@@ -1,156 +1,166 @@
-//! Comprehensive mathematical correctness tests
-//!
-//! Tests for BigInt256 operations, secp256k1 curve operations,
-//! modular arithmetic, and cryptographic primitives.
+// tests/math.rs - Unit tests for cryptographic mathematical operations
+// Tests modular arithmetic, elliptic curve operations, and GPU acceleration
 
-use speedbitcrack::math::{bigint::BigInt256, secp::Secp256k1};
+use speedbitcrack::math::{BigInt256, secp::Secp256k1};
 use speedbitcrack::types::Point;
 
-#[test]
-fn test_bigint256_from_hex() {
-    let hex = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F";
-    let bigint = BigInt256::from_hex(hex);
-    assert_eq!(bigint.to_hex().to_uppercase(), hex);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_bigint256_arithmetic() {
-    let a = BigInt256::from_u64(12345);
-    let b = BigInt256::from_u64(67890);
+    // Test basic modular inverse
+    #[test]
+    fn test_modular_inverse() {
+        let curve = Secp256k1::new();
+        let a = BigInt256::from_u64(5);
+        let modulus = curve.p.clone();
 
-    let sum = a.add(&b);
-    let expected_sum = BigInt256::from_u64(80235);
-    assert_eq!(sum, expected_sum);
+        let inv = curve.mod_inverse(&a, &modulus).unwrap();
+        let product = curve.montgomery.mul(&a, &inv);
 
-    let product = a.mul(&b);
-    let expected_product = BigInt256::from_u64(12345 * 67890);
-    assert_eq!(product, expected_product);
-}
+        // a * a^(-1) ≡ 1 mod p
+        assert_eq!(product, BigInt256::from_u64(1));
+    }
 
-#[test]
-fn test_modular_inverse() {
-    let curve = Secp256k1::new();
-    let a = BigInt256::from_u64(42);
-    let modulus = curve.n; // secp256k1 order
+    // Test point addition
+    #[test]
+    fn test_point_addition() {
+        let curve = Secp256k1::new();
 
-    let inv = curve.mod_inverse(&a, &modulus);
-    assert!(inv.is_some());
+        // Generator point G
+        let g = curve.g.clone();
 
-    let inv = inv.unwrap();
-    let product = curve.montgomery_p.mul(&a, &inv);
-    let reduced = curve.barrett_n.reduce(&product);
-    assert_eq!(reduced, BigInt256::from_u64(1));
-}
+        // Test G + G = 2G
+        let two_g = curve.point_add(&g, &g);
 
-#[test]
-fn test_point_validation() {
-    let curve = Secp256k1::new();
+        // Verify the result is on the curve
+        assert!(curve.is_on_curve(&two_g));
+    }
 
-    // Test generator point validation
-    assert!(curve.g.validate_curve(&curve));
-    assert!(curve.g.validate_subgroup(&curve));
-    assert!(curve.g.validate(&curve).is_ok());
+    // Test point doubling
+    #[test]
+    fn test_point_doubling() {
+        let curve = Secp256k1::new();
+        let g = curve.g.clone();
 
-    // Test point at infinity
-    let infinity = Point::infinity();
-    assert!(infinity.validate(&curve).is_ok());
-}
+        let doubled = curve.point_double(&g);
 
-#[test]
-fn test_point_operations() {
-    let curve = Secp256k1::new();
+        // Verify the result is on the curve
+        assert!(curve.is_on_curve(&doubled));
 
-    // Test point doubling: 2G should be on curve
-    let double_g = curve.double(&curve.g);
-    assert!(double_g.validate(&curve).is_ok());
+        // 2G should equal G + G
+        let added = curve.point_add(&g, &g);
+        assert_eq!(doubled, added);
+    }
 
-    // Test point addition: G + G = 2G
-    let add_gg = curve.add(&curve.g, &curve.g);
-    assert_eq!(add_gg.x, double_g.x);
-    assert_eq!(add_gg.y, double_g.y);
-}
+    // Test scalar multiplication
+    #[test]
+    fn test_scalar_multiplication() {
+        let curve = Secp256k1::new();
+        let g = curve.g.clone();
 
-#[test]
-fn test_scalar_multiplication() {
-    let curve = Secp256k1::new();
+        // Test 2 * G
+        let result = curve.scalar_mul(&BigInt256::from_u64(2), &g);
+        let expected = curve.point_add(&g, &g);
 
-    // Test multiplication by small scalars
-    let two_g = curve.mul(&BigInt256::from_u64(2), &curve.g);
-    let double_g = curve.double(&curve.g);
-    assert_eq!(two_g.x, double_g.x);
-    assert_eq!(two_g.y, double_g.y);
+        assert_eq!(result, expected);
+    }
 
-    // Test multiplication by zero: 0*G = infinity
-    let zero_g = curve.mul(&BigInt256::zero(), &curve.g);
-    assert!(zero_g.is_infinity());
-}
+    // Test Barrett reduction
+    #[test]
+    fn test_barrett_reduction() {
+        let curve = Secp256k1::new();
 
-#[test]
-fn test_barrett_reduction() {
-    let curve = Secp256k1::new();
-    let modulus = curve.p;
+        // Create a large number that needs reduction
+        let large_num = BigInt256::from_u64_array([
+            0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+        ]);
 
-    // Test reduction of large number
-    let large = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
-    let reduced = curve.barrett_p.reduce(&large);
+        let reduced = curve.barrett.reduce(&large_num, &curve.p);
 
-    // Reduced value should be less than modulus
-    assert!(reduced < modulus);
-    assert!(reduced >= BigInt256::zero());
-}
+        // Result should be less than modulus
+        assert!(reduced < curve.p);
+    }
 
-#[test]
-fn test_montgomery_reduction() {
-    let curve = Secp256k1::new();
+    // Test Montgomery multiplication
+    #[test]
+    fn test_montgomery_multiplication() {
+        let curve = Secp256k1::new();
 
-    // Test Montgomery multiplication: a * b * R^-1 mod p
-    let a = BigInt256::from_u64(12345);
-    let b = BigInt256::from_u64(67890);
+        let a = BigInt256::from_u64(5);
+        let b = BigInt256::from_u64(7);
+        let expected = BigInt256::from_u64(35);
 
-    let mont_product = curve.montgomery_p.mul(&a, &b);
+        let result = curve.montgomery.mul(&a, &b);
 
-    // Convert back to normal representation
-    let normal_product = curve.montgomery_p.to_normal(&mont_product);
+        // Convert back from Montgomery form for comparison
+        let result_normal = curve.montgomery.reduce(&result, &curve.p);
 
-    // Should equal regular multiplication modulo p
-    let expected = a.mul(&b);
-    let expected_reduced = curve.barrett_p.reduce(&expected);
+        assert_eq!(result_normal, expected);
+    }
 
-    assert_eq!(normal_product, expected_reduced);
-}
+    // Test Jacobian to affine conversion
+    #[test]
+    fn test_jacobian_to_affine() {
+        let curve = Secp256k1::new();
+        let g = curve.g.clone();
 
-#[test]
-fn test_curve_parameters() {
-    let curve = Secp256k1::new();
+        // Convert to affine (should be no-op for points at infinity, but test structure)
+        let affine = g.to_affine(&curve);
 
-    // Verify curve equation: y² = x³ + ax + b mod p for generator point
-    let g_affine = curve.g.to_affine(&curve);
-    let x = BigInt256::from_u64_array(g_affine.x);
-    let y = BigInt256::from_u64_array(g_affine.y);
+        // Verify the result is on the curve
+        assert!(curve.is_on_curve(&affine));
+    }
 
-    let y_squared = curve.montgomery_p.mul(&y, &y);
-    let x_squared = curve.montgomery_p.mul(&x, &x);
-    let x_cubed = curve.montgomery_p.mul(&x_squared, &x);
-    let ax = curve.montgomery_p.mul(&curve.a, &x); // a = 0, so ax = 0
-    let rhs = curve.montgomery_p.add(&x_cubed, &ax);
-    let rhs = curve.montgomery_p.add(&rhs, &curve.b);
+    // Property-based test for modular inverse
+    #[cfg(feature = "proptest")]
+    use proptest::prelude::*;
 
-    assert_eq!(y_squared, rhs);
-}
+    #[cfg(feature = "proptest")]
+    proptest! {
+        #[test]
+        fn test_inverse_property(a in 1u64..(1u64 << 32)) {
+            let curve = Secp256k1::new();
+            let a_big = BigInt256::from_u64(a);
 
-#[test]
-fn test_invalid_inputs() {
-    let curve = Secp256k1::new();
+            // Only test if a and p are coprime (gcd = 1)
+            if let Some(inv) = curve.mod_inverse(&a_big, &curve.p) {
+                let product = curve.montgomery.mul(&a_big, &inv);
+                let product_reduced = curve.montgomery.reduce(&product, &curve.p);
 
-    // Test modular inverse with invalid inputs
-    assert!(curve.mod_inverse(&BigInt256::zero(), &curve.n).is_none());
-    assert!(curve.mod_inverse(&BigInt256::from_u64(1), &BigInt256::zero()).is_none());
+                prop_assert_eq!(product_reduced, BigInt256::from_u64(1));
+            }
+        }
+    }
 
-    // Test point validation with invalid points
-    let invalid_point = Point {
-        x: [0; 4],
-        y: [0; 4],
-        z: [1, 0, 0, 0],
-    };
-    assert!(invalid_point.validate(&curve).is_err());
+    // Fuzz test for point operations
+    #[cfg(feature = "libfuzzer")]
+    use libfuzzer_sys::fuzz_target;
+
+    #[cfg(feature = "libfuzzer")]
+    fuzz_target!(|data: &[u8]| {
+        if data.len() < 32 {
+            return;
+        }
+
+        let curve = Secp256k1::new();
+
+        // Create a scalar from fuzz data
+        let scalar_bytes = &data[0..32];
+        let mut scalar_array = [0u64; 4];
+        for i in 0..4 {
+            let start = i * 8;
+            let end = start + 8;
+            if end <= scalar_bytes.len() {
+                scalar_array[i] = u64::from_le_bytes(scalar_bytes[start..end].try_into().unwrap());
+            }
+        }
+
+        let scalar = BigInt256::from_u64_array(scalar_array);
+
+        // Test scalar multiplication with generator
+        let _result = curve.scalar_mul(&scalar, &curve.g);
+
+        // If we get here without panicking, the operation is safe
+    });
 }

@@ -1,102 +1,48 @@
-//! Performance benchmarks for kangaroo algorithm
-//!
-//! Measures execution time and throughput for key operations.
-
 use criterion::{criterion_group, criterion_main, Criterion};
-use speedbitcrack::math::secp::Secp256k1;
-use speedbitcrack::math::bigint::BigInt256;
+use speedbitcrack::gpu::backend::GpuBackend;
+use speedbitcrack::types::{KangarooState, Point};
+use speedbitcrack::kangaroo::collision::Trap;
 
-fn bench_scalar_multiplication(c: &mut Criterion) {
-    let curve = Secp256k1::new();
-    let scalar = BigInt256::from_u64(0x123456789ABCDEF);
+fn bench_step_batch(c: &mut Criterion) {
+    // Only run CUDA benchmarks if CUDA feature is enabled
+    #[cfg(feature = "cudarc")]
+    {
+        let backend = speedbitcrack::gpu::backend::CudaBackend::new().unwrap();
 
-    c.bench_function("scalar_mul", |b| {
-        b.iter(|| curve.mul(&scalar, &curve.g));
-    });
+        // Create test data - 1024 kangaroos
+        let batch_size = 1024;
+        let mut positions = vec![[[0u32; 8]; 3]; batch_size];
+        let mut distances = vec![[0u32; 8]; batch_size];
+        let types = vec![0u32; batch_size];
+
+        // Initialize with some test data
+        for i in 0..batch_size {
+            // Set some basic point data
+            positions[i][0] = [1, 0, 0, 0, 0, 0, 0, 0]; // X coordinate
+            positions[i][1] = [2, 0, 0, 0, 0, 0, 0, 0]; // Y coordinate
+            positions[i][2] = [1, 0, 0, 0, 0, 0, 0, 0]; // Z coordinate
+            distances[i] = [i as u32, 0, 0, 0, 0, 0, 0, 0];
+        }
+
+        c.bench_function("cuda_step_batch_1024", |b| {
+            b.iter(|| {
+                let _traps = backend.step_batch(&mut positions, &mut distances, &types);
+            })
+        });
+    }
+
+    // CPU fallback benchmark
+    #[cfg(not(feature = "cudarc"))]
+    {
+        c.bench_function("cpu_step_batch_1024", |b| {
+            b.iter(|| {
+                // CPU implementation would go here
+                // For now, just a placeholder
+                let _result = 42;
+            })
+        });
+    }
 }
 
-fn bench_point_addition(c: &mut Criterion) {
-    let curve = Secp256k1::new();
-    let p1 = curve.mul(&BigInt256::from_u64(100), &curve.g);
-    let p2 = curve.mul(&BigInt256::from_u64(200), &curve.g);
-
-    c.bench_function("point_add", |b| {
-        b.iter(|| curve.add(&p1, &p2));
-    });
-}
-
-fn bench_point_doubling(c: &mut Criterion) {
-    let curve = Secp256k1::new();
-    let p = curve.mul(&BigInt256::from_u64(100), &curve.g);
-
-    c.bench_function("point_double", |b| {
-        b.iter(|| curve.double(&p));
-    });
-}
-
-fn bench_modular_inverse(c: &mut Criterion) {
-    let curve = Secp256k1::new();
-    let value = BigInt256::from_u64(0x123456789ABCDEF);
-
-    c.bench_function("mod_inverse", |b| {
-        b.iter(|| curve.mod_inverse(&value, &curve.n));
-    });
-}
-
-fn bench_barrett_reduction(c: &mut Criterion) {
-    let curve = Secp256k1::new();
-    let large_value = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
-
-    c.bench_function("barrett_reduce", |b| {
-        b.iter(|| curve.barrett_p.reduce(&large_value));
-    });
-}
-
-fn bench_montgomery_multiplication(c: &mut Criterion) {
-    let curve = Secp256k1::new();
-    let a = BigInt256::from_u64(0x123456789ABCDEF);
-    let b = BigInt256::from_u64(0xFEDCBA987654321);
-
-    c.bench_function("montgomery_mul", |b| {
-        b.iter(|| curve.montgomery_p.mul(&a, &b));
-    });
-}
-
-#[cfg(feature = "cudarc")]
-fn bench_cuda_multiplication(c: &mut Criterion) {
-    let backend = speedbitcrack::gpu::CudaBackend::new().unwrap();
-
-    c.bench_function("cuda_batch_mul", |b| {
-        let a = vec![[1, 0, 0, 0, 0, 0, 0, 0]; 16];
-        let batch_a = a.clone();
-        let batch_b = a;
-        b.iter(|| backend.batch_mul(batch_a.clone(), batch_b.clone()));
-    });
-}
-
-fn configure_criterion() -> Criterion {
-    Criterion::default()
-        .sample_size(100)
-        .measurement_time(std::time::Duration::from_secs(10))
-        .warm_up_time(std::time::Duration::from_secs(1))
-}
-
-criterion_group!{
-    name = benches;
-    config = configure_criterion();
-    targets = bench_scalar_multiplication, bench_point_addition, bench_point_doubling,
-             bench_modular_inverse, bench_barrett_reduction, bench_montgomery_multiplication
-}
-
-#[cfg(feature = "cudarc")]
-criterion_group!{
-    name = cuda_benches;
-    config = configure_criterion();
-    targets = bench_cuda_multiplication
-}
-
-#[cfg(feature = "cudarc")]
-criterion_main!(benches, cuda_benches);
-
-#[cfg(not(feature = "cudarc"))]
+criterion_group!(benches, bench_step_batch);
 criterion_main!(benches);

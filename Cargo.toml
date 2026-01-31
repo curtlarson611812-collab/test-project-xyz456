@@ -28,12 +28,13 @@ rocksdb = "0.22"                  # Disk spill for DP overflow
 num-bigint = "0.4.6"
 cudarc = { version = "0.9", optional = true }  # CUDA runtime wrapper
 cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }  # Raw CUDA runtime API for cuFFT
+cuda-sys = { version = "0.2.0", optional = true }  # Raw CUDA driver API for advanced operations
 libfuzzer-sys = { version = "0.4", optional = true }  # Fuzz testing
 
 [features]
 default = ["vulkan"]
 vulkan = ["wgpu", "vulkano", "vulkano-shaders"]
-cudarc = ["dep:cudarc", "dep:cuda-runtime-sys"]
+cudarc = ["dep:cudarc", "dep:cuda-runtime-sys", "dep:cuda-sys"]
 fuzz = ["libfuzzer-sys"]
 
 [lints.rust]
@@ -51,9 +52,6 @@ panic = "abort"
 
 [dev-dependencies]
 tempfile = "3.0"  # For temporary directories in tests
-proptest = "1.0"  # Property-based testing
-criterion = { version = "0.5", features = ["html_reports"] }  # Benchmarking
-
-[[bench]]
-name = "kangaroo"
-harness = false
+criterion = { version = "0.5", features = ["html_reports"] }  # Performance benchmarking
+proptest = "1.0"   # Property-based testing
+tokio-test = "0.4" # Async testing utilities

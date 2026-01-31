@@ -73,11 +73,11 @@ impl CollisionDetector {
             n_limbs[3] as u32, (n_limbs[3] >> 32) as u32,
         ]);
 
-        let priv_big = (if tame.dist >= wild.dist {
+        let priv_big = if tame.dist >= wild.dist {
             &tame.dist - &wild.dist
         } else {
             &n - (&wild.dist - &tame.dist)
-        }) % &n;
+        } % &n;
 
         let mut priv_array = [0u64; 4];
         for (i, &digit) in priv_big.to_u64_digits().iter().enumerate().take(4) {

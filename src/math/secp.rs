@@ -1,6 +1,9 @@
 //! secp256k1 elliptic curve operations
 //!
 //! secp256k1 curve ops, point add/double/mult, Barrett+Montgomery hybrid reductions (non-negotiable)
+//!
+//! SECURITY NOTE: Operations should be constant-time to prevent side-channel attacks.
+//! Where possible, use k256::FieldElement for constant-time field arithmetic.
 
 use super::bigint::{BigInt256, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
@@ -302,6 +305,65 @@ impl Secp256k1 {
 
         // Result = P1 + P2
         self.add(&p1, &p2)
+    }
+
+    /// Constant-time scalar multiplication using k256
+    /// Provides side-channel resistance for cryptographic operations
+    /// Note: k256 library provides constant-time field arithmetic
+    pub fn mul_constant_time(&self, k: &BigInt256, p: &Point) -> Point {
+        use k256::{ProjectivePoint, Scalar};
+
+        // Convert BigInt256 to k256::Scalar
+        let k_bytes = k.to_bytes_be();
+        let scalar = Scalar::from_bytes_reduced(k256::FieldBytes::from_slice(&k_bytes));
+
+        // Convert point to k256::ProjectivePoint
+        let p_affine = p.to_affine(self);
+        let x_bytes = p_affine.x.iter().rev().flat_map(|&x| x.to_be_bytes()).collect::<Vec<_>>();
+        let y_bytes = p_affine.y.iter().rev().flat_map(|&y| y.to_be_bytes()).collect::<Vec<_>>();
+
+        // Create k256 point from coordinates
+        let k256_point = k256::ProjectivePoint::from(
+            k256::AffinePoint::from_bytes(
+                &k256::EncodedPoint::from_affine_coordinates(
+                    k256::FieldBytes::from_slice(&x_bytes),
+                    k256::FieldBytes::from_slice(&y_bytes),
+                    false
+                ).unwrap()
+            ).unwrap()
+        );
+
+        // Perform constant-time scalar multiplication
+        let result = k256_point * scalar;
+
+        // Convert back to our Point representation
+        let result_affine = result.to_affine();
+        let result_coords = result_affine.to_encoded_point(false);
+
+        let mut x = [0u64; 4];
+        let mut y = [0u64; 4];
+
+        // Extract x coordinate
+        let x_bytes = result_coords.x().unwrap();
+        for i in 0..4 {
+            let start = i * 8;
+            let end = start + 8;
+            x[3 - i] = u64::from_be_bytes(x_bytes[start..end].try_into().unwrap());
+        }
+
+        // Extract y coordinate
+        let y_bytes = result_coords.y().unwrap();
+        for i in 0..4 {
+            let start = i * 8;
+            let end = start + 8;
+            y[3 - i] = u64::from_be_bytes(y_bytes[start..end].try_into().unwrap());
+        }
+
+        Point {
+            x: x.map(|v| v as u32),
+            y: y.map(|v| v as u32),
+            z: [1, 0, 0, 0], // Affine point
+        }
     }
 
     /// Naive double-and-add scalar multiplication (used by GLV)

@@ -2,11 +2,14 @@
 //!
 //! Trait for Vulkan/CUDA backends, async buffer mapping, overlap logic
 
+#[allow(unused_imports)]
 use crate::kangaroo::collision::Trap;
 use anyhow::Result;
+#[allow(unused_imports)]
 use num_bigint::BigUint;
 
 #[cfg(feature = "vulkan")]
+#[allow(unused_imports)]
 use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, sync::{GpuFuture}, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
 
 #[cfg(feature = "cudarc")]
@@ -492,9 +495,16 @@ pub struct CudaBackend {
     device: Arc<CudaDevice>,
     stream: CudaStream,
     cublas_handle: CudaBlas,    // Real cudarc cublas integration
-    // Note: PTX modules cannot be loaded directly with cudarc
-    // High-level module loading requires raw CUDA driver API
-    // For now, using placeholder - real implementation would need driver API
+    // PTX modules loaded via cudarc
+    inverse_module: CudaModule,
+    solve_module: CudaModule,
+    bigint_mul_module: CudaModule,
+    fft_mul_module: CudaModule,
+    hybrid_module: CudaModule,
+    precomp_module: CudaModule,
+    step_module: CudaModule,
+    barrett_module: CudaModule,
+    affine_module: CudaModule,
 }
 
 #[cfg(feature = "cudarc")]
@@ -1150,14 +1160,59 @@ impl GpuBackend for CudaBackend {
         // Initialize cuBLAS
         let cublas_handle = CudaBlas::new(device.clone())?;
 
-        // Note: cudarc does not support loading PTX modules directly
-        // Raw CUDA driver API would be needed for kernel execution
-        // This is a fundamental limitation of cudarc's design
+        // Load PTX modules from build output directory
+        let out_dir = std::env::var("OUT_DIR")?;
+        let ptx_dir = std::path::Path::new(&out_dir);
+
+        let inverse_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("inverse.ptx"))?
+        )?;
+
+        let solve_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("solve.ptx"))?
+        )?;
+
+        let bigint_mul_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("bigint_mul.ptx"))?
+        )?;
+
+        let fft_mul_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("fft_mul.ptx"))?
+        )?;
+
+        let hybrid_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("hybrid.ptx"))?
+        )?;
+
+        let precomp_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("precomp.ptx"))?
+        )?;
+
+        let step_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("step.ptx"))?
+        )?;
+
+        let barrett_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("barrett.ptx"))?
+        )?;
+
+        let affine_module = device.load_ptx(
+            &std::fs::read_to_string(ptx_dir.join("affine.ptx"))?
+        )?;
 
         Ok(Self {
             device,
             stream,
             cublas_handle,
+            inverse_module,
+            solve_module,
+            bigint_mul_module,
+            fft_mul_module,
+            hybrid_module,
+            precomp_module,
+            step_module,
+            barrett_module,
+            affine_module,
         })
     }
 
