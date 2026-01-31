@@ -141,6 +141,11 @@ impl Config {
             return Err(anyhow!("Jump mean must be > 0"));
         }
 
+        // Validate GPU backend
+        if !["hybrid", "cuda", "vulkan", "cpu"].contains(&self.gpu_backend.as_str()) {
+            return Err(anyhow!("Invalid GPU backend: {}. Must be one of: hybrid, cuda, vulkan, cpu", self.gpu_backend));
+        }
+
         // Validate near collision threshold
         if let Some(threshold) = self.enable_near_collisions {
             if !(0.0..=1.0).contains(&threshold) {

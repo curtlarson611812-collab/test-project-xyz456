@@ -64,16 +64,12 @@ impl KangarooManager {
             "hybrid" => {
                 Box::new(HybridBackend::new().await?)
             }
+            "cpu" => {
+                Box::new(crate::gpu::backend::CpuBackend {})
+            }
             _ => {
-                // Default to CUDA if available, otherwise CPU
-                #[cfg(feature = "cudarc")]
-                {
-                    Box::new(crate::gpu::backend::CudaBackend::new()?)
-                }
-                #[cfg(not(feature = "cudarc"))]
-                {
-                    Box::new(crate::gpu::backend::CpuBackend::new())
-                }
+                bail!("Invalid backend: {}", config.gpu_backend);
+            }
             }
         };
         let generator = KangarooGenerator::new(&config);
