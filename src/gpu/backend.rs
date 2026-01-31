@@ -2,17 +2,12 @@
 //!
 //! Trait for Vulkan/CUDA backends, async buffer mapping, overlap logic
 
-use crate::types::{KangarooState, Point};
 use crate::kangaroo::collision::Trap;
-use crate::math::BigInt256;
 use anyhow::Result;
 use num_bigint::BigUint;
-use async_trait::async_trait;
-#[cfg(feature = "vulkan")]
-use std::sync::Arc;
 
 #[cfg(feature = "vulkan")]
-use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer}, sync::{GpuFuture}, sync::future::FenceSignalFuture, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
+use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, sync::{GpuFuture}, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
 
 #[cfg(feature = "cudarc")]
 use cudarc::driver::*;
@@ -20,10 +15,8 @@ use cudarc::driver::*;
 use cudarc::cublas::CudaBlas;
 // Note: cuFFT functionality removed due to cudarc limitations
 // Raw CUDA driver API would be needed for full FFT support
-use std::path::Path;
-use std::collections::HashMap;
 
-// CUDA extern functions
+// CUDA extern functions - Note: Using cudarc types instead of raw cuda
 #[cfg(feature = "cudarc")]
 extern "C" {
     fn batch_modular_inverse_cuda(
@@ -33,8 +26,8 @@ extern "C" {
         is_prime: bool,
         exp_nibbles: *const u8,
         batch_size: i32,
-        stream: cuda::CudaStream,
-    ) -> cuda::CudaError;
+        stream: *mut std::ffi::c_void, // cudarc stream handle
+    ) -> i32; // cudarc error code
 
     fn bigint_mul_gemmex_cuda(
         cublas_handle: *mut std::ffi::c_void,
@@ -43,8 +36,8 @@ extern "C" {
         result_limbs: *mut u32,
         batch_size: i32,
         limbs: i32,
-        stream: cuda::CudaStream,
-    ) -> cuda::CudaError;
+        stream: *mut std::ffi::c_void,
+    ) -> i32;
 
     fn batch_mod_mul_hybrid_cuda(
         a: *const u32,
@@ -504,7 +497,6 @@ pub struct CudaBackend {
     // For now, using placeholder - real implementation would need driver API
 }
 
-#[cfg(feature = "cudarc")]
 #[cfg(feature = "cudarc")]
 impl GpuBackend for CudaBackend {
     fn new() -> Result<Self> {
@@ -1194,7 +1186,41 @@ impl GpuBackend for CudaBackend {
     }
 
     fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        Err(anyhow::anyhow!("CUDA big integer multiplication requires PTX kernel execution - cudarc limitation prevents 256-bit limb arithmetic with carry propagation. Raw driver API needed for schoolbook multiplication with warp shuffle carry handling, achieving millions of ops/sec on modern GPUs."))
+        let batch_size = a.len();
+        if batch_size == 0 || batch_size != b.len() {
+            return Err(anyhow::anyhow!("Invalid batch size for multiplication"));
+        }
+
+        // Allocate device memory for cuBLAS operations
+        let mut results = Vec::with_capacity(batch_size);
+
+        // For each pair, perform schoolbook multiplication using CPU fallback
+        // since cudarc doesn't support custom kernels
+        for i in 0..batch_size {
+            let mut result = [0u32; 16];
+
+            // Simple schoolbook multiplication (not optimized for GPU)
+            // In a real implementation, this would use custom PTX kernels
+            for j in 0..8 {
+                for k in 0..8 {
+                    let product = (a[i][j] as u64) * (b[i][k] as u64);
+                    let mut carry = product;
+
+                    // Add to result with carry propagation
+                    let mut pos = j + k;
+                    while carry > 0 && pos < 16 {
+                        let sum = (result[pos] as u64) + (carry & 0xFFFFFFFF);
+                        result[pos] = sum as u32;
+                        carry = sum >> 32;
+                        pos += 1;
+                    }
+                }
+            }
+
+            results.push(result);
+        }
+
+        Ok(results)
     }
 
     fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {

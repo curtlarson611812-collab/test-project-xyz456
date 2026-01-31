@@ -31,6 +31,58 @@ impl Point {
         self.z == [0; 4]
     }
 
+    /// Validate that point lies on the secp256k1 curve
+    /// Checks if y² = x³ + ax + b mod p
+    pub fn validate_curve(&self, curve: &super::math::secp::Secp256k1) -> bool {
+        if self.is_infinity() {
+            return true; // Point at infinity is valid
+        }
+
+        let x = super::math::bigint::BigInt256::from_u64_array(self.x);
+        let y = super::math::bigint::BigInt256::from_u64_array(self.y);
+
+        // Compute y²
+        let y_squared = curve.montgomery_p.mul(&y, &y);
+
+        // Compute x³ + ax + b
+        let x_squared = curve.montgomery_p.mul(&x, &x);
+        let x_cubed = curve.montgomery_p.mul(&x_squared, &x);
+        let ax = curve.montgomery_p.mul(&curve.a, &x);
+        let rhs = curve.montgomery_p.add(&x_cubed, &ax);
+        let rhs = curve.montgomery_p.add(&rhs, &curve.b);
+
+        // Check if y² ≡ x³ + ax + b mod p
+        y_squared == rhs
+    }
+
+    /// Check if point is in the prime order subgroup
+    /// Validates that n*P = infinity where n is the curve order
+    pub fn validate_subgroup(&self, curve: &super::math::secp::Secp256k1) -> bool {
+        if self.is_infinity() {
+            return true;
+        }
+
+        // Compute n*P where n is the curve order
+        let result = curve.mul(&curve.n, self);
+
+        // Should be point at infinity
+        result.is_infinity()
+    }
+
+    /// Comprehensive point validation
+    /// Checks curve membership and subgroup membership
+    pub fn validate(&self, curve: &super::math::secp::Secp256k1) -> Result<(), &'static str> {
+        if !self.validate_curve(curve) {
+            return Err("Point does not lie on the secp256k1 curve");
+        }
+
+        if !self.validate_subgroup(curve) {
+            return Err("Point is not in the prime order subgroup (potential small subgroup attack)");
+        }
+
+        Ok(())
+    }
+
     /// Convert Jacobian point to affine coordinates
     pub fn to_affine(&self, curve: &super::math::secp::Secp256k1) -> Point {
         if self.is_infinity() {

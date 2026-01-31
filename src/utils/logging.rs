@@ -2,7 +2,7 @@
 //!
 //! Logs for attractors, convergence, pruning stats, checkpoint summaries
 
-use log::{info, warn, error, debug, trace};
+use log::{info, warn, error, debug};
 use std::time::Instant;
 
 /// Setup structured logging

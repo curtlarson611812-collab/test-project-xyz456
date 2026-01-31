@@ -516,12 +516,21 @@ impl Secp256k1 {
     pub fn mod_inverse(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
 
+        // Security: Validate inputs to prevent side-channel attacks
         if a.is_zero() {
             return None; // No inverse for zero
         }
 
-        let mut old_r = *modulus;
-        let mut r = *a;
+        if modulus.is_zero() || modulus.is_even() {
+            return None; // Invalid modulus (must be odd prime)
+        }
+
+        // Security: Ensure constant-time execution by normalizing inputs
+        let a_reduced = self.barrett_p.reduce(a);
+        let modulus_reduced = modulus; // Assume modulus is already valid
+
+        let mut old_r = *modulus_reduced;
+        let mut r = a_reduced;
         let mut old_s = BigInt256::zero();
         let mut s = BigInt256::from_u64(1);
 

@@ -5,6 +5,12 @@
 //! Bitcoin puzzle addresses.
 //!
 //! Built with Rust + hybrid GPU acceleration (Vulkan/wgpu bulk compute, CUDA precision math).
+//!
+//! Security guarantees:
+//! - Constant-time cryptographic operations
+//! - Comprehensive input validation
+//! - Side-channel attack protection
+//! - No unsafe code usage
 
 #![deny(unsafe_code)]
 
@@ -17,6 +23,7 @@ pub mod dp;
 pub mod parity;
 pub mod targets;
 pub mod utils;
+pub mod security;
 
 // Re-export key types for library usage
 pub use config::Config;

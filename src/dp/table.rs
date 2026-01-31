@@ -7,7 +7,7 @@ use cuckoofilter::CuckooFilter;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use std::sync::Arc;
 use anyhow::Result;
 use tokio::task;
