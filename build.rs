@@ -119,6 +119,13 @@ fn main() {
             std::fs::copy(&fused_ptx_src, &fused_ptx_dst).expect("Failed to copy PTX file");
         }
 
+        // Compile custom_fft.ptx directly (already in PTX format)
+        let custom_fft_src = cuda_src_dir.join("custom_fft.ptx");
+        let custom_fft_dst = Path::new(&out_dir).join("custom_fft.ptx");
+        if custom_fft_src.exists() {
+            std::fs::copy(&custom_fft_src, &custom_fft_dst).expect("Failed to copy PTX file");
+        }
+
         // Link CUDA runtime, cuBLAS, and cuFFT
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
         println!("cargo:rustc-link-lib=cudart");

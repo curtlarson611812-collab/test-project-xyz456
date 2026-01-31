@@ -4,7 +4,7 @@
 //! and validation logic.
 
 use anyhow::{anyhow, Result};
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

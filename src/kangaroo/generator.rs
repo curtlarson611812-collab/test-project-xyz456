@@ -6,7 +6,7 @@ use crate::config::Config;
 use crate::types::{KangarooState, Point};
 use crate::math::Secp256k1;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use log::warn;
 
 // Sacred Magic 9 primes — must be default in config, only expanded via flag
