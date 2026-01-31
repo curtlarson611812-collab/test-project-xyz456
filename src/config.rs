@@ -162,6 +162,11 @@ impl Config {
             }
         }
 
+        // Validate GPU backend
+        if !["hybrid", "cuda", "vulkan", "cpu"].contains(&self.gpu_backend.as_str()) {
+            return Err(anyhow!("Invalid GPU backend: {}. Must be one of: hybrid, cuda, vulkan, cpu", self.gpu_backend));
+        }
+
         Ok(())
     }
 }

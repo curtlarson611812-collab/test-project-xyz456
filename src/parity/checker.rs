@@ -185,7 +185,7 @@ impl ParityChecker {
         // This would require mutable self, so we'll create a temp checker
         let quick_checker = ParityChecker {
             cpu_stepper: self.cpu_stepper.clone(),
-            gpu_backend: tokio::sync::Mutex::new(CpuBackend::new()),
+            gpu_backend: Box::new(CpuBackend::new().unwrap()),
             test_steps: 1000,
         };
 
