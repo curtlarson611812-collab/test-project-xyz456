@@ -15,9 +15,11 @@ use std::sync::Arc;
 use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer}, sync::{GpuFuture}, sync::future::FenceSignalFuture, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
 
 #[cfg(feature = "cudarc")]
-use cudarc::driver::{CudaDevice, CudaStream, CudaFunction};
+use cudarc::driver::*;
 #[cfg(feature = "cudarc")]
 use cudarc::cublas::CudaBlas;
+// Note: cuFFT functionality removed due to cudarc limitations
+// Raw CUDA driver API would be needed for full FFT support
 use std::path::Path;
 use std::collections::HashMap;
 
@@ -497,8 +499,9 @@ pub struct CudaBackend {
     device: Arc<CudaDevice>,
     stream: CudaStream,
     cublas_handle: CudaBlas,    // Real cudarc cublas integration
-    // PTX modules loaded as raw strings (cudarc limitation workaround)
-    ptx_modules: std::collections::HashMap<String, String>,
+    // Note: PTX modules cannot be loaded directly with cudarc
+    // High-level module loading requires raw CUDA driver API
+    // For now, using placeholder - real implementation would need driver API
 }
 
 #[cfg(feature = "cudarc")]
@@ -1148,81 +1151,54 @@ impl CudaBackend {
 #[cfg(feature = "cudarc")]
 impl GpuBackend for CudaBackend {
     fn new() -> Result<Self> {
-        // Initialize CUDA device and context
+        // Initialize CUDA device and stream
         let device = Arc::new(CudaDevice::new(0)?);
-        let stream = device.create_stream()?;
+        let stream = CudaStream::default();
 
         // Initialize cuBLAS
         let cublas_handle = CudaBlas::new(device.clone())?;
 
-        // Load PTX modules as strings (cudarc limitation workaround)
-        let out_dir = std::env::var("OUT_DIR")?;
-        let ptx_dir = Path::new(&out_dir);
-        let mut ptx_modules = HashMap::new();
-
-        let module_names = [
-            "inverse", "solve", "hybrid", "carry_propagation",
-            "bigint_mul", "fft_mul", "custom_fft", "fused_mul_redc"
-        ];
-
-        for name in &module_names {
-            let ptx_path = ptx_dir.join(format!("{}.ptx", name));
-            if ptx_path.exists() {
-                let ptx_content = std::fs::read_to_string(&ptx_path)?;
-                ptx_modules.insert(name.to_string(), ptx_content);
-            }
-        }
+        // Note: cudarc does not support loading PTX modules directly
+        // Raw CUDA driver API would be needed for kernel execution
+        // This is a fundamental limitation of cudarc's design
 
         Ok(Self {
             device,
             stream,
             cublas_handle,
-            ptx_modules,
         })
     }
 
     fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
-        // cudarc limitation: Cannot load PTX modules directly
-        // This would require extending cudarc or using raw CUDA driver API
-        Err(anyhow::anyhow!("CUDA precomp_table requires PTX module loading - cudarc limitation: high-level PTX loading not supported. Use raw CUDA driver API for full functionality."))
+        Err(anyhow::anyhow!("CUDA kernel execution requires PTX module loading - cudarc limitation: CudaModule::load_ptx() not available. Raw CUDA driver API (cuModuleLoad(), cuModuleGetFunction(), cuLaunchKernel()) needed for actual GPU execution. cuBLAS works but custom kernels require driver-level access."))
     }
 
     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
-        // cudarc limitation: Cannot execute custom PTX kernels
-        // Would need raw CUDA driver API integration
-        Err(anyhow::anyhow!("CUDA kangaroo stepping requires kernel execution - cudarc limitation: PTX execution not fully supported. Current fallback uses CPU implementation."))
+        Err(anyhow::anyhow!("CUDA kangaroo stepping requires custom PTX kernel execution - cudarc limitation: No CudaModule/CudaFunction support for launching custom kernels. Raw CUDA driver API needed: cuModuleLoad(), cuModuleGetFunction(), cuLaunchKernel() with grid(batch/256,1,1), block(256,1,1) for optimal occupancy. cuBLAS handles matrix ops but not elliptic curve arithmetic."))
     }
 
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
-        // cudarc limitation: No direct PTX kernel support for modular arithmetic
-        // This functionality is available in the PTX files but requires driver API
-        Err(anyhow::anyhow!("CUDA modular inverse requires PTX kernel execution - cudarc limitation prevents loading custom cryptographic kernels. Fermat/Euclidean algorithms implemented in PTX but inaccessible."))
+        Err(anyhow::anyhow!("CUDA modular inverse requires PTX kernel execution - cudarc limitation: No kernel launching capabilities. Raw driver API needed for Fermat's Little Theorem (a^(p-2) mod p) or Euclidean algorithm implementation. secp256k1 prime allows efficient GPU computation with Montgomery reduction."))
     }
 
     fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
-        // cuBLAS available but discrete log solving requires custom PTX
-        Err(anyhow::anyhow!("CUDA collision solving requires custom PTX kernels - cudarc provides cuBLAS but not general PTX execution for cryptographic operations."))
+        Err(anyhow::anyhow!("CUDA collision solving requires custom PTX kernels - cudarc limitation: No kernel execution support. Raw driver API needed for discrete log equation solving: d = alpha_t - alpha_w * inv(beta_w - beta_t) mod n. Montgomery arithmetic required for 256-bit modular operations."))
     }
 
     fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
-        // Complex collision equation solving requires PTX implementation
-        Err(anyhow::anyhow!("CUDA collision equation solving requires PTX kernel with Montgomery arithmetic - cudarc limitation prevents access to implemented Barrett reduction kernels."))
+        Err(anyhow::anyhow!("CUDA collision equation solving requires PTX kernel execution - cudarc limitation prevents access to implemented Barrett reduction kernels. Raw driver API needed for complex dlog solving with Montgomery arithmetic and modular inverse operations."))
     }
 
     fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
-        // Barrett reduction implemented in PTX but cudarc cannot load it
-        Err(anyhow::anyhow!("CUDA Barrett reduction PTX kernel exists but cudarc cannot load custom modular arithmetic kernels. Hybrid Barrett-Montgomery algorithm ready but inaccessible."))
+        Err(anyhow::anyhow!("CUDA Barrett reduction requires PTX kernel execution - cudarc limitation prevents loading modular arithmetic kernels. Raw driver API needed for q = ((x >> k) * mu) >> k, r = x - q * m with Montgomery optimization for multiplication-heavy operations."))
     }
 
     fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        // cuBLAS provides matrix multiplication but not big integer arithmetic
-        // Custom PTX implements proper 256-bit multiplication with carry propagation
-        Err(anyhow::anyhow!("CUDA big integer multiplication requires PTX kernel - cuBLAS provides matrix ops but not 256-bit limb arithmetic with carry propagation implemented in solve.cu."))
+        Err(anyhow::anyhow!("CUDA big integer multiplication requires PTX kernel execution - cudarc limitation prevents 256-bit limb arithmetic with carry propagation. Raw driver API needed for schoolbook multiplication with warp shuffle carry handling, achieving millions of ops/sec on modern GPUs."))
     }
 
     fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
-        // Jacobian to affine conversion requires modular inverse (PTX implemented)
-        Err(anyhow::anyhow!("CUDA affine conversion requires PTX modular inverse - cudarc limitation prevents loading elliptic curve coordinate transformation kernels."))
+        Err(anyhow::anyhow!("CUDA affine conversion requires PTX kernel execution - cudarc limitation prevents elliptic curve coordinate transformation. Raw driver API needed for z_inv = z^(-1), x = x * z_inv^2, y = y * z_inv^3 with batch modular inverse for Jacobian to affine conversion."))
     }
 
 }

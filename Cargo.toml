@@ -27,11 +27,12 @@ rand = "0.8"                      # Random number generation for entropy
 rocksdb = "0.22"                  # Disk spill for DP overflow
 num-bigint = "0.4.6"
 cudarc = { version = "0.9", optional = true }  # CUDA runtime wrapper
+cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }  # Raw CUDA runtime API for cuFFT
 
 [features]
 default = ["vulkan"]
 vulkan = ["wgpu", "vulkano", "vulkano-shaders"]
-cudarc = ["dep:cudarc"]
+cudarc = ["dep:cudarc", "dep:cuda-runtime-sys"]
 
 [lints.rust]
 unsafe_code = "deny"
