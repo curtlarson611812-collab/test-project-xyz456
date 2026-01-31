@@ -891,7 +891,7 @@ impl GpuBackend for CudaBackend {
                 }
                 let dist_biguint = BigUint::from_slice(&traps_flat[trap_offset + 1..trap_offset + 9].iter().rev().map(|&u| u).collect::<Vec<_>>());
 
-                traps.push(Trap { x, dist: dist_biguint });
+                traps.push(Trap { x, dist: dist_biguint, is_tame: true }); // TODO: Get from kernel output
             }
         }
 

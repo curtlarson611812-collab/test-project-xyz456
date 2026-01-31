@@ -328,40 +328,6 @@ __device__ void mod_inverse_extended_euclid_parallel(
 }
 
 // Batch modular inverse kernel with hybrid algorithm selection
-__global__ void batch_mod_inverse(
-    const uint32_t *inputs,      // [batch][LIMBS] input bigints
-    const uint32_t *modulus,     // [LIMBS] modulus
-    uint32_t *outputs,           // [batch][LIMBS] output inverses
-    bool is_prime_modulus,       // Whether modulus is prime (use Fermat)
-    const uint8_t *exp_nibbles,  // [64] exponent nibbles for Fermat
-    int batch_size
-) {
-    // Use shared memory for intermediate computations (per warp)
-    extern __shared__ uint32_t shared[];
-
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (idx >= batch_size) return;
-
-    // Extract input for this thread
-    uint32_t a[LIMBS];
-    for (int i = 0; i < LIMBS; i++) {
-        a[i] = inputs[idx * LIMBS + i];
-    }
-
-    // Compute modular inverse using appropriate algorithm
-    uint32_t result[LIMBS];
-    if (is_prime_modulus) {
-        mod_inverse_fermat_simple(a, modulus, exp_nibbles, result);
-    } else {
-        mod_inverse_extended_euclid_parallel(a, modulus, result);
-    }
-
-    // Store result
-    for (int i = 0; i < LIMBS; i++) {
-        outputs[idx * LIMBS + i] = result[i];
-    }
-}
 
 // Host function for batch modular inverse with hybrid algorithm selection
 extern "C" cudaError_t batch_modular_inverse_cuda(
