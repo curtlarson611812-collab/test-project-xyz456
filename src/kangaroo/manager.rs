@@ -68,8 +68,7 @@ impl KangarooManager {
                 Box::new(crate::gpu::backend::CpuBackend {})
             }
             _ => {
-                bail!("Invalid backend: {}", config.gpu_backend);
-            }
+                return Err(anyhow::anyhow!("Invalid backend: {}", config.gpu_backend));
             }
         };
         let generator = KangarooGenerator::new(&config);
