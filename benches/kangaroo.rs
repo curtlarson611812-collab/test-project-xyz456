@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
 use speedbitcrack::gpu::backend::GpuBackend;
 use speedbitcrack::types::{KangarooState, Point};
 use speedbitcrack::kangaroo::collision::Trap;
@@ -44,5 +44,41 @@ fn bench_step_batch(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, bench_step_batch);
+fn bench_occupancy_check(c: &mut Criterion) {
+    // Occupancy benchmark for Nsight profiling (target >90% on RTX 5090)
+    #[cfg(feature = "cudarc")]
+    {
+        let backend = speedbitcrack::gpu::backend::CudaBackend::new().unwrap();
+
+        let mut group = c.benchmark_group("occupancy");
+
+        // Test different batch sizes for optimal occupancy
+        for batch_size in [256, 512, 1024, 2048, 4096].iter() {
+            let mut positions = vec![[[0u32; 8]; 3]; *batch_size];
+            let mut distances = vec![[0u32; 8]; *batch_size];
+            let types = vec![0u32; *batch_size];
+
+            // Initialize test data
+            for i in 0..*batch_size {
+                positions[i][0] = [1, 0, 0, 0, 0, 0, 0, 0]; // X
+                positions[i][1] = [2, 0, 0, 0, 0, 0, 0, 0]; // Y
+                positions[i][2] = [1, 0, 0, 0, 0, 0, 0, 0]; // Z
+                distances[i] = [i as u32, 0, 0, 0, 0, 0, 0, 0];
+            }
+
+            group.bench_with_input(
+                BenchmarkId::from_parameter(batch_size),
+                batch_size,
+                |b, _batch_size| {
+                    b.iter(|| {
+                        let _traps = backend.step_batch(&mut positions, &mut distances, &types);
+                    })
+                }
+            );
+        }
+        group.finish();
+    }
+}
+
+criterion_group!(benches, bench_step_batch, bench_occupancy_check);
 criterion_main!(benches);

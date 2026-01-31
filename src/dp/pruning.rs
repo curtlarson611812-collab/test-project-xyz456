@@ -98,7 +98,7 @@ impl DpPruning {
 
     /// Run cluster-based pruning (prefer dense clusters)
     pub async fn prune_cluster_based(&self, max_cluster_size: usize) -> Result<PruningStats> {
-        let mut stats = PruningStats::default();
+        let stats = PruningStats::default();
 
         // TODO: Implement cluster-based pruning
         // Identify clusters that are too dense

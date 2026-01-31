@@ -62,7 +62,7 @@ impl KangarooManager {
                 Box::new(crate::gpu::backend::CudaBackend::new()?)
             }
             "hybrid" => {
-                Box::new(HybridBackend::new()?)
+                Box::new(HybridBackend::new().await?)
             }
             _ => {
                 // Default to CUDA if available, otherwise CPU

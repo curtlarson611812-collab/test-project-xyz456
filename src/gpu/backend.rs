@@ -81,8 +81,8 @@ pub trait GpuBackend {
 
 
 /// Create appropriate GPU backend based on available hardware
-pub fn create_backend() -> Result<HybridBackend> {
-    HybridBackend::new()
+pub async fn create_backend() -> Result<HybridBackend> {
+    HybridBackend::new().await
 }
 
 /// WGPU backend implementation (alternative to Vulkano)
@@ -914,12 +914,14 @@ impl GpuBackend for CudaBackend {
 }
 
 
-/// Hybrid backend that automatically selects between Vulkan and CUDA based on availability and operation type
-#[derive(Clone)]
-pub enum HybridBackend {
+/// Hybrid backend that dispatches operations to appropriate GPUs
+/// Uses Vulkan for bulk operations (step_batch) and CUDA for precision math
+pub struct HybridBackend {
+    #[cfg(feature = "vulkano")]
+    vulkan: WgpuBackend,
     #[cfg(feature = "cudarc")]
-    Cuda(CudaBackend),
-    Cpu(CpuBackend),
+    cuda: CudaBackend,
+    cpu: CpuBackend, // Fallback
 }
 
 /// CPU fallback backend
@@ -965,19 +967,15 @@ impl GpuBackend for CpuBackend {
 }
 
 impl HybridBackend {
-    /// Create a new hybrid backend with automatic selection
-    pub fn new() -> Result<Self> {
-        // Try CUDA first for precision operations (preferred for secp256k1 math)
-        #[cfg(feature = "cudarc")]
-        {
-            match CudaBackend::new() {
-                Ok(cuda) => return Ok(Self::Cuda(cuda)),
-                Err(_) => {} // Fall through to CPU
-            }
-        }
-
-        // Final fallback to CPU (Vulkan backend removed due to fundamental limitations)
-        Ok(Self::Cpu(CpuBackend::new()))
+    /// Create a new hybrid backend that holds both Vulkan and CUDA backends
+    pub async fn new() -> Result<Self> {
+        Ok(Self {
+            #[cfg(feature = "vulkano")]
+            vulkan: WgpuBackend::new().await?,
+            #[cfg(feature = "cudarc")]
+            cuda: CudaBackend::new()?,
+            cpu: CpuBackend {},
+        })
     }
 
     /// Check if this backend supports precision operations (true for CUDA, false for CPU)
@@ -1037,7 +1035,7 @@ pub enum SharedBuffer {
 
 impl GpuBackend for HybridBackend {
     fn new() -> Result<Self> {
-        Self::new()
+        Err(anyhow::anyhow!("Use HybridBackend::new().await for async initialization"))
     }
 
     fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {

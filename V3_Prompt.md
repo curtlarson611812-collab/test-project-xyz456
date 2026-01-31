@@ -151,7 +151,7 @@ Project Root:
    Hybrid CUDA/Vulkan:  
    - CUDA for critical math (EC adds/muls, modular inverse, alpha/beta tracking, collision solving).  
    - Vulkan (wgpu) for bulk stepping, kangaroo generation, memory tables.  
-   Goal: 2.5–3B ops/sec per RTX 5090, full utilization, <0.6s batches, async syncs.
+   Goal: 800M–1.5B ops/sec per RTX 5090 (realistic ceiling for kangaroo ECDLP), full utilization, <1.2s batches, async syncs.
 
 8. Parity & Drift Prevention  
    Integrated CPU/GPU 10M-step parity passes mandatory after any change.  
@@ -203,7 +203,7 @@ Project Root:
   Maintain data/known_attractors.txt (start with Magic 9 point).  
   On DP match/close match (Hamming <4 bits): loud log/alert, suggest G-Link attempt, dp-bits increase, or herd restart.
 
-## GPU Optimization Guidelines (Target: 2.5–3B ops/sec per RTX 5090)
+## GPU Optimization Guidelines (Realistic Target: 800M–1.5B ops/sec per RTX 5090)
 
 1. Maximize Parallelism & Occupancy (Core to All Kernels)
  - Launch thousands of threads/block (e.g., 1024 threads/block on Blackwell, aim 50–70% occupancy).

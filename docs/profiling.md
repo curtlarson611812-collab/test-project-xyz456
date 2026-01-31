@@ -1,6 +1,6 @@
 # GPU Profiling Guide for SpeedBitCrackV3
 
-This guide covers profiling tools and techniques for optimizing SpeedBitCrackV3's hybrid Vulkan+CUDA performance to achieve 2.5-3B ops/sec on RTX 5090.
+This guide covers profiling tools and techniques for optimizing SpeedBitCrackV3's hybrid Vulkan+CUDA performance to achieve 800M-1.5B ops/sec on RTX 5090 (realistic ceiling for kangaroo ECDLP).
 
 ## CUDA Profiling with Nsight Compute
 
@@ -193,7 +193,7 @@ renderdoccmd validation -- ./target/release/speedbitcrack
 ## Performance Targets Verification
 
 ### RTX 5090 Expected Performance
-- **Kangaroo Stepping**: 2.5-3B operations/second
+- **Kangaroo Stepping**: 800M-1.5B operations/second (realistic ceiling)
 - **Modular Arithmetic**: 2.8B operations/second
 - **Memory Bandwidth**: 80%+ utilization
 - **GPU Occupancy**: 90%+ for compute kernels
@@ -210,4 +210,4 @@ cargo bench --features cudarc -- --bench
 ncu --set full --target-processes all ./target/release/speedbitcrack
 ```
 
-This profiling setup enables systematic optimization to achieve SpeedBitCrackV3's 2.5-3B ops/sec performance target on RTX 5090 hardware.
+This profiling setup enables systematic optimization to achieve SpeedBitCrackV3's 800M-1.5B ops/sec performance target on RTX 5090 hardware (realistic ceiling for kangaroo ECDLP).
