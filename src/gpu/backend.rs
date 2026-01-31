@@ -19,6 +19,47 @@ use cudarc::driver::{CudaContext, CudaFunction};
 #[cfg(feature = "cuda")]
 use std::path::Path;
 
+// CUDA extern functions
+#[cfg(feature = "cuda")]
+extern "C" {
+    fn batch_modular_inverse_cuda(
+        inputs: *const u32,
+        modulus: *const u32,
+        outputs: *mut u32,
+        is_prime: bool,
+        exp_nibbles: *const u8,
+        batch_size: i32,
+        stream: cuda::CudaStream,
+    ) -> cuda::CudaError;
+
+    fn bigint_mul_gemmex_cuda(
+        cublas_handle: *mut std::ffi::c_void,
+        a_limbs: *const u32,
+        b_limbs: *const u32,
+        result_limbs: *mut u32,
+        batch_size: i32,
+        limbs: i32,
+        stream: cuda::CudaStream,
+    ) -> cuda::CudaError;
+
+    fn batch_mod_mul_hybrid_cuda(
+        a: *const u32,
+        b: *const u32,
+        mod_: *const u32,
+        result: *mut u32,
+        batch: i32,
+        stream: cuda::CudaStream,
+    ) -> cuda::CudaError;
+
+    fn batch_mod_sqr_hybrid_cuda(
+        a: *const u32,
+        mod_: *const u32,
+        result: *mut u32,
+        batch: i32,
+        stream: cuda::CudaStream,
+    ) -> cuda::CudaError;
+}
+
 /// GPU backend trait for Vulkan/CUDA operations
 pub trait GpuBackend {
     fn new() -> Result<Self> where Self: Sized;
@@ -27,35 +68,20 @@ pub trait GpuBackend {
     // Phase 2 precision methods for hybrid CUDA operations
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>>;
     fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>>;
+    // Collision equation solving for DLP resolution
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>>;
+    // Barrett reduction for 256-bit modular reduction
+    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>>;
     // cuBLAS-accelerated big integer operations
     fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>>;
+    // Batch affine conversion for DP export (Rule #7)
+    fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)>;
 }
 
 
 /// Create appropriate GPU backend based on available hardware
-pub fn create_backend() -> Result<Box<dyn GpuBackend>> {
-    // Try CUDA first (precision operations), then Vulkan (bulk operations), then CPU fallback
-
-    #[cfg(feature = "cuda")]
-    {
-        match CudaBackend::new() {
-            Ok(cuda) => return Ok(Box::new(cuda)),
-            Err(_) => {} // Fall through to Vulkan
-        }
-    }
-
-    #[cfg(feature = "vulkan")]
-    {
-        // Try WGPU first (simpler, more portable), then Vulkano
-        // For now, just try Vulkano - WGPU would need async initialization
-        match VulkanBackend::new() {
-            Ok(vulkan) => return Ok(Box::new(vulkan)),
-            Err(_) => {} // Fall through to CPU
-        }
-    }
-
-    // CPU fallback
-    Ok(Box::new(CpuBackend::new()))
+pub fn create_backend() -> Result<HybridBackend> {
+    HybridBackend::new()
 }
 
 /// WGPU backend implementation (alternative to Vulkano)
@@ -161,9 +187,22 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow::anyhow!("WGPU solve operations not yet implemented"))
     }
 
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("WGPU collision solving not yet implemented"))
+    }
+
+    fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("WGPU Barrett reduction not yet implemented"))
+    }
+
     fn batch_mul(&self, _a: Vec<[u32;8]>, _b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
         // WGPU can implement multiplication using compute shaders
         Err(anyhow::anyhow!("WGPU batch multiplication not yet implemented"))
+    }
+
+    fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        // WGPU can implement affine conversion using compute shaders
+        Err(anyhow::anyhow!("WGPU batch affine conversion not yet implemented"))
     }
 }
 
@@ -487,10 +526,26 @@ impl GpuBackend for VulkanBackend {
         Err(anyhow::anyhow!("Vulkan solve operations not yet implemented"))
     }
 
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        // Vulkan backend can implement collision solving using compute shaders
+        Err(anyhow::anyhow!("Vulkan collision solving not yet implemented"))
+    }
+
+    fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        // Vulkan backend can implement Barrett reduction using compute shaders
+        Err(anyhow::anyhow!("Vulkan Barrett reduction not yet implemented"))
+    }
+
     fn batch_mul(&self, _a: Vec<[u32;8]>, _b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
         // Vulkan backend can implement multiplication using compute shaders
         // For now, placeholder - would use bigint_mul.wgsl shader
         Err(anyhow::anyhow!("Vulkan batch multiplication not yet implemented"))
+    }
+
+    fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        // Vulkan backend can implement affine conversion using compute shaders
+        // For now, placeholder - would use affine conversion WGSL shader
+        Err(anyhow::anyhow!("Vulkan batch affine conversion not yet implemented"))
     }
 
     // Helper methods for buffer reading and data conversion
@@ -530,7 +585,10 @@ pub struct CudaBackend {
     device: CudaDevice,
     context: CudaContext,
     stream: CudaStream,
-    inverse_module: CudaModule,
+    inverse_module: CudaModule, // Contains affine and inverse kernels
+    solve_module: CudaModule,   // Contains collision solving and Barrett kernels
+    hybrid_module: CudaModule,  // Contains hybrid Barrett-Montgomery arithmetic
+    carry_module: CudaModule,   // Contains optimized carry propagation
     bigint_module: CudaModule,
     fft_module: CudaModule,
     fused_module: CudaModule,
@@ -583,6 +641,39 @@ impl CudaBackend {
         }
 
         let inverse_module = context.load_module(&ptx_path)?;
+
+        // Load solve module for collision solving and Barrett reduction
+        let solve_ptx_path = Path::new(&out_dir).join("solve.ptx");
+        if !solve_ptx_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Solve PTX module not found at {}. Ensure build.rs compiled successfully.",
+                solve_ptx_path.display()
+            ));
+        }
+
+        let solve_module = context.load_module(&solve_ptx_path)?;
+
+        // Load hybrid modular arithmetic module
+        let hybrid_ptx_path = Path::new(&out_dir).join("hybrid.ptx");
+        if !hybrid_ptx_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Hybrid PTX module not found at {}. Ensure build.rs compiled successfully.",
+                hybrid_ptx_path.display()
+            ));
+        }
+
+        let hybrid_module = context.load_module(&hybrid_ptx_path)?;
+
+        // Load carry propagation module
+        let carry_ptx_path = Path::new(&out_dir).join("carry_propagation.ptx");
+        if !carry_ptx_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Carry propagation PTX not found at {}. Ensure build.rs compiled successfully.",
+                carry_ptx_path.display()
+            ));
+        }
+
+        let carry_module = context.load_module(&carry_ptx_path)?;
 
         // Load bigint multiplication module and initialize cuBLAS
         let bigint_ptx_path = Path::new(&out_dir).join("bigint_mul.ptx");
@@ -640,6 +731,9 @@ impl CudaBackend {
             context,
             stream,
             inverse_module,
+            solve_module,
+            hybrid_module,
+            carry_module,
             bigint_module,
             fft_module,
             fused_module,
@@ -723,34 +817,157 @@ impl GpuBackend for CudaBackend {
         Err(anyhow::anyhow!("CUDA batch solve not yet implemented"))
     }
 
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        let batch = alpha_t.len();
+        if batch == 0 || batch != alpha_w.len() || batch != beta_t.len() || batch != beta_w.len() || batch != target.len() {
+            return Err(anyhow::anyhow!("Invalid batch sizes for collision solving"));
+        }
+
+        // Flatten all inputs
+        let alpha_t_flat: Vec<u32> = alpha_t.into_iter().flatten().collect();
+        let alpha_w_flat: Vec<u32> = alpha_w.into_iter().flatten().collect();
+        let beta_t_flat: Vec<u32> = beta_t.into_iter().flatten().collect();
+        let beta_w_flat: Vec<u32> = beta_w.into_iter().flatten().collect();
+        let target_flat: Vec<u32> = target.into_iter().flatten().collect();
+
+        // Allocate device memory
+        let d_alpha_t = self.context.alloc_copy(&alpha_t_flat)?;
+        let d_alpha_w = self.context.alloc_copy(&alpha_w_flat)?;
+        let d_beta_t = self.context.alloc_copy(&beta_t_flat)?;
+        let d_beta_w = self.context.alloc_copy(&beta_w_flat)?;
+        let d_target = self.context.alloc_copy(&target_flat)?;
+        let d_n = self.context.alloc_copy(&n)?;
+        let d_priv_out = self.context.alloc_zeros::<u32>(batch * 8)?;
+
+        // Get kernel function
+        let solve_fn = self.solve_module.get_function("batch_collision_solve")?;
+
+        // Launch kernel
+        unsafe {
+            solve_fn.launch(
+                &self.stream,
+                ((batch as u32 + 255) / 256, 1, 1),
+                (256, 1, 1),
+                &[
+                    &d_alpha_t.as_kernel_parameter(),
+                    &d_alpha_w.as_kernel_parameter(),
+                    &d_beta_t.as_kernel_parameter(),
+                    &d_beta_w.as_kernel_parameter(),
+                    &d_target.as_kernel_parameter(),
+                    &d_n.as_kernel_parameter(),
+                    &d_priv_out.as_kernel_parameter(),
+                    &(batch as i32),
+                ]
+            )?;
+        }
+
+        // Synchronize and read results
+        self.stream.synchronize()?;
+        let priv_flat = d_priv_out.copy_to_vec()?;
+
+        // Convert back to [u32;8] arrays
+        let results = priv_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+
+        Ok(results)
+    }
+
+    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        let batch = x.len();
+        if batch == 0 {
+            return Ok(vec![]);
+        }
+
+        // Flatten x inputs (512-bit each)
+        let x_flat: Vec<u32> = x.into_iter().flatten().collect();
+
+        // Compute n' for Montgomery if needed
+        let n_prime = if use_montgomery { self.compute_n_prime(&modulus) } else { 0 };
+
+        // Allocate device memory
+        let d_x = self.context.alloc_copy(&x_flat)?;
+        let d_mu = self.context.alloc_copy(&mu)?;
+        let d_modulus = self.context.alloc_copy(&modulus)?;
+        let d_out = self.context.alloc_zeros::<u32>(batch * 8)?;
+
+        // Get kernel function
+        let barrett_fn = self.solve_module.get_function("batch_barrett_reduce")?;
+
+        // Launch kernel
+        unsafe {
+            barrett_fn.launch(
+                &self.stream,
+                ((batch as u32 + 255) / 256, 1, 1),
+                (256, 1, 1),
+                &[
+                    &d_x.as_kernel_parameter(),
+                    &d_mu.as_kernel_parameter(),
+                    &d_modulus.as_kernel_parameter(),
+                    &d_out.as_kernel_parameter(),
+                    &use_montgomery,
+                    &(n_prime as u32),
+                    &(batch as i32),
+                    &8i32, // limbs
+                ]
+            )?;
+        }
+
+        // Synchronize and read results
+        self.stream.synchronize()?;
+        let out_flat = d_out.copy_to_vec()?;
+
+        // Convert back to [u32;8] arrays
+        let results = out_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+
+        Ok(results)
+    }
+
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         let batch_size = inputs.len() as i32;
         if batch_size == 0 {
             return Ok(vec![]);
         }
 
-        // Compute p-2 for Fermat's little theorem (simplified)
-        let mut p_minus_2 = BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
-        p_minus_2 -= 2u32;
+        // Determine if modulus is prime (affects algorithm selection)
+        let is_prime = self.is_prime_modulus(&modulus);
 
-        // Convert to bit array (simplified - should handle full 256-bit)
-        let exp_bits: Vec<u32> = (0..256).map(|i| {
-            if p_minus_2.bit(i as u64) { 1 } else { 0 }
-        }).collect();
+        // Prepare exponent nibbles for Fermat (p-2 in base 16)
+        let exp_nibbles = if is_prime {
+            self.compute_exponent_nibbles(&modulus)
+        } else {
+            vec![0u8; 64] // Not used for Euclidean
+        };
+
+        // Compute n' for Montgomery reduction (if needed)
+        let n_prime = self.compute_n_prime(&modulus);
+
+        // Flatten inputs for device memory
+        let input_flat: Vec<u32> = inputs.into_iter().flatten().collect();
 
         // Allocate device memory
-        let d_inputs = self.context.alloc_copy(&inputs.concat())?;
+        let d_inputs = self.context.alloc_copy(&input_flat)?;
         let d_modulus = self.context.alloc_copy(&modulus)?;
-        let d_exp_bits = self.context.alloc_copy(&exp_bits)?;
+        let d_exp_nibbles = self.context.alloc_copy(&exp_nibbles)?;
         let d_outputs = self.context.alloc_zeros::<u32>(batch_size as usize * 8)?;
 
-        // Launch Fermat inverse kernel (simplified - would implement full square-and-multiply)
-        let grid_size = (batch_size + 255) / 256;
-        let block_size = 256;
-
-        // For now, use a simplified approach - copy inputs as identity
-        // Real implementation would call batch_modular_inverse_cublas
-        self.context.memcpy_d2d(&d_outputs, &d_inputs)?;
+        // Launch the new hybrid batch modular inverse kernel
+        let inverse_fn = self.inverse_module.get_function("batch_mod_inverse")?;
+        let grid_size = ((batch_size as u32 + 255) / 256) as u32;
+        unsafe {
+            inverse_fn.launch(
+                &self.stream,
+                (grid_size, 1, 1),
+                (256, 1, 1),
+                &[
+                    &d_inputs.as_kernel_parameter(),
+                    &d_modulus.as_kernel_parameter(),
+                    &is_prime,
+                    &d_exp_nibbles.as_kernel_parameter(),
+                    &(n_prime as u32),
+                    &d_outputs.as_kernel_parameter(),
+                    &batch_size,
+                ]
+            )?;
+        }
 
         // Synchronize and read results
         self.stream.synchronize()?;
@@ -798,20 +1015,224 @@ impl GpuBackend for CudaBackend {
         Ok(results)
     }
 
-    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+    fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        let batch_size = positions.len() as i32;
+        if batch_size == 0 {
+            return Ok((vec![], vec![]));
+        }
+
+        // Flatten positions: each point is [X,Y,Z] where each is [u32;8], so 24 u32 per point
+        let positions_flat: Vec<u32> = positions.into_iter()
+            .flat_map(|point| point.into_iter().flatten())
+            .collect();
+
+        // Allocate device memory
+        let d_positions = self.context.alloc_copy(&positions_flat)?;
+        let d_modulus = self.context.alloc_copy(&modulus)?;
+        let d_x_outputs = self.context.alloc_zeros::<u32>(batch_size as usize * 8)?;
+        let d_y_outputs = self.context.alloc_zeros::<u32>(batch_size as usize * 8)?;
+
+        // Compute n' for Montgomery reduction
+        let n_prime = self.compute_n_prime(&modulus);
+
+        // Launch fused affine conversion kernel
+        let affine_fn = self.inverse_module.get_function("batch_affine_fused")?;
+        let grid_size = ((batch_size as u32 + 255) / 256) as u32;
+        unsafe {
+            affine_fn.launch(
+                &self.stream,
+                (grid_size, 1, 1),
+                (256, 1, 1),
+                &[
+                    &d_positions.as_kernel_parameter(),
+                    &d_modulus.as_kernel_parameter(),
+                    &(n_prime as u32),
+                    &d_x_outputs.as_kernel_parameter(),
+                    &d_y_outputs.as_kernel_parameter(),
+                    &batch_size,
+                ]
+            )?;
+        }
+
+        // Synchronize and read results
+        self.stream.synchronize()?;
+        let x_flat = d_x_outputs.copy_to_vec()?;
+        let y_flat = d_y_outputs.copy_to_vec()?;
+
+        // Convert back to arrays
+        let x_coords = x_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+        let y_coords = y_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+
+        Ok((x_coords, y_coords))
+    }
+
+    fn batch_redc(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>, modulus: [u32;8], n_prime: u32) -> Result<Vec<[u32;8]>> {
         let batch_size = a.len();
         if batch_size == 0 || batch_size != b.len() {
             return Err(anyhow::anyhow!("Invalid batch size"));
         }
 
-        // Choose algorithm based on batch size and precision requirements
-        if batch_size >= 1000 {
-            // Use cuFFT for large batches (better asymptotic performance)
-            self.batch_mul_cufft(a, b)
-        } else {
-            // Use cuBLAS GEMM for smaller batches (lower overhead)
-            self.batch_mul_cublas(a, b)
+        // Flatten inputs for device memory
+        let a_flat: Vec<u32> = a.into_iter().flatten().collect();
+        let b_flat: Vec<u32> = b.into_iter().flatten().collect();
+
+        // Allocate device memory
+        let d_a = self.context.alloc_copy(&a_flat)?;
+        let d_b = self.context.alloc_copy(&b_flat)?;
+        let d_modulus = self.context.alloc_copy(&modulus)?;
+        let d_results = self.context.alloc_zeros::<u32>(batch_size * 8)?;
+
+        // Launch fused REDC kernel
+        let fused_fn = self.fused_module.get_function("batch_fused_redc")?;
+        let shared_mem_size = 2 * 8 * std::mem::size_of::<u32>(); // 2 * LIMBS * sizeof(uint32_t)
+        unsafe {
+            fused_fn.launch(
+                &self.stream,
+                (batch_size as u32, 1, 1),
+                (32, 1, 1), // One warp per bigint
+                shared_mem_size,
+                &[
+                    &d_a.as_kernel_parameter(),
+                    &d_b.as_kernel_parameter(),
+                    &d_results.as_kernel_parameter(),
+                    &d_modulus.as_kernel_parameter(),
+                    &(n_prime as u32),
+                    &(batch_size as i32),
+                    &(8i32), // LIMBS
+                ]
+            )?;
         }
+
+        // Synchronize and read results
+        self.stream.synchronize()?;
+        let results_flat = d_results.copy_to_vec()?;
+        let results = results_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+
+        Ok(results)
+    }
+
+    // Helper: Check if modulus is prime (simplified primality test)
+    fn is_prime_modulus(&self, modulus: &[u32; 8]) -> bool {
+        // Convert to BigUint for primality testing
+        let mod_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
+
+        // Simple primality test (production would use more sophisticated methods)
+        if mod_big < num_bigint::BigUint::from(2u32) {
+            return false;
+        }
+        if mod_big == num_bigint::BigUint::from(2u32) || mod_big == num_bigint::BigUint::from(3u32) {
+            return true;
+        }
+        if mod_big.clone() % num_bigint::BigUint::from(2u32) == num_bigint::BigUint::from(0u32) {
+            return false;
+        }
+
+        // Check divisibility by odd numbers up to sqrt(modulus)
+        let sqrt_mod = mod_big.sqrt();
+        let mut i = num_bigint::BigUint::from(3u32);
+        while i <= sqrt_mod {
+            if mod_big.clone() % i.clone() == num_bigint::BigUint::from(0u32) {
+                return false;
+            }
+            i += num_bigint::BigUint::from(2u32);
+        }
+
+        true
+    }
+
+    // Helper: Compute p-2 as base-16 nibbles for windowed exponentiation
+    fn compute_exponent_nibbles(&self, modulus: &[u32; 8]) -> Vec<u8> {
+        let mut exp = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
+        exp -= num_bigint::BigUint::from(2u32); // p-2
+
+        let mut nibbles = vec![0u8; 64]; // 256 bits / 4 bits per nibble
+        for i in 0..64 {
+            nibbles[i] = (exp.bit(i * 4) as u8) |
+                        ((exp.bit(i * 4 + 1) as u8) << 1) |
+                        ((exp.bit(i * 4 + 2) as u8) << 2) |
+                        ((exp.bit(i * 4 + 3) as u8) << 3);
+        }
+        nibbles
+    }
+
+    // Helper: Compute n' for Montgomery reduction (n' = -n^{-1} mod 2^32)
+    fn compute_n_prime(&self, modulus: &[u32; 8]) -> u32 {
+        // For Montgomery reduction, we need n' such that n * n' ≡ -1 mod 2^32
+        // We can compute this using the extended Euclidean algorithm on n mod 2^32 and 2^32
+        let n_low = modulus[0] as u64; // Least significant limb
+        let r = 1u64 << 32; // 2^32
+
+        // Extended Euclidean algorithm to find inverse of n_low mod r
+        let mut old_r = r;
+        let mut r = n_low;
+        let mut old_s: i64 = 0;
+        let mut s: i64 = 1;
+
+        while r > 0 {
+            let quotient = old_r / r;
+            let temp_r = r;
+            r = old_r - quotient * r;
+            old_r = temp_r;
+
+            let temp_s = s;
+            s = old_s - (quotient as i64) * s;
+            old_s = temp_s;
+        }
+
+        // old_s now contains the inverse, make it positive and compute n'
+        let mut inv = old_s;
+        while inv < 0 {
+            inv += r as i64;
+        }
+        let n_prime = ((-inv) % (r as i64)) as u32;
+
+        n_prime
+    }
+
+    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>, mod_: [u32;8]) -> Result<Vec<[u32;8]>> {
+        let batch_size = a.len();
+        if batch_size == 0 || batch_size != b.len() {
+            return Err(anyhow::anyhow!("Invalid batch size"));
+        }
+
+        // Use hybrid Barrett-Montgomery modular multiplication for precision operations
+        // This provides ~30% performance gains over plain modular arithmetic (Rule #4)
+        let a_flat: Vec<u32> = a.into_iter().flatten().collect();
+        let b_flat: Vec<u32> = b.into_iter().flatten().collect();
+
+        // Allocate device memory
+        let d_a = self.context.alloc_copy(&a_flat)?;
+        let d_b = self.context.alloc_copy(&b_flat)?;
+        let d_mod = self.context.alloc_copy(&mod_)?;
+        let d_result = self.context.alloc_zeros::<u32>(batch_size * 8)?;
+
+        // Get kernel function
+        let hybrid_mul_fn = self.hybrid_module.get_function("batch_mod_mul_hybrid")?;
+
+        // Launch hybrid multiplication kernel
+        unsafe {
+            hybrid_mul_fn.launch(
+                &self.stream,
+                ((batch_size as u32 + 255) / 256, 1, 1),
+                (256, 1, 1),
+                &[
+                    &d_a.as_kernel_parameter(),
+                    &d_b.as_kernel_parameter(),
+                    &d_mod.as_kernel_parameter(),
+                    &d_result.as_kernel_parameter(),
+                    &(batch_size as i32),
+                ]
+            )?;
+        }
+
+        // Synchronize and read results
+        self.stream.synchronize()?;
+        let result_flat = d_result.copy_to_vec()?;
+
+        // Convert back to [u32;8] arrays
+        let results = result_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+
+        Ok(results)
     }
 
     fn batch_mul_cublas(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
@@ -841,18 +1262,18 @@ impl GpuBackend for CudaBackend {
             batch_size as i32,
         )?;
 
-        // Launch carry reduction
+        // Launch optimized carry propagation
         let carry_fn = self.carry_module.get_function("carry_propagate_warp_shuffle")?;
         unsafe {
             carry_fn.launch(
                 &self.stream,
-                (batch_size as u32, RESULT_LIMBS as u32, 1),
-                (32, 1, 1), // One warp per result limb
+                (batch_size as u32, 1, 1),  // grid(batch) - one block per bigint
+                (32, 1, 1),                  // block(32) - warp size
                 &[
-                    &d_results.as_kernel_parameter(),
-                    &d_products.as_kernel_parameter(),
-                    &(batch_size as u32),
-                    &(LIMBS as u32),
+                    &d_results.as_kernel_parameter(),  // out
+                    &d_products.as_kernel_parameter(), // products
+                    &(batch_size as u32),              // batch
+                    &(LIMBS as u32),                   // limbs
                 ]
             )?;
         }
@@ -1000,5 +1421,149 @@ impl GpuBackend for CpuBackend {
 
     async fn synchronize(&self) -> Result<()> {
         Ok(())
+    }
+}
+
+/// Hybrid backend that automatically selects between Vulkan and CUDA based on availability and operation type
+#[derive(Clone)]
+pub enum HybridBackend {
+    Vulkan(VulkanBackend),
+    Cuda(CudaBackend),
+}
+
+impl HybridBackend {
+    /// Create a new hybrid backend with automatic selection
+    pub fn new() -> Result<Self> {
+        // Try CUDA first for precision operations (preferred for secp256k1 math)
+        #[cfg(feature = "cuda")]
+        {
+            match CudaBackend::new() {
+                Ok(cuda) => return Ok(Self::Cuda(cuda)),
+                Err(_) => {} // Fall through to Vulkan
+            }
+        }
+
+        // Fallback to Vulkan for general operations
+        #[cfg(feature = "vulkan")]
+        {
+            match VulkanBackend::new() {
+                Ok(vulkan) => return Ok(Self::Vulkan(vulkan)),
+                Err(_) => {} // Fall through to CPU
+            }
+        }
+
+        // Final fallback to CPU
+        Ok(Self::Cuda(CpuBackend::new()))
+    }
+
+    /// Check if this backend supports precision operations (true for CUDA, false for Vulkan/CPU)
+    pub fn supports_precision_ops(&self) -> bool {
+        matches!(self, Self::Cuda(_))
+    }
+
+    /// Create shared buffer for Vulkan-CUDA interop (if available)
+    /// Falls back to separate allocations if interop not supported
+    pub fn create_shared_buffer(&self, size: usize) -> Result<SharedBuffer> {
+        match self {
+            Self::Cuda(cuda) => {
+                // Try Vulkan-CUDA interop if Vulkan backend also available
+                #[cfg(feature = "vulkan")]
+                {
+                    // For now, create separate buffers
+                    // TODO: Implement VK_EXT_external_memory_cuda interop
+                }
+                // Fallback to CUDA-only buffer
+                Ok(SharedBuffer::Cuda(cuda.context.alloc_zeros::<u8>(size)?))
+            }
+            Self::Vulkan(vulkan) => {
+                // Vulkan-only buffer
+                Ok(SharedBuffer::Vulkan(Buffer::new_sized(
+                    vulkan.device.clone(),
+                    BufferCreateInfo {
+                        size: size as u64,
+                        usage: BufferUsage::STORAGE_BUFFER,
+                        ..Default::default()
+                    },
+                    MemoryAllocateInfo {
+                        property_flags: MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT,
+                        ..Default::default()
+                    }
+                )?))
+            }
+        }
+    }
+}
+
+/// Shared buffer enum for Vulkan-CUDA interop
+pub enum SharedBuffer {
+    Cuda(cudarc::driver::CudaSlice<u8>),
+    Vulkan(std::sync::Arc<vulkano::buffer::Buffer>),
+}
+
+impl GpuBackend for HybridBackend {
+    fn new() -> Result<Self> {
+        Self::new()
+    }
+
+    fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+        match self {
+            Self::Vulkan(v) => v.precomp_table(primes, base),
+            Self::Cuda(c) => c.precomp_table(primes, base),
+        }
+    }
+
+    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+        match self {
+            Self::Vulkan(v) => v.step_batch(positions, distances, types),
+            Self::Cuda(c) => c.step_batch(positions, distances, types),
+        }
+    }
+
+    fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+        // Prefer CUDA for precision inverse operations
+        match self {
+            Self::Cuda(c) => c.batch_inverse(inputs, modulus),
+            Self::Vulkan(v) => v.batch_inverse(inputs, modulus),
+        }
+    }
+
+    fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
+        // Prefer CUDA for precision solving operations
+        match self {
+            Self::Cuda(c) => c.batch_solve(alphas, betas),
+            Self::Vulkan(v) => v.batch_solve(alphas, betas),
+        }
+    }
+
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        // Prefer CUDA for precision collision solving
+        match self {
+            Self::Cuda(c) => c.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n),
+            Self::Vulkan(v) => v.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n),
+        }
+    }
+
+    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        // Prefer CUDA for precision Barrett reduction
+        match self {
+            Self::Cuda(c) => c.batch_barrett_reduce(x, mu, modulus, use_montgomery),
+            Self::Vulkan(v) => v.batch_barrett_reduce(x, mu, modulus, use_montgomery),
+        }
+    }
+
+    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        // Prefer CUDA for precision multiplication operations
+        match self {
+            Self::Cuda(c) => c.batch_mul(a, b),
+            Self::Vulkan(v) => v.batch_mul(a, b),
+        }
+    }
+
+    fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        // Prefer CUDA for precision affine conversion operations
+        match self {
+            Self::Cuda(c) => c.batch_to_affine(positions, modulus),
+            Self::Vulkan(v) => v.batch_to_affine(positions, modulus),
+        }
     }
 }

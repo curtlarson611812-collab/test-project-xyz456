@@ -9,4 +9,7 @@ Optimize Barrett reduction
 Fully Expand Unrolled Loops
 Implement Batch Submission
 Simplify walk-back logic
+Optimize carry reduction kernal
+NTT-Based Modular Multiplication
+Make Fermat Loop More Efficient
 

@@ -28,20 +28,58 @@ fn main() {
 
         let out_dir = env::var("OUT_DIR").unwrap();
         let cuda_src_dir = Path::new("src/gpu/cuda");
-        let ptx_out = Path::new(&out_dir).join("inverse.ptx");
 
         // Compile inverse.cu to PTX for Phase 2 precision operations
+        let inverse_ptx = Path::new(&out_dir).join("inverse.ptx");
         let status = Command::new("nvcc")
             .arg("-ptx")
             .arg(cuda_src_dir.join("inverse.cu"))
             .arg("-o")
-            .arg(&ptx_out)
+            .arg(&inverse_ptx)
             .arg("--gpu-architecture=compute_50")  // Support compute capability 5.0+
             .arg("--optimize=3")
             .status();
 
         if !status.is_ok() {
             panic!("NVCC compilation failed for inverse.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
+        }
+
+        // Compile solve.cu to PTX for Phase 2 collision solving and Barrett reduction
+        let solve_ptx = Path::new(&out_dir).join("solve.ptx");
+        let status = Command::new("nvcc")
+            .arg("-ptx")
+            .arg(cuda_src_dir.join("solve.cu"))
+            .arg("-o")
+            .arg(&solve_ptx)
+            .arg("--gpu-architecture=compute_50")  // Support compute capability 5.0+
+            .arg("--optimize=3")
+            .status();
+
+        if !status.is_ok() {
+            panic!("NVCC compilation failed for solve.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
+        }
+
+        // Compile hybrid.cu to PTX for Phase 2 hybrid Barrett-Montgomery arithmetic
+        let hybrid_ptx = Path::new(&out_dir).join("hybrid.ptx");
+        let status = Command::new("nvcc")
+            .arg("-ptx")
+            .arg(cuda_src_dir.join("hybrid.cu"))
+            .arg("-o")
+            .arg(&hybrid_ptx)
+            .arg("--gpu-architecture=compute_50")  // Support compute capability 5.0+
+            .arg("--optimize=3")
+            .status();
+
+        if !status.is_ok() {
+            panic!("NVCC compilation failed for hybrid.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
+        }
+
+        // Compile carry_propagation.ptx directly (already PTX)
+        let carry_ptx_src = cuda_src_dir.join("carry_propagation.ptx");
+        let carry_ptx_dst = Path::new(&out_dir).join("carry_propagation.ptx");
+        if carry_ptx_src.exists() {
+            std::fs::copy(&carry_ptx_src, &carry_ptx_dst)
+                .expect("Failed to copy carry_propagation.ptx");
         }
 
         // Compile bigint_mul.cu with cuBLAS support for batch multiplication
