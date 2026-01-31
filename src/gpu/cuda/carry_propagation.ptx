@@ -75,8 +75,9 @@ loop_done:
     st.shared.u64 [sh_sums + %tid*8], %sum;
     bar.sync 0;
 
-    setp.eq.u32 %p_temp, %tid, 0;
-    @%p_temp bra serial_done;
+    // Only tid=0 performs propagation
+    setp.ne.u32 %p_temp, %tid, 0;
+    @%p_temp bra skip_serial;
 
     .reg .u64 %carry;
     mov.u64 %carry, 0;
@@ -93,7 +94,7 @@ serial_loop:
     setp.lt.u32 %p_temp, %i, 16;
     @%p_temp bra serial_loop;
 
-serial_done:
+skip_serial:
     bar.sync 0;
     ld.shared.u64 %sum, [sh_sums + %tid*8];
 
