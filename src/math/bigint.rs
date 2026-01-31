@@ -6,7 +6,7 @@ use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BigInt256 {
     /// Limbs in little-endian order (limb[0] is least significant)
     pub limbs: [u64; 4],
@@ -227,13 +227,13 @@ pub struct BarrettReducer {
 impl BarrettReducer {
     /// Create new Barrett reducer for given modulus
     /// Precomputes mu = floor(2^(512) / modulus) for Barrett reduction
-    pub fn new(modulus: BigInt256) -> Self {
+    pub fn new(modulus: &BigInt256) -> Self {
         // For secp256k1 modulus, k = 256, so we compute mu = floor(2^512 / modulus)
         // This is a simplified computation - full Barrett would need proper 512-bit arithmetic
         let k = modulus.bit_length();
         let mu = BigInt256::from_u64(1); // Placeholder - proper computation requires 512-bit division
 
-        BarrettReducer { modulus, mu, k }
+        BarrettReducer { modulus: *modulus, mu, k }
     }
 
     /// Barrett modular reduction: x mod modulus
@@ -307,7 +307,7 @@ pub struct MontgomeryReducer {
 impl MontgomeryReducer {
     /// Create new Montgomery reducer for given modulus
     /// Precomputes R=2^256, R_inv, and n_prime for REDC algorithm
-    pub fn new(modulus: BigInt256) -> Self {
+    pub fn new(modulus: &BigInt256) -> Self {
         // R = 2^256 (this would be a 257th bit set, but we approximate)
         let r = BigInt256::from_u64(0); // Placeholder for 2^256
 
@@ -326,7 +326,7 @@ impl MontgomeryReducer {
         };
 
         MontgomeryReducer {
-            modulus, r, r_inv, n_prime,
+            modulus: *modulus, r, r_inv, n_prime,
         }
     }
 

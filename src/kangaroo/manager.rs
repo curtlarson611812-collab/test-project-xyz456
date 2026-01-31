@@ -62,7 +62,7 @@ impl KangarooManager {
                 Box::new(crate::gpu::backend::CudaBackend::new()?)
             }
             "hybrid" => {
-                Box::new(HybridBackend::new().await?)
+                Box::new(HybridBackend::new()?)
             }
             _ => {
                 // Default to CUDA if available, otherwise CPU
@@ -116,8 +116,23 @@ impl KangarooManager {
             let target_points: Vec<_> = self.targets.iter().map(|t| t.point).collect();
             let kangaroos = self.generator.generate_batch(&target_points, kangaroos_per_target)?;
 
-            // Step kangaroos using CPU for now (GPU integration pending)
-            let stepped_kangaroos = self.stepper.step_batch(&kangaroos, target_points.first())?;
+            // Basic async overlap: step kangaroos and check collisions concurrently
+            // This demonstrates the concept - full GPU integration pending
+            let step_fut = async {
+                // Step kangaroos (currently CPU, will be GPU)
+                self.stepper.step_batch(&kangaroos, target_points.first())
+            };
+
+            let collision_fut = async {
+                // Check collisions concurrently
+                self.collision_detector.check_collisions(&self.dp_table).await
+            };
+
+            // Execute concurrently to demonstrate overlap concept
+            let (step_result, collision_result) = tokio::join!(step_fut, collision_fut);
+
+            let stepped_kangaroos = step_result?;
+            let collision_solution = collision_result?;
 
             // Check for distinguished points
             let dp_candidates = self.find_distinguished_points(&stepped_kangaroos)?;
@@ -132,8 +147,8 @@ impl KangarooManager {
                 }
             }
 
-            // Check for collisions
-            if let Some(solution) = self.collision_detector.check_collisions(&self.dp_table).await? {
+            // Check collision result
+            if let Some(solution) = collision_solution {
                 info!("COLLISION DETECTED!");
                 if self.verify_solution(&solution)? {
                     return Ok(Some(solution));

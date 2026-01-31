@@ -2,12 +2,15 @@
 //!
 //! Trait for Vulkan/CUDA backends, async buffer mapping, overlap logic
 
+#![allow(unsafe_code)] // Required for CUDA kernel launches and Vulkan buffer operations
+
 use crate::kangaroo::collision::Trap;
 use anyhow::Result;
 use num_bigint::BigUint;
 
 #[cfg(feature = "vulkano")]
 use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, sync::{GpuFuture}, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
+
 
 #[cfg(feature = "cudarc")]
 use cudarc::driver::*;
@@ -864,7 +867,7 @@ impl GpuBackend for CudaBackend {
 
 
 
-    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>, mod_: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
         let batch_size = a.len();
         if batch_size == 0 || batch_size != b.len() {
             return Err(anyhow::anyhow!("Invalid batch size"));
@@ -878,8 +881,7 @@ impl GpuBackend for CudaBackend {
         // Allocate device memory
         let d_a = self.context.alloc_copy(&a_flat)?;
         let d_b = self.context.alloc_copy(&b_flat)?;
-        let d_mod = self.context.alloc_copy(&mod_)?;
-        let d_result = self.context.alloc_zeros::<u32>(batch_size * 8)?;
+        let d_result = self.context.alloc_zeros::<u32>(batch_size * 16)?; // 512-bit results
 
         // Get kernel function
         let hybrid_mul_fn = self.hybrid_module.get_function("batch_mod_mul_hybrid")?;
@@ -893,7 +895,6 @@ impl GpuBackend for CudaBackend {
                 &[
                     &d_a.as_kernel_parameter(),
                     &d_b.as_kernel_parameter(),
-                    &d_mod.as_kernel_parameter(),
                     &d_result.as_kernel_parameter(),
                     &(batch_size as i32),
                 ]
@@ -924,6 +925,44 @@ pub enum HybridBackend {
 /// CPU fallback backend
 #[derive(Clone)]
 pub struct CpuBackend;
+
+impl GpuBackend for CpuBackend {
+    fn new() -> Result<Self> {
+        Ok(CpuBackend)
+    }
+
+    fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+        Err(anyhow::anyhow!("CPU backend does not support precomp_table"))
+    }
+
+    fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
+        Err(anyhow::anyhow!("CPU backend does not support step_batch"))
+    }
+
+    fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("CPU backend does not support batch_inverse"))
+    }
+
+    fn batch_solve(&self, _alphas: Vec<[u32;8]>, _betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
+        Err(anyhow::anyhow!("CPU backend does not support batch_solve"))
+    }
+
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("CPU backend does not support batch_solve_collision"))
+    }
+
+    fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("CPU backend does not support batch_barrett_reduce"))
+    }
+
+    fn batch_mul(&self, _a: Vec<[u32;8]>, _b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        Err(anyhow::anyhow!("CPU backend does not support batch_mul"))
+    }
+
+    fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        Err(anyhow::anyhow!("CPU backend does not support batch_to_affine"))
+    }
+}
 
 impl HybridBackend {
     /// Create a new hybrid backend with automatic selection
@@ -1007,233 +1046,136 @@ impl GpuBackend for HybridBackend {
 
 
     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
-        match self {
-            Self::Vulkan(v) => v.step_batch(positions, distances, types),
-            Self::Cuda(c) => c.step_batch(positions, distances, types),
-            Self::Cpu(c) => c.step_batch(positions, distances, types),
+        // Dispatch bulk step_batch to Vulkan for high-throughput kangaroo walks
+        #[cfg(feature = "vulkano")]
+        {
+            self.vulkan.step_batch(positions, distances, types)
+        }
+        #[cfg(not(feature = "vulkano"))]
+        {
+            // Fallback to CUDA if Vulkan not available
+            #[cfg(feature = "cudarc")]
+            {
+                self.cuda.step_batch(positions, distances, types)
+            }
+            #[cfg(not(feature = "cudarc"))]
+            {
+                self.cpu.step_batch(positions, distances, types)
+            }
         }
     }
 
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
-        // Prefer CUDA for precision inverse operations
-        match self {
-            Self::Cuda(c) => c.batch_inverse(inputs, modulus),
-            Self::Vulkan(v) => v.batch_inverse(inputs, modulus),
-            Self::Cpu(c) => c.batch_inverse(inputs, modulus),
+        // Dispatch precision inverse to CUDA
+        #[cfg(feature = "cudarc")]
+        {
+            self.cuda.batch_inverse(inputs, modulus)
+        }
+        #[cfg(not(feature = "cudarc"))]
+        {
+            #[cfg(feature = "vulkano")]
+            {
+                self.vulkan.batch_inverse(inputs, modulus)
+            }
+            #[cfg(not(feature = "vulkano"))]
+            {
+                self.cpu.batch_inverse(inputs, modulus)
+            }
         }
     }
 
     fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
-        // Prefer CUDA for precision solving operations
-        match self {
-            Self::Cuda(c) => c.batch_solve(alphas, betas),
-            Self::Vulkan(v) => v.batch_solve(alphas, betas),
-            Self::Cpu(c) => c.batch_solve(alphas, betas),
+        // Dispatch precision solving to CUDA
+        #[cfg(feature = "cudarc")]
+        {
+            self.cuda.batch_solve(alphas, betas)
+        }
+        #[cfg(not(feature = "cudarc"))]
+        {
+            #[cfg(feature = "vulkano")]
+            {
+                self.vulkan.batch_solve(alphas, betas)
+            }
+            #[cfg(not(feature = "vulkano"))]
+            {
+                self.cpu.batch_solve(alphas, betas)
+            }
         }
     }
 
     fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
-        // Prefer CUDA for precision collision solving
-        match self {
-            Self::Cuda(c) => c.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n),
-            Self::Vulkan(v) => v.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n),
-            Self::Cpu(c) => c.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n),
+        // Dispatch complex collision solving to CUDA
+        #[cfg(feature = "cudarc")]
+        {
+            self.cuda.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n)
+        }
+        #[cfg(not(feature = "cudarc"))]
+        {
+            #[cfg(feature = "vulkano")]
+            {
+                self.vulkan.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n)
+            }
+            #[cfg(not(feature = "vulkano"))]
+            {
+                self.cpu.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n)
+            }
         }
     }
 
     fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
-        // Prefer CUDA for precision Barrett reduction
-        match self {
-            Self::Cuda(c) => c.batch_barrett_reduce(x, mu, modulus, use_montgomery),
-            Self::Vulkan(v) => v.batch_barrett_reduce(x, mu, modulus, use_montgomery),
-            Self::Cpu(c) => c.batch_barrett_reduce(x, mu, modulus, use_montgomery),
+        // Dispatch Barrett reduction to CUDA
+        #[cfg(feature = "cudarc")]
+        {
+            self.cuda.batch_barrett_reduce(x, mu, modulus, use_montgomery)
+        }
+        #[cfg(not(feature = "cudarc"))]
+        {
+            #[cfg(feature = "vulkano")]
+            {
+                self.vulkan.batch_barrett_reduce(x, mu, modulus, use_montgomery)
+            }
+            #[cfg(not(feature = "vulkano"))]
+            {
+                self.cpu.batch_barrett_reduce(x, mu, modulus, use_montgomery)
+            }
         }
     }
 
     fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        // Prefer CUDA for precision multiplication operations
-        match self {
-            Self::Cuda(c) => c.batch_mul(a, b),
-            Self::Vulkan(v) => v.batch_mul(a, b),
-            Self::Cpu(c) => c.batch_mul(a, b),
+        // Dispatch multiplication to CUDA for precision
+        #[cfg(feature = "cudarc")]
+        {
+            self.cuda.batch_mul(a, b)
+        }
+        #[cfg(not(feature = "cudarc"))]
+        {
+            #[cfg(feature = "vulkano")]
+            {
+                self.vulkan.batch_mul(a, b)
+            }
+            #[cfg(not(feature = "vulkano"))]
+            {
+                self.cpu.batch_mul(a, b)
+            }
         }
     }
 
     fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
-        // Prefer CUDA for precision affine conversion operations
-        match self {
-            Self::Cuda(c) => c.batch_to_affine(positions, modulus),
-            Self::Vulkan(v) => v.batch_to_affine(positions, modulus),
-            Self::Cpu(c) => c.batch_to_affine(positions, modulus),
+        // Dispatch affine conversion to CUDA
+        #[cfg(feature = "cudarc")]
+        {
+            self.cuda.batch_to_affine(positions, modulus)
         }
-    }
-}
-#[cfg(feature = "cudarc")]
-impl CudaBackend {
-    // Helper: Check if modulus is prime (simplified primality test)
-    pub fn is_prime_modulus(modulus: &[u32; 8]) -> bool {
-        // Convert to BigUint for primality testing
-        let mod_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
-
-        // Simple primality test (production would use more sophisticated methods)
-        if mod_big < num_bigint::BigUint::from(2u32) {
-            return false;
-        }
-        if mod_big == num_bigint::BigUint::from(2u32) || mod_big == num_bigint::BigUint::from(3u32) {
-            return true;
-        }
-        if mod_big.clone() % num_bigint::BigUint::from(2u32) == num_bigint::BigUint::from(0u32) {
-            return false;
-        }
-
-        // Check divisibility by odd numbers up to sqrt(modulus)
-        let sqrt_mod = mod_big.sqrt();
-        let mut i = num_bigint::BigUint::from(3u32);
-        while i <= sqrt_mod {
-            if mod_big.clone() % i.clone() == num_bigint::BigUint::from(0u32) {
-                return false;
+        #[cfg(not(feature = "cudarc"))]
+        {
+            #[cfg(feature = "vulkano")]
+            {
+                self.vulkan.batch_to_affine(positions, modulus)
             }
-            i += num_bigint::BigUint::from(2u32);
-        }
-
-        true
-    }
-
-    // Helper: Compute p-2 as base-16 nibbles for windowed exponentiation
-    pub fn compute_exponent_nibbles(modulus: &[u32; 8]) -> Vec<u8> {
-        let mut exp = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
-        exp -= num_bigint::BigUint::from(2u32); // p-2
-
-        let mut nibbles = vec![0u8; 64]; // 256 bits / 4 bits per nibble
-        for i in 0..64 {
-            nibbles[i] = (exp.bit(i * 4) as u8) |
-                        ((exp.bit(i * 4 + 1) as u8) << 1) |
-                        ((exp.bit(i * 4 + 2) as u8) << 2) |
-                        ((exp.bit(i * 4 + 3) as u8) << 3);
-        }
-        nibbles
-    }
-
-    // Helper: Compute n' for Montgomery reduction (n' = -n^{-1} mod 2^32)
-    pub fn compute_n_prime(modulus: &[u32; 8]) -> u32 {
-        // For Montgomery reduction, we need n' such that n * n' ≡ -1 mod 2^32
-        // We can compute this using the extended Euclidean algorithm on n mod 2^32 and 2^32
-        let n_low = modulus[0] as u64; // Least significant limb
-        let r = 1u64 << 32; // 2^32
-
-        // Extended Euclidean algorithm to find inverse of n_low mod r
-        let mut old_r = r;
-        let mut r = n_low;
-        let mut old_s: i64 = 0;
-        let mut s: i64 = 1;
-
-        while r > 0 {
-            let quotient = old_r / r;
-            let temp_r = r;
-            r = old_r - quotient * r;
-            old_r = temp_r;
-
-            let temp_s = s;
-            s = old_s - (quotient as i64) * s;
-            old_s = temp_s;
-        }
-
-        // old_s now contains the inverse, make it positive and compute n'
-        let mut inv = old_s;
-        while inv < 0 {
-            inv += r as i64;
-        }
-        let n_prime = ((-inv) % (r as i64)) as u32;
-
-        n_prime
-    }
-}
-
-#[cfg(feature = "cudarc")]
-impl GpuBackend for CudaBackend {
-    fn new() -> Result<Self> {
-        // Initialize CUDA device and stream
-        let device = Arc::new(CudaDevice::new(0)?);
-        let stream = CudaStream::default();
-
-        // Initialize cuBLAS
-        let cublas_handle = CudaBlas::new(device.clone())?;
-
-        // Note: cudarc does not support loading PTX modules directly
-        // Raw CUDA driver API would be needed for kernel execution
-        // This is a fundamental limitation of cudarc's design
-
-        Ok(Self {
-            device,
-            stream,
-            cublas_handle,
-        })
-    }
-
-    fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
-        Err(anyhow::anyhow!("CUDA kernel execution requires PTX module loading - cudarc limitation: CudaModule::load_ptx() not available. Raw CUDA driver API (cuModuleLoad(), cuModuleGetFunction(), cuLaunchKernel()) needed for actual GPU execution. cuBLAS works but custom kernels require driver-level access."))
-    }
-
-    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
-        Err(anyhow::anyhow!("CUDA kangaroo stepping requires custom PTX kernel execution - cudarc limitation: No CudaModule/CudaFunction support for launching custom kernels. Raw CUDA driver API needed: cuModuleLoad(), cuModuleGetFunction(), cuLaunchKernel() with grid(batch/256,1,1), block(256,1,1) for optimal occupancy. cuBLAS handles matrix ops but not elliptic curve arithmetic."))
-    }
-
-    fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
-        Err(anyhow::anyhow!("CUDA modular inverse requires PTX kernel execution - cudarc limitation: No kernel launching capabilities. Raw driver API needed for Fermat's Little Theorem (a^(p-2) mod p) or Euclidean algorithm implementation. secp256k1 prime allows efficient GPU computation with Montgomery reduction."))
-    }
-
-    fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
-        Err(anyhow::anyhow!("CUDA collision solving requires custom PTX kernels - cudarc limitation: No kernel execution support. Raw driver API needed for discrete log equation solving: d = alpha_t - alpha_w * inv(beta_w - beta_t) mod n. Montgomery arithmetic required for 256-bit modular operations."))
-    }
-
-    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
-        Err(anyhow::anyhow!("CUDA collision equation solving requires PTX kernel execution - cudarc limitation prevents access to implemented Barrett reduction kernels. Raw driver API needed for complex dlog solving with Montgomery arithmetic and modular inverse operations."))
-    }
-
-    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
-        Err(anyhow::anyhow!("CUDA Barrett reduction requires PTX kernel execution - cudarc limitation prevents loading modular arithmetic kernels. Raw driver API needed for q = ((x >> k) * mu) >> k, r = x - q * m with Montgomery optimization for multiplication-heavy operations."))
-    }
-
-    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        let batch_size = a.len();
-        if batch_size == 0 || batch_size != b.len() {
-            return Err(anyhow::anyhow!("Invalid batch size for multiplication"));
-        }
-
-        // Allocate device memory for cuBLAS operations
-        let mut results = Vec::with_capacity(batch_size);
-
-        // For each pair, perform schoolbook multiplication using CPU fallback
-        // since cudarc doesn't support custom kernels
-        for i in 0..batch_size {
-            let mut result = [0u32; 16];
-
-            // Simple schoolbook multiplication (not optimized for GPU)
-            // In a real implementation, this would use custom PTX kernels
-            for j in 0..8 {
-                for k in 0..8 {
-                    let product = (a[i][j] as u64) * (b[i][k] as u64);
-                    let mut carry = product;
-
-                    // Add to result with carry propagation
-                    let mut pos = j + k;
-                    while carry > 0 && pos < 16 {
-                        let sum = (result[pos] as u64) + (carry & 0xFFFFFFFF);
-                        result[pos] = sum as u32;
-                        carry = sum >> 32;
-                        pos += 1;
-                    }
-                }
+            #[cfg(not(feature = "vulkano"))]
+            {
+                self.cpu.batch_to_affine(positions, modulus)
             }
-
-            results.push(result);
         }
-
-        Ok(results)
     }
-
-    fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
-        Err(anyhow::anyhow!("CUDA affine conversion requires PTX kernel execution - cudarc limitation prevents elliptic curve coordinate transformation. Raw driver API needed for z_inv = z^(-1), x = x * z_inv^2, y = y * z_inv^3 with batch modular inverse for Jacobian to affine conversion."))
-    }
-
 }

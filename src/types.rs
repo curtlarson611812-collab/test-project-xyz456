@@ -48,8 +48,8 @@ impl Point {
         let x_squared = curve.montgomery_p.mul(&x, &x);
         let x_cubed = curve.montgomery_p.mul(&x_squared, &x);
         let ax = curve.montgomery_p.mul(&curve.a, &x);
-        let rhs = curve.montgomery_p.add(&x_cubed, &ax);
-        let rhs = curve.montgomery_p.add(&rhs, &curve.b);
+        let rhs = curve.barrett_p.add(&x_cubed, &ax);
+        let rhs = curve.barrett_p.add(&rhs, &curve.b);
 
         // Check if y² ≡ x³ + ax + b mod p
         y_squared == rhs
