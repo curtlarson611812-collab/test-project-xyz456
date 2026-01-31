@@ -311,7 +311,7 @@ impl Secp256k1 {
     /// Provides side-channel resistance for cryptographic operations
     /// Note: k256 library provides constant-time field arithmetic
     pub fn mul_constant_time(&self, k: &BigInt256, p: &Point) -> Point {
-        use k256::{ProjectivePoint, Scalar};
+        use k256::Scalar;
 
         // Convert BigInt256 to k256::Scalar
         let k_bytes = k.to_bytes_be();

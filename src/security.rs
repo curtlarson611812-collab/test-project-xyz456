@@ -2,6 +2,8 @@
 //!
 //! Provides constant-time operations, input validation, and side-channel protection.
 
+#![allow(unsafe_code)] // Override crate-level deny for secure memory operations
+
 use crate::math::bigint::BigInt256;
 
 /// Validate that a scalar is in the valid range for secp256k1

@@ -138,6 +138,59 @@ mod tests {
         assert!(config.validate().is_err());
     }
 
+    // Test GPU step batch integration
+    #[test]
+    #[cfg(feature = "cudarc")]
+    fn test_gpu_step_batch_integration() {
+        use speedbitcrack::types::{KangarooState, Point};
+        use speedbitcrack::kangaroo::collision::Trap;
+
+        // Test CUDA backend creation
+        let backend = match speedbitcrack::gpu::backend::CudaBackend::new() {
+            Ok(b) => b,
+            Err(e) => {
+                println!("CUDA backend not available for integration test: {} - skipping", e);
+                return;
+            }
+        };
+
+        // Create test data - small batch for integration testing
+        let batch_size = 32;
+        let mut positions = vec![[[0u32; 8]; 3]; batch_size];
+        let mut distances = vec![[0u32; 8]; batch_size];
+        let types = vec![0u32; batch_size];
+
+        // Initialize with basic test data
+        for i in 0..batch_size {
+            // Set some basic point data (generator point approximation)
+            positions[i][0] = [0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07, 0x29BFCDB2, 0xDCE28D95, 0x9F2815B1, 0x6F81798]; // X coord
+            positions[i][1] = [0x483ADA77, 0x26A3C465, 0x5DA4FBFC, 0x0E1108A8, 0xFD17B448, 0xA6855419, 0x9C47D08F, 0xFB10D4B8]; // Y coord
+            positions[i][2] = [1, 0, 0, 0, 0, 0, 0, 0]; // Z coord = 1 (affine)
+            distances[i] = [i as u32, 0, 0, 0, 0, 0, 0, 0];
+        }
+
+        // Test precomp table generation
+        let base_point = Point {
+            x: [0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07, 0x29BFCDB2, 0xDCE28D95, 0x9F2815B1, 0x6F81798],
+            y: [0x483ADA77, 0x26A3C465, 0x5DA4FBFC, 0x0E1108A8, 0xFD17B448, 0xA6855419, 0x9C47D08F, 0xFB10D4B8],
+            z: [1, 0, 0, 0, 0, 0, 0, 0],
+        };
+
+        let base_distance = [0u32; 8];
+        let (points, dists) = backend.precomp_table(vec![base_distance; 8], base_distance).unwrap();
+
+        // Should return some data
+        assert!(!points.is_empty());
+        assert!(!dists.is_empty());
+
+        // Test step batch with precomputed data
+        let traps = backend.step_batch(&mut positions, &mut distances, &types).unwrap();
+
+        // Verify the operation completed (traps may or may not be found depending on data)
+        // The important thing is that the GPU operation completed without error
+        println!("GPU integration test completed successfully with {} traps found", traps.len());
+    }
+
     // Test GPU backend availability
     #[test]
     fn test_gpu_backend_availability() {
