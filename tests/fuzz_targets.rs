@@ -66,6 +66,41 @@ fuzz_target!(|data: &[u8]| {
 
 #[cfg(feature = "libfuzzer")]
 fuzz_target!(|data: &[u8]| {
+    // Additional fuzz test for comprehensive point validation
+    if data.len() < 96 {
+        return;
+    }
+
+    let curve = Secp256k1::new();
+
+    // Create point from fuzzed data and test all validation aspects
+    let x_bytes: [u8; 32] = data[0..32].try_into().unwrap();
+    let y_bytes: [u8; 32] = data[32..64].try_into().unwrap();
+    let z_bytes: [u8; 32] = data[64..96].try_into().unwrap();
+
+    let x = BigInt256::from_bytes_be(&x_bytes);
+    let y = BigInt256::from_bytes_be(&y_bytes);
+    let z = BigInt256::from_bytes_be(&z_bytes);
+
+    let point = Point {
+        x: x.to_u64_array(),
+        y: y.to_u64_array(),
+        z: z.to_u64_array(),
+    };
+
+    // Test comprehensive validation - should not panic on any input
+    let curve_valid = point.validate_curve(&curve);
+    let subgroup_valid = point.validate_subgroup(&curve);
+    let overall_valid = point.validate(&curve);
+
+    // These should be consistent
+    if curve_valid.is_ok() && subgroup_valid.is_ok() {
+        assert!(overall_valid.is_ok());
+    }
+});
+
+#[cfg(feature = "libfuzzer")]
+fuzz_target!(|data: &[u8]| {
     if data.len() < 32 {
         return;
     }

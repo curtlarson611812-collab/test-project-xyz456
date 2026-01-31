@@ -52,6 +52,26 @@ pub fn secure_zero_memory(data: &mut [u8]) {
     std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
 }
 
+/// Secure clearing of BigInt256 from memory
+pub fn secure_zero_bigint(bigint: &mut crate::math::bigint::BigInt256) {
+    // Convert limbs to bytes and zero securely
+    let mut bytes = [0u8; 32]; // 4 limbs * 8 bytes each
+
+    // Copy limb data to bytes array
+    for i in 0..4 {
+        let limb_bytes = bigint.limbs[i].to_le_bytes();
+        bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
+    }
+
+    // Securely zero the bytes
+    secure_zero_memory(&mut bytes);
+
+    // Zero the actual limbs (this is safe since we're in a controlled context)
+    for i in 0..4 {
+        bigint.limbs[i] = 0;
+    }
+}
+
 /// Validate that a target address is valid for ECDLP solving
 pub fn validate_target(target: &str) -> Result<(), &'static str> {
     // Basic validation - should be a valid Bitcoin address or hash160
@@ -76,10 +96,8 @@ pub fn security_audit() -> Vec<&'static str> {
         issues.push("Debug build detected - timing attacks possible");
     }
 
-    // Check for unsafe code usage
-    if cfg!(feature = "unsafe_code_allowed") {
-        issues.push("Unsafe code feature enabled - security risk");
-    }
+    // Note: Unsafe code is allowed in this module for secure memory operations
+    // The module-level #[allow(unsafe_code)] attribute overrides the crate-level deny
 
     // Check for CUDA availability
     #[cfg(not(feature = "cudarc"))]

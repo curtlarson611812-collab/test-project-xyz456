@@ -163,6 +163,25 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow::anyhow!("WGPU backend requires async initialization - use WgpuBackend::new().await"))
     }
 
+    fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+        Err(anyhow::anyhow!("WGPU precomp_table not yet implemented - requires compute shader for jump table generation"))
+    }
+
+    fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
+        Err(anyhow::anyhow!("WGPU step_batch not yet implemented - requires compute shader for kangaroo stepping"))
+    }
+
+    fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("WGPU batch_inverse not yet implemented - requires compute shader for modular inverse"))
+    }
+
+    fn batch_solve(&self, _alphas: Vec<[u32;8]>, _betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
+        Err(anyhow::anyhow!("WGPU batch_solve not yet implemented - requires compute shader for collision solving"))
+    }
+
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("WGPU batch_solve_collision not yet implemented - requires compute shader for complex collision equations"))
+    }
 
     fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
         Err(anyhow::anyhow!("WGPU Barrett reduction not yet implemented"))
@@ -897,8 +916,6 @@ impl GpuBackend for CudaBackend {
 /// Hybrid backend that automatically selects between Vulkan and CUDA based on availability and operation type
 #[derive(Clone)]
 pub enum HybridBackend {
-    #[cfg(feature = "vulkan")]
-    Vulkan(VulkanBackend),
     #[cfg(feature = "cudarc")]
     Cuda(CudaBackend),
     Cpu(CpuBackend),
@@ -916,24 +933,15 @@ impl HybridBackend {
         {
             match CudaBackend::new() {
                 Ok(cuda) => return Ok(Self::Cuda(cuda)),
-                Err(_) => {} // Fall through to Vulkan
-            }
-        }
-
-        // Fallback to Vulkan for general operations
-        #[cfg(feature = "vulkan")]
-        {
-            match VulkanBackend::new() {
-                Ok(vulkan) => return Ok(Self::Vulkan(vulkan)),
                 Err(_) => {} // Fall through to CPU
             }
         }
 
-        // Final fallback to CPU
+        // Final fallback to CPU (Vulkan backend removed due to fundamental limitations)
         Ok(Self::Cpu(CpuBackend::new()))
     }
 
-    /// Check if this backend supports precision operations (true for CUDA, false for Vulkan/CPU)
+    /// Check if this backend supports precision operations (true for CUDA, false for CPU)
     pub fn supports_precision_ops(&self) -> bool {
         #[cfg(feature = "cudarc")]
         {

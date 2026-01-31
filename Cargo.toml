@@ -32,8 +32,7 @@ cuda-sys = { version = "0.2.0", optional = true }  # Raw CUDA driver API for adv
 libfuzzer-sys = { version = "0.4", optional = true }  # Fuzz testing
 
 [features]
-default = ["vulkan"]
-vulkan = ["wgpu", "vulkano", "vulkano-shaders"]
+default = ["cudarc"]
 cudarc = ["dep:cudarc", "dep:cuda-runtime-sys", "dep:cuda-sys"]
 fuzz = ["libfuzzer-sys"]
 

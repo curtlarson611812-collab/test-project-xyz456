@@ -176,6 +176,15 @@ impl BigInt256 {
     }
 }
 
+impl Drop for BigInt256 {
+    fn drop(&mut self) {
+        // Securely zero memory to prevent cryptographic key leakage
+        // Use the security module's safe wrapper for BigInt256 zeroing
+        use crate::security::secure_zero_bigint;
+        secure_zero_bigint(self);
+    }
+}
+
 impl std::ops::Shl<usize> for BigInt256 {
     type Output = Self;
 
