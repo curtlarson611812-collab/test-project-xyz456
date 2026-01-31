@@ -52,14 +52,22 @@ __global__ void kangaroo_step_batch(
     // In practice, this would use a proper hash function
     uint32_t jump_idx = (state.position.x[0] + state.position.y[0]) % num_jumps;
 
-    // Load jump point into shared memory for coalesced access
-    __shared__ Point shared_jumps[32];  // Block size 32
+    // Shared memory for jump table optimization (RTX 5090 occupancy)
+    __shared__ Point shared_jumps[32];  // 32-entry jump table in shared memory
+    __shared__ uint32_t shared_jump_distances[32 * 8]; // Jump distances in shared memory
 
-    // Collaborative loading of jump points into shared memory
-    if (threadIdx.x < 32 && jump_idx < num_jumps) {
-        shared_jumps[threadIdx.x] = jumps[jump_idx];
+    // Collaborative loading of jump table into shared memory
+    // Coalesced access: threads load consecutive memory locations
+    if (threadIdx.x < 32) {
+        // Load jump point (coalesced across threads)
+        shared_jumps[threadIdx.x] = jumps[threadIdx.x];
+
+        // Load jump distances (coalesced across threads)
+        for (int i = 0; i < 8; i++) {
+            shared_jump_distances[threadIdx.x * 8 + i] = jumps[threadIdx.x].x[i];
+        }
     }
-    __syncthreads();
+    __syncthreads(); // Ensure shared memory loads complete
 
     // Perform elliptic curve point addition: position = position + jump
     // This is a simplified implementation - real implementation would use

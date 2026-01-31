@@ -34,6 +34,8 @@ libfuzzer-sys = { version = "0.4", optional = true }  # Fuzz testing
 [features]
 default = ["cudarc"]
 cudarc = ["dep:cudarc", "dep:cuda-runtime-sys", "dep:cuda-sys"]
+vulkano = ["dep:vulkano", "dep:vulkano-shaders"]
+wgpu = ["dep:wgpu"]
 fuzz = ["libfuzzer-sys"]
 
 [lints.rust]

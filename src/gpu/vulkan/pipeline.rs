@@ -2,10 +2,12 @@
 //!
 //! Device/queue/pipeline creation, bind group layouts, push constants
 
+#[cfg(feature = "vulkano")]
 use wgpu::{Device, Queue, ShaderModule, ComputePipeline, BindGroupLayout, PipelineLayout};
 use anyhow::Result;
 
 /// Vulkan pipeline manager
+#[cfg(feature = "vulkano")]
 pub struct VulkanPipeline {
     device: Device,
     queue: Queue,
@@ -14,6 +16,7 @@ pub struct VulkanPipeline {
     dp_check_pipeline: ComputePipeline,
 }
 
+#[cfg(feature = "vulkano")]
 impl VulkanPipeline {
     /// Create new Vulkan pipeline manager
     pub async fn new() -> Result<Self> {

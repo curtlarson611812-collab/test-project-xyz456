@@ -103,6 +103,10 @@ pub struct Config {
     /// Log level
     #[arg(long, default_value = "info")]
     pub log_level: String,
+
+    /// GPU backend to use (cuda, vulkan, hybrid, cpu)
+    #[arg(long, default_value = "cuda")]
+    pub gpu_backend: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

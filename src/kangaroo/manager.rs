@@ -6,7 +6,7 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution};
 use crate::dp::DpTable;
-use crate::gpu::backend::{GpuBackend, CpuBackend};
+use crate::gpu::backend::{GpuBackend, HybridBackend};
 use crate::kangaroo::generator::KangarooGenerator;
 use crate::kangaroo::stepper::KangarooStepper;
 use crate::kangaroo::collision::CollisionDetector;
@@ -24,7 +24,7 @@ pub struct KangarooManager {
     config: Config,
     targets: Vec<Target>,
     dp_table: Arc<Mutex<DpTable>>,
-    gpu_backend: Arc<tokio::sync::Mutex<CpuBackend>>,
+    gpu_backend: Box<dyn GpuBackend>,
     generator: KangarooGenerator,
     stepper: KangarooStepper,
     collision_detector: CollisionDetector,
@@ -43,11 +43,39 @@ impl KangarooManager {
 
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
-        let gpu_backend = Arc::new(tokio::sync::Mutex::new(CpuBackend::new()));
-        {
-            let mut backend = gpu_backend.lock().await;
-            backend.initialize().await?; // Initialize GPU backend
-        }
+
+        // Create appropriate GPU backend based on configuration
+        let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend.as_str() {
+            "vulkan" => {
+                #[cfg(feature = "vulkano")]
+                {
+                    use crate::gpu::backend::WgpuBackend;
+                    Box::new(WgpuBackend::new().await?)
+                }
+                #[cfg(not(feature = "vulkano"))]
+                {
+                    warn!("Vulkan backend requested but not compiled - falling back to CUDA");
+                    Box::new(crate::gpu::backend::CudaBackend::new()?)
+                }
+            }
+            "cuda" => {
+                Box::new(crate::gpu::backend::CudaBackend::new()?)
+            }
+            "hybrid" => {
+                Box::new(HybridBackend::new().await?)
+            }
+            _ => {
+                // Default to CUDA if available, otherwise CPU
+                #[cfg(feature = "cudarc")]
+                {
+                    Box::new(crate::gpu::backend::CudaBackend::new()?)
+                }
+                #[cfg(not(feature = "cudarc"))]
+                {
+                    Box::new(crate::gpu::backend::CpuBackend::new())
+                }
+            }
+        };
         let generator = KangarooGenerator::new(&config);
         let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits); // Use standard jump table
         let collision_detector = CollisionDetector::new();
@@ -88,15 +116,13 @@ impl KangarooManager {
             let target_points: Vec<_> = self.targets.iter().map(|t| t.point).collect();
             let kangaroos = self.generator.generate_batch(&target_points, kangaroos_per_target)?;
 
-            // Step kangaroos
+            // Step kangaroos using CPU for now (GPU integration pending)
             let stepped_kangaroos = self.stepper.step_batch(&kangaroos, target_points.first())?;
 
             // Check for distinguished points
             let dp_candidates = self.find_distinguished_points(&stepped_kangaroos)?;
 
             // Add to DP table (async)
-            // Use batch to_affine for DP export if needed (specs require for efficiency)
-            // For now, add to table, but in production export use batch_to_affine
             {
                 let mut dp_table = self.dp_table.lock().await;
                 for candidate in dp_candidates {
@@ -121,6 +147,7 @@ impl KangarooManager {
             self.total_ops += stepped_kangaroos.len() as u64;
         }
     }
+
 
     /// Find distinguished points in kangaroo batch
     fn find_distinguished_points(&self, kangaroos: &[KangarooState]) -> Result<Vec<crate::types::DpEntry>> {

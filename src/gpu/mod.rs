@@ -3,6 +3,7 @@
 //! Hybrid Vulkan/CUDA backend for bulk compute operations
 
 pub mod backend;
+#[cfg(feature = "vulkano")]
 pub mod vulkan;
 pub mod cuda;
 

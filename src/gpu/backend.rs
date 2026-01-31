@@ -6,7 +6,7 @@ use crate::kangaroo::collision::Trap;
 use anyhow::Result;
 use num_bigint::BigUint;
 
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, sync::{GpuFuture}, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
 
 #[cfg(feature = "cudarc")]
@@ -83,7 +83,7 @@ pub fn create_backend() -> Result<HybridBackend> {
 }
 
 /// WGPU backend implementation (alternative to Vulkano)
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 pub struct WgpuBackend {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -92,7 +92,7 @@ pub struct WgpuBackend {
     dp_pipeline: wgpu::ComputePipeline,
 }
 
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 impl WgpuBackend {
     pub async fn new() -> Result<Self> {
         let instance = wgpu::Instance::default();
@@ -156,7 +156,7 @@ impl WgpuBackend {
     }
 }
 
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 impl GpuBackend for WgpuBackend {
     fn new() -> Result<Self> {
         // WGPU requires async, but we provide sync wrapper
@@ -199,7 +199,7 @@ impl GpuBackend for WgpuBackend {
 }
 
 /// Vulkan backend implementation using vulkano
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 pub struct VulkanBackend {
     instance: std::sync::Arc<vulkano::instance::Instance>,
     device: std::sync::Arc<vulkano::device::Device>,
@@ -209,7 +209,7 @@ pub struct VulkanBackend {
     dp_pipeline: std::sync::Arc<vulkano::pipeline::ComputePipeline>,
 }
 
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 impl VulkanBackend {
     pub fn new() -> Result<Self> {
         // Enhanced instance creation with validation layers for debugging
@@ -301,7 +301,7 @@ impl VulkanBackend {
     }
 }
 
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 impl GpuBackend for VulkanBackend {
     fn new() -> Result<Self> {
         Self::new()
@@ -474,7 +474,7 @@ impl GpuBackend for VulkanBackend {
 }
 
 /// Utility functions for Vulkan buffer reading
-#[cfg(feature = "vulkan")]
+#[cfg(feature = "vulkano")]
 impl VulkanBackend {
     pub fn read_positions_buffer(buf: &Buffer<[[[u32;8];3]]>, count: usize) -> Result<Vec<[[u32;8];3]>> {
         let data = buf.read()?;
@@ -955,7 +955,7 @@ impl HybridBackend {
 
     /// Create shared buffer for Vulkan-CUDA interop (if available)
     /// Falls back to separate allocations if interop not supported
-    #[cfg(any(feature = "vulkan", feature = "cudarc"))]
+    #[cfg(any(feature = "vulkano", feature = "cudarc"))]
     pub fn create_shared_buffer(&self, size: usize) -> Result<SharedBuffer> {
         match self {
             #[cfg(feature = "cudarc")]
@@ -964,7 +964,7 @@ impl HybridBackend {
                 let buffer = cuda.context.alloc_zeros::<u8>(size)?;
                 Ok(SharedBuffer::Cuda(buffer))
             }
-            #[cfg(feature = "vulkan")]
+            #[cfg(feature = "vulkano")]
             Self::Vulkan(vulkan) => {
                 // Vulkan-only buffer
                 Ok(SharedBuffer::Vulkan(Buffer::new_sized(
@@ -988,11 +988,11 @@ impl HybridBackend {
 }
 
 /// Shared buffer enum for Vulkan-CUDA interop
-#[cfg(any(feature = "vulkan", feature = "cudarc"))]
+#[cfg(any(feature = "vulkano", feature = "cudarc"))]
 pub enum SharedBuffer {
     #[cfg(feature = "cudarc")]
     Cuda(cudarc::driver::CudaSlice<u8>),
-    #[cfg(feature = "vulkan")]
+    #[cfg(feature = "vulkano")]
     Vulkan(std::sync::Arc<vulkano::buffer::Buffer>),
 }
 

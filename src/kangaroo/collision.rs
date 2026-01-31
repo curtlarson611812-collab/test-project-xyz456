@@ -1,6 +1,7 @@
 use crate::types::{Solution, KangarooState, Point};
 use crate::dp::DpTable;
 use crate::math::{Secp256k1, BigInt256};
+use crate::gpu::backend::GpuBackend;
 use anyhow::Result;
 use num_bigint::BigUint;
 
@@ -33,6 +34,17 @@ impl CollisionDetector {
 
     pub fn curve(&self) -> &Secp256k1 {
         &self.curve
+    }
+
+    /// GPU-accelerated collision checking
+    pub async fn check_collisions_gpu(
+        &self,
+        _gpu_backend: &dyn crate::gpu::backend::GpuBackend,
+        dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>
+    ) -> Result<Option<Solution>> {
+        // Placeholder: would implement GPU-accelerated collision checking
+        // For now, fall back to CPU implementation
+        self.check_collisions(dp_table).await
     }
 
     pub async fn check_collisions(&self, dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>) -> Result<Option<Solution>> {
