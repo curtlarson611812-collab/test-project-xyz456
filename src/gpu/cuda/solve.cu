@@ -157,7 +157,7 @@ __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t
     for (int i = 0; i < LIMBS; i++) result[i] = temp[i + LIMBS];
 
     // Conditional subtraction
-    if (bigint_cmp_par(result, mod_, LIMBS) >= 0) {
+    if (bigint_cmp_par(result, mod_) >= 0) {
         bigint_sub_par(result, mod_, result);
     }
 }
@@ -233,12 +233,13 @@ __global__ void batch_collision_solve(uint32_t *alpha_t, uint32_t *alpha_w, uint
 
     // Step 5: Reduce modulo n
     // First, check if priv_temp >= n and subtract if needed
-    if (bigint_cmp_par(priv_temp, n, LIMBS) >= 0) {
+    if (bigint_cmp_par(priv_temp, n) >= 0) {
         bigint_sub_par(priv_temp, n, priv_temp);
     }
 
     // Handle negative results (if alpha_diff was negative)
-    if (bigint_cmp_par(priv_temp, &alpha_diff[LIMBS], LIMBS) < 0) {  // Check against zero array
+    // Check if priv_temp is negative (most significant bit set)
+    if ((priv_temp[LIMBS-1] & 0x80000000) != 0) {
         bigint_add_par(priv_temp, n, priv_temp);
     }
 
@@ -259,9 +260,9 @@ __global__ void batch_barrett_reduce(uint32_t *x, uint32_t *mu, uint32_t *mod, u
     } else {
         // Barrett reduction: q = (x * mu) >> (2*k), r = x - q * mod
         __shared__ uint32_t x_wide[WIDE_LIMBS];
-        __shared__ uint32_t q[limbs];
+        __shared__ uint32_t q[LIMBS];
         __shared__ uint32_t qp[WIDE_LIMBS];
-        __shared__ uint32_t result[limbs];
+        __shared__ uint32_t result[LIMBS];
 
         // Load x (512-bit input)
         if (limb_idx < WIDE_LIMBS) {
@@ -270,7 +271,7 @@ __global__ void batch_barrett_reduce(uint32_t *x, uint32_t *mu, uint32_t *mod, u
         __syncthreads();
 
         // Compute x * mu (wide multiplication)
-        uint32_t x_mu[WIDE_LIMBS + limbs + 1];
+        uint32_t x_mu[WIDE_LIMBS + LIMBS + 1];
         bigint_wide_mul_par(x_wide, mu, x_mu);
 
         // Extract q from upper bits (approximation of x * mu >> 512)
@@ -308,7 +309,7 @@ __global__ void batch_barrett_reduce(uint32_t *x, uint32_t *mu, uint32_t *mod, u
         __syncthreads();
 
         // Conditional subtraction: if r >= mod, r -= mod
-        if (bigint_cmp_par(result, mod, limbs) >= 0) {
+        if (bigint_cmp_par(result, mod) >= 0) {
             bigint_sub_par(result, mod, result);
         }
 

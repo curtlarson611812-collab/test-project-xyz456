@@ -1,6 +1,6 @@
 use crate::types::{Solution, KangarooState, Point};
 use crate::dp::DpTable;
-use crate::math::Secp256k1;
+use crate::math::{Secp256k1, BigInt256};
 use anyhow::Result;
 use num_bigint::BigUint;
 

@@ -205,7 +205,7 @@ __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t
     if (limb_idx < LIMBS) result[limb_idx] = temp[LIMBS + limb_idx];
 
     // Conditional subtraction
-    if (bigint_cmp_par(result, mod_, LIMBS) >= 0) {
+    if (bigint_cmp_par(result, mod_) >= 0) {
         bigint_sub_par(result, mod_, result);
     }
 }
@@ -254,7 +254,7 @@ __device__ void barrett_reduce_par(const uint32_t x[WIDE_LIMBS], const uint32_t 
     __syncthreads();
 
     // Conditional subtraction: if r >= mod, r -= mod
-    if (bigint_cmp_par(result, mod_, LIMBS) >= 0) {
+    if (bigint_cmp_par(result, mod_) >= 0) {
         bigint_sub_par(result, mod_, result);
     }
 }

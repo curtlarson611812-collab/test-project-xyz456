@@ -61,6 +61,9 @@ extern "C" cudaError_t batch_bigint_mul_cublas(
 ) {
     cudaError_t cuda_status;
     cublasStatus_t cublas_status;
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    dim3 grid, block;
 
     // Allocate temporary buffer for GEMM products (float for precision)
     float *d_products;
@@ -89,8 +92,6 @@ extern "C" cudaError_t batch_bigint_mul_cublas(
     // Perform batched GEMM: C = A * B^T for each batch element
     // A: [batch][limbs][1], B: [batch][1][limbs], C: [batch][limbs][limbs]
     // Each multiplication a[limbs] * b[limbs] produces products[limbs][limbs]
-    const float alpha = 1.0f;
-    const float beta = 0.0f;
 
     cublas_status = cublasSgemmStridedBatched(
         cublas_handle,
@@ -110,8 +111,8 @@ extern "C" cudaError_t batch_bigint_mul_cublas(
     }
 
     // Launch carry reduction kernel to convert products to proper bigint format
-    dim3 grid(batch_size);
-    dim3 block(limbs * 2); // Enough threads for all output limbs
+    grid.x = batch_size;
+    block.x = limbs * 2; // Enough threads for all output limbs
     carry_reduce_kernel<<<grid, block, 0, stream>>>(d_products, d_output_limbs, batch_size, limbs);
 
     // Check for kernel launch errors

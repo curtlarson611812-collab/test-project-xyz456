@@ -99,6 +99,7 @@ extern "C" cudaError_t batch_bigint_mul_cufft(
 ) {
     cudaError_t cuda_status;
     cufftResult cufft_status;
+    dim3 mul_grid, mul_block, carry_grid, carry_block;
 
     // Calculate FFT size (next power of 2 >= limbs_a + limbs_b)
     int n = 1;
@@ -149,8 +150,8 @@ extern "C" cudaError_t batch_bigint_mul_cufft(
     }
 
     // Pointwise complex multiplication (convolution theorem)
-    dim3 mul_grid((batch_size * n + 255) / 256);
-    dim3 mul_block(256);
+    mul_grid.x = (batch_size * n + 255) / 256;
+    mul_block.x = 256;
 
     pointwise_complex_mul<<<mul_grid, mul_block, 0, stream>>>(
         d_a_poly, d_b_poly, d_result_poly, batch_size, n);
@@ -163,8 +164,8 @@ extern "C" cudaError_t batch_bigint_mul_cufft(
     }
 
     // Convert back to bigint with carry propagation
-    dim3 carry_grid(batch_size);
-    dim3 carry_block(result_limbs);
+    carry_grid.x = batch_size;
+    carry_block.x = result_limbs;
 
     complex_to_bigint_with_carry<<<carry_grid, carry_block, 0, stream>>>(
         d_result_limbs, d_result_poly, 1.0 / n, batch_size, n, result_limbs);

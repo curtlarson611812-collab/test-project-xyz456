@@ -26,13 +26,12 @@ rand = "0.8"                      # Random number generation for entropy
 # Optional / Future
 rocksdb = "0.22"                  # Disk spill for DP overflow
 num-bigint = "0.4.6"
-cuda = { version = "0.1", optional = true }  # CUDA driver API
 cudarc = { version = "0.9", optional = true }  # CUDA runtime wrapper
 
 [features]
 default = ["vulkan"]
 vulkan = ["wgpu", "vulkano", "vulkano-shaders"]
-cuda = ["dep:cuda", "dep:cudarc"]
+cudarc = ["dep:cudarc"]
 
 [lints.rust]
 unsafe_code = "deny"

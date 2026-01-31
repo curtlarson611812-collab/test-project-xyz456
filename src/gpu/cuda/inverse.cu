@@ -3,6 +3,7 @@
 // Ports bigint operations from utils.wgsl for precision modular arithmetic
 
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 #include <stdint.h>
 
 #define LIMBS 8
@@ -18,8 +19,16 @@ __constant__ uint32_t SECP_N[LIMBS] = {
     0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
 };
 
+// Forward declarations for helper functions
+__device__ void bigint_copy(const uint32_t *src, uint32_t *dst);
+__device__ void bigint_zero(uint32_t *result);
+__device__ void bigint_one(uint32_t *result);
+__device__ int bigint_cmp_par(const uint32_t *a, const uint32_t *b);
+__device__ void bigint_sub(const uint32_t *a, const uint32_t *b, uint32_t *result);
+__device__ void mod_inverse_extended_euclid(const uint32_t *a, const uint32_t *modulus, uint32_t *result);
+
 // Bigint helper functions with parallel limb processing
-__device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
+__device__ void bigint_add_par(const uint32_t *a, const uint32_t *b, uint32_t *result) {
     int limb_idx = threadIdx.x;
     if (limb_idx >= LIMBS) return;
 
@@ -40,7 +49,16 @@ __device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
     __syncthreads(); // Ensure all limbs updated
 }
 
-__device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
+__device__ void bigint_sub(const uint32_t *a, const uint32_t *b, uint32_t *result) {
+    uint32_t borrow = 0;
+    for (int i = 0; i < LIMBS; i++) {
+        uint64_t diff = (uint64_t)a[i] - b[i] - borrow;
+        result[i] = diff & 0xFFFFFFFFULL;
+        borrow = (diff >> 32) & 1;
+    }
+}
+
+__device__ void bigint_sub_par(const uint32_t *a, const uint32_t *b, uint32_t *result) {
     int limb_idx = threadIdx.x;
     if (limb_idx >= LIMBS) return;
 
@@ -59,7 +77,7 @@ __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
     __syncthreads();
 }
 
-__device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
+__device__ void bigint_mul_par(const uint32_t *a, const uint32_t *b, uint32_t *result) {
     // Parallel schoolbook multiplication with warp shuffle for carry
     int limb_idx = threadIdx.x;
     if (limb_idx >= LIMBS) return;
@@ -89,7 +107,7 @@ __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
     __syncthreads();
 }
 
-__device__ void bigint_div_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
+__device__ void bigint_div_par(const uint32_t *a, const uint32_t *b, uint32_t *result) {
     // Simplified parallel division for Euclidean algorithm
     // This is a placeholder - full parallel division would be more complex
     int limb_idx = threadIdx.x;
@@ -115,7 +133,7 @@ __device__ void bigint_div_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
     __syncthreads();
 }
 
-__device__ int bigint_cmp_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) {
+__device__ int bigint_cmp_par(const uint32_t *a, const uint32_t *b) {
     // Parallel comparison using warp vote
     int limb_idx = threadIdx.x;
     int local_cmp = 0;
@@ -138,7 +156,7 @@ __device__ int bigint_cmp_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) 
     return msb_diff;
 }
 
-__device__ void bigint_mul(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[2*LIMBS]) {
+__device__ void bigint_mul(const uint32_t *a, const uint32_t *b, uint32_t *result) {
     // Initialize result to zero
     for (int i = 0; i < 2*LIMBS; i++) result[i] = 0;
 
@@ -162,8 +180,8 @@ __device__ void bigint_mul(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uin
 }
 
 // Fermat inverse using windowed exponentiation (4-bit windows for efficiency)
-__device__ void mod_inverse_fermat_windowed(const uint32_t a[LIMBS], const uint32_t modulus[LIMBS],
-                                          const uint8_t exp_nibbles[64], uint32_t result[LIMBS]) {
+__device__ void mod_inverse_fermat_simple(const uint32_t *a, const uint32_t *modulus,
+                                          const uint8_t *exp_nibbles, uint32_t *result) {
     // Precompute a^1 to a^15 using small multiplications
     uint32_t powers[16][LIMBS];
     bigint_copy(a, powers[1]); // a^1 = a
@@ -199,7 +217,7 @@ __device__ void mod_inverse_fermat_windowed(const uint32_t a[LIMBS], const uint3
     bigint_copy(current, result);
 }
 
-__device__ int bigint_cmp(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) {
+__device__ int bigint_cmp(const uint32_t *a, const uint32_t *b) {
     // Parallel comparison across limbs
     int result = 0;
     for (int i = LIMBS - 1; i >= 0; i--) {
@@ -226,16 +244,16 @@ __device__ bool bigint_is_zero(const uint32_t a[LIMBS]) {
     return is_zero;
 }
 
-__device__ void bigint_copy(const uint32_t src[LIMBS], uint32_t dst[LIMBS]) {
+__device__ void bigint_copy(const uint32_t *src, uint32_t *dst) {
     for (int i = 0; i < LIMBS; i++) dst[i] = src[i];
 }
 
 // Create zero and one constants
-__device__ void bigint_zero(uint32_t result[LIMBS]) {
+__device__ void bigint_zero(uint32_t *result) {
     for (int i = 0; i < LIMBS; i++) result[i] = 0;
 }
 
-__device__ void bigint_one(uint32_t result[LIMBS]) {
+__device__ void bigint_one(uint32_t *result) {
     result[0] = 1;
     for (int i = 1; i < LIMBS; i++) result[i] = 0;
 }
@@ -334,7 +352,7 @@ __global__ void batch_mod_inverse(
     // Compute modular inverse using appropriate algorithm
     uint32_t result[LIMBS];
     if (is_prime_modulus) {
-        mod_inverse_fermat_windowed(a, modulus, result, exp_nibbles);
+        mod_inverse_fermat_simple(a, modulus, exp_nibbles, result);
     } else {
         mod_inverse_extended_euclid_parallel(a, modulus, result);
     }
@@ -419,38 +437,6 @@ __global__ void test_mod_inverse() {
 }
 
 // Montgomery multiplication kernel for batch operations
-__global__ void montgomery_mul_batch(
-    uint32_t *a_limbs, uint32_t *b_limbs, uint32_t *result_limbs,
-    uint32_t *modulus_limbs, uint32_t inv_mod, int batch_size, int limbs
-) {
-    int batch_idx = blockIdx.x;
-    int limb_idx = threadIdx.x;
-
-    if (batch_idx >= batch_size || limb_idx >= limbs) return;
-
-    // Montgomery multiplication: (a * b * inv_mod) mod modulus
-    // Simplified implementation - in practice would use full Montgomery reduction
-    uint32_t *a = &a_limbs[batch_idx * limbs];
-    uint32_t *b = &b_limbs[batch_idx * limbs];
-    uint32_t *result = &result_limbs[batch_idx * limbs];
-    uint32_t *mod = modulus_limbs;
-
-    // Compute a * b (simplified - no carry handling in this kernel)
-    // Real implementation would use cuBLAS GEMM for this step
-    uint64_t product = (uint64_t)a[limb_idx] * (uint64_t)b[limb_idx];
-    uint32_t low = product & 0xFFFFFFFFULL;
-    uint32_t high = (product >> 32) & 0xFFFFFFFFULL;
-
-    // Montgomery reduction step (simplified)
-    uint64_t temp = (uint64_t)low * inv_mod;
-    uint32_t q = temp & 0xFFFFFFFFULL;
-
-    // Final modular subtraction
-    int64_t diff = (int64_t)low - (int64_t)q * mod[limb_idx];
-    if (diff < 0) diff += (int64_t)mod[limb_idx] << 32; // Approximation
-    result[limb_idx] = diff & 0xFFFFFFFFULL;
-}
-
 // Extended Euclidean algorithm for modular inverse on GPU
 __device__ void extended_euclidean(uint32_t a[8], uint32_t m[8], uint32_t result[8]) {
     // Simplified implementation for demonstration
@@ -523,7 +509,6 @@ extern "C" cudaError_t batch_modular_inverse_cublas(
     cudaError_t cuda_status;
     cublasStatus_t cublas_status;
 
-    const int LIMBS = 8;
     size_t batch_bigint_size = batch_size * LIMBS * sizeof(uint32_t);
 
     // Allocate temporary buffers for exponentiation chain
@@ -627,7 +612,7 @@ __global__ void batch_affine_conversion(uint32_t *positions, uint32_t *modulus, 
 }
 
 // Montgomery multiplication kernel with REDC algorithm
-__global__ void montgomery_mul_batch(uint32_t *a, uint32_t *b, uint32_t *result, uint32_t *modulus, uint32_t n_prime, int batch, int limbs) {
+__device__ void montgomery_mul_batch(uint32_t *a, uint32_t *b, uint32_t *result, uint32_t *modulus, uint32_t n_prime, int batch, int limbs) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     if (id >= batch) return;
 
@@ -677,8 +662,8 @@ __global__ void montgomery_mul_batch(uint32_t *a, uint32_t *b, uint32_t *result,
     }
 
     // Conditional subtraction if result >= modulus
-    if (bigint_cmp(res_p, modulus, limbs) >= 0) {
-        bigint_sub(res_p, modulus, res_p, limbs);
+    if (bigint_cmp(res_p, modulus) >= 0) {
+        bigint_sub(res_p, modulus, res_p);
     }
 }
 
@@ -871,8 +856,8 @@ __global__ void batch_fused_redc(uint32_t *a, uint32_t *b, uint32_t *out, uint32
 
     // Conditional subtraction if result >= modulus
     if (tid == 0) {
-        if (bigint_cmp(out_p, mod, limbs) >= 0) {
-            bigint_sub(out_p, mod, out_p, limbs);
+        if (bigint_cmp(out_p, mod) >= 0) {
+            bigint_sub(out_p, mod, out_p);
         }
     }
 }
