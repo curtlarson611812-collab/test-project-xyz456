@@ -1,0 +1,51 @@
+[package]
+name = "speedbitcrack"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+
+[dependencies]
+# Required Crates
+wgpu = { version = "0.20", optional = true }  # Vulkan backend via wgpu
+vulkano = { version = "0.34", optional = true }  # Vulkan backend via vulkano
+vulkano-shaders = { version = "0.34", optional = true }  # Shader compilation
+k256 = { version = "0.13", features = ["arithmetic"] }  # secp256k1 with arithmetic ops
+rayon = "1.10"                    # Parallel CPU tasks (pruning, buckets)
+tokio = { version = "1", features = ["full"] }  # Async pruning, I/O
+clap = { version = "4", features = ["derive"] } # CLI parsing
+cuckoofilter = "0.5"              # Bloom + Cuckoo for DP table
+log = "0.4"                       # Structured logging
+env_logger = "0.11"               # Simple logger setup
+anyhow = "1.0"                    # Error handling
+hex = "0.4"                       # Pubkey/hex parsing
+serde = { version = "1", features = ["derive"] }  # Config serialization if needed
+bincode = "1.3"                   # Binary serialization for rocksdb
+async-trait = "0.1"               # Async traits for GPU backend
+rand = "0.8"                      # Random number generation for entropy
+
+# Optional / Future
+rocksdb = "0.22"                  # Disk spill for DP overflow
+num-bigint = "0.4.6"
+cuda = { version = "0.1", optional = true }  # CUDA driver API
+cudarc = { version = "0.9", optional = true }  # CUDA runtime wrapper
+
+[features]
+default = ["vulkan"]
+vulkan = ["wgpu", "vulkano", "vulkano-shaders"]
+cuda = ["dep:cuda", "dep:cudarc"]
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+pedantic = "warn"
+nursery = "warn"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[dev-dependencies]
+tempfile = "3.0"  # For temporary directories in tests

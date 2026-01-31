@@ -1,0 +1,37 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Log files
+*.log
+
+# Large DP dump files
+data/*.bin
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-workspace
+
+# Performance profiling data
+*.prof
+perf.data*
+*.heaptrack
+
+# GPU debugging
+*.nvprof
+*.nsight

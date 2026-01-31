@@ -1,0 +1,12 @@
+Implement Tonelli-Shanks algorithm
+GLV endomorphism optimization
+more detailed Barrett Implementation
+Benchmark GLV Jacobian performance
+GPU parallel scalar multipications
+Optimize code for GPU batches
+Unroll carry Propagation
+Optimize Barrett reduction
+Fully Expand Unrolled Loops
+Implement Batch Submission
+Simplify walk-back logic
+

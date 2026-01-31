@@ -1,0 +1,71 @@
+Phase 1: Vulkan Foundation (URGENT - Core Bulk Stepping)
+Effort: High | Dependencies: secp.rs math | Goal: Implement bulk kangaroo stepping on Vulkan for parallel ops.
+
+Implement utils.wgsl modular arithmetic (Rule #4 hybrid reductions on GPU).
+Barrett/Montgomery mul/add/sub for 256-bit field ops.
+Effort: Medium | Why: Foundation for all EC ops on GPU.
+
+Implement kangaroo.wgsl stepping kernel (Rule #7 Vulkan for bulk stepping).
+Position updates, alpha/beta coefficients, EC add/double/mul.
+Effort: High | Why: Hot path for kangaroo jumps — target high occupancy on RTX 5090.
+
+Implement jump_table.wgsl selection logic (Rule #6 expandable jump table).
+Deterministic jump op selection using position hash, apply from precomputed table.
+Effort: Medium | Why: Efficient jump ops without CPU round-trips.
+
+Implement dp_check.wgsl candidate detection (DP by trailing bits).
+Trailing dp_bits check on x-coord, collect candidates.
+Effort: Low | Why: GPU-side DP filtering to reduce CPU transfer.
+
+Complete VulkanBackend pipeline integration (in backend.rs).
+Buffer alloc/manage, kernel launch, results sync to CPU.
+Effort: High | Why: Connect shaders to manager.rs for step_batch GPU dispatch.
+
+
+Phase 2: CUDA Precision Math (HIGH PRIORITY - Critical Ops)
+Effort: High | Dependencies: Phase 1 | Goal: CUDA for precision-critical math like modular inverse/batch solving.
+
+Enable CUDA feature and implement CudaBackend::new() (Rule #7 hybrid CUDA).
+NVCC/PTX compilation for kernels.
+Effort: Medium | Why: Enable CUDA backend.
+
+Implement modular inverse on CUDA (extended Euclidean for GPU).
+Batch inverse for batch to_affine.
+Effort: High | Why: Precision math for DP export.
+
+Implement batch collision equation solving on CUDA.
+Solve priv = alpha_tame - alpha_wild + beta_tame * target - beta_wild * target mod n.
+Effort: Medium | Why: Fast collision resolution.
+
+Implement 256-bit Barrett reduction in CUDA.
+Hybrid with Montgomery for mul-heavy ops.
+Effort: Medium | Why: Rule #4 on GPU.
+
+
+Phase 3: Hybrid Integration & Optimization (MEDIUM PRIORITY - Full System)
+Effort: Medium | Dependencies: Phases 1-2 | Goal: Hybrid Vulkan (bulk) + CUDA (precision) in manager.rs.
+
+Replace CpuBackend with GpuBackend trait in manager.rs (Rule #7 hybrid).
+Dispatch step_batch to Vulkan, precision to CUDA.
+Effort: Medium | Why: Actual GPU use.
+
+Add async overlap between Vulkan/CUDA ops (in manager.run).
+Concurrent stepping + collision check.
+Effort: Low | Why: Maximize throughput.
+
+Implement memory coalescing/minimize global access in shaders/kernels.
+Shared memory for jump table, coalesced buffer reads.
+Effort: Medium | Why: RTX 5090 occupancy tuning.
+
+Add profiling/occupancy tools (e.g., nsight for CUDA, Vulkan tools).
+Effort: Low | Why: Verify 2.5–3B ops/sec.
+
+
+Phase 4: Advanced Features & Testing (FUTURE - Enhancements)
+Effort: Low | Dependencies: Phase 3 | Goal: Full V3 features.
+
+Implement near collisions/walk-backs (in collision_detector).
+Add GPU-specific tests (batch step on GPU, parity with CPU).
+Benchmark full loop (ops/sec on RTX 5090 sim).
+
+This list gets us to full GPU compliance and performance targets. What's our first step, Curt? Want me to prompt GROK Coder for Phase 1 Vulkan shaders?
