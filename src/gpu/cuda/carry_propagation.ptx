@@ -1,5 +1,5 @@
 // carry_propagation.ptx - Optimized PTX kernel for carry propagation
-// Uses warp shuffle for parallel prefix carry prop, loop for sum diagonal
+// Uses shared memory for serial carry prop, loop for sum diagonal
 // For 256-bit (8 limbs), grid(batch) block(16) warp per bigint (only 16 threads active)
 // Optimized for minimal latency with register-based operations
 .visible .entry carry_propagate_warp_shuffle(
@@ -12,10 +12,10 @@
     .reg .u32 %tid, %bid;
     .reg .u64 %out_addr, %prod_base_addr, %load_addr;
     .reg .u64 %sum, %add_val, %temp_u64;
-    .reg .u32 %carry32, %temp_u32, %j_min, %j_max, %j, %prod_idx, %prod_val;
-    .reg .u32 %offset_u32;
-    .reg .u64 %mask;
+    .reg .u32 %temp_u32, %j_min, %j_max, %j, %prod_idx, %prod_val;
+    .reg .u32 %i;
     .reg .pred %p_active, %p_temp;
+    .shared .u64 sh_sums[16];
 
     // Thread indices
     mov.u32 %bid, %ctaid.x;
@@ -71,27 +71,31 @@ loop_start:
 
 loop_done:
 
-    // Parallel carry propagation
-    // Initial low and carry
-    shr.u64 %carry32, %sum, 32;
-    mov.u64 %mask, 0xFFFFFFFF;
-    and.b64 %sum, %sum, %mask;
+    // Carry propagation with shared serial
+    st.shared.u64 [sh_sums + %tid*8], %sum;
+    bar.sync 0;
 
-    // Iterative
-    mov.u32 %offset_u32, 1;
-prefix_loop:
-    .reg .u32 %left_carry;
-    shfl.sync.up.b32 %left_carry, %carry32, %offset_u32, 0, 0xFFFFFFFF;
-    setp.ge.u32 %p_temp, %tid, %offset_u32;
-    @%p_temp cvt.u64.u32 %temp_u64, %left_carry;
-    @%p_temp add.u64 %sum, %sum, %temp_u64;
+    setp.eq.u32 %p_temp, %tid, 0;
+    @%p_temp bra serial_done;
 
-    shr.u64 %carry32, %sum, 32;
-    and.b64 %sum, %sum, %mask;
+    .reg .u64 %carry;
+    mov.u64 %carry, 0;
 
-    mul.u32 %offset_u32, %offset_u32, 2;
-    setp.lt.u32 %p_temp, %offset_u32, 16;
-    @%p_temp bra prefix_loop;
+    mov.u32 %i, 0;
+serial_loop:
+    ld.shared.u64 %temp_u64, [sh_sums + %i*8];
+    add.u64 %temp_u64, %temp_u64, %carry;
+    and.b64 %sum, %temp_u64, 0xFFFFFFFF;
+    st.shared.u64 [sh_sums + %i*8], %sum;
+    shr.u64 %carry, %temp_u64, 32;
+
+    add.u32 %i, %i, 1;
+    setp.lt.u32 %p_temp, %i, 16;
+    @%p_temp bra serial_loop;
+
+serial_done:
+    bar.sync 0;
+    ld.shared.u64 %sum, [sh_sums + %tid*8];
 
     // Store
     st.global.u64 [%out_addr], %sum;
