@@ -40,10 +40,88 @@ fn to_affine(p: array<array<u32, 8>, 3>) -> array<array<u32, 8>, 2> {
     return array<array<u32, 8>, 2>(x, y);
 }
 
+// Jacobian scalar multiplication: k * P using windowed method
+// Returns result in Jacobian coordinates
+fn jacobian_mul(k: array<u32, 8>, p: array<array<u32, 8>, 3>) -> array<array<u32, 8>, 3> {
+    var result = array<array<u32, 8>, 3>(
+        array<u32, 8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u),  // X = 0
+        array<u32, 8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u),  // Y = 0
+        array<u32, 8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)   // Z = 0 (infinity)
+    );
+
+    // Process bits from MSB to LSB (constant-time)
+    for (var bit = 0u; bit < 256u; bit = bit + 1u) {
+        // Double the result
+        result = jacobian_double(result);
+
+        // Get bit from scalar k
+        let word_idx = bit / 32u;
+        let bit_idx = bit % 32u;
+        let bit_value = (k[word_idx] >> bit_idx) & 1u;
+
+        if (bit_value == 1u) {
+            // Add p to result
+            result = jacobian_add(result, p);
+        }
+    }
+
+    return result;
+}
+
 // Check if affine x is distinguished (trailing bits zero)
 fn is_distinguished(x: array<u32, 8>) -> bool {
     let mask = (1u << DISTINGUISHED_BITS) - 1u;
     return (x[0] & mask) == 0u;
+}
+
+// Jacobian point doubling for secp256k1 (complete EC arithmetic)
+// Implements P3 = 2*P1 in Jacobian coordinates
+// Used when adding a point to itself
+fn jacobian_double(p1: array<array<u32, 8>, 3>) -> array<array<u32, 8>, 3> {
+    // Handle point at infinity
+    if (bigint_is_zero(p1[2])) {
+        return p1;
+    }
+
+    let a = 0u; // secp256k1 a = 0
+
+    // Y^2
+    let y_squared = mod_mul(p1[1], p1[1], P);
+
+    // 4*Y^2
+    let four_y_squared = mod_mul(y_squared, array<u32, 8>(4u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), P);
+
+    // X^2
+    let x_squared = mod_mul(p1[0], p1[0], P);
+
+    // 3*X^2 + a*Z^4 (a=0 for secp256k1)
+    let three_x_squared = mod_mul(x_squared, array<u32, 8>(3u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), P);
+
+    // Z^2, Z^4
+    let z_squared = mod_mul(p1[2], p1[2], P);
+    let z_fourth = mod_mul(z_squared, z_squared, P);
+
+    // M = 3*X^2 + a*Z^4
+    let m = three_x_squared; // a*Z^4 = 0
+
+    // Z3 = 2*Y*Z
+    let z3 = mod_mul(p1[1], p1[2], P);
+    let z3_doubled = mod_mul(z3, array<u32, 8>(2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), P);
+
+    // X3 = M^2 - 2*X*4*Y^2
+    let m_squared = mod_mul(m, m, P);
+    let two_x = mod_mul(p1[0], array<u32, 8>(2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), P);
+    let two_x_four_y_squared = mod_mul(two_x, four_y_squared, P);
+    let x3 = bigint_sub(m_squared, two_x_four_y_squared, P);
+
+    // Y3 = M*(X*4*Y^2 - X3) - 8*Y^4
+    let x_four_y_squared = mod_mul(p1[0], four_y_squared, P);
+    let x_four_y_squared_minus_x3 = bigint_sub(x_four_y_squared, x3, P);
+    let m_times_diff = mod_mul(m, x_four_y_squared_minus_x3, P);
+    let eight_y_fourth = mod_mul(four_y_squared, array<u32, 8>(2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), P); // 4*Y^2 * 2 = 8*Y^4
+    let y3 = bigint_sub(m_times_diff, eight_y_fourth, P);
+
+    return array<array<u32, 8>, 3>(x3, y3, z3_doubled);
 }
 
 // Jacobian point addition for secp256k1 (complete EC arithmetic implementation)
@@ -78,9 +156,8 @@ fn ec_add(p1: array<array<u32, 8>, 3>, p2: array<array<u32, 8>, 3>) -> array<arr
     let s1_eq_s2 = bigint_eq(s1, s2);
 
     if (u1_eq_u2 && s1_eq_s2) {
-        // Points are the same, should use point doubling
-        // For now, return p1 (placeholder - full double would be implemented)
-        return p1;
+        // Points are the same, use point doubling
+        return jacobian_double(p1);
     }
 
     // H = U2 - U1

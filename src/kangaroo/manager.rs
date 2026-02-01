@@ -18,6 +18,7 @@ use anyhow::Result;
 use log::{info, warn, debug};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use bincode;
 
 /// Central manager for kangaroo herd operations
 pub struct KangarooManager {
@@ -219,8 +220,39 @@ impl KangarooManager {
 
     /// Save checkpoint
     async fn save_checkpoint(&self) -> Result<()> {
-        // TODO: Save kangaroo states, DP table, statistics
-        debug!("Saving checkpoint at {} ops", self.total_ops);
+        use serde::{Serialize, Deserialize};
+
+        #[derive(Serialize, Deserialize)]
+        struct CheckpointData {
+            total_ops: u64,
+            start_time: std::time::SystemTime,
+            kangaroo_states: Vec<KangarooState>,
+            dp_entries: Vec<DpEntry>,
+        }
+
+        // Collect current kangaroo states (simplified - in practice would collect from active herds)
+        let kangaroo_states = vec![]; // TODO: Collect from active kangaroo herds
+
+        // Collect DP table entries
+        let dp_entries = self.dp_table.get_all_entries().await?;
+
+        let checkpoint = CheckpointData {
+            total_ops: self.total_ops,
+            start_time: self.start_time.into(),
+            kangaroo_states,
+            dp_entries,
+        };
+
+        // Serialize and save to sled database
+        let serialized = bincode::serialize(&checkpoint)?;
+        if let Some(db) = &self.dp_table.sled_db {
+            db.insert("checkpoint", serialized)?;
+            db.flush()?;
+            info!("Checkpoint saved at {} ops with {} DP entries", self.total_ops, dp_entries.len());
+        } else {
+            warn!("Checkpoint not saved - disk storage not enabled");
+        }
+
         Ok(())
     }
 
@@ -256,6 +288,43 @@ impl KangarooManager {
         }
 
         Ok(is_valid)
+    }
+
+    /// Convert GPU computation results back to KangarooState format
+    /// Used after GPU stepping operations to reconstruct kangaroo states
+    fn convert_gpu_results_to_kangaroos(
+        &self,
+        original_kangaroos: &[KangarooState],
+        gpu_positions: &[[[u32; 8]; 3]],
+        gpu_distances: &[[u32; 8]]
+    ) -> Vec<KangarooState> {
+        original_kangaroos.iter().enumerate().map(|(i, original)| {
+            if i < gpu_positions.len() && i < gpu_distances.len() {
+                // Convert GPU output back to our format
+                let gpu_pos = gpu_positions[i];
+                let gpu_dist = gpu_distances[i];
+
+                // Convert u32 arrays back to BigInt256
+                let position = Point {
+                    x: BigInt256::from_u32_array(gpu_pos[0]),
+                    y: BigInt256::from_u32_array(gpu_pos[1]),
+                    z: BigInt256::from_u32_array(gpu_pos[2]),
+                };
+                let distance = BigInt256::from_u32_array(gpu_dist);
+
+                KangarooState {
+                    position,
+                    distance: (distance, original.distance.1), // Keep original target
+                    alpha: original.alpha,
+                    beta: original.beta,
+                    is_tame: original.is_tame,
+                    steps: original.steps,
+                }
+            } else {
+                // Fallback to original if GPU data unavailable
+                original.clone()
+            }
+        }).collect()
     }
 }
 

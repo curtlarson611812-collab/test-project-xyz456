@@ -57,4 +57,5 @@ panic = "abort"
 tempfile = "3.0"  # For temporary directories in tests
 criterion = { version = "0.5", features = ["html_reports"] }  # Performance benchmarking
 proptest = "1.0"   # Property-based testing
+kmeans = "0.6"     # K-means clustering for DP table optimization
 tokio-test = "0.4" # Async testing utilities

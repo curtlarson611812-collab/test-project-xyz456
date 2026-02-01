@@ -212,6 +212,11 @@ impl DpTable {
         }
     }
 
+    /// Get all DP entries for checkpointing
+    pub async fn get_all_entries(&self) -> Result<Vec<DpEntry>> {
+        Ok(self.entries.values().cloned().collect())
+    }
+
     /// Calculate value score for DP entry (higher = more valuable)
     /// Formula: score = dist / (cluster_density + 1)
     fn calculate_value_score(&self, entry: &DpEntry) -> f64 {

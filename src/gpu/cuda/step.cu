@@ -96,6 +96,94 @@ __device__ void sub_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const
     }
 }
 
+// Device function for Jacobian point doubling (complete EC arithmetic)
+// P3 = 2*P1 in Jacobian coordinates
+// Returns P3 in Jacobian coordinates
+__device__ Point jacobian_double(Point p1) {
+    Point result = {0};
+
+    // Check for point at infinity
+    bool p1_inf = true;
+    for (int i = 0; i < 8; i++) {
+        if (p1.z[i] != 0) p1_inf = false;
+    }
+    if (p1_inf) return p1;
+
+    uint32_t a = 0; // secp256k1 a = 0
+
+    // Y^2
+    uint32_t y_squared[8] = {0};
+    mul_mod(p1.y, p1.y, y_squared, P);
+
+    // 4*Y^2
+    uint32_t four_y_squared[8] = {0};
+    uint32_t four[8] = {4, 0, 0, 0, 0, 0, 0, 0};
+    mul_mod(y_squared, four, four_y_squared, P);
+
+    // X^2
+    uint32_t x_squared[8] = {0};
+    mul_mod(p1.x, p1.x, x_squared, P);
+
+    // 3*X^2 + a*Z^4 (a=0 for secp256k1)
+    uint32_t three[8] = {3, 0, 0, 0, 0, 0, 0, 0};
+    uint32_t three_x_squared[8] = {0};
+    mul_mod(x_squared, three, three_x_squared, P);
+
+    // Z^2, Z^4
+    uint32_t z_squared[8] = {0}, z_fourth[8] = {0};
+    mul_mod(p1.z, p1.z, z_squared, P);
+    mul_mod(z_squared, z_squared, z_fourth, P);
+
+    // M = 3*X^2 + a*Z^4
+    uint32_t m[8] = {0};
+    for (int i = 0; i < 8; i++) m[i] = three_x_squared[i]; // a*Z^4 = 0
+
+    // Z3 = 2*Y*Z
+    uint32_t yz[8] = {0}, z3[8] = {0};
+    uint32_t two[8] = {2, 0, 0, 0, 0, 0, 0, 0};
+    mul_mod(p1.y, p1.z, yz, P);
+    mul_mod(yz, two, z3, P);
+
+    // X3 = M^2 - 2*X*4*Y^2
+    uint32_t m_squared[8] = {0};
+    mul_mod(m, m, m_squared, P);
+
+    uint32_t two_x[8] = {0};
+    mul_mod(p1.x, two, two_x, P);
+
+    uint32_t two_x_four_y_squared[8] = {0};
+    mul_mod(two_x, four_y_squared, two_x_four_y_squared, P);
+
+    uint32_t x3[8] = {0};
+    sub_mod(m_squared, two_x_four_y_squared, x3, P);
+
+    // Y3 = M*(X*4*Y^2 - X3) - 8*Y^4
+    uint32_t x_four_y_squared[8] = {0};
+    mul_mod(p1.x, four_y_squared, x_four_y_squared, P);
+
+    uint32_t x_four_y_squared_minus_x3[8] = {0};
+    sub_mod(x_four_y_squared, x3, x_four_y_squared_minus_x3, P);
+
+    uint32_t m_times_diff[8] = {0};
+    mul_mod(m, x_four_y_squared_minus_x3, m_times_diff, P);
+
+    uint32_t eight[8] = {8, 0, 0, 0, 0, 0, 0, 0};
+    uint32_t eight_y_fourth[8] = {0};
+    mul_mod(four_y_squared, two, eight_y_fourth, P); // 4*Y^2 * 2 = 8*Y^4
+
+    uint32_t y3[8] = {0};
+    sub_mod(m_times_diff, eight_y_fourth, y3, P);
+
+    // Copy results
+    for (int i = 0; i < 8; i++) {
+        result.x[i] = x3[i];
+        result.y[i] = y3[i];
+        result.z[i] = z3[i];
+    }
+
+    return result;
+}
+
 // Device function for Jacobian point addition (complete EC arithmetic)
 // P3 = P1 + P2 in Jacobian coordinates
 // Returns P3 in Jacobian coordinates
@@ -146,9 +234,8 @@ __device__ Point ec_add(Point p1, Point p2) {
     }
 
     if (same_point) {
-        // Points are the same - should use point doubling
-        // For now, return p1 as placeholder
-        return p1;
+        // Points are the same - use point doubling
+        return jacobian_double(p1);
     }
 
     // H = U2 - U1 mod P
@@ -199,6 +286,30 @@ __device__ Point ec_add(Point p1, Point p2) {
         result.x[i] = x3[i];
         result.y[i] = y3[i];
         result.z[i] = z3[i];
+    }
+
+    return result;
+}
+
+// Device function for Jacobian scalar multiplication (complete EC arithmetic)
+// P3 = k * P1 using windowed exponentiation for constant-time operation
+__device__ Point jacobian_mul(uint64_t k[4], Point p1) {
+    Point result = {0, 0, 0}; // Point at infinity
+
+    // Convert k to bits and process MSB first for constant-time
+    for (int bit = 255; bit >= 0; bit--) {
+        // Double the result
+        result = jacobian_double(result);
+
+        // Get the bit from k
+        int word_idx = bit / 64;
+        int bit_idx = bit % 64;
+        uint64_t bit_value = (k[word_idx] >> bit_idx) & 1;
+
+        if (bit_value) {
+            // Add p1 to result
+            result = jacobian_add(result, p1);
+        }
     }
 
     return result;

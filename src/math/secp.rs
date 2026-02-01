@@ -310,13 +310,53 @@ impl Secp256k1 {
     /// Constant-time scalar multiplication using k256
     /// Provides side-channel resistance for cryptographic operations
     /// Note: k256 library provides constant-time field arithmetic
-    /// TODO: Update to current k256 API
-    /// Temporarily disabled due to k256 API changes - using fallback implementation
-    pub fn mul_constant_time(&self, _k: &BigInt256, p: &Point) -> Point {
-        // TODO: Re-implement with current k256 API
-        // For now, return the point unchanged (not mathematically correct)
-        // This allows the build to succeed while k256 integration is fixed
-        *p
+    /// Constant-time scalar multiplication using k256
+    /// Provides side-channel resistance for cryptographic operations
+    pub fn mul_constant_time(&self, k: &BigInt256, p: &Point) -> Point {
+        use k256::{Scalar, ProjectivePoint, AffinePoint, FieldBytes};
+
+        // Convert BigInt256 to k256::Scalar
+        let k_bytes = k.to_bytes_be();
+        let scalar = Scalar::from_bytes_reduced(FieldBytes::from_slice(&k_bytes));
+
+        // Convert our Point to k256::ProjectivePoint
+        let p_affine = self.to_affine(p);
+        let x_field = FieldBytes::from_slice(&p_affine.x.to_bytes_be());
+        let y_field = FieldBytes::from_slice(&p_affine.y.to_bytes_be());
+
+        // Create k256 affine point
+        let k256_affine = AffinePoint::from_encoded_point(
+            &k256::EncodedPoint::from_affine_coordinates(x_field, y_field, false)
+        );
+
+        if let Some(affine_point) = k256_affine {
+            let k256_projective = ProjectivePoint::from(affine_point);
+
+            // Perform constant-time scalar multiplication
+            let result_projective = k256_projective * scalar;
+            let result_affine = result_projective.to_affine();
+
+            // Convert back to our Point representation
+            let result_coords = result_affine.to_encoded_point(false);
+            let mut x_bigint = BigInt256::zero();
+            let mut y_bigint = BigInt256::zero();
+
+            if let (Some(x_bytes), Some(y_bytes)) = (result_coords.x(), result_coords.y()) {
+                // Convert from big-endian bytes back to BigInt256
+                x_bigint = BigInt256::from_bytes_be(x_bytes);
+                y_bigint = BigInt256::from_bytes_be(y_bytes);
+            }
+
+            // Return as affine point (z=1)
+            Point {
+                x: x_bigint.to_u64_array().map(|v| v as u32),
+                y: y_bigint.to_u64_array().map(|v| v as u32),
+                z: [1, 0, 0, 0],
+            }
+        } else {
+            // Invalid point, return original
+            *p
+        }
     }
 
     /// Naive double-and-add scalar multiplication (used by GLV)
