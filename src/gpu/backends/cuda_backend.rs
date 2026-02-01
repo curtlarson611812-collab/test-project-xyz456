@@ -170,9 +170,27 @@ impl GpuBackend for CudaBackend {
             })?;
         let mut d_distances = DeviceBuffer::from_slice(&distances_flat)?;
         let mut d_types = DeviceBuffer::from_slice(&types)?;
-        let mut d_new_positions = unsafe { DeviceBuffer::zeroed(batch_size * 24) }?; // 3 * 8 u32 per position
-        let mut d_new_distances = unsafe { DeviceBuffer::zeroed(batch_size * 8) }?;
-        let mut d_traps = unsafe { DeviceBuffer::zeroed(batch_size * 9) }?; // trap data per kangaroo
+        let mut d_new_positions = match unsafe { DeviceBuffer::zeroed(batch_size * 24) } {
+            Ok(b) => b,
+            Err(CudaError::OutOfMemory) => {
+                return Err(anyhow!("CUDA OOM in step_batch output buffers - reduce batch size (current: {})", batch_size));
+            }
+            Err(e) => return Err(anyhow!("CUDA alloc failed for output buffers: {}", e)),
+        };
+        let mut d_new_distances = match unsafe { DeviceBuffer::zeroed(batch_size * 8) } {
+            Ok(b) => b,
+            Err(CudaError::OutOfMemory) => {
+                return Err(anyhow!("CUDA OOM in step_batch distance buffers - reduce batch size (current: {})", batch_size));
+            }
+            Err(e) => return Err(anyhow!("CUDA alloc failed for distance buffers: {}", e)),
+        };
+        let mut d_traps = match unsafe { DeviceBuffer::zeroed(batch_size * 9) } {
+            Ok(b) => b,
+            Err(CudaError::OutOfMemory) => {
+                return Err(anyhow!("CUDA OOM in step_batch trap buffers - reduce batch size (current: {})", batch_size));
+            }
+            Err(e) => return Err(anyhow!("CUDA alloc failed for trap buffers: {}", e)),
+        };
 
         // Launch kangaroo stepping kernel
         let step_fn = self.step_module.get_function(CStr::from_bytes_with_nul(b"kangaroo_step_batch\0")?)?;
