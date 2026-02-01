@@ -7,6 +7,7 @@ use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
 use crate::gpu::{GpuBackend, HybridBackend, CpuBackend, HybridGpuManager, shared::SharedBuffer};
+use crate::types::TaggedKangarooState;
 #[cfg(feature = "vulkano")]
 use crate::gpu::VulkanBackend;
 #[cfg(feature = "rustacuda")]
@@ -29,6 +30,9 @@ use bincode;
 pub struct KangarooManager {
     config: Config,
     targets: Vec<Target>,
+    multi_targets: Vec<Point>,           // Multi-target points for batch solving
+    wild_states: Vec<TaggedKangarooState>, // Tagged wild kangaroos per target
+    tame_states: Vec<KangarooState>,     // Shared tame kangaroos
     dp_table: Arc<Mutex<DpTable>>,
     gpu_backend: Box<dyn GpuBackend>,
     generator: KangarooGenerator,
@@ -89,6 +93,9 @@ impl KangarooManager {
         Ok(KangarooManager {
             config,
             targets,
+            multi_targets: Vec::new(),
+            wild_states: Vec::new(),
+            tame_states: Vec::new(),
             dp_table,
             gpu_backend,
             generator,
@@ -103,6 +110,67 @@ impl KangarooManager {
     /// Get number of targets
     pub fn target_count(&self) -> usize {
         self.targets.len()
+    }
+
+    /// Create new KangarooManager for multi-target solving
+    pub async fn new_multi(config: Config, multi_targets: Vec<Point>, batch_per_target: usize) -> Result<Self> {
+        // Load single targets as before
+        let target_loader = TargetLoader::new();
+        let targets = target_loader.load_targets(&config)?;
+
+        // Initialize components
+        let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
+        let generator = KangarooGenerator::new(&config);
+        let stepper = KangarooStepper::new(config.expanded_jump_table);
+        let collision_detector = CollisionDetector::new();
+        let parity_checker = ParityChecker::new();
+
+        // Create GPU backend
+        let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend.as_str() {
+            "hybrid" => Box::new(HybridBackend::new().await?),
+            "vulkan" => {
+                #[cfg(feature = "wgpu")]
+                {
+                    Box::new(crate::gpu::backends::vulkan_backend::WgpuBackend::new().await?)
+                }
+                #[cfg(not(feature = "wgpu"))]
+                {
+                    return Err(anyhow!("Vulkan backend requires 'wgpu' feature"));
+                }
+            }
+            "cuda" => {
+                #[cfg(feature = "rustacuda")]
+                {
+                    Box::new(crate::gpu::backends::cuda_backend::CudaBackend::new()?)
+                }
+                #[cfg(not(feature = "rustacuda"))]
+                {
+                    return Err(anyhow!("CUDA backend requires 'rustacuda' feature"));
+                }
+            }
+            "cpu" => Box::new(CpuBackend::new()?),
+            _ => return Err(anyhow!("Invalid GPU backend: {}", config.gpu_backend)),
+        };
+
+        // Generate multi-target kangaroos
+        let wild_states = generator.generate_wild_batch_multi(&multi_targets, batch_per_target)?;
+        let tame_states = generator.generate_tame_batch(wild_states.len());
+
+        Ok(Self {
+            config,
+            targets,
+            multi_targets,
+            wild_states,
+            tame_states,
+            dp_table,
+            gpu_backend,
+            generator,
+            stepper,
+            collision_detector,
+            parity_checker,
+            total_ops: 0,
+            start_time: std::time::Instant::now(),
+        })
     }
 
     /// Run the main solving loop
@@ -833,5 +901,99 @@ mod tests {
         let mut manager = KangarooManager::new(config).await.unwrap();
         let result = manager.run().await.unwrap();
         assert!(result.is_none(), "Should stop without solution");
+    }
+
+    /// Step multi-target kangaroos using hybrid GPU acceleration
+    pub fn step_herds_multi(&mut self, steps: u64) -> Result<()> {
+        // Create shared buffers for wild kangaroos
+        let mut shared_wild_points = SharedBuffer::<Point>::new(self.wild_states.len());
+        let mut shared_wild_distances = SharedBuffer::<BigInt256>::new(self.wild_states.len());
+        let mut shared_wild_tags = SharedBuffer::<u32>::new(self.wild_states.len());
+
+        // Initialize wild kangaroo data
+        {
+            let wild_points = shared_wild_points.as_mut_slice();
+            let wild_distances = shared_wild_distances.as_mut_slice();
+            let wild_tags = shared_wild_tags.as_mut_slice();
+
+            for (i, wild_state) in self.wild_states.iter().enumerate() {
+                wild_points[i] = wild_state.point;
+                wild_distances[i] = wild_state.distance;
+                wild_tags[i] = wild_state.target_idx;
+            }
+        }
+
+        // Create shared buffers for tame kangaroos
+        let mut shared_tame_points = SharedBuffer::<Point>::new(self.tame_states.len());
+        let mut shared_tame_distances = SharedBuffer::<BigInt256>::new(self.tame_states.len());
+
+        // Initialize tame kangaroo data
+        {
+            let tame_points = shared_tame_points.as_mut_slice();
+            let tame_distances = shared_tame_distances.as_mut_slice();
+
+            for (i, tame_state) in self.tame_states.iter().enumerate() {
+                tame_points[i] = tame_state.position;
+                tame_distances[i] = BigInt256::from_u64(tame_state.distance);
+            }
+        }
+
+        // Create hybrid manager and execute
+        let hybrid_manager = HybridGpuManager::new(0.001, 5)?; // 0.1% error threshold, 5s check interval
+
+        // For now, execute single-threaded with drift monitoring
+        // TODO: Extend hybrid manager to handle tagged multi-target operations
+        hybrid_manager.execute_with_drift_monitoring(
+            &mut shared_wild_points,
+            &mut shared_wild_distances,
+            self.wild_states.len(),
+            steps,
+        )?;
+
+        // Update wild kangaroo states
+        {
+            let wild_points = shared_wild_points.as_slice();
+            let wild_distances = shared_wild_distances.as_slice();
+
+            for (i, wild_state) in self.wild_states.iter_mut().enumerate() {
+                wild_state.point = wild_points[i];
+                wild_state.distance = wild_distances[i];
+            }
+        }
+
+        // Update tame kangaroo states
+        {
+            let tame_points = shared_tame_points.as_slice();
+            let tame_distances = shared_tame_distances.as_slice();
+
+            for (i, tame_state) in self.tame_states.iter_mut().enumerate() {
+                tame_state.position = tame_points[i];
+                tame_state.distance = tame_distances[i].to_u64_array()[0];
+            }
+        }
+
+        // Check for collisions and solutions
+        self.check_multi_collisions()?;
+
+        self.total_ops += (self.wild_states.len() + self.tame_states.len()) as u64 * steps;
+
+        Ok(())
+    }
+
+    /// Check for collisions in multi-target setup and solve keys
+    fn check_multi_collisions(&mut self) -> Result<()> {
+        // Check DP table for collisions between wild and tame kangaroos
+        let mut dp_table = self.dp_table.lock().unwrap();
+
+        // In a full implementation, this would:
+        // 1. Check for new DP entries from the GPU step
+        // 2. Look for collisions between wild and tame kangaroos
+        // 3. Solve the discrete log for matched targets
+        // 4. Return solutions
+
+        // For now, placeholder implementation
+        // TODO: Implement full collision detection and key solving
+
+        Ok(())
     }
 }

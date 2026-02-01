@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use crate::math::bigint::BigInt256;
 
 /// secp256k1 point representation (Jacobian coordinates)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -23,6 +24,15 @@ impl Point {
             x: [0; 4],
             y: [0; 4],
             z: [0; 4],
+        }
+    }
+
+    /// Create point from affine coordinates (x, y, z=1)
+    pub fn from_affine(x: [u64; 4], y: [u64; 4]) -> Self {
+        Point {
+            x,
+            y,
+            z: [1, 0, 0, 0],
         }
     }
 
@@ -143,6 +153,19 @@ pub struct KangarooState {
     pub is_tame: bool,
     /// Kangaroo ID for tracking
     pub id: u64,
+}
+
+/// Tagged kangaroo state for multi-target solving
+#[derive(Debug, Clone)]
+pub struct TaggedKangarooState {
+    /// Current position (point on curve)
+    pub point: Point,
+    /// Distance traveled (BigInt256 for large ranges)
+    pub distance: BigInt256,
+    /// Target index this kangaroo is solving for
+    pub target_idx: u32,
+    /// Initial offset used for wild kangaroo generation (d in P - d*G)
+    pub initial_offset: BigInt256,
 }
 
 impl KangarooState {

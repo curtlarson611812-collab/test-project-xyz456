@@ -3,8 +3,9 @@
 //! Strict tame/wild start logic — fixed primes for wild, G-based tame, no entropy unless flagged
 
 use crate::config::Config;
-use crate::types::{KangarooState, Point};
+use crate::types::{KangarooState, Point, TaggedKangarooState};
 use crate::math::{Secp256k1, bigint::BigInt256};
+use std::ops::Rem;
 
 use anyhow::Result;
 use log::warn;
@@ -227,5 +228,67 @@ impl TameKangarooGenerator {
             true, // is_tame = true
             rand::random::<u64>(), // Random ID
         ))
+    }
+
+    /// Generate multi-target wild kangaroos with tags
+    pub fn generate_wild_batch_multi(&self, targets: &[Point], batch_per_target: usize) -> Result<Vec<TaggedKangarooState>> {
+        let mut batch = Vec::with_capacity(targets.len() * batch_per_target);
+
+        for (target_idx, target) in targets.iter().enumerate() {
+            for _ in 0..batch_per_target {
+                // Generate random offset for wild kangaroo: P - d*G
+                // Use smaller range for efficiency (can be expanded for larger puzzles)
+                let offset = self.random_bigint_mod(&BigInt256::from_u64(1u64 << 40)); // 40-bit range
+
+                // Compute wild start position: target - offset * G
+                let curve = Secp256k1::new();
+                let offset_point = curve.mul(&offset, &curve.g);
+                let wild_point = curve.barrett_p.sub(target, &offset_point);
+
+                batch.push(TaggedKangarooState {
+                    point: wild_point,
+                    distance: BigInt256::zero(), // Start at distance 0, will accumulate during stepping
+                    target_idx: target_idx as u32,
+                    initial_offset: offset,
+                });
+            }
+        }
+
+        Ok(batch)
+    }
+
+    /// Generate tame kangaroos (shared across all targets)
+    pub fn generate_tame_batch(&self, total_count: usize) -> Vec<KangarooState> {
+        let mut tames = Vec::with_capacity(total_count);
+
+        for i in 0..total_count {
+            let offset = BigInt256::from_u64(i as u64 * 1000000); // Spaced tame starts
+            let curve = Secp256k1::new();
+            let start_position = curve.mul(&offset, &curve.g);
+
+            let alpha = offset.to_u64_array();
+            let beta = [1, 0, 0, 0]; // Beta coefficient
+
+            tames.push(KangarooState::new(
+                start_position,
+                alpha[0], // Use lowest 64 bits as distance
+                alpha,
+                beta,
+                true, // is_tame = true
+                i as u64,
+            ));
+        }
+
+        tames
+    }
+
+    /// Generate random BigInt256 modulo modulus
+    fn random_bigint_mod(&self, modulus: &BigInt256) -> BigInt256 {
+        // Simple random generation - in production use cryptographically secure randomness
+        let mut limbs = [0u64; 4];
+        for i in 0..4 {
+            limbs[i] = rand::random::<u64>();
+        }
+        BigInt256::from_u64_array(limbs) % &modulus
     }
 }
