@@ -2,6 +2,8 @@ use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
 use speedbitcrack::gpu::backend::GpuBackend;
 use speedbitcrack::types::{KangarooState, Point};
 use speedbitcrack::kangaroo::collision::Trap;
+#[cfg(feature = "cudarc")]
+use std::process::Command;
 
 fn bench_step_batch(c: &mut Criterion) {
     // Only run CUDA benchmarks if CUDA feature is enabled
@@ -27,6 +29,32 @@ fn bench_step_batch(c: &mut Criterion) {
         c.bench_function("cuda_step_batch_1024", |b| {
             b.iter(|| {
                 let _traps = backend.step_batch(&mut positions, &mut distances, &types);
+            })
+        });
+
+        // Automated Nsight Compute profiling for performance validation
+        c.bench_function("cuda_step_batch_with_ncu_profiling", |b| {
+            b.iter(|| {
+                let _traps = backend.step_batch(&mut positions, &mut distances, &types);
+                // Run Nsight Compute metrics collection
+                let output = Command::new("ncu")
+                    .arg("--metrics")
+                    .arg("sm__warps_active.avg.pct_of_peak_sustained_active,dram__bytes_read.sum,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active")
+                    .arg("--target-processes")
+                    .arg("all")
+                    .arg("--replay-mode")
+                    .arg("application")
+                    .output();
+                match output {
+                    Ok(result) => {
+                        let metrics = String::from_utf8_lossy(&result.stdout);
+                        // Log metrics for analysis (would be collected in CI)
+                        println!("NCU Metrics: {}", metrics);
+                    }
+                    Err(_) => {
+                        // Nsight not available, continue with benchmark
+                    }
+                }
             })
         });
     }
