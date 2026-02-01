@@ -20,36 +20,9 @@ impl ParityChecker {
     /// Create new parity checker
     pub fn new() -> Self {
         // TODO: Initialize with proper config
-        let config = crate::config::Config::parse().unwrap_or_else(|_| {
-            // Create a minimal test config
-            crate::config::Config {
-                mode: crate::config::SearchMode::FullRange,
-                p2pk_file: std::path::PathBuf::from("test_p2pk.txt"),
-                puzzles_file: std::path::PathBuf::from("test_puzzles.txt"),
-                puzzle_mode: false,
-                test_mode: true,
-                dp_bits: 20,
-                herd_size: 100,
-                jump_mean: 1000,
-                max_ops: 1000,
-                wild_primes: vec![179, 257],
-                prime_spacing_with_entropy: false,
-                expanded_prime_spacing: false,
-                expanded_jump_table: false,
-                attractor_start: None,
-                enable_near_collisions: None,
-                enable_walk_backs: None,
-                enable_smart_pruning: false,
-                enable_target_eviction: false,
-                validate_puzzle: None,
-                force_continue: false,
-                output_dir: std::path::PathBuf::from("test_output"),
-                checkpoint_interval: 1000,
-                log_level: "info".to_string(),
-            }
-        });
+        let config = crate::config::Config::default();
         let cpu_stepper = KangarooStepper::new(false); // Use standard jump table
-        let gpu_backend: Box<dyn GpuBackend> = Box::new(CpuBackend::new());
+        let gpu_backend: Box<dyn GpuBackend> = Box::new(CpuBackend);
 
         ParityChecker {
             cpu_stepper,
@@ -185,7 +158,7 @@ impl ParityChecker {
         // This would require mutable self, so we'll create a temp checker
         let quick_checker = ParityChecker {
             cpu_stepper: self.cpu_stepper.clone(),
-            gpu_backend: Box::new(CpuBackend::new().unwrap()),
+            gpu_backend: Box::new(CpuBackend),
             test_steps: 1000,
         };
 

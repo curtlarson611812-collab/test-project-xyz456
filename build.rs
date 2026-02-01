@@ -14,7 +14,7 @@ fn main() {
 
     for shader_path in &shaders {
         if Path::new(shader_path).exists() {
-            println!("cargo:rerun-if-changed={}", shader_path);
+            println!("cargo:rerun-if-changed={shader_path}");
         }
     }
 
@@ -40,9 +40,7 @@ fn main() {
             .arg("--optimize=3")
             .status();
 
-        if !status.is_ok() {
-            panic!("NVCC compilation failed for inverse.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-        }
+        assert!(status.is_ok(), "NVCC compilation failed for inverse.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
 
         // Compile solve.cu to PTX for Phase 2 collision solving and Barrett reduction
         let solve_ptx = Path::new(&out_dir).join("solve.ptx");
@@ -55,9 +53,7 @@ fn main() {
             .arg("--optimize=3")
             .status();
 
-        if !status.is_ok() {
-            panic!("NVCC compilation failed for solve.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-        }
+        assert!(status.is_ok(), "NVCC compilation failed for solve.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
 
         // Compile hybrid.cu to PTX for Phase 2 hybrid Barrett-Montgomery arithmetic
         let hybrid_ptx = Path::new(&out_dir).join("hybrid.ptx");
@@ -70,9 +66,7 @@ fn main() {
             .arg("--optimize=3")
             .status();
 
-        if !status.is_ok() {
-            panic!("NVCC compilation failed for hybrid.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-        }
+        assert!(status.is_ok(), "NVCC compilation failed for hybrid.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
 
         // Compile carry_propagation.ptx directly (already PTX)
         let carry_ptx_src = cuda_src_dir.join("carry_propagation.ptx");
@@ -93,9 +87,7 @@ fn main() {
             .arg("--optimize=3")
             .status();
 
-        if !status.is_ok() {
-            panic!("NVCC compilation failed for bigint_mul.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-        }
+        assert!(status.is_ok(), "NVCC compilation failed for bigint_mul.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
 
         // Compile fft_mul.cu with cuFFT support for advanced multiplication
         let fft_ptx = Path::new(&out_dir).join("fft_mul.ptx");
@@ -108,9 +100,7 @@ fn main() {
             .arg("--optimize=3")
             .status();
 
-        if !status.is_ok() {
-            panic!("NVCC compilation failed for fft_mul.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-        }
+        assert!(status.is_ok(), "NVCC compilation failed for fft_mul.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
 
         // Compile fused_mul_redc.ptx directly (already in PTX format)
         let fused_ptx_src = cuda_src_dir.join("fused_mul_redc.ptx");

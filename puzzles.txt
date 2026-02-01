@@ -1,0 +1,4 @@
+# Bitcoin puzzle targets
+# Format: puzzle_number:compressed_public_key
+# This file should contain Bitcoin puzzle public keys for testing
+# Currently empty - to be populated with actual puzzle data

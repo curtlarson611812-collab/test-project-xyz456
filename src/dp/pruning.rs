@@ -63,9 +63,7 @@ impl DpPruning {
                 .filter_map(|(hash, entry)| {
                     // Calculate real value score based on distance and cluster density
                     let dist_score = entry.state.distance as f64;
-                    let cluster_density = table.clusters.get(&entry.cluster_id)
-                        .map(|cluster| cluster.len() as f64)
-                        .unwrap_or(1.0);
+                    let cluster_density = table.get_cluster_size(entry.cluster_id) as f64;
                     let value_score = dist_score / (cluster_density + 1.0);
                     Some((value_score, *hash))
                 })
@@ -85,11 +83,9 @@ impl DpPruning {
         Ok(stats)
     }
 
-    /// Advanced cluster-based pruning using k-means clustering
+    /// Advanced cluster-based pruning using simple k-means clustering
     /// Groups DP entries by spatial clustering and removes outliers
     pub async fn prune_advanced_clusters(&self, k_clusters: usize) -> Result<PruningStats> {
-        use kmeans::*;
-
         let mut stats = PruningStats::default();
 
         // Get all DP entries
@@ -102,19 +98,16 @@ impl DpPruning {
         }
 
         // Extract features for clustering (using x-coordinate and distance)
-        let samples: Vec<Vec<f64>> = entries.iter().map(|(_, entry)| {
-            vec![
+        let samples: Vec<[f64; 2]> = entries.iter().map(|(_, entry)| {
+            [
                 (entry.point.x[0] as f64) / u32::MAX as f64,  // Normalize x-coordinate
                 (entry.state.distance as f64).log2().max(0.0) / 64.0,  // Log distance normalized
             ]
         }).collect();
 
-        // Perform k-means clustering
-        let kmeans = KMeans::new(samples, k_clusters, Distance::Euclidean);
-        let result = kmeans.kmeans_lloyd(100, KMeans::default_rng());
-
-        match result {
-            Ok((cluster_centers, cluster_assignments)) => {
+        // Perform simple k-means clustering
+        match self.simple_kmeans(&samples, k_clusters, 50) {
+            Ok(cluster_assignments) => {
                 // Calculate cluster sizes
                 let mut cluster_sizes = vec![0; k_clusters];
                 for &assignment in &cluster_assignments {
@@ -125,7 +118,7 @@ impl DpPruning {
                 let min_cluster_size = cluster_sizes.iter().min().unwrap_or(&0);
                 if *min_cluster_size < entries.len() / (k_clusters * 2) {
                     // Remove entries from small clusters
-                    for (i, (_, entry)) in entries.iter().enumerate() {
+                    for (i, (_, _entry)) in entries.iter().enumerate() {
                         if cluster_sizes[cluster_assignments[i]] == *min_cluster_size {
                             // Mark for removal (would need remove method in DpTable)
                             stats.entries_removed += 1;
@@ -143,6 +136,80 @@ impl DpPruning {
         }
 
         Ok(stats)
+    }
+
+    /// Simple k-means clustering implementation
+    fn simple_kmeans(&self, samples: &[[f64; 2]], k: usize, max_iterations: usize) -> Result<Vec<usize>> {
+        use rand::Rng;
+
+        if samples.is_empty() || k == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut rng = rand::thread_rng();
+
+        // Initialize centroids randomly
+        let mut centroids: Vec<[f64; 2]> = (0..k)
+            .map(|_| {
+                let idx = rng.gen_range(0..samples.len());
+                samples[idx]
+            })
+            .collect();
+
+        let mut assignments = vec![0; samples.len()];
+
+        for _ in 0..max_iterations {
+            let mut changed = false;
+
+            // Assign points to nearest centroids
+            for (i, &point) in samples.iter().enumerate() {
+                let mut min_dist = f64::INFINITY;
+                let mut best_centroid = 0;
+
+                for (j, &centroid) in centroids.iter().enumerate() {
+                    let dist = self.euclidean_distance(point, centroid);
+                    if dist < min_dist {
+                        min_dist = dist;
+                        best_centroid = j;
+                    }
+                }
+
+                if assignments[i] != best_centroid {
+                    assignments[i] = best_centroid;
+                    changed = true;
+                }
+            }
+
+            if !changed {
+                break; // Converged
+            }
+
+            // Update centroids
+            let mut counts = vec![0; k];
+            let mut sums: Vec<[f64; 2]> = vec![[0.0, 0.0]; k];
+
+            for (i, &assignment) in assignments.iter().enumerate() {
+                counts[assignment] += 1;
+                sums[assignment][0] += samples[i][0];
+                sums[assignment][1] += samples[i][1];
+            }
+
+            for i in 0..k {
+                if counts[i] > 0 {
+                    centroids[i][0] = sums[i][0] / counts[i] as f64;
+                    centroids[i][1] = sums[i][1] / counts[i] as f64;
+                }
+            }
+        }
+
+        Ok(assignments)
+    }
+
+    /// Calculate Euclidean distance between two 2D points
+    fn euclidean_distance(&self, a: [f64; 2], b: [f64; 2]) -> f64 {
+        let dx = a[0] - b[0];
+        let dy = a[1] - b[1];
+        (dx * dx + dy * dy).sqrt()
     }
 
     /// Run value-based pruning (prefer low-value entries)
@@ -196,6 +263,7 @@ pub struct PruningStats {
     pub entries_removed: usize,
     pub chunks_processed: usize,
     pub duration_ms: u64,
+    pub additional_info: String,
 }
 
 /// Pruning recommendations

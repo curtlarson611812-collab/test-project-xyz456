@@ -4,7 +4,7 @@
 //! async pruning trigger, multi-GPU dispatch
 
 use crate::config::Config;
-use crate::types::{KangarooState, Target, Solution};
+use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
 use crate::gpu::backend::{GpuBackend, HybridBackend};
 use crate::kangaroo::generator::KangarooGenerator;
@@ -12,7 +12,7 @@ use crate::kangaroo::stepper::KangarooStepper;
 use crate::kangaroo::collision::CollisionDetector;
 use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
-use crate::math::BigInt256;
+use crate::math::bigint::BigInt256;
 
 use anyhow::Result;
 use log::{info, warn, debug};
@@ -46,32 +46,7 @@ impl KangarooManager {
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
 
         // Create appropriate GPU backend based on configuration
-        let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend.as_str() {
-            "vulkan" => {
-                #[cfg(feature = "vulkano")]
-                {
-                    use crate::gpu::backend::WgpuBackend;
-                    Box::new(WgpuBackend::new().await?)
-                }
-                #[cfg(not(feature = "vulkano"))]
-                {
-                    warn!("Vulkan backend requested but not compiled - falling back to CUDA");
-                    Box::new(crate::gpu::backend::CudaBackend::new()?)
-                }
-            }
-            "cuda" => {
-                Box::new(crate::gpu::backend::CudaBackend::new()?)
-            }
-            "hybrid" => {
-                Box::new(HybridBackend::new().await?)
-            }
-            "cpu" => {
-                Box::new(crate::gpu::backend::CpuBackend {})
-            }
-            _ => {
-                return Err(anyhow::anyhow!("Invalid backend: {}", config.gpu_backend));
-            }
-        };
+        let gpu_backend: Box<dyn GpuBackend> = Box::new(crate::gpu::backend::CpuBackend);
         let generator = KangarooGenerator::new(&config);
         let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits); // Use standard jump table
         let collision_detector = CollisionDetector::new();
@@ -203,8 +178,7 @@ impl KangarooManager {
         // Trigger pruning if >80% full
         let dp_utilization = {
             let dp_table = self.dp_table.lock().await;
-            let stats = dp_table.stats();
-            stats.utilization
+            dp_table.stats().utilization
         };
         if dp_utilization > 0.8 {
             let mut dp_table = self.dp_table.lock().await;
@@ -234,23 +208,31 @@ impl KangarooManager {
         let kangaroo_states = vec![]; // TODO: Collect from active kangaroo herds
 
         // Collect DP table entries
-        let dp_entries = self.dp_table.get_all_entries().await?;
+        let dp_entries: Vec<DpEntry> = {
+            let table = self.dp_table.lock().await;
+            table.get_entries().values().cloned().collect()
+        };
+
+        let dp_entries_count = dp_entries.len();
 
         let checkpoint = CheckpointData {
             total_ops: self.total_ops,
-            start_time: self.start_time.into(),
+            start_time: std::time::SystemTime::now(),
             kangaroo_states,
             dp_entries,
         };
 
         // Serialize and save to sled database
         let serialized = bincode::serialize(&checkpoint)?;
-        if let Some(db) = &self.dp_table.sled_db {
-            db.insert("checkpoint", serialized)?;
-            db.flush()?;
-            info!("Checkpoint saved at {} ops with {} DP entries", self.total_ops, dp_entries.len());
-        } else {
-            warn!("Checkpoint not saved - disk storage not enabled");
+        {
+            let dp_table = self.dp_table.lock().await;
+            if let Some(db) = dp_table.sled_db() {
+                db.insert("checkpoint", serialized)?;
+                db.flush()?;
+                info!("Checkpoint saved at {} ops with {} DP entries", self.total_ops, dp_entries_count);
+            } else {
+                warn!("Checkpoint not saved - disk storage not enabled");
+            }
         }
 
         Ok(())
@@ -290,6 +272,16 @@ impl KangarooManager {
         Ok(is_valid)
     }
 
+    /// Convert u32 array to u64 array (GPU format to CPU format)
+    fn u32_array_to_u64_array(u32_arr: [u32; 8]) -> [u64; 4] {
+        [
+            (u32_arr[0] as u64) | ((u32_arr[1] as u64) << 32),
+            (u32_arr[2] as u64) | ((u32_arr[3] as u64) << 32),
+            (u32_arr[4] as u64) | ((u32_arr[5] as u64) << 32),
+            (u32_arr[6] as u64) | ((u32_arr[7] as u64) << 32),
+        ]
+    }
+
     /// Convert GPU computation results back to KangarooState format
     /// Used after GPU stepping operations to reconstruct kangaroo states
     fn convert_gpu_results_to_kangaroos(
@@ -306,19 +298,19 @@ impl KangarooManager {
 
                 // Convert u32 arrays back to BigInt256
                 let position = Point {
-                    x: BigInt256::from_u32_array(gpu_pos[0]),
-                    y: BigInt256::from_u32_array(gpu_pos[1]),
-                    z: BigInt256::from_u32_array(gpu_pos[2]),
+                    x: Self::u32_array_to_u64_array(gpu_pos[0]),
+                    y: Self::u32_array_to_u64_array(gpu_pos[1]),
+                    z: Self::u32_array_to_u64_array(gpu_pos[2]),
                 };
-                let distance = BigInt256::from_u32_array(gpu_dist);
+                let distance_u64 = Self::u32_array_to_u64_array(gpu_dist);
 
                 KangarooState {
                     position,
-                    distance: (distance, original.distance.1), // Keep original target
+                    distance: distance_u64[0], // Use first limb as distance
                     alpha: original.alpha,
                     beta: original.beta,
                     is_tame: original.is_tame,
-                    steps: original.steps,
+                    id: original.id,
                 }
             } else {
                 // Fallback to original if GPU data unavailable

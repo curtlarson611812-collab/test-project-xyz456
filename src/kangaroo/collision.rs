@@ -77,7 +77,7 @@ impl CollisionDetector {
     }
 
     fn solve_trap_collision(&self, tame: &Trap, wild: &Trap) -> Option<Solution> {
-        let n_limbs = self.curve.n.to_u64_array();
+        let n_limbs = self.curve.n.clone().to_u64_array();
         let n = BigUint::from_slice(&[
             n_limbs[0] as u32, (n_limbs[0] >> 32) as u32,
             n_limbs[1] as u32, (n_limbs[1] >> 32) as u32,
@@ -234,7 +234,7 @@ impl CollisionDetector {
         if tame_dist_big > BigUint::from(0u64) {
             // Compute k = tame_distance * inv(step_size) mod subgroup_order
             // For Magic 9, we might have specific subgroup orders
-            let n_limbs = self.curve.n.to_u64_array();
+            let n_limbs = self.curve.n.clone().to_u64_array();
             let subgroup_order = BigUint::from_slice(&[
                 n_limbs[0] as u32, (n_limbs[0] >> 32) as u32,
                 n_limbs[1] as u32, (n_limbs[1] >> 32) as u32,

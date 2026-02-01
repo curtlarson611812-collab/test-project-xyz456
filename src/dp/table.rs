@@ -189,6 +189,16 @@ impl DpTable {
         &self.entries
     }
 
+    /// Get cluster size for a given cluster ID
+    pub fn get_cluster_size(&self, cluster_id: u32) -> usize {
+        self.clusters.get(&cluster_id).map(|c| c.len()).unwrap_or(0)
+    }
+
+    /// Get sled database reference (for checkpointing)
+    pub fn sled_db(&self) -> Option<&Arc<sled::Db>> {
+        self.sled_db.as_ref()
+    }
+
     /// Get table statistics
     pub fn stats(&self) -> DpStats {
         let total_entries = self.entries.len();

@@ -74,6 +74,16 @@ impl BigInt256 {
         bytes
     }
 
+    /// Convert to little-endian bytes
+    pub fn to_bytes_le(&self) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        for i in 0..4 {
+            let limb_bytes = self.limbs[i].to_le_bytes(); // limbs are little-endian
+            bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
+        }
+        bytes
+    }
+
     /// Check if zero
     pub fn is_zero(&self) -> bool {
         self.limbs == [0; 4]
@@ -120,19 +130,19 @@ impl BigInt256 {
         }
 
         if *self < *divisor {
-            return (BigInt256::zero(), *self);
+            return (BigInt256::zero(), self.clone());
         }
 
         // Simple long division implementation
         // This is a simplified version - full implementation would be more complex
         let mut quotient = BigInt256::zero();
-        let mut remainder = *self;
+        let mut remainder = self.clone();
 
         // Start from most significant bit
         for bit in (0..256).rev() {
             if remainder.get_bit(bit) {
                 // Try to subtract divisor shifted left by bit positions
-                let shifted_divisor = *divisor << bit;
+                let shifted_divisor = divisor.clone() << bit;
                 if remainder >= shifted_divisor {
                     remainder = remainder - shifted_divisor;
                     // Set bit in quotient
@@ -248,7 +258,7 @@ impl BarrettReducer {
         let k = modulus.bit_length();
         let mu = BigInt256::from_u64(1); // Placeholder - proper computation requires 512-bit division
 
-        BarrettReducer { modulus: *modulus, mu, k }
+        BarrettReducer { modulus: modulus.clone(), mu, k }
     }
 
     /// Barrett modular reduction: x mod modulus
@@ -257,7 +267,7 @@ impl BarrettReducer {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
 
         if *x < self.modulus {
-            return *x;
+            return x.clone();
         }
 
         // Barrett reduction algorithm
@@ -275,9 +285,9 @@ impl BarrettReducer {
 
     /// Barrett modular addition
     pub fn add(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        let sum = *a + *b;
+        let sum = a.clone() + b.clone();
         if sum >= self.modulus {
-            sum - self.modulus
+            sum - self.modulus.clone()
         } else {
             sum
         }
@@ -286,9 +296,9 @@ impl BarrettReducer {
     /// Barrett modular subtraction
     pub fn sub(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
         if *a >= *b {
-            *a - *b
+            a.clone() - b.clone()
         } else {
-            self.modulus - (*b - *a)
+            self.modulus.clone() - (b.clone() - a.clone())
         }
     }
 
@@ -298,7 +308,7 @@ impl BarrettReducer {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
 
         // Compute full product (truncated to 256 bits, but that's the limitation)
-        let product = *a * *b;
+        let product = a.clone() * b.clone();
 
         // Apply Barrett reduction
         self.reduce(&product)
@@ -341,7 +351,7 @@ impl MontgomeryReducer {
         };
 
         MontgomeryReducer {
-            modulus: *modulus, r, r_inv, n_prime,
+            modulus: modulus.clone(), r, r_inv, n_prime,
         }
     }
 
@@ -353,14 +363,14 @@ impl MontgomeryReducer {
         // Full REDC requires careful handling of R = 2^256
 
         // Compute t = a * b (256-bit result, truncated)
-        let t = *a * *b;
+        let t = a.clone() * b.clone();
 
         // REDC step 1: m = (t * n_prime) mod 2^64
         let t_low = t.limbs[0];
         let m = ((t_low as u128 * self.n_prime as u128) % ((1u64 as u128) << 64)) as u64;
 
         // REDC step 2: compute t + m * modulus
-        let m_modulus = BigInt256::from_u64(m) * self.modulus;
+        let m_modulus = BigInt256::from_u64(m) * self.modulus.clone();
         let sum = t + m_modulus;
 
         // REDC step 3: divide by R = 2^256 (shift right by 256 bits)
@@ -370,7 +380,7 @@ impl MontgomeryReducer {
 
         // Final reduction if needed
         if result >= self.modulus {
-            result - self.modulus
+            result - self.modulus.clone()
         } else {
             result
         }
@@ -394,18 +404,18 @@ impl MontgomeryReducer {
             return None;
         }
 
-        let mut old_r = *modulus;
-        let mut r = *a;
+        let mut old_r = modulus.clone();
+        let mut r = a.clone();
         let mut old_s = BigInt256::zero();
         let mut s = BigInt256::from_u64(1);
 
         while !r.is_zero() {
             let quotient = old_r.div_rem(&r).0;
-            let temp_r = old_r - quotient * r;
+            let temp_r = old_r - quotient.clone() * r.clone();
             old_r = r;
             r = temp_r;
 
-            let temp_s = old_s - quotient * s;
+            let temp_s = old_s - quotient * s.clone();
             old_s = s;
             s = temp_s;
         }
@@ -417,7 +427,7 @@ impl MontgomeryReducer {
         if old_s.limbs[0] & 1 == 0 {
             Some(old_s)
         } else {
-            Some(*modulus - old_s)
+            Some(modulus.clone() - old_s)
         }
     }
 
