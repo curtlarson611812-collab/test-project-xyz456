@@ -3,6 +3,8 @@
 
 use speedbitcrack::math::{BigInt256, secp::Secp256k1};
 use speedbitcrack::types::Point;
+#[cfg(feature = "rustacuda")]
+use speedbitcrack::gpu::backend::HybridBackend;
 
 #[cfg(test)]
 mod tests {
@@ -131,6 +133,30 @@ mod tests {
                 prop_assert_eq!(product_reduced, BigInt256::from_u64(1));
             }
         }
+    }
+
+    // Test hybrid GPU backend multiplication
+    #[cfg(feature = "rustacuda")]
+    #[tokio::test]
+    async fn test_hybrid_mul() {
+        let backend = HybridBackend::new().await.unwrap();
+
+        // Test 5 * 3 = 15
+        let a = vec![BigInt256::from_u64(5).to_u64_array()];
+        let b = vec![BigInt256::from_u64(3).to_u64_array()];
+
+        let result = backend.batch_mul(a, b).unwrap();
+        let expected = BigInt256::from_u64(15);
+
+        // Convert result back and check
+        let result_big = BigInt256::from_u64_array([
+            result[0][0] | ((result[0][1] as u64) << 32),
+            result[0][2] | ((result[0][3] as u64) << 32),
+            result[0][4] | ((result[0][5] as u64) << 32),
+            result[0][6] | ((result[0][7] as u64) << 32),
+        ]);
+
+        assert_eq!(result_big, expected);
     }
 
     // Fuzz test for point operations

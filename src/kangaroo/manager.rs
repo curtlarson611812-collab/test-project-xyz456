@@ -6,13 +6,18 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
-use crate::gpu::backend::{GpuBackend, HybridBackend};
+use crate::gpu::backend::{GpuBackend, HybridBackend, CpuBackend};
+#[cfg(feature = "vulkano")]
+use crate::gpu::backend::VulkanBackend;
+#[cfg(feature = "rustacuda")]
+use crate::gpu::backend::CudaBackend;
 use crate::kangaroo::generator::KangarooGenerator;
 use crate::kangaroo::stepper::KangarooStepper;
 use crate::kangaroo::collision::CollisionDetector;
 use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
+use anyhow::anyhow;
 
 use anyhow::Result;
 use log::{info, warn, debug};
@@ -51,7 +56,31 @@ impl KangarooManager {
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
 
         // Create appropriate GPU backend based on configuration
-        let gpu_backend: Box<dyn GpuBackend> = Box::new(crate::gpu::backend::CpuBackend);
+        let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend.as_str() {
+            "hybrid" => Box::new(HybridBackend::new().await?),
+            "vulkan" => {
+                #[cfg(feature = "vulkano")]
+                {
+                    Box::new(VulkanBackend::new().await?)
+                }
+                #[cfg(not(feature = "vulkano"))]
+                {
+                    return Err(anyhow!("Vulkan backend requires 'vulkano' feature to be enabled"));
+                }
+            }
+            "cuda" => {
+                #[cfg(feature = "rustacuda")]
+                {
+                    Box::new(CudaBackend::new()?)
+                }
+                #[cfg(not(feature = "rustacuda"))]
+                {
+                    return Err(anyhow!("CUDA backend requires 'rustacuda' feature to be enabled"));
+                }
+            }
+            "cpu" => Box::new(CpuBackend::new()?),
+            _ => return Err(anyhow!("Invalid GPU backend: {}", config.gpu_backend)),
+        };
         let generator = KangarooGenerator::new(&config);
         let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits); // Use standard jump table
         let collision_detector = CollisionDetector::new();

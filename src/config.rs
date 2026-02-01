@@ -105,7 +105,7 @@ pub struct Config {
     pub log_level: String,
 
     /// GPU backend to use (cuda, vulkan, hybrid, cpu)
-    #[arg(long, default_value = "cuda")]
+    #[arg(long, default_value = "hybrid")]
     pub gpu_backend: String,
 }
 
