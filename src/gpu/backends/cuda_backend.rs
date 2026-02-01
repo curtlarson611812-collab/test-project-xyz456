@@ -162,7 +162,12 @@ impl GpuBackend for CudaBackend {
         let distances_flat: Vec<u32> = distances.iter().flatten().cloned().collect();
 
         // Allocate device memory and copy data
-        let mut d_positions = DeviceBuffer::from_slice(&positions_flat)?;
+        let mut d_positions = DeviceBuffer::from_slice(&positions_flat)
+            .map_err(|e| if matches!(e, rustacuda::error::CudaError::OutOfMemory) {
+                anyhow!("CUDA OOM in step_batch - reduce batch size")
+            } else {
+                anyhow!("CUDA alloc failed: {}", e)
+            })?;
         let mut d_distances = DeviceBuffer::from_slice(&distances_flat)?;
         let mut d_types = DeviceBuffer::from_slice(&types)?;
         let mut d_new_positions = unsafe { DeviceBuffer::zeroed(batch_size * 24) }?; // 3 * 8 u32 per position

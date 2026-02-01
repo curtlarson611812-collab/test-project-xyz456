@@ -27,11 +27,16 @@ impl WgpuBackend {
             ..Default::default()
         });
 
+        // Check for available adapters
+        if instance.enumerate_adapters(wgpu::Backends::PRIMARY).is_empty() {
+            return Err(anyhow!("No Vulkan adapters available"));
+        }
+
         let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
-        }).await.ok_or_else(|| anyhow!("No Vulkan adapter found"))?;
+        }).await.ok_or_else(|| anyhow!("No suitable Vulkan adapter found"))?;
 
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {

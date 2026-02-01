@@ -45,36 +45,37 @@ impl GpuBackend for CpuBackend {
     }
 
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
-        // CPU implementation of modular inverse using Fermat's little theorem
-        // For secp256k1 prime p, compute a^(p-2) mod p
+        // CPU implementation using modular inverse (more efficient than Fermat's little theorem)
         let mut results = Vec::with_capacity(inputs.len());
+        let modulus_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
 
         for input in inputs {
-            // Convert [u32;8] to BigUint for modular exponentiation
+            // Convert [u32;8] to BigUint
             let input_big = num_bigint::BigUint::from_slice(&input.iter().rev().map(|&x| x).collect::<Vec<_>>());
-            let modulus_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
 
             if input_big == num_bigint::BigUint::ZERO {
                 results.push([0u32; 8]);
                 continue;
             }
 
-            // Compute p-2 exponent
-            let exponent = &modulus_big - 2u32;
-
-            // Modular exponentiation: input^(p-2) mod p
-            let result_big = input_big.modpow(&exponent, &modulus_big);
-
-            // Convert back to [u32;8] (little-endian)
-            let result_bytes = result_big.to_bytes_le();
-            let mut result = [0u32; 8];
-            for (i, chunk) in result_bytes.chunks(4).enumerate() {
-                if i < 8 {
-                    result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
+            // Use modular inverse (more efficient than exponentiation)
+            match input_big.modinv(&modulus_big) {
+                Some(inv) => {
+                    // Convert back to [u32;8] (little-endian)
+                    let result_bytes: Vec<u8> = inv.to_bytes_le();
+                    let mut result = [0u32; 8];
+                    for (i, chunk) in result_bytes.chunks(4).enumerate() {
+                        if i < 8 {
+                            result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
+                        }
+                    }
+                    results.push(result);
+                }
+                None => {
+                    // No inverse exists
+                    results.push([0u32; 8]);
                 }
             }
-
-            results.push(result);
         }
 
         Ok(results)
