@@ -32,6 +32,8 @@ use std::sync::Arc;
 use std::ffi::CStr;
 #[cfg(feature = "rustacuda")]
 use std::os::raw::c_void;
+#[cfg(feature = "rustacuda")]
+use std::ptr;
 // Note: cuFFT functionality removed due to cudarc limitations
 // Raw CUDA driver API would be needed for full FFT support
 
@@ -1207,18 +1209,20 @@ impl GpuBackend for CudaBackend {
         let mul_fn = self.bigint_mul_module.get_function("bigint_mul_kernel")?;
 
         // Launch multiplication kernel - one thread per batch element
+        let batch_u32 = batch_size as u32;
+        let params = vec![
+            d_a.as_device_ptr() as *const _ as *mut c_void,  // Input const cast
+            d_b.as_device_ptr() as *const _ as *mut c_void,
+            d_result.as_device_ptr() as *mut _ as *mut c_void,  // Output mut
+            &batch_u32 as *const u32 as *mut c_void,
+        ];
         unsafe {
-            mul_fn.launch(
-                &self.stream,
+            mul_fn.launch_kernel(
+                &params,
                 ((batch_size as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
                 0,
-                &[
-                    &d_a.as_kernel_parameter(),
-                    &d_b.as_kernel_parameter(),
-                    &d_result.as_kernel_parameter(),
-                    &(batch_size as u32),
-                ]
+                &self.stream
             )?;
         }
 

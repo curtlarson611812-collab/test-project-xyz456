@@ -7,7 +7,11 @@
 
 // Schoolbook multiplication kernel for 256-bit integers
 // Each thread handles one multiplication: a[8] * b[8] -> result[16]
-__global__ void bigint_mul_kernel(const uint32_t *a, const uint32_t *b, uint32_t *result, uint32_t batch) {
+__global__ void bigint_mul_kernel(void *a_void, void *b_void, void *result_void, uint32_t batch) {
+    const uint32_t *a = (const uint32_t *)a_void;
+    const uint32_t *b = (const uint32_t *)b_void;
+    uint32_t *result = (uint32_t *)result_void;
+
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch) return;
 
