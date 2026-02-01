@@ -38,8 +38,13 @@ impl KangarooManager {
     /// Create new KangarooManager
     pub async fn new(config: Config) -> Result<Self> {
         // Load targets - ALWAYS load full valuable_p2pk_publickey.txt
+        println!("DEBUG: Entered KangarooManager::new");
+        println!("DEBUG: Starting target loading...");
+        println!("DEBUG: About to call TargetLoader::new()");
         let target_loader = TargetLoader::new();
+        println!("DEBUG: TargetLoader created successfully");
         let targets = target_loader.load_targets(&config)?;
+        println!("DEBUG: Loaded {} targets", targets.len());
         info!("Loaded {} targets", targets.len());
 
         // Initialize components

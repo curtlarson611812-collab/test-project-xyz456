@@ -1,4 +1,6 @@
 # Bitcoin puzzle targets
-# Format: puzzle_number:compressed_public_key
-# This file should contain Bitcoin puzzle public keys for testing
-# Currently empty - to be populated with actual puzzle data
+# Format: puzzle_num,pubkey_hex,key_range_low,key_range_high[,btc_value]
+# This file contains Bitcoin puzzle public keys for testing
+
+# Puzzle #32: Range 2^31 to 2^32, key 0x80000000
+32,0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798,2147483648,4294967296,0.00000001

@@ -109,7 +109,7 @@ pub struct Config {
     pub gpu_backend: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SearchMode {
     /// Full range search (default for P2PK/Magic 9 clusters)
     FullRange,

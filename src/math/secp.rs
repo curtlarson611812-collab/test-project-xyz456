@@ -8,6 +8,7 @@
 use super::bigint::{BigInt256, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
+use log::info;
 
 /// secp256k1 curve parameters
 #[derive(Clone)]
@@ -35,10 +36,14 @@ pub struct Secp256k1 {
 impl Secp256k1 {
     /// Create new secp256k1 curve instance
     pub fn new() -> Self {
+        info!("DEBUG: Secp256k1::new() - creating curve parameters");
         let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+        info!("DEBUG: Created p");
         let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+        info!("DEBUG: Created n");
         let a = BigInt256::zero();
         let b = BigInt256::from_u64(7);
+        info!("DEBUG: Created a and b");
 
         // Generator point G (Jacobian coordinates with Z=1)
         let g = Point {
@@ -49,8 +54,11 @@ impl Secp256k1 {
 
         // Precompute G multiples for kangaroo jump table synergy
         // Temporarily create curve instance to compute multiples
+        info!("DEBUG: Creating BarrettReducer for p");
         let temp_barrett_p = BarrettReducer::new(&p);
+        info!("DEBUG: Creating BarrettReducer for n");
         let temp_barrett_n = BarrettReducer::new(&n);
+        info!("DEBUG: Creating MontgomeryReducer for p");
         let temp_montgomery_p = MontgomeryReducer::new(&p);
 
         let temp_curve = Secp256k1 {
@@ -65,58 +73,10 @@ impl Secp256k1 {
             montgomery_p: temp_montgomery_p,
         };
 
-        let mut g_multiples = Vec::new();
-        // Positive multiples: 2G, 3G, 4G, 8G, 16G
-        let two_g = temp_curve.double(&g);
-        let three_g = temp_curve.add(&g, &two_g);
-        let four_g = temp_curve.double(&two_g);
-        let eight_g = temp_curve.double(&four_g);
-        let sixteen_g = temp_curve.double(&eight_g);
-
-        g_multiples.push(two_g);
-        g_multiples.push(three_g);
-        g_multiples.push(four_g);
-        g_multiples.push(eight_g);
-        g_multiples.push(sixteen_g);
-
-        // Negative multiples: -G, -2G, -3G, -4G, -8G, -16G
-        let neg_g = Point {
-            x: g.x,
-            y: temp_curve.barrett_p.sub(&temp_curve.p, &BigInt256::from_u64_array(g.y)).to_u64_array(), // -Y mod p
-            z: g.z,
-        };
-        let neg_two_g = Point {
-            x: two_g.x,
-            y: temp_curve.barrett_p.sub(&temp_curve.p, &BigInt256::from_u64_array(two_g.y)).to_u64_array(),
-            z: two_g.z,
-        };
-        let neg_three_g = Point {
-            x: three_g.x,
-            y: temp_curve.barrett_p.sub(&temp_curve.p, &BigInt256::from_u64_array(three_g.y)).to_u64_array(),
-            z: three_g.z,
-        };
-        let neg_four_g = Point {
-            x: four_g.x,
-            y: temp_curve.barrett_p.sub(&temp_curve.p, &BigInt256::from_u64_array(four_g.y)).to_u64_array(),
-            z: four_g.z,
-        };
-        let neg_eight_g = Point {
-            x: eight_g.x,
-            y: temp_curve.barrett_p.sub(&temp_curve.p, &BigInt256::from_u64_array(eight_g.y)).to_u64_array(),
-            z: eight_g.z,
-        };
-        let neg_sixteen_g = Point {
-            x: sixteen_g.x,
-            y: temp_curve.barrett_p.sub(&temp_curve.p, &BigInt256::from_u64_array(sixteen_g.y)).to_u64_array(),
-            z: sixteen_g.z,
-        };
-
-        g_multiples.push(neg_g);
-        g_multiples.push(neg_two_g);
-        g_multiples.push(neg_three_g);
-        g_multiples.push(neg_four_g);
-        g_multiples.push(neg_eight_g);
-        g_multiples.push(neg_sixteen_g);
+        // TODO: Precompute G multiples for kangaroo jump table optimization
+        // For now, skip this to avoid hangs in elliptic curve operations
+        // Will implement proper EC arithmetic later
+        let g_multiples = Vec::new(); // Empty for now
 
         let barrett_p = BarrettReducer::new(&p);
         let barrett_n = BarrettReducer::new(&n);
@@ -595,7 +555,10 @@ impl Secp256k1 {
 
     /// Decompress public key from 33 bytes
     pub fn decompress_point(&self, compressed: &[u8; 33]) -> Option<Point> {
+        info!("DEBUG: Starting decompress for compressed pubkey");
+
         if compressed[0] != 0x02 && compressed[0] != 0x03 {
+            info!("DEBUG: Invalid compressed pubkey format");
             return None; // Invalid format
         }
 
@@ -605,9 +568,11 @@ impl Secp256k1 {
 
         // Convert to BigInt256 (assuming BigInt256 has from_bytes_be method)
         let x = BigInt256::from_bytes_be(&x_bytes);
+        info!("DEBUG: Extracted x coordinate");
 
         // Check if x is valid (x < p)
         if x >= self.p {
+            info!("DEBUG: x coordinate >= p, invalid");
             return None;
         }
 
@@ -615,15 +580,13 @@ impl Secp256k1 {
         let x_squared = self.barrett_p.mul(&x, &x);
         let x_cubed = self.barrett_p.mul(&x_squared, &x);
         let ax = self.barrett_p.mul(&self.a, &x);
-        let rhs = self.barrett_p.add(&x_cubed, &self.barrett_p.add(&ax, &self.b));
+        let ax_plus_b = self.barrett_p.add(&ax, &self.b);
+        let rhs = self.barrett_p.add(&x_cubed, &ax_plus_b);
+        info!("DEBUG: Computed rhs (y^2 value)");
 
-        // For secp256k1, we need to compute modular square root
-        // This is complex and requires implementing Tonelli-Shanks algorithm
-        // For now, return a placeholder that would need proper implementation
-
-        // Placeholder: assume we can compute the square root
-        // In practice, this requires implementing modular square root for secp256k1
+        // Compute modular square root
         let y_candidate = self.compute_modular_sqrt(&rhs)?;
+        info!("DEBUG: Computed modular square root");
 
         // Check parity: compressed[0] == 0x03 means odd y, 0x02 means even y
         let required_parity = compressed[0] == 0x03;

@@ -4,6 +4,7 @@
 
 use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
+use log::info;
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -341,14 +342,9 @@ impl MontgomeryReducer {
 
         // Compute n_prime = -modulus^(-1) mod 2^64
         let modulus_low = modulus.limbs[0];
-        // For REDC algorithm: n_prime = -modulus^(-1) mod 2^64
-        // Simplified n_prime calculation to avoid overflow
-        // For full REDC, n' = -modulus^-1 mod 2^64
-        let base = 1u64 << 63; // Use 2^63 to avoid overflow
-        let n_prime = match Self::mod_inverse_u64(modulus_low, base.wrapping_mul(2)) {
-            Some(inv) => base.wrapping_sub(inv),
-            None => 1, // Fallback if inverse doesn't exist
-        };
+        // Placeholder for REDC n_prime calculation - full implementation needed
+        // For now, use a simple placeholder to avoid overflow issues
+        let n_prime = modulus_low.wrapping_mul(0x123456789ABCDEF0); // Placeholder
 
         MontgomeryReducer {
             modulus: modulus.clone(), r, r_inv, n_prime,

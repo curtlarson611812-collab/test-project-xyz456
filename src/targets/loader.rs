@@ -4,7 +4,7 @@
 
 use crate::types::Target;
 use crate::config::Config;
-use crate::math::Secp256k1;
+use crate::math::{Secp256k1, BigInt256};
 use anyhow::{anyhow, Result};
 use log::{info, warn};
 use std::fs;
@@ -18,26 +18,38 @@ pub struct TargetLoader {
 impl TargetLoader {
     /// Create new target loader
     pub fn new() -> Self {
+        println!("DEBUG: TargetLoader::new() called");
+        let curve = Secp256k1::new();
+        println!("DEBUG: Secp256k1 created in TargetLoader");
         TargetLoader {
-            curve: Secp256k1::new(),
+            curve,
         }
     }
 
     /// Load all targets based on configuration - ALWAYS load FULL valuable_p2pk_publickey.txt
     pub fn load_targets(&self, config: &Config) -> Result<Vec<Target>> {
+        info!("DEBUG: load_targets called with puzzle_mode: {}, test_mode: {}", config.puzzle_mode, config.test_mode);
         let mut targets = Vec::new();
 
         // Load P2PK targets - ALWAYS load the FULL file (~34,353 verified P2PK pubkeys)
         // NO shrinking to 1/10/test keys unless --test-mode flag is explicitly set
+        info!("DEBUG: P2PK file '{}' exists: {}", config.p2pk_file.display(), config.p2pk_file.exists());
         if config.p2pk_file.exists() {
+            info!("DEBUG: Loading P2PK targets...");
             let p2pk_targets = self.load_p2pk_targets(&config.p2pk_file)?;
+            let p2pk_count = p2pk_targets.len();
             targets.extend(p2pk_targets);
-        } else if !config.test_mode {
+            info!("DEBUG: Loaded {} P2PK targets", p2pk_count);
+        } else if config.mode == crate::config::SearchMode::FullRange && !config.test_mode && !config.puzzle_mode {
             return Err(anyhow!("P2PK file not found: {} (required for full-range mode)", config.p2pk_file.display()));
+        } else {
+            info!("DEBUG: Skipping P2PK targets (puzzle mode, test mode, or file not found)");
         }
 
         // Load puzzle targets if enabled - append to P2PK targets
+        println!("DEBUG: Puzzle mode enabled: {}", config.puzzle_mode);
         if config.puzzle_mode {
+            println!("DEBUG: Puzzle file '{}' exists: {}", config.puzzles_file.display(), config.puzzles_file.exists());
             if config.puzzles_file.exists() {
                 let puzzle_targets = self.load_puzzle_targets(&config.puzzles_file)?;
                 targets.extend(puzzle_targets);
@@ -135,19 +147,28 @@ impl TargetLoader {
 
     /// Load puzzle targets from puzzles.txt
     fn load_puzzle_targets(&self, file_path: &Path) -> Result<Vec<Target>> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
         info!("Loading puzzle targets from {}", file_path.display());
-        let content = fs::read_to_string(file_path)?;
+        let file = File::open(file_path)?;
+        let reader = BufReader::new(file);
         let mut targets = Vec::new();
         let mut invalid_count = 0;
 
-        for (line_num, line) in content.lines().enumerate() {
+        for (line_num, line_result) in reader.lines().enumerate() {
+            let line = line_result?;
             let line = line.trim();
+            info!("DEBUG: Parsing line {}: {}", line_num + 1, line);
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
 
             match self.parse_puzzle_line(line, line_num + 1) {
-                Ok(target) => targets.push(target),
+                Ok(target) => {
+                    info!("DEBUG: Parsed target: puzzle {}", target.id);
+                    targets.push(target);
+                }
                 Err(e) => {
                     warn!("Skipping invalid puzzle line {}: {}", line_num + 1, e);
                     invalid_count += 1;
@@ -162,19 +183,43 @@ impl TargetLoader {
 
     /// Parse puzzle target line: puzzle_num,pubkey_hex,key_range_low,key_range_high[,btc_value]
     fn parse_puzzle_line(&self, line: &str, line_num: usize) -> Result<Target> {
+        println!("DEBUG: Parsing puzzle line: {}", line);
         let parts: Vec<&str> = line.split(',').collect();
+        println!("DEBUG: Split into {} parts", parts.len());
         if parts.len() < 4 {
             return Err(anyhow!("Invalid puzzle line format (expected puzzle_num,pubkey_hex,low,high[,btc]): {}", line));
         }
 
         let puzzle_num: u32 = parts[0].trim().parse()
             .map_err(|e| anyhow!("Invalid puzzle number '{}': {}", parts[0], e))?;
+        println!("DEBUG: Puzzle number: {}", puzzle_num);
 
         let pubkey_hex = parts[1].trim();
+        info!("DEBUG: Validating pubkey hex: {}", pubkey_hex);
+
+        // Early validation of compressed pubkey format
+        let pubkey_hex = if pubkey_hex.starts_with("0x") {
+            &pubkey_hex[2..]
+        } else {
+            pubkey_hex
+        };
+
+        if pubkey_hex.len() != 66 || (!pubkey_hex.starts_with("02") && !pubkey_hex.starts_with("03")) {
+            return Err(anyhow!("Invalid compressed pubkey format: expected 66 hex chars starting with 02 or 03"));
+        }
+
+        // Validate x coordinate is in valid range
+        let x_hex = &pubkey_hex[2..]; // Skip the 02/03 prefix
+        let x = BigInt256::from_hex(x_hex);
+        if x >= self.curve.p {
+            return Err(anyhow!("Invalid pubkey: x coordinate >= p"));
+        }
+
         let key_range_low: u64 = parts[2].trim().parse()
             .map_err(|e| anyhow!("Invalid key range low '{}': {}", parts[2], e))?;
         let key_range_high: u64 = parts[3].trim().parse()
             .map_err(|e| anyhow!("Invalid key range high '{}': {}", parts[3], e))?;
+        info!("DEBUG: Key range: {} to {}", key_range_low, key_range_high);
 
         let btc_value = if parts.len() >= 5 {
             Some(parts[4].trim().parse::<f64>()
