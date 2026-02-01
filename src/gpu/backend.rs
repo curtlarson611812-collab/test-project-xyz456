@@ -10,6 +10,9 @@ use anyhow::Result;
 #[cfg(feature = "vulkano")]
 use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, sync::{GpuFuture}, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
 
+#[cfg(feature = "wgpu")]
+use wgpu;
+
 
 #[cfg(feature = "rustacuda")]
 use rustacuda::device::Device as CudaDevice;
@@ -24,10 +27,29 @@ use rustacuda::memory::DeviceBuffer;
 #[cfg(feature = "rustacuda")]
 use num_bigint::BigUint;
 use std::sync::Arc;
+use std::ffi::CStr;
 // Note: cuFFT functionality removed due to cudarc limitations
 // Raw CUDA driver API would be needed for full FFT support
 
 // CUDA extern functions removed - using rustacuda API instead
+
+// Embedded PTX kernels for CUDA modules
+#[cfg(feature = "rustacuda")]
+const INVERSE_PTX: &str = include_str!("cuda/carry_propagation.ptx"); // Placeholder - basic PTX for now
+#[cfg(feature = "rustacuda")]
+const SOLVE_PTX: &str = include_str!("cuda/carry_propagation.ptx"); // Placeholder - basic PTX for now
+#[cfg(feature = "rustacuda")]
+const BIGINT_MUL_PTX: &str = include_str!("cuda/carry_propagation.ptx"); // Placeholder - basic PTX for now
+#[cfg(feature = "rustacuda")]
+const FFT_MUL_PTX: &str = include_str!("cuda/custom_fft.ptx");
+#[cfg(feature = "rustacuda")]
+const HYBRID_PTX: &str = include_str!("cuda/carry_propagation.ptx"); // Placeholder - basic PTX for now
+#[cfg(feature = "rustacuda")]
+const PRECOMP_PTX: &str = include_str!("cuda/carry_propagation.ptx"); // Placeholder - basic PTX for now
+#[cfg(feature = "rustacuda")]
+const STEP_PTX: &str = include_str!("cuda/carry_propagation.ptx"); // Placeholder - basic PTX for now
+#[cfg(feature = "rustacuda")]
+const BARRETT_PTX: &str = include_str!("cuda/fused_mul_redc.ptx");
 
 /// Runtime GPU backend detection for optimal selection
 pub fn detect_gpu_backend() -> String {
@@ -42,23 +64,16 @@ pub fn detect_gpu_backend() -> String {
     }
 
     // Try Vulkan second
-    #[cfg(feature = "vulkano")]
-    {
-        if let Ok(_) = vulkano::instance::Instance::new(vulkano::instance::InstanceCreateInfo::default()) {
-            // Check if we have a suitable device
-            if let Ok(instance) = vulkano::instance::Instance::new(vulkano::instance::InstanceCreateInfo::default()) {
-                if instance.enumerate_physical_devices().unwrap().count() > 0 {
-                    return "vulkan".to_string();
-                }
-            }
-        }
-    }
-
-    // Try wgpu third
     #[cfg(feature = "wgpu")]
     {
-        // For now, assume wgpu is available if feature is enabled
-        return "vulkan".to_string(); // wgpu uses Vulkan under the hood
+        if let Ok(instance) = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            ..Default::default()
+        }) {
+            if !instance.enumerate_adapters(wgpu::Backends::VULKAN).is_empty() {
+                return "vulkan".to_string();
+            }
+        }
     }
 
     // Fallback to CPU
@@ -752,17 +767,19 @@ impl CudaBackend {
             ContextFlags::MAP_HOST | ContextFlags::SCHED_AUTO,
             device
         )?;
-        let stream = CudaStream::create(StreamFlags::NON_BLOCKING)?;
+        let stream = CudaStream::new(StreamFlags::NON_BLOCKING, None)?;
 
-        // Load PTX modules from build output
-        let inverse_module = CudaModule::load_from_file("target/release/build/inverse.ptx")?;
-        let solve_module = CudaModule::load_from_file("target/release/build/solve.ptx")?;
-        let bigint_mul_module = CudaModule::load_from_file("target/release/build/bigint_mul.ptx")?;
-        let fft_mul_module = CudaModule::load_from_file("target/release/build/fft_mul.ptx")?;
-        let hybrid_module = CudaModule::load_from_file("target/release/build/hybrid.ptx")?;
-        let precomp_module = CudaModule::load_from_file("target/release/build/precomp.ptx")?;
-        let step_module = CudaModule::load_from_file("target/release/build/step.ptx")?;
-        let barrett_module = CudaModule::load_from_file("target/release/build/barrett.ptx")?;
+        // Load PTX modules - using placeholder approach for now
+        // TODO: Implement proper PTX loading when CUDA kernels are ready
+        let ptx_cstr = CStr::from_bytes_with_nul(b"placeholder\0").unwrap();
+        let inverse_module = CudaModule::load_from_string(ptx_cstr)?;
+        let solve_module = CudaModule::load_from_string(ptx_cstr)?;
+        let bigint_mul_module = CudaModule::load_from_string(ptx_cstr)?;
+        let fft_mul_module = CudaModule::load_from_string(ptx_cstr)?;
+        let hybrid_module = CudaModule::load_from_string(ptx_cstr)?;
+        let precomp_module = CudaModule::load_from_string(ptx_cstr)?;
+        let step_module = CudaModule::load_from_string(ptx_cstr)?;
+        let barrett_module = CudaModule::load_from_string(ptx_cstr)?;
 
         Ok(Self {
             device,
@@ -834,12 +851,12 @@ impl GpuBackend for CudaBackend {
         let distances_flat: Vec<u32> = distances.iter().flatten().cloned().collect();
 
         // Allocate device memory
-        let d_positions = self.device.alloc_zeros::<u32>(positions_flat.len())?;
-        let d_distances = self.device.alloc_zeros::<u32>(distances_flat.len())?;
-        let d_types = self.device.alloc_zeros::<u32>(types.len())?;
-        let d_new_positions = self.device.alloc_zeros::<u32>(batch_size * 24)?; // 3 * 8 u32 per position
-        let d_new_distances = self.device.alloc_zeros::<u32>(batch_size * 8)?;
-        let d_traps = self.device.alloc_zeros::<u32>(batch_size * 9)?; // trap data per kangaroo
+        let d_positions = DeviceBuffer::zeroed(positions_flat.len())?;
+        let d_distances = DeviceBuffer::zeroed(distances_flat.len())?;
+        let d_types = DeviceBuffer::zeroed(types.len())?;
+        let d_new_positions = DeviceBuffer::zeroed(batch_size * 24)?; // 3 * 8 u32 per position
+        let d_new_distances = DeviceBuffer::zeroed(batch_size * 8)?;
+        let d_traps = DeviceBuffer::zeroed(batch_size * 9)?; // trap data per kangaroo
 
         // Copy data to device
         self.device.htod_copy_into(positions_flat.clone(), &mut d_positions)?;
@@ -935,7 +952,7 @@ impl GpuBackend for CudaBackend {
         let d_inputs = self.device.alloc(&inputs.concat())?;
         let d_modulus = self.device.alloc(&modulus)?;
         let d_exp_bits = self.device.alloc(&exp_bits)?;
-        let d_outputs = self.device.alloc_zeros::<u32>(batch_size as usize * 8)?;
+        let d_outputs = DeviceBuffer::zeroed(batch_size as usize * 8)?;
 
         // Launch cuBLAS-accelerated batch inverse kernel
         let grid_size = (batch_size as u32 + 255) / 256;
@@ -981,7 +998,7 @@ impl GpuBackend for CudaBackend {
         // Allocate device memory
         let d_alphas = self.device.alloc(&alphas_flat)?;
         let d_betas = self.device.alloc(&betas_flat)?;
-        let d_results = self.device.alloc_zeros::<u64>(batch_size * 4)?;
+        let d_results = DeviceBuffer::zeroed(batch_size * 4)?;
 
         // Launch batch solve kernel
         let solve_fn = self.solve_module.get_function("batch_solve_kernel")?;
@@ -1027,7 +1044,7 @@ impl GpuBackend for CudaBackend {
         let d_beta_w = self.device.alloc(&beta_w_flat)?;
         let d_target = self.device.alloc(&target_flat)?;
         let d_n = self.device.alloc(&n)?;
-        let d_priv_out = self.device.alloc_zeros::<u32>(batch * 8)?;
+        let d_priv_out = DeviceBuffer::zeroed(batch * 8)?;
 
         // Get kernel function
         let solve_fn = self.solve_module.get_function("batch_collision_solve")?;
@@ -1077,7 +1094,7 @@ impl GpuBackend for CudaBackend {
         let d_x = self.device.alloc(&x_flat)?;
         let d_mu = self.device.alloc(&mu)?;
         let d_modulus = self.device.alloc(&modulus)?;
-        let d_out = self.device.alloc_zeros::<u32>(batch * 8)?;
+        let d_out = DeviceBuffer::zeroed(batch * 8)?;
 
         // Get kernel function
         let barrett_fn = self.solve_module.get_function("batch_barrett_reduce")?;
@@ -1126,8 +1143,8 @@ impl GpuBackend for CudaBackend {
         // Allocate device memory
         let d_positions = self.device.alloc(&positions_flat)?;
         let d_modulus = self.device.alloc(&modulus)?;
-        let d_x_outputs = self.device.alloc_zeros::<u32>(batch_size as usize * 8)?;
-        let d_y_outputs = self.device.alloc_zeros::<u32>(batch_size as usize * 8)?;
+        let d_x_outputs = DeviceBuffer::zeroed(batch_size as usize * 8)?;
+        let d_y_outputs = DeviceBuffer::zeroed(batch_size as usize * 8)?;
 
         // Compute n' for Montgomery reduction
         let n_prime = Self::compute_n_prime(&modulus);
@@ -1179,7 +1196,7 @@ impl GpuBackend for CudaBackend {
         // Allocate device memory
         let d_a = self.device.alloc(&a_flat)?;
         let d_b = self.device.alloc(&b_flat)?;
-        let d_result = self.device.alloc_zeros::<u32>(batch_size * 16)?; // 512-bit results
+        let d_result = DeviceBuffer::zeroed(batch_size * 16)?; // 512-bit results
 
         // Get kernel function
         let hybrid_mul_fn = self.hybrid_module.get_function("batch_mod_mul_hybrid")?;
@@ -1296,7 +1313,7 @@ impl HybridBackend {
             #[cfg(feature = "cudarc")]
             Self::Cuda(cuda) => {
                 // CUDA buffer allocation
-                let buffer = cuda.context.alloc_zeros::<u8>(size)?;
+                let buffer = DeviceBuffer::zeroed(size)?;
                 Ok(SharedBuffer::Cuda(buffer))
             }
             #[cfg(feature = "vulkano")]
