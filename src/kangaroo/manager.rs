@@ -6,7 +6,7 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
-use crate::gpu::{GpuBackend, HybridBackend, CpuBackend};
+use crate::gpu::{GpuBackend, HybridBackend, CpuBackend, HybridGpuManager, shared::SharedBuffer};
 #[cfg(feature = "vulkano")]
 use crate::gpu::VulkanBackend;
 #[cfg(feature = "rustacuda")]
@@ -392,6 +392,83 @@ impl KangarooManager {
         }
 
         Ok(stepped_kangaroos)
+    }
+
+    /// Step kangaroos using refined hybrid GPU with drift mitigation
+    pub async fn step_herds_hybrid_refined(&mut self, total_steps: u64) -> Result<()> {
+        // Create shared buffers for cross-API memory access
+        let mut shared_points = SharedBuffer::<Point>::new(self.config.herd_size);
+        let mut shared_distances = SharedBuffer::<u64>::new(self.config.herd_size);
+
+        // Initialize with current kangaroo state
+        {
+            let points_slice = shared_points.as_mut_slice();
+            let distances_slice = shared_distances.as_mut_slice();
+
+            // Copy from internal storage (simplified - would need to track active kangaroos)
+            for i in 0..self.config.herd_size.min(points_slice.len()) {
+                // Initialize with default positions (would copy from actual kangaroos)
+                points_slice[i] = Point {
+                    x: [i as u64, 0, 0, 0],
+                    y: [0, 0, 0, 0],
+                    z: [1, 0, 0, 0],
+                };
+                distances_slice[i] = i as u64 * 1000; // Placeholder distances
+            }
+        }
+
+        // Create hybrid manager with drift monitoring
+        let hybrid_manager = HybridGpuManager::new(0.001, 5).await?; // 0.1% error threshold, 5s check interval
+
+        // Execute hybrid computation with drift mitigation
+        hybrid_manager.execute_with_drift_monitoring(
+            &mut shared_points,
+            &mut shared_distances,
+            self.config.herd_size,
+            total_steps,
+        )?;
+
+        // Extract results and update DP table
+        {
+
+            // Process distinguished points found during computation
+            for i in 0..shared_points.len() {
+                let point = shared_points.as_slice()[i];
+                let distance = shared_distances.as_slice()[i];
+
+                // Check if this is a distinguished point (simplified check)
+                let x_low = point.x[0] & ((1u64 << 20) - 1); // 20-bit DP check
+                if x_low == 0 {
+                    // Found distinguished point - add to DP table
+                    let kangaroo_state = KangarooState::new(
+                        point,
+                        distance,
+                        [0; 4], // alpha (would be tracked)
+                        [0; 4], // beta (would be tracked)
+                        true,   // is_tame (simplified)
+                        i as u64, // id
+                    );
+
+                    let mut table = self.dp_table.lock().await;
+                    let dp_entry = crate::types::DpEntry::new(point, kangaroo_state, x_low as u64, 0);
+                    if let Err(e) = table.add_dp(dp_entry) {
+                        log::warn!("Failed to add DP entry: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Log final metrics
+        let metrics = hybrid_manager.get_metrics();
+        log::info!(
+            "Hybrid computation completed - Error rate: {:.6}, CUDA throughput: {:.0} ops/s, Vulkan throughput: {:.0} ops/s, Swaps: {}",
+            metrics.error_rate,
+            metrics.cuda_throughput,
+            metrics.vulkan_throughput,
+            metrics.swap_count
+        );
+
+        Ok(())
     }
 
     /// Verify potential solution

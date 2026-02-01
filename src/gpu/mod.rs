@@ -4,6 +4,8 @@
 
 pub mod backend;
 pub mod backends;
+pub mod shared;
+pub mod hybrid_manager;
 #[cfg(feature = "vulkano")]
 pub mod vulkan;
 pub mod cuda;
@@ -11,3 +13,4 @@ pub mod cuda;
 // Re-export main backend interfaces
 pub use backend::{detect_gpu_backend};
 pub use backends::*;
+pub use hybrid_manager::HybridGpuManager;
