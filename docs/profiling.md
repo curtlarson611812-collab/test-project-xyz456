@@ -40,6 +40,9 @@ ncu --section Occupancy --section SpeedOfLight --target-processes all ./target/r
 
 # Profile fused multiplication kernel
 ncu --kernel-name "fused_mul_reduce_kernel" --set full ./target/release/speedbitcrack
+
+# Comprehensive profiling with key metrics for bottleneck analysis
+ncu --set full --target-processes all --replay-mode application --metrics sm__warps_active.avg.pct_of_peak_sustained_active,dram__bytes_read.sum,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active ./target/release/speedbitcrack --batch 4096  # Occupancy >90%, bandwidth <200GB/s, ALU >80%
 ```
 
 ### Nsight Compute Reports

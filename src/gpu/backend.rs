@@ -41,6 +41,17 @@ use std::ptr;
 
 // CUDA extern functions removed - using rustacuda API instead
 
+/// CUDA error checking macro for consistent error handling
+#[cfg(feature = "rustacuda")]
+macro_rules! cuda_check {
+    ($expr:expr) => {
+        $expr.map_err(|e| anyhow!("CUDA error: {}", e))?
+    };
+    ($expr:expr, $ctx:expr) => {
+        $expr.map_err(|e| anyhow!("CUDA error in {}: {}", $ctx, e))?
+    };
+}
+
 // Embedded PTX kernels for CUDA modules
 #[cfg(feature = "rustacuda")]
 const INVERSE_PTX: &str = include_str!("cuda/carry_propagation.ptx"); // Placeholder - basic PTX for now
@@ -868,26 +879,28 @@ impl GpuBackend for CudaBackend {
 
         // Launch kangaroo stepping kernel
         let step_fn = self.inverse_module.get_function("kangaroo_step_batch")?;
+        let batch_u32 = batch_size as u32;
+        let params = vec![
+            d_positions.as_device_ptr() as *const _ as *mut c_void,
+            d_distances.as_device_ptr() as *const _ as *mut c_void,
+            d_types.as_device_ptr() as *const _ as *mut c_void,
+            d_new_positions.as_device_ptr() as *mut _ as *mut c_void,
+            d_new_distances.as_device_ptr() as *mut _ as *mut c_void,
+            d_traps.as_device_ptr() as *mut _ as *mut c_void,
+            &batch_u32 as *const u32 as *mut c_void,
+        ];
         unsafe {
-            step_fn.launch(
-                &self.stream,
+            cuda_check!(step_fn.launch_kernel(
+                &params,
                 ((batch_size as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
                 0,
-                &[
-                    &d_positions.as_kernel_parameter(),
-                    &d_distances.as_kernel_parameter(),
-                    &d_types.as_kernel_parameter(),
-                    &d_new_positions.as_kernel_parameter(),
-                    &d_new_distances.as_kernel_parameter(),
-                    &d_traps.as_kernel_parameter(),
-                    &(batch_size as u32),
-                ]
-            )?;
+                &self.stream
+            ), "step_batch launch");
         }
 
         // Synchronize and read results
-        self.stream.synchronize()?;
+        cuda_check!(self.stream.synchronize(), "step_batch sync");
         let new_positions_flat = d_new_positions.copy_to_vec()?;
         let new_distances_flat = d_new_distances.copy_to_vec()?;
         let traps_flat = d_traps.copy_to_vec()?;
@@ -1006,30 +1019,32 @@ impl GpuBackend for CudaBackend {
         let alphas_flat: Vec<u32> = alphas.into_iter().flatten().collect();
         let betas_flat: Vec<u32> = betas.into_iter().flatten().collect();
 
-        // Allocate device memory
-        let d_alphas = self.device.alloc(&alphas_flat)?;
-        let d_betas = self.device.alloc(&betas_flat)?;
-        let d_results = DeviceBuffer::zeroed(batch_size * 4)?;
+        // Allocate device memory and copy data
+        let d_alphas = DeviceBuffer::from_slice(&alphas_flat)?;
+        let d_betas = DeviceBuffer::from_slice(&betas_flat)?;
+        let mut d_results = DeviceBuffer::uninitialized(batch_size * 4)?;
 
         // Launch batch solve kernel
         let solve_fn = self.solve_module.get_function("batch_solve_kernel")?;
+        let batch_u32 = batch_size as u32;
+        let params = vec![
+            d_alphas.as_device_ptr() as *const _ as *mut c_void,
+            d_betas.as_device_ptr() as *const _ as *mut c_void,
+            d_results.as_device_ptr() as *mut _ as *mut c_void,
+            &batch_u32 as *const u32 as *mut c_void,
+        ];
         unsafe {
-            solve_fn.launch(
-                &self.stream,
+            cuda_check!(solve_fn.launch_kernel(
+                &params,
                 (batch_size as u32, 1, 1),
                 (256, 1, 1),
                 0,
-                &[
-                    &d_alphas.as_kernel_parameter(),
-                    &d_betas.as_kernel_parameter(),
-                    &d_results.as_kernel_parameter(),
-                    &(batch_size as u32),
-                ]
-            )?;
+                &self.stream
+            ), "batch_solve launch");
         }
 
         // Synchronize and read results
-        self.stream.synchronize()?;
+        cuda_check!(self.stream.synchronize(), "batch_solve sync");
         let results_flat = d_results.copy_to_vec()?;
         let results = results_flat.chunks(4).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
@@ -1049,40 +1064,42 @@ impl GpuBackend for CudaBackend {
         let beta_w_flat: Vec<u32> = beta_w.into_iter().flatten().collect();
         let target_flat: Vec<u32> = target.into_iter().flatten().collect();
 
-        // Allocate device memory
-        let d_alpha_t = self.device.alloc(&alpha_t_flat)?;
-        let d_alpha_w = self.device.alloc(&alpha_w_flat)?;
-        let d_beta_t = self.device.alloc(&beta_t_flat)?;
-        let d_beta_w = self.device.alloc(&beta_w_flat)?;
-        let d_target = self.device.alloc(&target_flat)?;
-        let d_n = self.device.alloc(&n)?;
-        let d_priv_out = DeviceBuffer::zeroed(batch * 8)?;
+        // Allocate device memory and copy data
+        let d_alpha_t = DeviceBuffer::from_slice(&alpha_t_flat)?;
+        let d_alpha_w = DeviceBuffer::from_slice(&alpha_w_flat)?;
+        let d_beta_t = DeviceBuffer::from_slice(&beta_t_flat)?;
+        let d_beta_w = DeviceBuffer::from_slice(&beta_w_flat)?;
+        let d_target = DeviceBuffer::from_slice(&target_flat)?;
+        let d_n = DeviceBuffer::from_slice(&n)?;
+        let mut d_priv_out = DeviceBuffer::uninitialized(batch * 8)?;
 
         // Get kernel function
         let solve_fn = self.solve_module.get_function("batch_collision_solve")?;
 
         // Launch kernel
+        let batch_i32 = batch as i32;
+        let params = vec![
+            d_alpha_t.as_device_ptr() as *const _ as *mut c_void,
+            d_alpha_w.as_device_ptr() as *const _ as *mut c_void,
+            d_beta_t.as_device_ptr() as *const _ as *mut c_void,
+            d_beta_w.as_device_ptr() as *const _ as *mut c_void,
+            d_target.as_device_ptr() as *const _ as *mut c_void,
+            d_n.as_device_ptr() as *const _ as *mut c_void,
+            d_priv_out.as_device_ptr() as *mut _ as *mut c_void,
+            &batch_i32 as *const i32 as *mut c_void,
+        ];
         unsafe {
-            solve_fn.launch(
-                &self.stream,
+            cuda_check!(solve_fn.launch_kernel(
+                &params,
                 ((batch as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
                 0,
-                &[
-                    &d_alpha_t.as_kernel_parameter(),
-                    &d_alpha_w.as_kernel_parameter(),
-                    &d_beta_t.as_kernel_parameter(),
-                    &d_beta_w.as_kernel_parameter(),
-                    &d_target.as_kernel_parameter(),
-                    &d_n.as_kernel_parameter(),
-                    &d_priv_out.as_kernel_parameter(),
-                    &(batch as i32),
-                ]
-            )?;
+                &self.stream
+            ), "batch_solve_collision launch");
         }
 
         // Synchronize and read results
-        self.stream.synchronize()?;
+        cuda_check!(self.stream.synchronize(), "batch_solve_collision sync");
         let priv_flat = d_priv_out.copy_to_vec()?;
 
         // Convert back to [u32;8] arrays
@@ -1103,37 +1120,40 @@ impl GpuBackend for CudaBackend {
         // Compute n' for Montgomery if needed
         let n_prime = if use_montgomery { Self::compute_n_prime(&modulus) } else { 0 };
 
-        // Allocate device memory
-        let d_x = self.device.alloc(&x_flat)?;
-        let d_mu = self.device.alloc(&mu)?;
-        let d_modulus = self.device.alloc(&modulus)?;
-        let d_out = DeviceBuffer::zeroed(batch * 8)?;
+        // Allocate device memory and copy data
+        let d_x = DeviceBuffer::from_slice(&x_flat)?;
+        let d_mu = DeviceBuffer::from_slice(&mu)?;
+        let d_modulus = DeviceBuffer::from_slice(&modulus)?;
+        let mut d_out = DeviceBuffer::uninitialized(batch * 8)?;
 
         // Get kernel function
         let barrett_fn = self.solve_module.get_function("batch_barrett_reduce")?;
 
         // Launch kernel
+        let n_prime_u32 = n_prime as u32;
+        let batch_i32 = batch as i32;
+        let params = vec![
+            d_x.as_device_ptr() as *const _ as *mut c_void,
+            d_mu.as_device_ptr() as *const _ as *mut c_void,
+            d_modulus.as_device_ptr() as *const _ as *mut c_void,
+            d_out.as_device_ptr() as *mut _ as *mut c_void,
+            &use_montgomery as *const bool as *mut c_void,
+            &n_prime_u32 as *const u32 as *mut c_void,
+            &batch_i32 as *const i32 as *mut c_void,
+            &8i32 as *const i32 as *mut c_void,
+        ];
         unsafe {
-            barrett_fn.launch(
-                &self.stream,
+            cuda_check!(barrett_fn.launch_kernel(
+                &params,
                 ((batch as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
                 0,
-                &[
-                    &d_x.as_kernel_parameter(),
-                    &d_mu.as_kernel_parameter(),
-                    &d_modulus.as_kernel_parameter(),
-                    &d_out.as_kernel_parameter(),
-                    &use_montgomery,
-                    &(n_prime as u32),
-                    &(batch as i32),
-                    &8i32, // limbs
-                ]
-            )?;
+                &self.stream
+            ), "batch_barrett_reduce launch");
         }
 
         // Synchronize and read results
-        self.stream.synchronize()?;
+        cuda_check!(self.stream.synchronize(), "batch_barrett_reduce sync");
         let out_flat = d_out.copy_to_vec()?;
 
         // Convert back to [u32;8] arrays
@@ -1154,11 +1174,11 @@ impl GpuBackend for CudaBackend {
             .flat_map(|point| point.into_iter().flatten())
             .collect();
 
-        // Allocate device memory
-        let d_positions = self.device.alloc(&positions_flat)?;
-        let d_modulus = self.device.alloc(&modulus)?;
-        let d_x_outputs = DeviceBuffer::zeroed(batch_size as usize * 8)?;
-        let d_y_outputs = DeviceBuffer::zeroed(batch_size as usize * 8)?;
+        // Allocate device memory and copy data
+        let d_positions = DeviceBuffer::from_slice(&positions_flat)?;
+        let d_modulus = DeviceBuffer::from_slice(&modulus)?;
+        let mut d_x_outputs = DeviceBuffer::uninitialized(batch_size as usize * 8)?;
+        let mut d_y_outputs = DeviceBuffer::uninitialized(batch_size as usize * 8)?;
 
         // Compute n' for Montgomery reduction
         let n_prime = Self::compute_n_prime(&modulus);
@@ -1166,25 +1186,27 @@ impl GpuBackend for CudaBackend {
         // Launch fused affine conversion kernel
         let affine_fn = self.inverse_module.get_function("batch_affine_fused")?;
         let grid_size = ((batch_size as u32 + 255) / 256) as u32;
+        let n_prime_u32 = n_prime as u32;
+        let params = vec![
+            d_positions.as_device_ptr() as *const _ as *mut c_void,
+            d_modulus.as_device_ptr() as *const _ as *mut c_void,
+            &n_prime_u32 as *const u32 as *mut c_void,
+            d_x_outputs.as_device_ptr() as *mut _ as *mut c_void,
+            d_y_outputs.as_device_ptr() as *mut _ as *mut c_void,
+            &batch_size as *const usize as *mut c_void,
+        ];
         unsafe {
-            affine_fn.launch(
-                &self.stream,
+            cuda_check!(affine_fn.launch_kernel(
+                &params,
                 (grid_size, 1, 1),
                 (256, 1, 1),
                 0,
-                &[
-                    &d_positions.as_kernel_parameter(),
-                    &d_modulus.as_kernel_parameter(),
-                    &(n_prime as u32),
-                    &d_x_outputs.as_kernel_parameter(),
-                    &d_y_outputs.as_kernel_parameter(),
-                    &batch_size,
-                ]
-            )?;
+                &self.stream
+            ), "batch_to_affine launch");
         }
 
         // Synchronize and read results
-        self.stream.synchronize()?;
+        cuda_check!(self.stream.synchronize(), "batch_to_affine sync");
         let x_flat = d_x_outputs.copy_to_vec()?;
         let y_flat = d_y_outputs.copy_to_vec()?;
 
@@ -1225,21 +1247,17 @@ impl GpuBackend for CudaBackend {
             &batch_u32 as *const u32 as *mut c_void,
         ];
         unsafe {
-            mul_fn.launch_kernel(
+            cuda_check!(mul_fn.launch_kernel(
                 &params,
                 ((batch_size as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
                 0,
                 &self.stream
-            ).map_err(|e| match e {
-                CudaError::OutOfMemory => anyhow!("CUDA OOM - reduce batch size"),
-                CudaError::InvalidPtx => anyhow!("Invalid PTX - check kernel compilation"),
-                _ => anyhow!("Kernel launch failed: {}", e),
-            })?;
+            ), "batch_mul launch");
         }
 
         // Synchronize and read results
-        self.stream.synchronize().map_err(|e| anyhow!("Stream sync failed: {}", e))?;
+        cuda_check!(self.stream.synchronize(), "batch_mul sync");
         let result_flat = d_result.copy_to_vec()?;
 
         // Convert back to [u32;16] arrays
