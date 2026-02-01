@@ -64,9 +64,24 @@ impl BigInt256 {
         self.limbs
     }
 
+    /// Convert to big-endian bytes
+    pub fn to_bytes_be(&self) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        for i in 0..4 {
+            let limb_bytes = self.limbs[3 - i].to_be_bytes(); // limbs are little-endian, so reverse order
+            bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
+        }
+        bytes
+    }
+
     /// Check if zero
     pub fn is_zero(&self) -> bool {
         self.limbs == [0; 4]
+    }
+
+    /// Check if even
+    pub fn is_even(&self) -> bool {
+        (self.limbs[0] & 1) == 0
     }
 
     /// Negate: -self mod modulus (for BarrettReducer)

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::task;
 use rayon::prelude::*;
-use rocksdb::{DB, Options, WriteBatch};
+use sled;
 use bincode;
 
 /// Smart Distinguished Points table
@@ -24,9 +24,9 @@ pub struct DpTable {
     max_size: usize,
     value_scores: HashMap<u64, f64>,
     clusters: HashMap<u32, Vec<u64>>, // cluster_id -> entry hashes
-    rocksdb_path: Option<PathBuf>,
+    sled_path: Option<PathBuf>,
     disk_enabled: bool,
-    rocksdb: Option<Arc<DB>>,
+    sled_db: Option<Arc<sled::Db>>,
 }
 
 /// Pruning operation statistics
@@ -74,14 +74,9 @@ impl DpTable {
         let max_size = 1 << 24; // ~16M entries
         let cuckoo_filter = CuckooFilter::with_capacity(max_size * 2);
 
-        let rocksdb = if enable_disk {
-            let path = db_path.clone().unwrap_or_else(|| PathBuf::from("./dp_table_rocksdb"));
-            let mut opts = Options::default();
-            opts.create_if_missing(true);
-            opts.set_write_buffer_size(64 * 1024 * 1024); // 64MB write buffer
-            opts.set_max_write_buffer_number(3);
-            opts.set_max_background_jobs(4);
-            Some(Arc::new(DB::open(&opts, path).expect("Failed to open RocksDB")))
+        let sled_db = if enable_disk {
+            let path = db_path.clone().unwrap_or_else(|| PathBuf::from("./dp_table_sled"));
+            Some(Arc::new(sled::open(path).expect("Failed to open Sled database")))
         } else {
             None
         };
@@ -93,9 +88,9 @@ impl DpTable {
             max_size,
             value_scores: HashMap::new(),
             clusters: HashMap::new(),
-            rocksdb_path: db_path,
+            sled_path: db_path,
             disk_enabled: enable_disk,
-            rocksdb,
+            sled_db: sled_db,
         }
     }
 
@@ -398,19 +393,17 @@ impl DpTable {
 
     /// Async spill DP entry to disk storage (rule #12 combo)
     async fn spill_to_disk_async(&self, entry: DpEntry) -> Result<()> {
-        // RocksDB operations are synchronous, so we use task::spawn_blocking
-        // to avoid blocking the async runtime. Use WriteBatch for efficiency.
-        let db = self.rocksdb.as_ref().map(|arc| arc.clone());
+        // Sled operations are synchronous but fast, use task::spawn_blocking for safety
+        let db = self.sled_db.as_ref().map(|arc| arc.clone());
         let key = entry.x_hash.to_be_bytes();
         let serialized = bincode::serialize(&entry)?;
         task::spawn_blocking(move || {
             if let Some(db) = db {
-                let mut batch = WriteBatch::default();
-                batch.put(&key, &serialized);
-                db.write(batch)?;
+                db.insert(&key, serialized)?;
+                db.flush()?; // Ensure data is written
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("RocksDB not enabled"))
+                Err(anyhow::anyhow!("Sled database not enabled"))
             }
         }).await??;
         Ok(())
@@ -422,7 +415,7 @@ impl DpTable {
             return Ok(());
         }
 
-        let db = self.rocksdb.as_ref().map(|arc| arc.clone());
+        let db = self.sled_db.as_ref().map(|arc| arc.clone());
         let mut batch_data = Vec::new();
 
         for entry in entries {
@@ -433,14 +426,13 @@ impl DpTable {
 
         task::spawn_blocking(move || {
             if let Some(db) = db {
-                let mut batch = WriteBatch::default();
                 for (key, serialized) in batch_data {
-                    batch.put(key, serialized);
+                    db.insert(key, serialized)?;
                 }
-                db.write(batch)?;
+                db.flush()?; // Ensure all data is written
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("RocksDB not enabled"))
+                Err(anyhow::anyhow!("Sled database not enabled"))
             }
         }).await??;
 
@@ -449,19 +441,19 @@ impl DpTable {
 
     /// Synchronous spill DP entry to disk storage
     fn spill_to_disk_sync(&self, entry: DpEntry) -> Result<()> {
-        if let Some(db) = &self.rocksdb {
+        if let Some(db) = &self.sled_db {
             let key = entry.x_hash.to_be_bytes();
             let serialized = bincode::serialize(&entry)?;
-            db.put(key, serialized)?;
+            db.insert(key, serialized)?;
             Ok(())
         } else {
-            Err(anyhow::anyhow!("RocksDB not enabled"))
+            Err(anyhow::anyhow!("Sled database not enabled"))
         }
     }
 
     /// Load DP entry from disk (if it exists)
     pub fn load_from_disk(&self, hash: u64) -> Result<Option<DpEntry>> {
-        if let Some(db) = &self.rocksdb {
+        if let Some(db) = &self.sled_db {
             let key = hash.to_be_bytes();
             match db.get(key)? {
                 Some(data) => {
@@ -640,9 +632,9 @@ mod tests {
         table.log_stats(); // Should not panic
     }
 
-    /// Test RocksDB disk operations
+    /// Test Sled disk operations
     #[test]
-    fn test_rocksdb_disk_operations() {
+    fn test_sled_disk_operations() {
         use std::fs;
         use tempfile::tempdir;
 

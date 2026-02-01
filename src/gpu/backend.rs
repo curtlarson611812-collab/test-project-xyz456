@@ -49,16 +49,16 @@ extern "C" {
         mod_: *const u32,
         result: *mut u32,
         batch: i32,
-        stream: cuda::CudaStream,
-    ) -> cuda::CudaError;
+        stream: *mut std::os::raw::c_void,
+    ) -> std::os::raw::c_int;
 
     fn batch_mod_sqr_hybrid_cuda(
         a: *const u32,
         mod_: *const u32,
         result: *mut u32,
         batch: i32,
-        stream: cuda::CudaStream,
-    ) -> cuda::CudaError;
+        stream: *mut std::os::raw::c_void,
+    ) -> std::os::raw::c_int;
 }
 
 /// GPU backend trait for Vulkan/CUDA operations
@@ -541,12 +541,17 @@ impl GpuBackend for CudaBackend {
         let distances_flat: Vec<u32> = distances.iter().flatten().cloned().collect();
 
         // Allocate device memory
-        let d_positions = self.context.alloc_copy(&positions_flat)?;
-        let d_distances = self.context.alloc_copy(&distances_flat)?;
-        let d_types = self.context.alloc_copy(types)?;
-        let d_new_positions = self.context.alloc_zeros::<u32>(batch_size * 24)?; // 3 * 8 u32 per position
-        let d_new_distances = self.context.alloc_zeros::<u32>(batch_size * 8)?;
-        let d_traps = self.context.alloc_zeros::<u32>(batch_size * 9)?; // trap data per kangaroo
+        let d_positions = self.device.alloc_zeros::<u32>(positions_flat.len())?;
+        let d_distances = self.device.alloc_zeros::<u32>(distances_flat.len())?;
+        let d_types = self.device.alloc_zeros::<u32>(types.len())?;
+        let d_new_positions = self.device.alloc_zeros::<u32>(batch_size * 24)?; // 3 * 8 u32 per position
+        let d_new_distances = self.device.alloc_zeros::<u32>(batch_size * 8)?;
+        let d_traps = self.device.alloc_zeros::<u32>(batch_size * 9)?; // trap data per kangaroo
+
+        // Copy data to device
+        self.device.htod_copy_into(positions_flat.clone(), &mut d_positions)?;
+        self.device.htod_copy_into(distances_flat.clone(), &mut d_distances)?;
+        self.device.htod_copy_into(types.to_vec(), &mut d_types)?;
 
         // Launch kangaroo stepping kernel
         let step_fn = self.inverse_module.get_function("kangaroo_step_batch")?;
@@ -634,10 +639,10 @@ impl GpuBackend for CudaBackend {
         let exp_bit_length = 256;
 
         // Allocate device memory
-        let d_inputs = self.context.alloc_copy(&inputs.concat())?;
-        let d_modulus = self.context.alloc_copy(&modulus)?;
-        let d_exp_bits = self.context.alloc_copy(&exp_bits)?;
-        let d_outputs = self.context.alloc_zeros::<u32>(batch_size as usize * 8)?;
+        let d_inputs = self.device.alloc(&inputs.concat())?;
+        let d_modulus = self.device.alloc(&modulus)?;
+        let d_exp_bits = self.device.alloc(&exp_bits)?;
+        let d_outputs = self.device.alloc_zeros::<u32>(batch_size as usize * 8)?;
 
         // Launch cuBLAS-accelerated batch inverse kernel
         let grid_size = (batch_size as u32 + 255) / 256;
@@ -681,9 +686,9 @@ impl GpuBackend for CudaBackend {
         let betas_flat: Vec<u32> = betas.into_iter().flatten().collect();
 
         // Allocate device memory
-        let d_alphas = self.context.alloc_copy(&alphas_flat)?;
-        let d_betas = self.context.alloc_copy(&betas_flat)?;
-        let d_results = self.context.alloc_zeros::<u64>(batch_size * 4)?;
+        let d_alphas = self.device.alloc(&alphas_flat)?;
+        let d_betas = self.device.alloc(&betas_flat)?;
+        let d_results = self.device.alloc_zeros::<u64>(batch_size * 4)?;
 
         // Launch batch solve kernel
         let solve_fn = self.solve_module.get_function("batch_solve_kernel")?;
@@ -723,13 +728,13 @@ impl GpuBackend for CudaBackend {
         let target_flat: Vec<u32> = target.into_iter().flatten().collect();
 
         // Allocate device memory
-        let d_alpha_t = self.context.alloc_copy(&alpha_t_flat)?;
-        let d_alpha_w = self.context.alloc_copy(&alpha_w_flat)?;
-        let d_beta_t = self.context.alloc_copy(&beta_t_flat)?;
-        let d_beta_w = self.context.alloc_copy(&beta_w_flat)?;
-        let d_target = self.context.alloc_copy(&target_flat)?;
-        let d_n = self.context.alloc_copy(&n)?;
-        let d_priv_out = self.context.alloc_zeros::<u32>(batch * 8)?;
+        let d_alpha_t = self.device.alloc(&alpha_t_flat)?;
+        let d_alpha_w = self.device.alloc(&alpha_w_flat)?;
+        let d_beta_t = self.device.alloc(&beta_t_flat)?;
+        let d_beta_w = self.device.alloc(&beta_w_flat)?;
+        let d_target = self.device.alloc(&target_flat)?;
+        let d_n = self.device.alloc(&n)?;
+        let d_priv_out = self.device.alloc_zeros::<u32>(batch * 8)?;
 
         // Get kernel function
         let solve_fn = self.solve_module.get_function("batch_collision_solve")?;
@@ -776,10 +781,10 @@ impl GpuBackend for CudaBackend {
         let n_prime = if use_montgomery { Self::compute_n_prime(&modulus) } else { 0 };
 
         // Allocate device memory
-        let d_x = self.context.alloc_copy(&x_flat)?;
-        let d_mu = self.context.alloc_copy(&mu)?;
-        let d_modulus = self.context.alloc_copy(&modulus)?;
-        let d_out = self.context.alloc_zeros::<u32>(batch * 8)?;
+        let d_x = self.device.alloc(&x_flat)?;
+        let d_mu = self.device.alloc(&mu)?;
+        let d_modulus = self.device.alloc(&modulus)?;
+        let d_out = self.device.alloc_zeros::<u32>(batch * 8)?;
 
         // Get kernel function
         let barrett_fn = self.solve_module.get_function("batch_barrett_reduce")?;
@@ -826,10 +831,10 @@ impl GpuBackend for CudaBackend {
             .collect();
 
         // Allocate device memory
-        let d_positions = self.context.alloc_copy(&positions_flat)?;
-        let d_modulus = self.context.alloc_copy(&modulus)?;
-        let d_x_outputs = self.context.alloc_zeros::<u32>(batch_size as usize * 8)?;
-        let d_y_outputs = self.context.alloc_zeros::<u32>(batch_size as usize * 8)?;
+        let d_positions = self.device.alloc(&positions_flat)?;
+        let d_modulus = self.device.alloc(&modulus)?;
+        let d_x_outputs = self.device.alloc_zeros::<u32>(batch_size as usize * 8)?;
+        let d_y_outputs = self.device.alloc_zeros::<u32>(batch_size as usize * 8)?;
 
         // Compute n' for Montgomery reduction
         let n_prime = Self::compute_n_prime(&modulus);
@@ -879,9 +884,9 @@ impl GpuBackend for CudaBackend {
         let b_flat: Vec<u32> = b.into_iter().flatten().collect();
 
         // Allocate device memory
-        let d_a = self.context.alloc_copy(&a_flat)?;
-        let d_b = self.context.alloc_copy(&b_flat)?;
-        let d_result = self.context.alloc_zeros::<u32>(batch_size * 16)?; // 512-bit results
+        let d_a = self.device.alloc(&a_flat)?;
+        let d_b = self.device.alloc(&b_flat)?;
+        let d_result = self.device.alloc_zeros::<u32>(batch_size * 16)?; // 512-bit results
 
         // Get kernel function
         let hybrid_mul_fn = self.hybrid_module.get_function("batch_mod_mul_hybrid")?;

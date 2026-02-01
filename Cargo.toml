@@ -24,7 +24,7 @@ async-trait = "0.1"               # Async traits for GPU backend
 rand = "0.8"                      # Random number generation for entropy
 
 # Optional / Future
-rocksdb = "0.22"                  # Disk spill for DP overflow
+sled = "0.34"                    # Fast embedded database for DP overflow
 num-bigint = "0.4.6"
 cudarc = { version = "0.9", optional = true }  # CUDA runtime wrapper
 cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }  # Raw CUDA runtime API for cuFFT
@@ -47,8 +47,8 @@ nursery = "warn"
 
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+lto = "thin"  # Changed from true to "thin" (faster, less RAM)
+codegen-units = 16  # Parallelize (from 1)
 panic = "abort"
 
 [dev-dependencies]
