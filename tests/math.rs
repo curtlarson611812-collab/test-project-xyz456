@@ -153,6 +153,22 @@ mod tests {
         assert_eq!(result[0], expected);
     }
 
+    // Test batch multiplication correctness with larger numbers
+    #[cfg(feature = "rustacuda")]
+    #[tokio::test]
+    async fn test_cuda_batch_mul_correctness() {
+        let backend = Box::new(HybridBackend::new().await.unwrap()) as Box<dyn speedbitcrack::gpu::backend::GpuBackend>;
+
+        // Test with secp256k1 field modulus components (simplified)
+        let a = vec![BigInt256::from_u64(0xFFFFFFFFFFFFFFFF)]; // Large number
+        let b = vec![BigInt256::from_u64(2)]; // Simple multiplier
+
+        let result = backend.batch_mul(&a, &b);
+        let expected = BigInt256::from_u64_array([0xFFFFFFFFFFFFFFFE, 1, 0, 0]); // 2^64 - 2 + 2^64 = 2^65 - 2
+
+        assert_eq!(result[0], expected);
+    }
+
     // Fuzz test for point operations
     #[cfg(feature = "libfuzzer")]
     use libfuzzer_sys::fuzz_target;

@@ -5,7 +5,7 @@
 #![allow(unsafe_code)] // Required for CUDA kernel launches and Vulkan buffer operations
 
 use crate::kangaroo::collision::Trap;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 #[cfg(feature = "vulkano")]
 use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, sync::{GpuFuture}, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
@@ -26,6 +26,8 @@ use rustacuda::module::Module as CudaModule;
 use rustacuda::memory::DeviceBuffer;
 #[cfg(feature = "rustacuda")]
 use rustacuda::launch;
+#[cfg(feature = "rustacuda")]
+use rustacuda::error::CudaError;
 #[cfg(feature = "rustacuda")]
 use num_bigint::BigUint;
 use std::sync::Arc;
@@ -950,36 +952,42 @@ impl GpuBackend for CudaBackend {
         let exp_bits = p_minus_2.to_vec();
         let exp_bit_length = 256;
 
-        // Allocate device memory
-        let d_inputs = self.device.alloc(&inputs.concat())?;
-        let d_modulus = self.device.alloc(&modulus)?;
-        let d_exp_bits = self.device.alloc(&exp_bits)?;
-        let d_outputs = DeviceBuffer::zeroed(batch_size as usize * 8)?;
+        // Allocate device memory and copy data
+        let inputs_flat: Vec<u32> = inputs.into_iter().flatten().collect();
+        let d_inputs = DeviceBuffer::from_slice(&inputs_flat)?;
+        let d_modulus = DeviceBuffer::from_slice(&modulus)?;
+        let d_exp_bits = DeviceBuffer::from_slice(&exp_bits)?;
+        let mut d_outputs = DeviceBuffer::uninitialized(batch_size as usize * 8)?;
 
         // Launch cuBLAS-accelerated batch inverse kernel
         let grid_size = (batch_size as u32 + 255) / 256;
         let block_size = 256;
 
         let inverse_fn = self.inverse_module.get_function("batch_fermat_inverse")?;
+        let params = vec![
+            d_inputs.as_device_ptr() as *const _ as *mut c_void,
+            d_outputs.as_device_ptr() as *mut _ as *mut c_void,
+            d_modulus.as_device_ptr() as *const _ as *mut c_void,
+            d_exp_bits.as_device_ptr() as *const _ as *mut c_void,
+            &(exp_bit_length as i32) as *const i32 as *mut c_void,
+            &batch_size as *const i32 as *mut c_void,
+        ];
         unsafe {
-            inverse_fn.launch(
-                &self.stream,
+            inverse_fn.launch_kernel(
+                &params,
                 (grid_size, 1, 1),
                 (block_size, 1, 1),
                 0,
-                &[
-                    &d_inputs.as_kernel_parameter(),
-                    &d_outputs.as_kernel_parameter(),
-                    &d_modulus.as_kernel_parameter(),
-                    &d_exp_bits.as_kernel_parameter(),
-                    &(exp_bit_length as i32),
-                    &batch_size,
-                ]
-            )?;
+                &self.stream
+            ).map_err(|e| match e {
+                CudaError::OutOfMemory => anyhow!("CUDA OOM in batch_inverse - reduce batch size"),
+                CudaError::InvalidPtx => anyhow!("Invalid PTX in batch_inverse"),
+                _ => anyhow!("Batch inverse kernel launch failed: {}", e),
+            })?;
         }
 
         // Synchronize and read results
-        self.stream.synchronize()?;
+        self.stream.synchronize().map_err(|e| anyhow!("Batch inverse sync failed: {}", e))?;
         let output_flat = d_outputs.copy_to_vec()?;
         let outputs = output_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
@@ -1223,11 +1231,15 @@ impl GpuBackend for CudaBackend {
                 (256, 1, 1),
                 0,
                 &self.stream
-            )?;
+            ).map_err(|e| match e {
+                CudaError::OutOfMemory => anyhow!("CUDA OOM - reduce batch size"),
+                CudaError::InvalidPtx => anyhow!("Invalid PTX - check kernel compilation"),
+                _ => anyhow!("Kernel launch failed: {}", e),
+            })?;
         }
 
         // Synchronize and read results
-        self.stream.synchronize()?;
+        self.stream.synchronize().map_err(|e| anyhow!("Stream sync failed: {}", e))?;
         let result_flat = d_result.copy_to_vec()?;
 
         // Convert back to [u32;16] arrays
