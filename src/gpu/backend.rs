@@ -30,6 +30,8 @@ use rustacuda::launch;
 use num_bigint::BigUint;
 use std::sync::Arc;
 use std::ffi::CStr;
+#[cfg(feature = "rustacuda")]
+use std::os::raw::c_void;
 // Note: cuFFT functionality removed due to cudarc limitations
 // Raw CUDA driver API would be needed for full FFT support
 
@@ -776,7 +778,7 @@ impl CudaBackend {
         let ptx_cstr = CStr::from_bytes_with_nul(b"placeholder\0").unwrap();
         let inverse_module = CudaModule::load_from_string(ptx_cstr)?;
         let solve_module = CudaModule::load_from_string(ptx_cstr)?;
-        let bigint_mul_module = CudaModule::load_from_string(ptx_cstr)?;
+        let bigint_mul_module = CudaModule::load_from_file(&format!("{}/bigint_mul.ptx", env!("OUT_DIR")))?;
         let fft_mul_module = CudaModule::load_from_string(ptx_cstr)?;
         let hybrid_module = CudaModule::load_from_string(ptx_cstr)?;
         let precomp_module = CudaModule::load_from_string(ptx_cstr)?;
@@ -852,18 +854,13 @@ impl GpuBackend for CudaBackend {
         let positions_flat: Vec<u32> = positions.iter().flat_map(|p| p.iter().flatten()).cloned().collect();
         let distances_flat: Vec<u32> = distances.iter().flatten().cloned().collect();
 
-        // Allocate device memory
-        let d_positions = DeviceBuffer::zeroed(positions_flat.len())?;
-        let d_distances = DeviceBuffer::zeroed(distances_flat.len())?;
-        let d_types = DeviceBuffer::zeroed(types.len())?;
+        // Allocate device memory and copy data
+        let d_positions = DeviceBuffer::from_slice(&positions_flat)?;
+        let d_distances = DeviceBuffer::from_slice(&distances_flat)?;
+        let d_types = DeviceBuffer::from_slice(&types)?;
         let d_new_positions = DeviceBuffer::zeroed(batch_size * 24)?; // 3 * 8 u32 per position
         let d_new_distances = DeviceBuffer::zeroed(batch_size * 8)?;
         let d_traps = DeviceBuffer::zeroed(batch_size * 9)?; // trap data per kangaroo
-
-        // Copy data to device
-        self.context.copy(&positions_flat, &mut d_positions)?;
-        self.context.copy(&distances_flat, &mut d_distances)?;
-        self.context.copy(&types, &mut d_types)?;
 
         // Launch kangaroo stepping kernel
         let step_fn = self.inverse_module.get_function("kangaroo_step_batch")?;
@@ -1201,10 +1198,10 @@ impl GpuBackend for CudaBackend {
         let a_flat: Vec<u32> = a.into_iter().flatten().collect();
         let b_flat: Vec<u32> = b.into_iter().flatten().collect();
 
-        // Allocate device memory
-        let d_a = self.device.alloc(&a_flat)?;
-        let d_b = self.device.alloc(&b_flat)?;
-        let d_result = DeviceBuffer::zeroed(batch_size * 16)?; // 512-bit results
+        // Allocate device memory and copy data
+        let d_a = DeviceBuffer::from_slice(&a_flat)?;
+        let d_b = DeviceBuffer::from_slice(&b_flat)?;
+        let mut d_result = DeviceBuffer::uninitialized(batch_size * 16)?; // 512-bit results
 
         // Get kernel function
         let hybrid_mul_fn = self.hybrid_module.get_function("batch_mod_mul_hybrid")?;
@@ -1229,8 +1226,8 @@ impl GpuBackend for CudaBackend {
         self.stream.synchronize()?;
         let result_flat = d_result.copy_to_vec()?;
 
-        // Convert back to [u32;8] arrays
-        let results = result_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
+        // Convert back to [u32;16] arrays
+        let results = result_flat.chunks(16).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
         Ok(results)
     }
