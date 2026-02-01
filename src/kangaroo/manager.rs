@@ -6,11 +6,11 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
-use crate::gpu::backend::{GpuBackend, HybridBackend, CpuBackend};
+use crate::gpu::{GpuBackend, HybridBackend, CpuBackend};
 #[cfg(feature = "vulkano")]
-use crate::gpu::backend::VulkanBackend;
+use crate::gpu::VulkanBackend;
 #[cfg(feature = "rustacuda")]
-use crate::gpu::backend::CudaBackend;
+use crate::gpu::CudaBackend;
 use crate::kangaroo::generator::KangarooGenerator;
 use crate::kangaroo::stepper::KangarooStepper;
 use crate::kangaroo::collision::CollisionDetector;

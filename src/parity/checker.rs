@@ -4,7 +4,7 @@
 
 use crate::types::{KangarooState, Point};
 use crate::kangaroo::stepper::KangarooStepper;
-use crate::gpu::backend::{GpuBackend, CpuBackend};
+use crate::gpu::{GpuBackend, CpuBackend};
 use anyhow::Result;
 use std::time::Instant;
 use log::{warn, debug};

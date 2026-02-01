@@ -1,0 +1,144 @@
+//! Hybrid Backend Implementation
+//!
+//! Intelligent dispatch between Vulkan (bulk) and CUDA (precision) backends
+
+use super::backend_trait::GpuBackend;
+use super::cuda_backend::CudaBackend;
+use super::vulkan_backend::WgpuBackend;
+use super::cpu_backend::CpuBackend;
+use crate::kangaroo::collision::Trap;
+use anyhow::{Result, anyhow};
+
+/// Hybrid backend that dispatches operations to appropriate GPUs
+/// Uses Vulkan for bulk operations (step_batch) and CUDA for precision math
+pub struct HybridBackend {
+    #[cfg(feature = "wgpu")]
+    vulkan: WgpuBackend,
+    #[cfg(feature = "rustacuda")]
+    cuda: CudaBackend,
+    cpu: CpuBackend,
+}
+
+impl HybridBackend {
+    /// Create new hybrid backend with all available backends
+    pub async fn new() -> Result<Self> {
+        let cpu = CpuBackend::new()?;
+
+        #[cfg(feature = "wgpu")]
+        let vulkan = WgpuBackend::new().await?;
+
+        #[cfg(feature = "rustacuda")]
+        let cuda = CudaBackend::new()?;
+
+        Ok(Self {
+            #[cfg(feature = "wgpu")]
+            vulkan,
+            #[cfg(feature = "rustacuda")]
+            cuda,
+            cpu,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl GpuBackend for HybridBackend {
+    async fn new() -> Result<Self> {
+        Self::new().await
+    }
+
+    fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+        // Dispatch to Vulkan for bulk precomputation
+        #[cfg(feature = "wgpu")]
+        {
+            self.vulkan.precomp_table(primes, base)
+        }
+        #[cfg(not(feature = "wgpu"))]
+        {
+            self.cpu.precomp_table(primes, base)
+        }
+    }
+
+    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+        // Dispatch to Vulkan for bulk stepping operations
+        #[cfg(feature = "wgpu")]
+        {
+            self.vulkan.step_batch(positions, distances, types)
+        }
+        #[cfg(not(feature = "wgpu"))]
+        {
+            self.cpu.step_batch(positions, distances, types)
+        }
+    }
+
+    fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+        // Dispatch to CUDA for precision inverse operations
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_inverse(inputs, modulus)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.batch_inverse(inputs, modulus)
+        }
+    }
+
+    fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
+        // Dispatch to CUDA for precision solve operations
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_solve(alphas, betas)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.batch_solve(alphas, betas)
+        }
+    }
+
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        // Dispatch to CUDA for complex collision solving
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.batch_solve_collision(alpha_t, alpha_w, beta_t, beta_w, target, n)
+        }
+    }
+
+    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        // Dispatch to CUDA for modular reduction operations
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_barrett_reduce(x, mu, modulus, use_montgomery)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.batch_barrett_reduce(x, mu, modulus, use_montgomery)
+        }
+    }
+
+    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        // Dispatch to CUDA for precision multiplication
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_mul(a, b)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.batch_mul(a, b)
+        }
+    }
+
+    fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        // Dispatch to CUDA for affine conversion
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_to_affine(positions, modulus)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.batch_to_affine(positions, modulus)
+        }
+    }
+}

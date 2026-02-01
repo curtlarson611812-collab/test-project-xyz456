@@ -29,4 +29,4 @@ pub mod security;
 pub use config::Config;
 pub use types::{KangarooState, Point, AlphaBeta};
 pub use kangaroo::KangarooManager;
-pub use gpu::backend::GpuBackend;
+pub use gpu::GpuBackend;

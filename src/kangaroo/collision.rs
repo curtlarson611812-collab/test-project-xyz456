@@ -1,7 +1,7 @@
 use crate::types::{Solution, KangarooState, Point};
 use crate::dp::DpTable;
 use crate::math::{Secp256k1, BigInt256};
-use crate::gpu::backend::GpuBackend;
+use crate::gpu::GpuBackend;
 use anyhow::Result;
 use num_bigint::BigUint;
 
