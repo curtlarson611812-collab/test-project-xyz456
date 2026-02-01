@@ -19,6 +19,7 @@ env_logger = "0.11"               # Simple logger setup
 anyhow = "1.0"                    # Error handling
 hex = "0.4"                       # Pubkey/hex parsing
 serde = { version = "1", features = ["derive"] }  # Config serialization if needed
+bytemuck = "1.0"                  # Safe casting between byte slices and POD types
 bincode = "1.3"                   # Binary serialization for rocksdb
 async-trait = "0.1"               # Async traits for GPU backend
 rand = "0.8"                      # Random number generation for entropy

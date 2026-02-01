@@ -7,7 +7,7 @@ use super::cuda_backend::CudaBackend;
 use super::vulkan_backend::WgpuBackend;
 use super::cpu_backend::CpuBackend;
 use crate::kangaroo::collision::Trap;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 /// Hybrid backend that dispatches operations to appropriate GPUs
 /// Uses Vulkan for bulk operations (step_batch) and CUDA for precision math
@@ -38,6 +38,58 @@ impl HybridBackend {
             cpu,
         })
     }
+}
+
+impl HybridBackend {
+    /// Check if this backend supports precision operations (true for CUDA, false for CPU)
+    pub fn supports_precision_ops(&self) -> bool {
+        #[cfg(feature = "rustacuda")]
+        {
+            true
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            false
+        }
+    }
+
+    /// Create shared buffer for Vulkan-CUDA interop (if available)
+    /// Falls back to separate allocations if interop not supported
+    #[cfg(any(feature = "wgpu", feature = "rustacuda"))]
+    pub fn create_shared_buffer(&self, size: usize) -> anyhow::Result<SharedBuffer> {
+        #[cfg(feature = "rustacuda")]
+        {
+            // CUDA buffer allocation
+            use crate::gpu::backends::cuda_backend::CudaBackend;
+            // For now, return a placeholder - would need actual CUDA buffer
+            Err(anyhow::anyhow!("CUDA shared buffers not yet implemented"))
+        }
+        #[cfg(all(not(feature = "rustacuda"), feature = "wgpu"))]
+        {
+            // Vulkan-only buffer
+            use wgpu::util::DeviceExt;
+            let buffer = self.vulkan.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("shared_buffer"),
+                size: size as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            Ok(SharedBuffer::Vulkan(buffer))
+        }
+        #[cfg(not(any(feature = "wgpu", feature = "rustacuda")))]
+        {
+            Err(anyhow::anyhow!("No GPU backends available for shared buffers"))
+        }
+    }
+}
+
+/// Shared buffer enum for Vulkan-CUDA interop
+#[cfg(any(feature = "wgpu", feature = "rustacuda"))]
+pub enum SharedBuffer {
+    #[cfg(feature = "rustacuda")]
+    Cuda(()), // Placeholder - would be actual CUDA buffer type
+    #[cfg(feature = "wgpu")]
+    Vulkan(wgpu::Buffer),
 }
 
 #[async_trait::async_trait]

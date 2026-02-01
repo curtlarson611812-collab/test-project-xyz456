@@ -8,7 +8,7 @@ use anyhow::Result;
 /// Unified GPU backend trait for hybrid Vulkan+CUDA acceleration
 /// Enables dispatch of kangaroo operations to appropriate GPU backends
 #[async_trait::async_trait]
-pub trait GpuBackend: Send + Sync {
+pub trait GpuBackend {
     /// Create a new backend instance
     async fn new() -> Result<Self> where Self: Sized;
 
