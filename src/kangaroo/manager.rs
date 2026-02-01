@@ -121,11 +121,15 @@ impl KangarooManager {
             let target_points: Vec<_> = self.targets.iter().map(|t| t.point).collect();
             let kangaroos = self.generator.generate_batch(&target_points, kangaroos_per_target)?;
 
-            // Basic async overlap: step kangaroos and check collisions concurrently
-            // This demonstrates the concept - full GPU integration pending
+            // Use GPU acceleration when available (hybrid backend with optimizations)
             let step_fut = async {
-                // Step kangaroos (currently CPU, will be GPU)
-                self.stepper.step_batch(&kangaroos, target_points.first())
+                if self.config.gpu_backend == "hybrid" {
+                    // Use optimized GPU dispatch for hybrid backend
+                    self.step_kangaroos_gpu(&kangaroos).await
+                } else {
+                    // Fall back to CPU stepping
+                    self.stepper.step_batch(&kangaroos, target_points.first())
+                }
             };
 
             let collision_fut = async {
@@ -278,6 +282,116 @@ impl KangarooManager {
         // Run 10M-step parity check (rule: CPU/GPU bit-for-bit mandatory)
         debug!("Running parity verification check");
         self.parity_checker.verify_batch().await
+    }
+
+    /// Step kangaroos using optimized GPU dispatch (hybrid backend)
+    async fn step_kangaroos_gpu(&self, kangaroos: &[KangarooState]) -> Result<Vec<KangarooState>> {
+        // Convert kangaroo states to GPU format
+        let mut positions: Vec<[[u32; 8]; 3]> = kangaroos.iter()
+            .map(|k| [
+                k.position.x.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
+                k.position.y.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
+                k.position.z.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
+            ])
+            .collect();
+
+        let mut distances: Vec<[u32; 8]> = kangaroos.iter()
+            .map(|k| [
+                k.distance as u32, (k.distance >> 32) as u32, 0, 0, 0, 0, 0, 0
+            ])
+            .collect();
+
+        let types: Vec<u32> = kangaroos.iter()
+            .map(|k| if k.is_tame { 1 } else { 0 })
+            .collect();
+
+        // Use the GPU backend for stepping
+        let traps = self.gpu_backend.step_batch(&mut positions, &mut distances, &types)?;
+
+        // Convert back to KangarooState format
+        let stepped_kangaroos: Vec<KangarooState> = positions.into_iter()
+            .zip(distances.into_iter())
+            .enumerate()
+            .map(|(i, (pos, dist))| {
+                let position = Point {
+                    x: [
+                        ((pos[0][1] as u64) << 32) | pos[0][0] as u64,
+                        ((pos[0][3] as u64) << 32) | pos[0][2] as u64,
+                        ((pos[0][5] as u64) << 32) | pos[0][4] as u64,
+                        ((pos[0][7] as u64) << 32) | pos[0][6] as u64,
+                    ],
+                    y: [
+                        ((pos[1][1] as u64) << 32) | pos[1][0] as u64,
+                        ((pos[1][3] as u64) << 32) | pos[1][2] as u64,
+                        ((pos[1][5] as u64) << 32) | pos[1][4] as u64,
+                        ((pos[1][7] as u64) << 32) | pos[1][6] as u64,
+                    ],
+                    z: [
+                        ((pos[2][1] as u64) << 32) | pos[2][0] as u64,
+                        ((pos[2][3] as u64) << 32) | pos[2][2] as u64,
+                        ((pos[2][5] as u64) << 32) | pos[2][4] as u64,
+                        ((pos[2][7] as u64) << 32) | pos[2][6] as u64,
+                    ],
+                };
+
+                let distance = ((dist[1] as u64) << 32) | dist[0] as u64;
+
+                KangarooState::new(
+                    position,
+                    distance as u64,
+                    kangaroos[i].alpha,
+                    kangaroos[i].beta,
+                    kangaroos[i].is_tame,
+                    kangaroos[i].id,
+                )
+            })
+            .collect();
+
+        // Process traps (distinguished points found)
+        for trap in traps {
+            // Convert trap back to DP entry and add to table
+            let trap_point = Point {
+                x: [
+                    ((trap.x[1] as u64) << 32) | trap.x[0] as u64,
+                    ((trap.x[3] as u64) << 32) | trap.x[2] as u64,
+                    ((trap.x[5] as u64) << 32) | trap.x[4] as u64,
+                    ((trap.x[7] as u64) << 32) | trap.x[6] as u64,
+                ],
+                y: [0; 4], // Not provided in trap
+                z: [0; 4], // Not provided in trap
+            };
+
+            let trap_distance_bytes = trap.dist.to_bytes_le();
+            let trap_distance = if trap_distance_bytes.len() >= 8 {
+                ((trap_distance_bytes[7] as u64) << 56) |
+                ((trap_distance_bytes[6] as u64) << 48) |
+                ((trap_distance_bytes[5] as u64) << 40) |
+                ((trap_distance_bytes[4] as u64) << 32) |
+                ((trap_distance_bytes[3] as u64) << 24) |
+                ((trap_distance_bytes[2] as u64) << 16) |
+                ((trap_distance_bytes[1] as u64) << 8) |
+                (trap_distance_bytes[0] as u64)
+            } else {
+                0
+            };
+
+            // Create kangaroo state for the trap
+            let trap_state = KangarooState::new(
+                trap_point,
+                trap_distance,
+                [0; 4], // alpha not provided
+                [0; 4], // beta not provided
+                trap.is_tame,
+                0, // id not provided
+            );
+
+            // Add to DP table
+            let mut table = self.dp_table.lock().await;
+            let dp_entry = DpEntry::new(trap_point, trap_state, 0, 0); // x_hash and cluster_id simplified
+            table.add_dp(dp_entry)?;
+        }
+
+        Ok(stepped_kangaroos)
     }
 
     /// Verify potential solution

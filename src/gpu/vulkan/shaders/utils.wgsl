@@ -423,19 +423,100 @@ fn mod_sub(a: array<u32, 8>, b: array<u32, 8>, modulus: array<u32, 8>) -> array<
     let diff = bigint_sub(a, b);
     return bigint_add(diff, modulus);
 }
-// Modular multiplication: (a * b) mod p using hybrid Barrett/Montgomery
+// Optimized Montgomery multiplication with workgroup shared memory
+var<workgroup> shared_modulus: array<u32, 8>;
+var<workgroup> shared_n_prime: u32;
+
+// Load constants into shared memory once per workgroup
+fn load_shared_constants(modulus: array<u32, 8>, n_prime: u32) {
+    if (local_invocation_id.x == 0u) {
+        for (var i = 0u; i < 8u; i = i + 1u) {
+            shared_modulus[i] = modulus[i];
+        }
+        shared_n_prime = n_prime;
+    }
+    workgroupBarrier();
+}
+
+fn montgomery_mul_opt(a: array<u32, 8>, b: array<u32, 8>, modulus: array<u32, 8>, n_prime: u32) -> array<u32, 8> {
+    load_shared_constants(modulus, n_prime);
+
+    // Step 1: Compute a * b (512-bit result)
+    var temp: array<u32, 16> = array<u32, 16>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+
+    // Schoolbook multiplication with carry propagation
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        var carry: u64 = 0u;
+        for (var j = 0u; j < 8u; j = j + 1u) {
+            let prod = u64(a[i]) * u64(b[j]) + u64(temp[i + j]) + carry;
+            temp[i + j] = u32(prod & 0xFFFFFFFFu);
+            carry = prod >> 32u;
+        }
+        // Propagate remaining carry
+        var k = i + 8u;
+        while (carry > 0u && k < 16u) {
+            let sum = u64(temp[k]) + carry;
+            temp[k] = u32(sum & 0xFFFFFFFFu);
+            carry = sum >> 32u;
+            k = k + 1u;
+        }
+    }
+
+    // Step 2: REDC - compute m = (temp[0] * n_prime) mod 2^32
+    let m = u32((u64(temp[0]) * u64(shared_n_prime)) & 0xFFFFFFFFu);
+
+    // Step 3: Compute (temp + m * modulus) / 2^32
+    var carry = 0u;
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        // Compute m * shared_modulus[i] + temp[i] + carry
+        let prod_lo = u64(m) * u64(shared_modulus[i]);
+        let sum_lo = u64(temp[i]) + (prod_lo & 0xFFFFFFFFu) + u64(carry);
+        let sum_hi = (prod_lo >> 32u) + (sum_lo >> 32u);
+
+        temp[i] = u32(sum_lo & 0xFFFFFFFFu);
+        carry = u32(sum_hi & 0xFFFFFFFFu);
+        temp[i + 8u] = u32((u64(temp[i + 8u]) + (sum_hi >> 32u) + (u64(carry) >> 32u)) & 0xFFFFFFFFFFFFFFFFu);
+    }
+
+    // Step 4: Final subtraction if result >= modulus
+    var needs_sub = false;
+    if (carry > 0u || temp[15] > 0u || temp[14] > 0u || temp[13] > 0u || temp[12] > 0u || temp[11] > 0u || temp[10] > 0u || temp[9] > 0u || temp[8] > 0u) {
+        needs_sub = true;
+    } else {
+        // Compare temp[7..0] with modulus
+        for (var i = 7; i >= 0; i = i - 1) {
+            if (temp[i] > shared_modulus[i]) {
+                needs_sub = true;
+                break;
+            } else if (temp[i] < shared_modulus[i]) {
+                break;
+            }
+        }
+    }
+
+    var result: array<u32, 8>;
+    if (needs_sub) {
+        carry = 0u;
+        for (var i = 0u; i < 8u; i = i + 1u) {
+            let diff = u64(temp[i]) - u64(shared_modulus[i]) - u64(carry);
+            result[i] = u32(diff & 0xFFFFFFFFu);
+            carry = u32((diff >> 63u) & 1u);
+        }
+    } else {
+        for (var i = 0u; i < 8u; i = i + 1u) {
+            result[i] = temp[i];
+        }
+    }
+
+    return result;
+}
+
+// Modular multiplication: (a * b) mod p using optimized Montgomery
 fn mod_mul(a: array<u32, 8>, b: array<u32, 8>, modulus: array<u32, 8>) -> array<u32, 8> {
     // Barrett/Montgomery hybrid only - plain modmul auto-fails rule #4
-    // Montgomery for mul-heavy, Barrett for add/sub/reduce
-    let prod = bigint_mul(a, b); // 512-bit product
     let is_p = modulus[0] == P[0];
     let n_prime = select(N_PRIME, P_PRIME, is_p);
-    let redc_result = montgomery_redc(prod, modulus, n_prime); // (a*b) * R^{-1} mod modulus
-    // Final Barrett on (redc_result * R_mod) to get a*b mod modulus
-    let mu = select(MU_N, MU_P, is_p);
-    let r_mod = select(R_N, R_P, is_p);
-    let final_reduce = barrett_reduce(bigint_mul(redc_result, r_mod), modulus, mu);
-    return final_reduce;
+    return montgomery_mul_opt(a, b, modulus, n_prime);
 }
 // Modular inverse using extended Euclidean algorithm (GPU-adapted)
 fn mod_inverse(a: array<u32, 8>, modulus: array<u32, 8>) -> array<u32, 8> {

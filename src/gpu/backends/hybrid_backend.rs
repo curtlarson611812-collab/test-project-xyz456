@@ -41,6 +41,100 @@ impl HybridBackend {
 }
 
 impl HybridBackend {
+    /// Profile device performance for dynamic load balancing
+    async fn profile_device_performance(&self) -> (f32, f32) {
+        // Profile small batch performance to determine relative speeds
+        // Returns (cuda_ratio, vulkan_ratio) where cuda_ratio + vulkan_ratio = 1.0
+
+        #[cfg(all(feature = "rustacuda", feature = "wgpu"))]
+        {
+            // TODO: Implement actual profiling with small test batches
+            // For now, assume CUDA is 1.5x faster than Vulkan for mixed workloads
+            (0.6, 0.4) // CUDA gets 60%, Vulkan gets 40%
+        }
+
+        #[cfg(all(feature = "rustacuda", not(feature = "wgpu")))]
+        {
+            (1.0, 0.0) // CUDA only
+        }
+
+        #[cfg(all(not(feature = "rustacuda"), feature = "wgpu"))]
+        {
+            (0.0, 1.0) // Vulkan only
+        }
+
+        #[cfg(not(any(feature = "rustacuda", feature = "wgpu")))]
+        {
+            (0.0, 0.0) // CPU only
+        }
+    }
+
+    /// Optimized dispatch with dynamic load balancing
+    pub async fn dispatch_step_batch(
+        &self,
+        positions: &mut Vec<[[u32; 8]; 3]>,
+        distances: &mut Vec<[u32; 8]>,
+        types: &Vec<u32>,
+        batch_size: usize,
+    ) -> Result<Vec<Trap>> {
+        let (cuda_ratio, vulkan_ratio) = self.profile_device_performance().await;
+
+        let mut all_traps = Vec::new();
+
+        #[cfg(feature = "rustacuda")]
+        if cuda_ratio > 0.0 {
+            let cuda_batch = ((batch_size as f32) * cuda_ratio) as usize;
+            if cuda_batch > 0 {
+                // Split data for CUDA processing
+                let mut cuda_positions_vec: Vec<[[u32; 8]; 3]> = positions[0..cuda_batch].to_vec();
+                let mut cuda_distances_vec: Vec<[u32; 8]> = distances[0..cuda_batch].to_vec();
+                let cuda_types_vec: Vec<u32> = types[0..cuda_batch].to_vec();
+
+                match self.cuda.step_batch(&mut cuda_positions_vec, &mut cuda_distances_vec, &cuda_types_vec) {
+                    Ok(cuda_traps) => all_traps.extend(cuda_traps),
+                    Err(e) => {
+                        log::warn!("CUDA batch failed, falling back to CPU: {}", e);
+                        // Fallback to CPU for this portion
+                        let cpu_traps = self.cpu.step_batch(&mut cuda_positions_vec, &mut cuda_distances_vec, &cuda_types_vec)?;
+                        all_traps.extend(cpu_traps);
+                    }
+                }
+            }
+        }
+
+        #[cfg(feature = "wgpu")]
+        if vulkan_ratio > 0.0 {
+            let vulkan_start = ((batch_size as f32) * cuda_ratio) as usize;
+            let vulkan_batch = ((batch_size as f32) * vulkan_ratio) as usize;
+            let vulkan_end = (vulkan_start + vulkan_batch).min(batch_size);
+
+            if vulkan_end > vulkan_start {
+                // Split data for Vulkan processing
+                let mut vulkan_positions_vec: Vec<[[u32; 8]; 3]> = positions[vulkan_start..vulkan_end].to_vec();
+                let mut vulkan_distances_vec: Vec<[u32; 8]> = distances[vulkan_start..vulkan_end].to_vec();
+                let vulkan_types_vec: Vec<u32> = types[vulkan_start..vulkan_end].to_vec();
+
+                match self.vulkan.step_batch(&mut vulkan_positions_vec, &mut vulkan_distances_vec, &vulkan_types_vec) {
+                    Ok(vulkan_traps) => all_traps.extend(vulkan_traps),
+                    Err(e) => {
+                        log::warn!("Vulkan batch failed, falling back to CPU: {}", e);
+                        // Fallback to CPU for this portion
+                        let cpu_traps = self.cpu.step_batch(&mut vulkan_positions_vec, &mut vulkan_distances_vec, &vulkan_types_vec)?;
+                        all_traps.extend(cpu_traps);
+                    }
+                }
+            }
+        }
+
+        // If no GPU backends available, use CPU for everything
+        #[cfg(not(any(feature = "rustacuda", feature = "wgpu")))]
+        {
+            all_traps = self.cpu.step_batch(positions, distances, types)?;
+        }
+
+        Ok(all_traps)
+    }
+
     /// Check if this backend supports precision operations (true for CUDA, false for CPU)
     pub fn supports_precision_ops(&self) -> bool {
         #[cfg(feature = "rustacuda")]
