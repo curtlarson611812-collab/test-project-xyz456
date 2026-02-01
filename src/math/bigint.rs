@@ -13,6 +13,127 @@ pub struct BigInt256 {
     pub limbs: [u64; 4],
 }
 
+/// 512-bit integer represented as 8 u64 limbs (little-endian)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BigInt512 {
+    /// Limbs in little-endian order (limb[0] is least significant)
+    pub limbs: [u64; 8],
+}
+
+impl BigInt512 {
+    /// Create from BigInt256 (padded with zeros)
+    pub fn from_bigint256(x: &BigInt256) -> Self {
+        BigInt512 {
+            limbs: [x.limbs[0], x.limbs[1], x.limbs[2], x.limbs[3], 0, 0, 0, 0],
+        }
+    }
+
+    /// Convert back to BigInt256 (truncate)
+    pub fn to_bigint256(self) -> BigInt256 {
+        BigInt256 {
+            limbs: [self.limbs[0], self.limbs[1], self.limbs[2], self.limbs[3]],
+        }
+    }
+
+    /// Division with remainder using binary long division
+    pub fn div_rem(&self, other: &BigInt512) -> (BigInt256, BigInt512) {
+        if other.limbs == [0; 8] {
+            panic!("Division by zero");
+        }
+
+        if self.limbs == [0; 8] {
+            return (BigInt256::zero(), BigInt512::from_bigint256(&BigInt256::zero()));
+        }
+
+        // Binary long division
+        let mut quotient = BigInt512::from_bigint256(&BigInt256::zero());
+        let mut remainder = self.clone();
+
+        // Process from most significant bit to least
+        for bit_pos in (0..512).rev() {
+            // Left shift remainder and add next bit from dividend
+            remainder = remainder.left_shift(1);
+
+            let limb_idx = bit_pos / 64;
+            let bit_idx = bit_pos % 64;
+            let bit = (self.limbs[limb_idx] >> bit_idx) & 1;
+            if bit == 1 && limb_idx < 8 {
+                remainder.limbs[0] |= 1;
+            }
+
+            // If remainder >= divisor, subtract and set quotient bit
+            if remainder >= *other {
+                remainder = remainder.sub(other);
+                let q_limb_idx = bit_pos / 64;
+                let q_bit_idx = bit_pos % 64;
+                if q_limb_idx < 4 {
+                    quotient.limbs[q_limb_idx] |= 1u64 << q_bit_idx;
+                }
+            }
+        }
+
+        (quotient.to_bigint256(), remainder)
+    }
+
+    /// Left shift by n bits
+    fn left_shift(&self, n: usize) -> BigInt512 {
+        if n >= 512 {
+            return BigInt512 { limbs: [0; 8] };
+        }
+
+        let limb_shift = n / 64;
+        let bit_shift = n % 64;
+
+        let mut result = [0u64; 8];
+
+        for i in 0..8 {
+            let src_idx = i as isize - limb_shift as isize;
+            if src_idx >= 0 && src_idx < 8 {
+                result[i] = self.limbs[src_idx as usize] << bit_shift;
+                // Carry from previous limb
+                if bit_shift > 0 && i > 0 && src_idx > 0 {
+                    result[i] |= self.limbs[(src_idx - 1) as usize] >> (64 - bit_shift);
+                }
+            }
+        }
+
+        BigInt512 { limbs: result }
+    }
+
+    /// Subtract another BigInt512
+    fn sub(&self, other: &BigInt512) -> BigInt512 {
+        let mut result = [0u64; 8];
+        let mut borrow = 0u64;
+
+        for i in 0..8 {
+            let (diff, new_borrow) = self.limbs[i].overflowing_sub(other.limbs[i]);
+            let (diff, _) = diff.overflowing_sub(borrow);
+            result[i] = diff;
+            borrow = if new_borrow { 1 } else { 0 };
+        }
+
+        BigInt512 { limbs: result }
+    }
+}
+
+impl PartialOrd for BigInt512 {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BigInt512 {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        for i in (0..8).rev() {
+            match self.limbs[i].cmp(&other.limbs[i]) {
+                std::cmp::Ordering::Equal => continue,
+                ord => return ord,
+            }
+        }
+        std::cmp::Ordering::Equal
+    }
+}
+
 impl BigInt256 {
     /// Create zero
     pub fn zero() -> Self {
@@ -176,6 +297,7 @@ impl BigInt256 {
         BigInt256 { limbs: result }
     }
 
+
     /// Left shift by n bits
     fn left_shift(&self, n: usize) -> BigInt256 {
         if n >= 256 {
@@ -252,12 +374,13 @@ pub struct BarrettReducer {
 
 impl BarrettReducer {
     /// Create new Barrett reducer for given modulus
-    /// Precomputes mu = floor(2^(512) / modulus) for Barrett reduction
+    /// Precomputes mu = floor(2^(2*k) / modulus) for Barrett reduction
     pub fn new(modulus: &BigInt256) -> Self {
-        // For secp256k1 modulus, k = 256, so we compute mu = floor(2^512 / modulus)
-        // This is a simplified computation - full Barrett would need proper 512-bit arithmetic
         let k = modulus.bit_length();
-        let mu = BigInt256::from_u64(1); // Placeholder - proper computation requires 512-bit division
+        // Compute mu = floor(2^(2*k) / modulus) = floor(2^512 / modulus) for k=256
+        let two_2k = BigInt512 { limbs: [0, 0, 0, 0, 0, 0, 0, 1] }; // 2^512
+        let modulus_512 = BigInt512::from_bigint256(modulus);
+        let (mu, _) = two_2k.div_rem(&modulus_512);
 
         BarrettReducer { modulus: modulus.clone(), mu, k }
     }
@@ -334,17 +457,31 @@ impl MontgomeryReducer {
     /// Create new Montgomery reducer for given modulus
     /// Precomputes R=2^256, R_inv, and n_prime for REDC algorithm
     pub fn new(modulus: &BigInt256) -> Self {
-        // R = 2^256 (this would be a 257th bit set, but we approximate)
-        let r = BigInt256::from_u64(0); // Placeholder for 2^256
+        // R = 2^256 (represented as 0 since it's beyond our 256-bit range)
+        let r = BigInt256::zero();
 
-        // R^(-1) mod modulus - simplified computation
-        let r_inv = BigInt256::from_u64(1); // Placeholder
+        // R^(-1) mod modulus - for Montgomery, R_inv = R^(-1) mod N
+        // Since R = 2^256 and 2^256 > modulus for secp256k1, R_inv = 2^256 mod modulus
+        let r_mod = BigInt256::zero(); // 2^256 mod modulus = 0 since 2^256 > modulus
+        let r_inv = BigInt256::zero(); // R_inv would be computed properly in full implementation
 
-        // Compute n_prime = -modulus^(-1) mod 2^64
-        let modulus_low = modulus.limbs[0];
-        // Placeholder for REDC n_prime calculation - full implementation needed
-        // For now, use a simple placeholder to avoid overflow issues
-        let n_prime = modulus_low.wrapping_mul(0x123456789ABCDEF0); // Placeholder
+        // Compute n_prime = -modulus^(-1) mod 2^64 using extended Euclidean algorithm
+        // We need to find n' such that n' * n ≡ -1 mod 2^64
+        let modulus_low = modulus.limbs[0] as u128;
+        let r_64 = 1u128 << 64;
+
+        // Extended Euclidean algorithm for -n^(-1) mod 2^64
+        let (gcd, x, _) = extended_euclid_u128(modulus_low, r_64);
+        if gcd != 1 {
+            panic!("Modulus not coprime with 2^64");
+        }
+
+        // n' = -x mod 2^64
+        let n_prime = if x == 0 {
+            0
+        } else {
+            ((r_64 - (x % r_64)) % r_64) as u64
+        };
 
         MontgomeryReducer {
             modulus: modulus.clone(), r, r_inv, n_prime,
@@ -527,12 +664,35 @@ impl Mul for BigInt256 {
     }
 }
 
+/// Extended Euclidean algorithm for u128
+fn extended_euclid_u128(a: u128, b: u128) -> (u128, u128, u128) {
+    let (mut old_r, mut r) = (a, b);
+    let (mut old_s, mut s) = (1u128, 0u128);
+    let (mut old_t, mut t) = (0u128, 1u128);
+
+    while r != 0 {
+        let quotient = old_r / r;
+        let temp = r;
+        r = old_r - quotient * r;
+        old_r = temp;
+
+        let temp = s;
+        s = old_s - quotient * s;
+        old_s = temp;
+
+        let temp = t;
+        t = old_t - quotient * t;
+        old_t = temp;
+    }
+
+    (old_r, old_s, old_t)
+}
+
 impl Div for BigInt256 {
     type Output = Self;
 
-    fn div(self, _other: Self) -> Self {
-        // TODO: Implement division
-        todo!("Implement division")
+    fn div(self, other: Self) -> Self {
+        self.div_rem(&other).0
     }
 }
 

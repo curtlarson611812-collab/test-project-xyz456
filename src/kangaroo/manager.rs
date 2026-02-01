@@ -238,8 +238,9 @@ impl KangarooManager {
             dp_entries: Vec<DpEntry>,
         }
 
-        // Collect current kangaroo states (simplified - in practice would collect from active herds)
-        let kangaroo_states = vec![]; // TODO: Collect from active kangaroo herds
+        // Generate kangaroo states for current targets
+        let target_points: Vec<Point> = self.targets.iter().map(|t| t.point).collect();
+        let kangaroo_states = self.generator.generate_batch(&target_points, 512)?; // 512 kangaroos per target
 
         // Collect DP table entries
         let dp_entries: Vec<DpEntry> = {

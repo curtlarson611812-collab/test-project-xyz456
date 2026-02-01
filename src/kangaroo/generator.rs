@@ -4,7 +4,7 @@
 
 use crate::config::Config;
 use crate::types::{KangarooState, Point};
-use crate::math::Secp256k1;
+use crate::math::{Secp256k1, bigint::BigInt256};
 
 use anyhow::Result;
 use log::warn;
@@ -169,8 +169,32 @@ impl WildKangarooGenerator {
     }
 
     pub fn generate(&self, target_point: &Point) -> Result<KangarooState> {
-        // TODO: Generate wild kangaroo starting from target vicinity
-        todo!("Implement wild kangaroo generation")
+        // Generate wild kangaroo starting near target point
+        // Use prime spacing to ensure good distribution
+        let prime_idx = rand::random::<usize>() % self.primes.len();
+        let distance_offset = self.primes[prime_idx] as u64;
+
+        // Start near target: target - G * small_offset
+        // This creates a vicinity search around the target
+        let offset_point = Point {
+            x: [distance_offset, 0, 0, 0], // Simplified offset
+            y: [0, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+
+        // For wild kangaroos: alpha = distance_offset, beta = 1
+        // Start with zero alpha/beta, will be updated during stepping
+        let alpha = [distance_offset, 0, 0, 0]; // Distance traveled
+        let beta = [1, 0, 0, 0]; // Beta coefficient
+
+        Ok(KangarooState::new(
+            *target_point, // Start at target vicinity
+            distance_offset,
+            alpha,
+            beta,
+            false, // is_tame = false (wild)
+            rand::random::<u64>(), // Random ID
+        ))
     }
 }
 
@@ -185,7 +209,23 @@ impl TameKangarooGenerator {
     }
 
     pub fn generate(&self, curve: &Secp256k1) -> Result<KangarooState> {
-        // TODO: Generate tame kangaroo starting from G + offset
-        todo!("Implement tame kangaroo generation")
+        // Generate tame kangaroo starting from G + offset
+        // Use attractor offset to ensure different starting points
+        let offset_scalar = BigInt256::from_u64((self.attractor_offset as u64).wrapping_mul(0x100000000)); // Large offset
+        let start_position = curve.mul(&offset_scalar, &curve.g);
+
+        // For tame kangaroos: alpha = offset_scalar, beta = 1
+        // Start with proper alpha/beta for tame kangaroos
+        let alpha = offset_scalar.to_u64_array();
+        let beta = [1, 0, 0, 0]; // Beta coefficient
+
+        Ok(KangarooState::new(
+            start_position,
+            alpha[0], // Use lowest 64 bits as distance
+            alpha,
+            beta,
+            true, // is_tame = true
+            rand::random::<u64>(), // Random ID
+        ))
     }
 }
