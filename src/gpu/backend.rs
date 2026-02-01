@@ -12,14 +12,58 @@ use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceC
 
 
 #[cfg(feature = "rustacuda")]
-use rustacuda::prelude::*;
+use rustacuda::device::Device as CudaDevice;
+#[cfg(feature = "rustacuda")]
+use rustacuda::context::{Context as CudaContext, ContextFlags};
+#[cfg(feature = "rustacuda")]
+use rustacuda::stream::{Stream as CudaStream, StreamFlags};
+#[cfg(feature = "rustacuda")]
+use rustacuda::module::Module as CudaModule;
 #[cfg(feature = "rustacuda")]
 use rustacuda::memory::DeviceBuffer;
+#[cfg(feature = "rustacuda")]
+use num_bigint::BigUint;
 use std::sync::Arc;
 // Note: cuFFT functionality removed due to cudarc limitations
 // Raw CUDA driver API would be needed for full FFT support
 
 // CUDA extern functions removed - using rustacuda API instead
+
+/// Runtime GPU backend detection for optimal selection
+pub fn detect_gpu_backend() -> String {
+    // Try CUDA first (highest performance)
+    #[cfg(feature = "rustacuda")]
+    {
+        if let Ok(()) = unsafe { rustacuda::init(rustacuda::CudaFlags::empty()) } {
+            if let Ok(_) = CudaDevice::get_device(0) {
+                return "cuda".to_string();
+            }
+        }
+    }
+
+    // Try Vulkan second
+    #[cfg(feature = "vulkano")]
+    {
+        if let Ok(_) = vulkano::instance::Instance::new(vulkano::instance::InstanceCreateInfo::default()) {
+            // Check if we have a suitable device
+            if let Ok(instance) = vulkano::instance::Instance::new(vulkano::instance::InstanceCreateInfo::default()) {
+                if instance.enumerate_physical_devices().unwrap().count() > 0 {
+                    return "vulkan".to_string();
+                }
+            }
+        }
+    }
+
+    // Try wgpu third
+    #[cfg(feature = "wgpu")]
+    {
+        // For now, assume wgpu is available if feature is enabled
+        return "vulkan".to_string(); // wgpu uses Vulkan under the hood
+    }
+
+    // Fallback to CPU
+    "cpu".to_string()
+}
 
 /// GPU backend trait for Vulkan/CUDA operations
 pub trait GpuBackend {
@@ -705,10 +749,10 @@ impl CudaBackend {
 
         let device = CudaDevice::get_device(0)?;
         let context = CudaContext::create_and_push(
-            rustacuda_core::ContextFlags::MAP_HOST | rustacuda_core::ContextFlags::SCHED_AUTO,
+            ContextFlags::MAP_HOST | ContextFlags::SCHED_AUTO,
             device
         )?;
-        let stream = CudaStream::create(rustacuda_core::StreamFlags::NON_BLOCKING)?;
+        let stream = CudaStream::create(StreamFlags::NON_BLOCKING)?;
 
         // Load PTX modules from build output
         let inverse_module = CudaModule::load_from_file("target/release/build/inverse.ptx")?;
@@ -733,6 +777,39 @@ impl CudaBackend {
             step_module,
             barrett_module,
         })
+    }
+
+    /// Compute n' for Montgomery reduction: n' = -(n^-1) mod 2^32
+    fn compute_n_prime(modulus: &[u32; 8]) -> u32 {
+        // For Montgomery reduction, compute n' where n' * n ≡ -1 mod 2^32
+        // Using the algorithm from HAC 14.94
+        let mut n_prime = 1u32;
+
+        // Extended Euclidean algorithm for 32-bit
+        let mut y = 0u32;
+        let mut x = 1u32;
+
+        let n0 = modulus[0]; // Least significant word
+        let mut a = n0;
+        let mut b = 0x100000000u64; // 2^32
+
+        while a > 1 {
+            let quotient = a / (b as u32);
+            let t = b as u32;
+
+            b = (a % t) as u64;
+            a = t;
+
+            let temp = x;
+            x = y.wrapping_sub(quotient.wrapping_mul(x));
+            y = temp;
+        }
+
+        if y > 0x7FFFFFFF {
+            y = y.wrapping_neg();
+        }
+
+        y
     }
 }
 
@@ -884,7 +961,7 @@ impl GpuBackend for CudaBackend {
         // Synchronize and read results
         self.stream.synchronize()?;
         let output_flat = d_outputs.copy_to_vec()?;
-        let outputs = output_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+        let outputs = output_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
         Ok(outputs)
     }
@@ -925,7 +1002,7 @@ impl GpuBackend for CudaBackend {
         // Synchronize and read results
         self.stream.synchronize()?;
         let results_flat = d_results.copy_to_vec()?;
-        let results = results_flat.chunks(4).map(|c| c.try_into().unwrap()).collect();
+        let results = results_flat.chunks(4).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
         Ok(results)
     }
@@ -979,7 +1056,7 @@ impl GpuBackend for CudaBackend {
         let priv_flat = d_priv_out.copy_to_vec()?;
 
         // Convert back to [u32;8] arrays
-        let results = priv_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+        let results = priv_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
         Ok(results)
     }
@@ -1029,7 +1106,7 @@ impl GpuBackend for CudaBackend {
         let out_flat = d_out.copy_to_vec()?;
 
         // Convert back to [u32;8] arrays
-        let results = out_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+        let results = out_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
         Ok(results)
     }
@@ -1080,8 +1157,8 @@ impl GpuBackend for CudaBackend {
         let y_flat = d_y_outputs.copy_to_vec()?;
 
         // Convert back to arrays
-        let x_coords = x_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
-        let y_coords = y_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+        let x_coords = x_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
+        let y_coords = y_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
         Ok((x_coords, y_coords))
     }
@@ -1127,7 +1204,7 @@ impl GpuBackend for CudaBackend {
         let result_flat = d_result.copy_to_vec()?;
 
         // Convert back to [u32;8] arrays
-        let results = result_flat.chunks(8).map(|c| c.try_into().unwrap()).collect();
+        let results = result_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
 
         Ok(results)
     }

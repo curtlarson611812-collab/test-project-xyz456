@@ -136,27 +136,21 @@ mod tests {
     }
 
     // Test hybrid GPU backend multiplication
-    #[cfg(feature = "rustacuda")]
     #[tokio::test]
     async fn test_hybrid_mul() {
-        let backend = HybridBackend::new().await.unwrap();
+        #[cfg(not(feature = "rustacuda"))]
+        let backend = Box::new(speedbitcrack::gpu::backend::CpuBackend::new().unwrap()) as Box<dyn speedbitcrack::gpu::backend::GpuBackend>;
+        #[cfg(feature = "rustacuda")]
+        let backend = Box::new(HybridBackend::new().await.unwrap()) as Box<dyn speedbitcrack::gpu::backend::GpuBackend>;
 
         // Test 5 * 3 = 15
-        let a = vec![BigInt256::from_u64(5).to_u64_array()];
-        let b = vec![BigInt256::from_u64(3).to_u64_array()];
+        let a = vec![BigInt256::from_u64(5)];
+        let b = vec![BigInt256::from_u64(3)];
 
-        let result = backend.batch_mul(a, b).unwrap();
+        let result = backend.batch_mul(&a, &b);
         let expected = BigInt256::from_u64(15);
 
-        // Convert result back and check
-        let result_big = BigInt256::from_u64_array([
-            result[0][0] | ((result[0][1] as u64) << 32),
-            result[0][2] | ((result[0][3] as u64) << 32),
-            result[0][4] | ((result[0][5] as u64) << 32),
-            result[0][6] | ((result[0][7] as u64) << 32),
-        ]);
-
-        assert_eq!(result_big, expected);
+        assert_eq!(result[0], expected);
     }
 
     // Fuzz test for point operations
