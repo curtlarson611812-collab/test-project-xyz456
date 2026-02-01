@@ -12,10 +12,10 @@ use num_bigint::BigUint;
 use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{Device, DeviceCreateInfo, QueueCreateInfo, QueueFlags}, buffer::{Buffer, BufferCreateInfo, BufferUsage}, memory::{MemoryAllocateInfo, MemoryPropertyFlags}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage}, sync::{GpuFuture}, pipeline::{ComputePipeline, PipelineBindPoint}, descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet}};
 
 
-#[cfg(feature = "cudarc")]
-use cudarc::driver::*;
-#[cfg(feature = "cudarc")]
-use cudarc::cublas::CudaBlas;
+#[cfg(feature = "rustacuda")]
+use rustacuda::prelude::*;
+#[cfg(feature = "rustacuda")]
+use rustacuda::memory::DeviceBuffer;
 use std::sync::Arc;
 // Note: cuFFT functionality removed due to cudarc limitations
 // Raw CUDA driver API would be needed for full FFT support
@@ -338,6 +338,66 @@ impl GpuBackend for VulkanBackend {
             types.iter().copied()
         )?;
 
+        // TODO: Implement Vulkan compute pipeline dispatch
+        // For now, return empty traps (placeholder)
+        Ok(vec![])
+    }
+
+    fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+        Err(anyhow::anyhow!("Vulkan precomp_table not yet implemented - requires compute shader for jump table generation"))
+    }
+
+    fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("Vulkan batch_inverse not yet implemented - requires compute shader for modular inverse"))
+    }
+
+    fn batch_solve(&self, _alphas: Vec<[u32;8]>, _betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
+        Err(anyhow::anyhow!("Vulkan batch_solve not yet implemented - requires compute shader for collision solving"))
+    }
+
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("Vulkan batch_solve_collision not yet implemented - requires compute shader for complex collision equations"))
+    }
+
+    fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        Err(anyhow::anyhow!("Vulkan Barrett reduction not yet implemented"))
+    }
+
+    fn batch_mul(&self, _a: Vec<[u32;8]>, _b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        Err(anyhow::anyhow!("Vulkan batch multiplication not yet implemented"))
+    }
+
+    fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        Err(anyhow::anyhow!("Vulkan batch affine conversion not yet implemented"))
+    }
+
+    fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
+        // Rustacuda implementation placeholder
+        Ok(vec![])
+    }
+
+        // Concise buffer allocation for inputs
+        let positions_buf = Buffer::from_iter(
+            self.device.clone(),
+            BufferCreateInfo { usage: BufferUsage::STORAGE_BUFFER, ..Default::default() },
+            MemoryAllocateInfo { property_flags: MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT, ..Default::default() },
+            positions.iter().flatten().flatten().copied()
+        )?;
+
+        let distances_buf = Buffer::from_iter(
+            self.device.clone(),
+            BufferCreateInfo { usage: BufferUsage::STORAGE_BUFFER, ..Default::default() },
+            MemoryAllocateInfo { property_flags: MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT, ..Default::default() },
+            distances.iter().flatten().copied()
+        )?;
+
+        let types_buf = Buffer::from_iter(
+            self.device.clone(),
+            BufferCreateInfo { usage: BufferUsage::STORAGE_BUFFER, ..Default::default() },
+            MemoryAllocateInfo { property_flags: MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT, ..Default::default() },
+            types.iter().copied()
+        )?;
+
         // Jump table buffers (assume pre-loaded, placeholder here)
         let jump_points_buf = Buffer::new_sized(
             self.device.clone(),
@@ -510,31 +570,74 @@ impl VulkanBackend {
 }
 
 /// CUDA backend implementation for precision operations
-#[cfg(feature = "cudarc")]
+#[cfg(feature = "rustacuda")]
 pub struct CudaBackend {
-    device: Arc<CudaDevice>,
+    device: CudaDevice,
+    context: CudaContext,
     stream: CudaStream,
-    cublas_handle: CudaBlas,    // Real cudarc cublas integration
-    // Note: PTX modules cannot be loaded directly with cudarc
-    // High-level module loading requires raw CUDA driver API
-    // For now, using placeholder - real implementation would need driver API
+    inverse_module: CudaModule,
+    solve_module: CudaModule,
+    bigint_mul_module: CudaModule,
+    fft_mul_module: CudaModule,
+    hybrid_module: CudaModule,
+    precomp_module: CudaModule,
+    step_module: CudaModule,
+    barrett_module: CudaModule,
 }
 
-#[cfg(feature = "cudarc")]
-impl GpuBackend for CudaBackend {
+// #[cfg(feature = "rustacuda")]
+// impl CudaBackend {
+    pub fn new() -> Result<Self, rustacuda::error::CudaError> {
+        rustacuda::init(rustacuda::CudaFlags::empty())?;
+
+        let device = CudaDevice::get_device(0)?;
+        let context = CudaContext::create_and_push(
+            rustacuda_core::ContextFlags::MAP_HOST | rustacuda_core::ContextFlags::SCHED_AUTO,
+            device
+        )?;
+        let stream = CudaStream::create(rustacuda_core::StreamFlags::NON_BLOCKING)?;
+
+        // Load PTX modules from build output
+        let inverse_module = CudaModule::load_from_file("target/release/build/inverse.ptx")?;
+        let solve_module = CudaModule::load_from_file("target/release/build/solve.ptx")?;
+        let bigint_mul_module = CudaModule::load_from_file("target/release/build/bigint_mul.ptx")?;
+        let fft_mul_module = CudaModule::load_from_file("target/release/build/fft_mul.ptx")?;
+        let hybrid_module = CudaModule::load_from_file("target/release/build/hybrid.ptx")?;
+        let precomp_module = CudaModule::load_from_file("target/release/build/precomp.ptx")?;
+        let step_module = CudaModule::load_from_file("target/release/build/step.ptx")?;
+        let barrett_module = CudaModule::load_from_file("target/release/build/barrett.ptx")?;
+
+        Ok(Self {
+            device,
+            context,
+            stream,
+            inverse_module,
+            solve_module,
+            bigint_mul_module,
+            fft_mul_module,
+            hybrid_module,
+            precomp_module,
+            step_module,
+            barrett_module,
+        })
+    }
+}
+
+// #[cfg(feature = "rustacuda")]
+// impl GpuBackend for CudaBackend {
     fn new() -> Result<Self> {
-        Self::new()
+        Err(anyhow::anyhow!("Use CudaBackend::new() for rustacuda initialization"))
     }
 
     fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
         Err(anyhow::anyhow!("CUDA precomp_table not yet implemented"))
     }
 
-    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
-        let batch_size = positions.len();
-        if batch_size == 0 || batch_size != distances.len() || batch_size != types.len() {
-            return Err(anyhow::anyhow!("Invalid batch sizes for kangaroo stepping"));
-        }
+    fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
+        // Rustacuda implementation placeholder
+        Ok(vec![])
+    }
+
 
         // Flatten inputs for device memory
         let positions_flat: Vec<u32> = positions.iter().flat_map(|p| p.iter().flatten()).cloned().collect();

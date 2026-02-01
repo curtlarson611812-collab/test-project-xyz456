@@ -22,8 +22,8 @@ fn main() {
     // For WGSL, we use runtime compilation in the VulkanBackend for now
     // This allows for easier development and shader reloading
 
-    // Compile CUDA kernels when cudarc feature is enabled
-    if cfg!(feature = "cudarc") {
+    // Compile CUDA kernels when rustacuda feature is enabled
+    if cfg!(feature = "rustacuda") {
         println!("cargo:rerun-if-changed=src/gpu/cuda");
 
         let out_dir = env::var("OUT_DIR").unwrap();

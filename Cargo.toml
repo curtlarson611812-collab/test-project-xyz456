@@ -26,14 +26,16 @@ rand = "0.8"                      # Random number generation for entropy
 # Optional / Future
 sled = "0.34"                    # Fast embedded database for DP overflow
 num-bigint = "0.4.6"
-cudarc = { version = "0.9", optional = true }  # CUDA runtime wrapper
+rustacuda = { version = "0.1", optional = true }     # CUDA driver API wrapper
+rustacuda_core = { version = "0.1", optional = true } # Core CUDA types
+rustacuda_derive = { version = "0.1", optional = true } # Derive macros
 cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }  # Raw CUDA runtime API for cuFFT
 cuda-sys = { version = "0.2.0", optional = true }  # Raw CUDA driver API for advanced operations
 libfuzzer-sys = { version = "0.4", optional = true }  # Fuzz testing
 
 [features]
-default = ["cudarc"]
-cudarc = ["dep:cudarc", "dep:cuda-runtime-sys", "dep:cuda-sys"]
+default = ["rustacuda"]
+rustacuda = ["dep:rustacuda", "dep:rustacuda_core", "dep:rustacuda_derive", "dep:cuda-sys"]
 vulkano = ["dep:vulkano", "dep:vulkano-shaders"]
 wgpu = ["dep:wgpu"]
 fuzz = ["libfuzzer-sys"]
