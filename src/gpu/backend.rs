@@ -1204,11 +1204,11 @@ impl GpuBackend for CudaBackend {
         let mut d_result = DeviceBuffer::uninitialized(batch_size * 16)?; // 512-bit results
 
         // Get kernel function
-        let hybrid_mul_fn = self.hybrid_module.get_function("batch_mod_mul_hybrid")?;
+        let mul_fn = self.bigint_mul_module.get_function("bigint_mul_kernel")?;
 
-        // Launch hybrid multiplication kernel
+        // Launch multiplication kernel - one thread per batch element
         unsafe {
-            hybrid_mul_fn.launch(
+            mul_fn.launch(
                 &self.stream,
                 ((batch_size as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
@@ -1217,7 +1217,7 @@ impl GpuBackend for CudaBackend {
                     &d_a.as_kernel_parameter(),
                     &d_b.as_kernel_parameter(),
                     &d_result.as_kernel_parameter(),
-                    &(batch_size as i32),
+                    &(batch_size as u32),
                 ]
             )?;
         }
