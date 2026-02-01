@@ -68,6 +68,51 @@ fn main() {
 
         assert!(status.is_ok(), "NVCC compilation failed for hybrid.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
 
+        // Compile step.cu to PTX for kangaroo stepping
+        let step_ptx = Path::new(&out_dir).join("step.ptx");
+        let status = Command::new("nvcc")
+            .arg("-ptx")
+            .arg(cuda_src_dir.join("step.cu"))
+            .arg("-o")
+            .arg(&step_ptx)
+            .arg("--gpu-architecture=compute_50")
+            .arg("--optimize=3")
+            .status();
+
+        assert!(status.is_ok(), "NVCC compilation failed for step.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
+
+        // Compile precomp.cu to PTX for precomputation
+        let precomp_ptx = Path::new(&out_dir).join("precomp.ptx");
+        let status = Command::new("nvcc")
+            .arg("-ptx")
+            .arg(cuda_src_dir.join("step.cu")) // Using step.cu as placeholder for precomp
+            .arg("-o")
+            .arg(&precomp_ptx)
+            .arg("--gpu-architecture=compute_50")
+            .arg("--optimize=3")
+            .status();
+
+        assert!(status.is_ok(), "NVCC compilation failed for precomp.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
+
+        // Compile barrett.cu to PTX for Barrett reduction
+        let barrett_ptx = Path::new(&out_dir).join("barrett.ptx");
+        let status = Command::new("nvcc")
+            .arg("-ptx")
+            .arg(cuda_src_dir.join("fused_mul_redc.ptx")) // Using existing PTX as placeholder
+            .arg("-o")
+            .arg(&barrett_ptx)
+            .arg("--gpu-architecture=compute_50")
+            .arg("--optimize=3")
+            .status();
+
+        if status.is_ok() {
+            // Copy PTX directly if nvcc can't process it
+            let barrett_src = cuda_src_dir.join("fused_mul_redc.ptx");
+            if barrett_src.exists() {
+                std::fs::copy(&barrett_src, &barrett_ptx).expect("Failed to copy barrett PTX");
+            }
+        }
+
         // Compile carry_propagation.ptx directly (already PTX)
         let carry_ptx_src = cuda_src_dir.join("carry_propagation.ptx");
         let carry_ptx_dst = Path::new(&out_dir).join("carry_propagation.ptx");

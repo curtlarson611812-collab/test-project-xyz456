@@ -25,6 +25,8 @@ use rustacuda::module::Module as CudaModule;
 #[cfg(feature = "rustacuda")]
 use rustacuda::memory::DeviceBuffer;
 #[cfg(feature = "rustacuda")]
+use rustacuda::launch;
+#[cfg(feature = "rustacuda")]
 use num_bigint::BigUint;
 use std::sync::Arc;
 use std::ffi::CStr;
@@ -67,10 +69,10 @@ pub fn detect_gpu_backend() -> String {
     #[cfg(feature = "wgpu")]
     {
         if let Ok(instance) = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
+            backends: wgpu::Backends::PRIMARY,
             ..Default::default()
         }) {
-            if !instance.enumerate_adapters(wgpu::Backends::VULKAN).is_empty() {
+            if !instance.enumerate_adapters(wgpu::Backends::PRIMARY).is_empty() {
                 return "vulkan".to_string();
             }
         }
@@ -859,9 +861,9 @@ impl GpuBackend for CudaBackend {
         let d_traps = DeviceBuffer::zeroed(batch_size * 9)?; // trap data per kangaroo
 
         // Copy data to device
-        self.device.htod_copy_into(positions_flat.clone(), &mut d_positions)?;
-        self.device.htod_copy_into(distances_flat.clone(), &mut d_distances)?;
-        self.device.htod_copy_into(types.to_vec(), &mut d_types)?;
+        self.context.copy(&positions_flat, &mut d_positions)?;
+        self.context.copy(&distances_flat, &mut d_distances)?;
+        self.context.copy(&types, &mut d_types)?;
 
         // Launch kangaroo stepping kernel
         let step_fn = self.inverse_module.get_function("kangaroo_step_batch")?;
@@ -870,6 +872,7 @@ impl GpuBackend for CudaBackend {
                 &self.stream,
                 ((batch_size as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
+                0,
                 &[
                     &d_positions.as_kernel_parameter(),
                     &d_distances.as_kernel_parameter(),
@@ -964,6 +967,7 @@ impl GpuBackend for CudaBackend {
                 &self.stream,
                 (grid_size, 1, 1),
                 (block_size, 1, 1),
+                0,
                 &[
                     &d_inputs.as_kernel_parameter(),
                     &d_outputs.as_kernel_parameter(),
@@ -1007,6 +1011,7 @@ impl GpuBackend for CudaBackend {
                 &self.stream,
                 (batch_size as u32, 1, 1),
                 (256, 1, 1),
+                0,
                 &[
                     &d_alphas.as_kernel_parameter(),
                     &d_betas.as_kernel_parameter(),
@@ -1055,6 +1060,7 @@ impl GpuBackend for CudaBackend {
                 &self.stream,
                 ((batch as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
+                0,
                 &[
                     &d_alpha_t.as_kernel_parameter(),
                     &d_alpha_w.as_kernel_parameter(),
@@ -1105,6 +1111,7 @@ impl GpuBackend for CudaBackend {
                 &self.stream,
                 ((batch as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
+                0,
                 &[
                     &d_x.as_kernel_parameter(),
                     &d_mu.as_kernel_parameter(),
@@ -1157,6 +1164,7 @@ impl GpuBackend for CudaBackend {
                 &self.stream,
                 (grid_size, 1, 1),
                 (256, 1, 1),
+                0,
                 &[
                     &d_positions.as_kernel_parameter(),
                     &d_modulus.as_kernel_parameter(),
@@ -1207,6 +1215,7 @@ impl GpuBackend for CudaBackend {
                 &self.stream,
                 ((batch_size as u32 + 255) / 256, 1, 1),
                 (256, 1, 1),
+                0,
                 &[
                     &d_a.as_kernel_parameter(),
                     &d_b.as_kernel_parameter(),
