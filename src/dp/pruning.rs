@@ -88,9 +88,11 @@ impl DpPruning {
     pub async fn prune_advanced_clusters(&self, k_clusters: usize) -> Result<PruningStats> {
         let mut stats = PruningStats::default();
 
-        // Get all DP entries
-        let table = self.dp_table.lock().await;
-        let entries: Vec<_> = table.get_entries().iter().collect();
+        // Get all DP entries - collect them before any lock dropping
+        let entries: Vec<_> = {
+            let table = self.dp_table.lock().await;
+            table.get_entries().iter().map(|(k, v)| (*k, v.clone())).collect()
+        };
 
         if entries.len() < k_clusters * 2 {
             // Not enough data for meaningful clustering
@@ -106,38 +108,41 @@ impl DpPruning {
         }).collect();
 
         // Perform simple k-means clustering
-        match self.simple_kmeans(&samples, k_clusters, 50) {
-            Ok(cluster_assignments) => {
-                // Calculate cluster sizes
-                let mut cluster_sizes = vec![0; k_clusters];
-                for &assignment in &cluster_assignments {
-                    cluster_sizes[assignment] += 1;
-                }
+        let cluster_result = self.simple_kmeans(&samples, k_clusters, 50);
+        let hashes_to_remove = if let Ok(cluster_assignments) = cluster_result {
+            // Calculate cluster sizes
+            let mut cluster_sizes = vec![0; k_clusters];
+            for &assignment in &cluster_assignments {
+                cluster_sizes[assignment] += 1;
+            }
 
-                // Remove entries from smallest clusters (outliers)
-                let min_cluster_size = cluster_sizes.iter().min().unwrap_or(&0);
-                if *min_cluster_size < entries.len() / (k_clusters * 2) {
-                    // Collect hashes to remove from small clusters
-                    let mut hashes_to_remove = Vec::new();
-                    for (i, (_, entry)) in entries.iter().enumerate() {
-                        if cluster_sizes[cluster_assignments[i]] == *min_cluster_size {
-                            hashes_to_remove.push(entry.hash);
-                        }
+            // Remove entries from smallest clusters (outliers)
+            let min_cluster_size = cluster_sizes.iter().min().unwrap_or(&0);
+            if *min_cluster_size < entries.len() / (k_clusters * 2) {
+                // Collect hashes to remove from small clusters
+                let mut hashes = Vec::new();
+                for (i, (_, entry)) in entries.iter().enumerate() {
+                    if cluster_sizes[cluster_assignments[i]] == *min_cluster_size {
+                        hashes.push(entry.x_hash);
                     }
-
-                    // Actually remove the entries
-                    drop(table); // Release lock before acquiring it again
-                    let mut table = self.dp_table.lock().await;
-                    stats.entries_removed = table.remove_dps(&hashes_to_remove);
                 }
+                hashes
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
 
-                stats.chunks_processed = 1;
-                stats.additional_info = format!("Clustered {} entries into {} groups", entries.len(), k_clusters);
-            }
-            Err(_) => {
-                // Fallback to simple pruning if clustering fails
-                stats.additional_info = "Clustering failed, using fallback".to_string();
-            }
+        // Remove the entries if any were identified
+        if !hashes_to_remove.is_empty() {
+            let mut table = self.dp_table.lock().await;
+            stats.entries_removed = table.remove_dps(&hashes_to_remove);
+        }
+
+        if !hashes_to_remove.is_empty() {
+            stats.chunks_processed = 1;
+            stats.additional_info = format!("Clustered {} entries into {} groups", entries.len(), k_clusters);
         }
 
         Ok(stats)
@@ -234,7 +239,7 @@ impl DpPruning {
     }
 
     /// Run cluster-based pruning (prefer dense clusters)
-    pub async fn prune_cluster_based(&self, max_cluster_size: usize) -> Result<PruningStats> {
+    pub async fn prune_cluster_based(&self, _max_cluster_size: usize) -> Result<PruningStats> {
         let stats = PruningStats::default();
 
         // TODO: Implement cluster-based pruning

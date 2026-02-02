@@ -182,7 +182,7 @@ impl TargetLoader {
     }
 
     /// Parse puzzle target line: puzzle_num,pubkey_hex,key_range_low,key_range_high[,btc_value]
-    fn parse_puzzle_line(&self, line: &str, line_num: usize) -> Result<Target> {
+    fn parse_puzzle_line(&self, line: &str, _line_num: usize) -> Result<Target> {
         println!("DEBUG: Parsing puzzle line: {}", line);
         let parts: Vec<&str> = line.split(',').collect();
         println!("DEBUG: Split into {} parts", parts.len());

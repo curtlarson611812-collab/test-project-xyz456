@@ -261,7 +261,7 @@ impl HybridGpuManager {
     }
 
     /// Concise Block: Parallel Rho Dispatch in Hybrid
-    pub fn dispatch_parallel_rho(&self, g: Point, p: Point, num_walks: usize) -> Option<BigInt256> {
+    pub fn dispatch_parallel_rho(&self, _g: Point, _p: Point, _num_walks: usize) -> Option<BigInt256> {
         // Launch CUDA walks: Each thread rho walk until DP, collect collisions
         // Sim stub: For each walk, random start, f update until cycle or DP
         // On collision X_i = X_j, solve k = (a_i - a_j) / (b_j - b_i) mod n
@@ -269,7 +269,7 @@ impl HybridGpuManager {
     }
 
     /// Concise Block: Parallel Brent's Rho in Hybrid
-    pub fn dispatch_parallel_brents_rho(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
+    pub fn dispatch_parallel_brents_rho(&self, _g: Point, _p: Point, _num_walks: usize, _bias_mod: u64) -> Option<BigInt256> {
         // Integration: Use CUDA rho kernel for parallel Brent's cycle detection
         // Launch CUDA kernel with rho states, collect distinguished points
         // On cycle detection, solve using existing collision solver
@@ -318,7 +318,7 @@ impl HybridGpuManager {
     pub fn get_attractor_rate(&self, points: &[Point]) -> f64 {
         let sample: Vec<Point> = points.iter().take(100).cloned().collect();
         match crate::utils::pubkey_loader::scan_full_valuable_for_attractors(&sample) {
-            Ok((count, percent, _)) => percent,
+            Ok((_count, percent, _)) => percent,
             Err(_) => 0.0, // Return 0 on error
         }
     }
@@ -528,7 +528,7 @@ impl HybridGpuManager {
             }
 
             let gpu_point = points_slice[i];
-            let gpu_distance = distances_slice[i];
+            let _gpu_distance = distances_slice[i];
 
             // For drift detection, compare against expected CPU computation
             // In a real implementation, this would maintain a CPU reference computation

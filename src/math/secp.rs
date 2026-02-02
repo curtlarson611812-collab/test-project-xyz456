@@ -625,6 +625,7 @@ impl Secp256k1 {
         let mut x_bytes = [0u8; 32];
         x_bytes.copy_from_slice(&compressed[1..33]);
         let x = BigInt256::from_bytes_be(&x_bytes);
+        let x_clone = x.clone(); // Clone for later use in logging
 
         // Check if x is valid (x < p)
         if x >= self.p {
@@ -661,7 +662,7 @@ impl Secp256k1 {
 
         // Final validation: check if point is actually on curve
         if !self.is_on_curve(&point) {
-            log::warn!("Decompressed point not on curve for x: {}", x.to_hex());
+            log::warn!("Decompressed point not on curve for x: {}", x_clone.to_hex());
             return None;
         }
 

@@ -82,23 +82,29 @@ impl CollisionDetector {
             let mut targets = Vec::new();
 
             for (entry1, entry2) in &collision_candidates {
-                // Convert BigInt256 to [u32;8] format for GPU
-                alphas_t.push(self.bigint_to_u32_array(&entry1.state.alpha));
-                alphas_w.push(self.bigint_to_u32_array(&entry2.state.alpha));
-                betas_t.push(self.bigint_to_u32_array(&entry1.state.beta));
-                betas_w.push(self.bigint_to_u32_array(&entry2.state.beta));
-                targets.push(self.bigint_to_u32_array(&entry1.point.x));
+                // Convert [u64;4] arrays to [u32;8] format for GPU
+                alphas_t.push(Self::array_to_u32_array(&entry1.state.alpha));
+                alphas_w.push(Self::array_to_u32_array(&entry2.state.alpha));
+                betas_t.push(Self::array_to_u32_array(&entry1.state.beta));
+                betas_w.push(Self::array_to_u32_array(&entry2.state.beta));
+                targets.push(Self::array_to_u32_array(&entry1.point.x));
             }
 
             let n = self.bigint_to_u32_array(&self.curve.n());
 
             // Use GPU batch collision solving
-            match gpu_backend.batch_solve_collision(alphas_t, alphas_w, betas_t, betas_w, targets, n).await {
+            match gpu_backend.batch_solve_collision(alphas_t, alphas_w, betas_t, betas_w, targets, n) {
                 Ok(solutions) => {
                     // Check for valid solutions
-                    for (i, solution) in solutions.into_iter().enumerate() {
-                        if solution != [0u32; 8] { // Non-zero solution found
-                            let solution_big = self.u32_array_to_bigint(&solution);
+                    for i in 0..solutions.len() {
+                        let solution = &solutions[i];
+                        if solution.iter().any(|&x| x != 0) { // Non-zero solution found
+                            // Convert [u32; 8] to BigInt256 directly
+                            let mut limbs = [0u64; 4];
+                            for j in 0..4 {
+                                limbs[j] = (solution[j * 2] as u64) | ((solution[j * 2 + 1] as u64) << 32);
+                            }
+                            let solution_big = BigInt256 { limbs };
                             if let Some(verified_solution) = self.verify_collision_solution(&collision_candidates[i].0, &collision_candidates[i].1, &solution_big) {
                                 return Ok(Some(verified_solution));
                             }
@@ -126,6 +132,16 @@ impl CollisionDetector {
         result
     }
 
+    /// Convert [u64; 4] array to [u32; 8] array for GPU operations
+    fn array_to_u32_array(arr: &[u64; 4]) -> [u32; 8] {
+        let mut result = [0u32; 8];
+        for (i, &limb) in arr.iter().enumerate() {
+            result[i * 2] = (limb & 0xFFFFFFFF) as u32;
+            result[i * 2 + 1] = (limb >> 32) as u32;
+        }
+        result
+    }
+
     /// Convert [u32; 8] array back to BigInt256
     fn u32_array_to_bigint(&self, array: &[u32; 8]) -> BigInt256 {
         let mut limbs = [0u64; 4];
@@ -141,19 +157,16 @@ impl CollisionDetector {
         // and     entry2_point = solution * G + entry2_distance
         // This is a simplified check - full verification would be more thorough
         let g = self.curve.g();
-        if let Ok(solution_g) = self.curve.mul(solution, g) {
-            // Check if the solution produces the expected relationship
-            // This is a simplified check - full verification would be more thorough
-            Some(Solution {
-                private_key: solution.to_u64_array(),
-                target_point: entry1.point.clone(),
-                total_ops: 0,
-                time_seconds: 0.0,
-                verified: true,
-            })
-        } else {
-            None
-        }
+        let solution_g = self.curve.mul(solution, g);
+        // Check if the solution produces the expected relationship
+        // This is a simplified check - full verification would be more thorough
+        Some(Solution {
+            private_key: solution.clone().to_u64_array(),
+            target_point: entry1.point.clone(),
+            total_ops: 0,
+            time_seconds: 0.0,
+            verified: true,
+        })
     }
 
     pub async fn check_collisions(&self, dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>) -> Result<Option<Solution>> {

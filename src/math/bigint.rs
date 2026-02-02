@@ -316,6 +316,14 @@ impl BigInt256 {
         BigInt256 { limbs: arr }
     }
 
+    pub fn from_u32_array(arr: [u32; 8]) -> Self {
+        let mut limbs = [0u64; 4];
+        for i in 0..4 {
+            limbs[i] = (arr[i * 2] as u64) | ((arr[i * 2 + 1] as u64) << 32);
+        }
+        BigInt256 { limbs }
+    }
+
     /// Convert to u64 array (little-endian)
     pub fn to_u64_array(self) -> [u64; 4] {
         self.limbs
@@ -615,22 +623,18 @@ impl MontgomeryReducer {
         let r_mod = BigInt256::zero(); // 2^256 mod modulus = 0 since 2^256 > modulus
         let r_inv = BigInt256::zero(); // R_inv would be computed properly in full implementation
 
-        // Compute n_prime = -modulus^(-1) mod 2^64 using extended Euclidean algorithm
-        // We need to find n' such that n' * n ≡ -1 mod 2^64
-        let modulus_low = modulus.limbs[0] as u128;
-        let r_64 = 1u128 << 64;
+        // Compute n_prime = -modulus^(-1) mod 2^64
+        // Use num_bigint for reliable calculation to avoid overflow issues
+        let modulus_big = num_bigint::BigUint::from_bytes_be(&modulus.to_bytes_be());
+        let r64_big = num_bigint::BigUint::from(1u128 << 64);
 
-        // Extended Euclidean algorithm for -n^(-1) mod 2^64
-        let (gcd, x, _) = extended_euclid_u128(modulus_low, r_64);
-        if gcd != 1 {
-            panic!("Modulus not coprime with 2^64");
-        }
-
-        // n' = -x mod 2^64
-        let n_prime = if x == 0 {
-            0
-        } else {
-            ((r_64 - (x % r_64)) % r_64) as u64
+        let n_prime = match modulus_big.modinv(&r64_big) {
+            Some(inv) => {
+                // n' = -inv mod 2^64
+                let minus_inv = &r64_big - &inv;
+                minus_inv.to_u64_digits()[0]
+            }
+            None => panic!("Modulus not coprime with 2^64"),
         };
 
         MontgomeryReducer {
@@ -660,7 +664,7 @@ impl MontgomeryReducer {
         let m_modulus = BigInt512::from_bigint256(&self.modulus).mul(BigInt512::from_bigint256(&m_big));
 
         // Add t + m*modulus
-        let sum = t.add(&m_modulus);
+        let sum = t.add(m_modulus);
 
         // Divide by R = 2^256 by shifting right 256 bits
         // Since sum is 512 bits, we take limbs[4] through limbs[7] (bits 256-511)
@@ -675,12 +679,18 @@ impl MontgomeryReducer {
         result_limbs[6] = (sum.limbs[7] & 0xFFFFFFFF) as u32;
         result_limbs[7] = ((sum.limbs[7] >> 32) & 0xFFFFFFFF) as u32;
 
-        let mut result = BigInt256::from_u32_array(result_limbs);
+        let result_u64 = [
+            (result_limbs[0] as u64) | ((result_limbs[1] as u64) << 32),
+            (result_limbs[2] as u64) | ((result_limbs[3] as u64) << 32),
+            (result_limbs[4] as u64) | ((result_limbs[5] as u64) << 32),
+            (result_limbs[6] as u64) | ((result_limbs[7] as u64) << 32),
+        ];
+        let mut result = BigInt256::from_u64_array(result_u64);
 
         // Step 4: Final conditional subtraction
         // If result >= modulus, result = result - modulus
         if result >= self.modulus {
-            result = result.sub(&self.modulus);
+            result = result.sub(self.modulus.clone());
         }
 
         result
@@ -706,36 +716,26 @@ impl MontgomeryReducer {
         // For prime modulus (like secp256k1 p or n), use Fermat: a^{p-2} mod p
         // This is much faster for known primes than extended Euclidean
         if Self::is_prime_approx(modulus) {
-            let exp = modulus.sub(&BigInt256::from_u64(2));
+            let exp = modulus.clone().sub(BigInt256::from_u64(2));
             return Some(self.pow_mod(a, &exp, modulus));
         }
 
-        // Extended Euclidean algorithm for general modulus
-        let mut old_r = modulus.clone();
-        let mut r = a.clone();
-        let mut old_s = BigInt256::zero();
-        let mut s = BigInt256::one();
+        // For BigInt256, use num_bigint::BigUint for reliable modular inverse
+        // This avoids overflow issues with negative coefficients in extended Euclidean
+        let a_big = num_bigint::BigUint::from_bytes_be(&a.to_bytes_be());
+        let modulus_big = num_bigint::BigUint::from_bytes_be(&modulus.to_bytes_be());
 
-        while !r.is_zero() {
-            let (quotient, _) = old_r.div_rem(&r);
-            let temp_r = old_r.sub(&quotient.mul(&r));
-            old_r = r;
-            r = temp_r;
-            let temp_s = old_s.sub(&quotient.mul(&s));
-            old_s = s;
-            s = temp_s;
+        match a_big.modinv(&modulus_big) {
+            Some(inv) => {
+                // Convert back to BigInt256
+                let inv_bytes = inv.to_bytes_be();
+                let mut result_bytes = [0u8; 32];
+                let start = 32usize.saturating_sub(inv_bytes.len());
+                result_bytes[start..].copy_from_slice(&inv_bytes);
+                Some(BigInt256::from_bytes_be(&result_bytes))
+            }
+            None => None,
         }
-
-        if old_r != BigInt256::one() {
-            return None; // No inverse exists
-        }
-
-        // Normalize to positive result
-        if old_s < BigInt256::zero() {
-            old_s = old_s.add(modulus);
-        }
-
-        Some(old_s)
     }
 
     /// Constant-time modular exponentiation using square-and-multiply
@@ -922,11 +922,26 @@ fn extended_euclid_u128(a: u128, b: u128) -> (u128, u128, u128) {
         old_r = temp;
 
         let temp = s;
-        s = old_s - quotient * s;
+        // Handle potential negative results by using wrapping operations
+        let qs = quotient * s;
+        s = if old_s >= qs {
+            old_s - qs
+        } else {
+            // Wrap around: equivalent to old_s - qs mod 2^128
+            // For our use case (finding modular inverse), we need to handle the sign
+            let diff = qs - old_s;
+            (1u128 << 64).wrapping_sub(diff % (1u128 << 64))
+        };
         old_s = temp;
 
         let temp = t;
-        t = old_t - quotient * t;
+        let qt = quotient * t;
+        t = if old_t >= qt {
+            old_t - qt
+        } else {
+            let diff = qt - old_t;
+            (1u128 << 64).wrapping_sub(diff % (1u128 << 64))
+        };
         old_t = temp;
     }
 
