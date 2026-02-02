@@ -298,6 +298,15 @@ impl KangarooGenerator {
         BigInt256::from_u64(biased % (1u64 << 32)) // Keep small for speed
     }
 
+    /// Concise Block: Mod9-Biased Jump from Bucket
+    fn get_jump_from_bucket_mod9(&self, bucket: u32) -> BigInt256 {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        let base_prime = PRIME_MULTIPLIERS[bucket as usize % 32];
+        let adjust = 9 - (base_prime % 9); // To next multiple of 9
+        let biased = base_prime + adjust;
+        BigInt256::from_u64(biased % (1 << 32)) // Small, mod9=0
+    }
+
     /// Setup Kangaroos for Multi-Target with Precise Starts
     /// Verbatim preset: Per-target wild primes, shared tame G.
     pub fn setup_kangaroos_multi(&self, targets: &[Point], num_per_target: usize, config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {

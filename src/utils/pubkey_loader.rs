@@ -323,8 +323,14 @@ fn count_magic9_in_list(points: &Vec<Point>) -> usize {
     }).count()
 }
 
-/// Concise Block: Attractor Proxy Fn for Real Pubkey Test
+/// Concise Block: Mod9=0 Filter for Attractor Reduction
+fn is_mod9_attractor_candidate(x: &BigInt256) -> bool {
+    x.clone() % BigInt256::from_u64(9) == BigInt256::zero()  // Digital root 0 mod9
+}
+
+/// Concise Block: Layer Mod9 in Proxy for Impl
 fn is_attractor_proxy(x: &BigInt256) -> bool {
+    if !is_mod9_attractor_candidate(x) { return false; } // Reduce first
     let x_hex = x.to_hex();
     if !x_hex.ends_with('9') { return false; } // Hex end '9' (nibble 9 mod16)
     if x.clone() % BigInt256::from_u64(9) != BigInt256::zero() { return false; } // Mod9=0 (digital root 0)
@@ -369,9 +375,9 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
     println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
 
     // Scan for attractors and clusters with mod9=0 reduction
-    let (attractor_count, percent, clusters) = scan_full_valuable_for_attractors(&points);
-    println!("Full Valuable Attractors: {} ({:.1}%), Clusters: {:?}", attractor_count, percent, clusters);
-    if percent > 15.0 {
+    let (mod9_count, mod9_percent, full_count, full_percent, clusters) = scan_full_valuable_for_attractors(&points);
+    println!("Mod9=0: {} ({:.1}%), Full Attractors: {} ({:.1}%), Clusters: {:?}", mod9_count, mod9_percent, full_count, full_percent, clusters);
+    if mod9_percent > 15.0 {
         println!("Confirmed MANY related keys—bias high!");
     }
 
