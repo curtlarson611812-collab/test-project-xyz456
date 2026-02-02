@@ -10,6 +10,7 @@ use hex::decode;
 use crate::types::Point;
 use crate::math::bigint::BigInt256;
 use crate::math::secp::Secp256k1;
+use crate::kangaroo::SearchConfig;
 
 /// Load pubkeys from file (supports uncompressed format: 04 + x + y)
 pub fn load_pubkeys_from_file(path: &str) -> io::Result<Vec<Point>> {
@@ -130,7 +131,7 @@ fn parse_compressed(bytes: &[u8]) -> io::Result<Point> {
         None => return Err(io::Error::new(io::ErrorKind::InvalidData, "No square root for compressed pubkey")),
     };
 
-    let mut point = Point::from_affine(x, y);
+    let mut point = Point::from_affine(x.to_u64_array(), y.to_u64_array());
     if !point.validate_curve(&curve) {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Decompressed point not on curve"));
     }
@@ -176,7 +177,7 @@ fn mod_pow(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 
             result = mod_mul(&result, &base, modulus);
         }
         base = mod_mul(&base, &base, modulus);
-        exp = exp.right_shift(1);
+        exp = exp >> 1;
     }
 
     result
@@ -226,6 +227,66 @@ pub fn load_all_puzzles_pubkeys() -> Vec<Point> {
             }
         })
         .collect()
+}
+
+/// Load test/solved puzzle pubkeys with optimized configuration for quick validation
+pub fn load_test_puzzle_keys() -> (Vec<Point>, SearchConfig) {
+    // Test pubkeys for solved puzzles (known private keys for validation)
+    let test_hex = vec![
+        // #1 (privkey = 1) - compressed pubkey
+        "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+        // #2 (privkey = 2) - compressed pubkey
+        "02C6047F9441ED7D6D3045406E95C07CD85C778E4B8CEF3CA7ABAC09B95C709EE5",
+        // #3 (privkey = 3) - compressed pubkey
+        "02F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
+        // #4 (privkey = 4) - compressed pubkey
+        "02E493DBF1C10D80F3581E4904930B1404CC6C13900EE0758474FA94ABE8C4CD13",
+        // #5 (privkey = 0x13 = 19) - compressed pubkey
+        "03A598A8030DA6D86C6BC7F2F5144EA549D28211EA58FAA70EBFB1ECB5C53FE0E6",
+    ];
+
+    let points: Vec<Point> = test_hex.into_iter().filter_map(|hex| {
+        match parse_compressed(hex.as_bytes()) {
+            Ok(point) => Some(point),
+            Err(_) => None,
+        }
+    }).collect();
+
+    let mut config = SearchConfig::for_test_puzzles();
+    config.name = "test_puzzles".to_string();
+
+    (points, config)
+}
+
+/// Load unsolved puzzle pubkeys with configuration optimized for real solving
+pub fn load_unsolved_puzzle_keys() -> (Vec<Point>, SearchConfig) {
+    // Unsolved puzzle pubkeys that have been revealed (but not solved)
+    // Note: These are compressed format pubkeys from puzzles where the pubkey was exposed
+    let unsolved_hex = vec![
+        // #66 (66-bit puzzle) - revealed pubkey
+        "02EE07BAA936B8FD3E5736B0474D2CF3DE231D0B17F3F76D4BA3CB4FE9FA52D600",
+        // Additional unsolved puzzles would be added here as they become available
+    ];
+
+    let points: Vec<Point> = unsolved_hex.into_iter().filter_map(|hex| {
+        match parse_compressed(hex.as_bytes()) {
+            Ok(point) => Some(point),
+            Err(_) => None,
+        }
+    }).collect();
+
+    let mut config = SearchConfig::for_unsolved_puzzles();
+    config.name = "unsolved_puzzles".to_string();
+
+    (points, config)
+}
+
+/// Load valuable P2PK pubkeys from file with default configuration
+pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConfig)> {
+    let points = load_pubkeys_from_file(path)?;
+    let mut config = SearchConfig::for_valuable_p2pk();
+    config.name = format!("valuable_p2pk_{}", path);
+    Ok((points, config))
 }
 
 #[cfg(test)]

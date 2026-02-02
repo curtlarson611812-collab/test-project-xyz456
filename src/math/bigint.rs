@@ -5,6 +5,7 @@
 use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
 use log::info;
+use num_bigint::BigUint;
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -140,6 +141,11 @@ impl BigInt256 {
         BigInt256 { limbs: [0; 4] }
     }
 
+    /// Create one
+    pub fn one() -> Self {
+        BigInt256 { limbs: [1, 0, 0, 0] }
+    }
+
     /// Create from u64
     pub fn from_u64(x: u64) -> Self {
         BigInt256 { limbs: [x, 0, 0, 0] }
@@ -204,6 +210,11 @@ impl BigInt256 {
             bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
         }
         bytes
+    }
+
+    /// Convert to hex string
+    pub fn to_hex(&self) -> String {
+        format!("{:064x}", num_bigint::BigUint::from_bytes_le(&self.to_bytes_le()))
     }
 
     /// Check if zero

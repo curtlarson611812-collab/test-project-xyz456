@@ -8,6 +8,7 @@ use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
 use crate::gpu::{GpuBackend, HybridBackend, CpuBackend, HybridGpuManager, shared::SharedBuffer};
 use crate::types::TaggedKangarooState;
+use crate::kangaroo::SearchConfig;
 #[cfg(feature = "vulkano")]
 use crate::gpu::VulkanBackend;
 #[cfg(feature = "rustacuda")]
@@ -29,6 +30,7 @@ use bincode;
 /// Central manager for kangaroo herd operations
 pub struct KangarooManager {
     config: Config,
+    search_config: SearchConfig,         // Search parameters for this manager
     targets: Vec<Target>,
     multi_targets: Vec<Point>,           // Multi-target points for batch solving
     wild_states: Vec<TaggedKangarooState>, // Tagged wild kangaroos per target
@@ -40,6 +42,7 @@ pub struct KangarooManager {
     collision_detector: CollisionDetector,
     parity_checker: ParityChecker,
     total_ops: u64,
+    current_steps: u64,                  // Steps completed so far
     start_time: std::time::Instant,
 }
 
@@ -92,6 +95,7 @@ impl KangarooManager {
 
         Ok(KangarooManager {
             config,
+            search_config: SearchConfig::default(),
             targets,
             multi_targets: Vec::new(),
             wild_states: Vec::new(),
@@ -103,62 +107,77 @@ impl KangarooManager {
             collision_detector,
             parity_checker,
             total_ops: 0,
+            current_steps: 0,
             start_time: std::time::Instant::now(),
         })
     }
 
     /// Get number of targets
     pub fn target_count(&self) -> usize {
-        self.targets.len()
+        self.targets.len() + self.multi_targets.len()
     }
 
-    /// Create new KangarooManager for multi-target solving
-    pub async fn new_multi(config: Config, multi_targets: Vec<Point>, batch_per_target: usize) -> Result<Self> {
-        // Load single targets as before
-        let target_loader = TargetLoader::new();
-        let targets = target_loader.load_targets(&config)?;
+    /// Get DP table size
+    pub fn dp_table_size(&self) -> usize {
+        self.dp_table.try_lock().map(|table| table.entries().len()).unwrap_or(0)
+    }
+
+    /// Get current steps completed
+    pub fn current_steps(&self) -> u64 {
+        self.current_steps
+    }
+
+    /// Get search config
+    pub fn search_config(&self) -> &SearchConfig {
+        &self.search_config
+    }
+
+    /// Get multi targets
+    pub fn multi_targets(&self) -> &[Point] {
+        &self.multi_targets
+    }
+
+    /// Get wild states
+    pub fn wild_states(&self) -> &[TaggedKangarooState] {
+        &self.wild_states
+    }
+
+    /// Get tame states
+    pub fn tame_states(&self) -> &[KangarooState] {
+        &self.tame_states
+    }
+
+    /// Create new KangarooManager for multi-target solving with search config
+    pub async fn new_multi_config(multi_targets: Vec<Point>, search_config: SearchConfig) -> Result<Self> {
+        // Validate search config
+        search_config.validate()?;
+
+        // Use default config for basic setup
+        let config = Config {
+            gpu_backend: "hybrid".to_string(),
+            dp_bits: search_config.dp_bits as usize,
+            herd_size: multi_targets.len() * search_config.batch_per_target,
+            ..Default::default()
+        };
 
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
-        let generator = KangarooGenerator::new(&config);
-        let stepper = KangarooStepper::new(config.expanded_jump_table);
+        let generator = KangarooGenerator::new(&config).with_search_config(search_config.clone());
+        let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits);
         let collision_detector = CollisionDetector::new();
         let parity_checker = ParityChecker::new();
 
         // Create GPU backend
-        let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend.as_str() {
-            "hybrid" => Box::new(HybridBackend::new().await?),
-            "vulkan" => {
-                #[cfg(feature = "wgpu")]
-                {
-                    Box::new(crate::gpu::backends::vulkan_backend::WgpuBackend::new().await?)
-                }
-                #[cfg(not(feature = "wgpu"))]
-                {
-                    return Err(anyhow!("Vulkan backend requires 'wgpu' feature"));
-                }
-            }
-            "cuda" => {
-                #[cfg(feature = "rustacuda")]
-                {
-                    Box::new(crate::gpu::backends::cuda_backend::CudaBackend::new()?)
-                }
-                #[cfg(not(feature = "rustacuda"))]
-                {
-                    return Err(anyhow!("CUDA backend requires 'rustacuda' feature"));
-                }
-            }
-            "cpu" => Box::new(CpuBackend::new()?),
-            _ => return Err(anyhow!("Invalid GPU backend: {}", config.gpu_backend)),
-        };
+        let gpu_backend: Box<dyn GpuBackend> = Box::new(HybridBackend::new().await?);
 
-        // Generate multi-target kangaroos
-        let wild_states = generator.generate_wild_batch_multi(&multi_targets, batch_per_target)?;
-        let tame_states = generator.generate_tame_batch(wild_states.len());
+        // Generate multi-target kangaroos with config
+        let wild_states = generator.generate_wild_batch_multi_config(&multi_targets)?;
+        let tame_states = generator.generate_tame_batch_config(wild_states.len())?;
 
         Ok(Self {
             config,
-            targets,
+            search_config,
+            targets: Vec::new(), // Not used in multi-target mode
             multi_targets,
             wild_states,
             tame_states,
@@ -169,6 +188,7 @@ impl KangarooManager {
             collision_detector,
             parity_checker,
             total_ops: 0,
+            current_steps: 0,
             start_time: std::time::Instant::now(),
         })
     }

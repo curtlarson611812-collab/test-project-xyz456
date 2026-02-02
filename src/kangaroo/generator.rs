@@ -5,7 +5,9 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Point, TaggedKangarooState};
 use crate::math::{Secp256k1, bigint::BigInt256};
+use crate::kangaroo::SearchConfig;
 use std::ops::Rem;
+use anyhow::anyhow;
 
 use anyhow::Result;
 use log::warn;
@@ -21,6 +23,7 @@ const MAGIC9_PRIMES: [u64; 32] = [
 /// Kangaroo generator for tame and wild kangaroos
 pub struct KangarooGenerator {
     config: Config,
+    search_config: Option<SearchConfig>,
     curve: Secp256k1,
 }
 
@@ -36,8 +39,15 @@ impl KangarooGenerator {
 
         KangarooGenerator {
             config,
+            search_config: None,
             curve: Secp256k1::new(),
         }
+    }
+
+    /// Set search configuration for config-aware generation
+    pub fn with_search_config(mut self, search_config: SearchConfig) -> Self {
+        self.search_config = Some(search_config);
+        self
     }
 
     /// Generate batch — one herd per target (multi-target support)
@@ -230,20 +240,34 @@ impl TameKangarooGenerator {
         ))
     }
 
-    /// Generate multi-target wild kangaroos with tags
-    pub fn generate_wild_batch_multi(&self, targets: &[Point], batch_per_target: usize) -> Result<Vec<TaggedKangarooState>> {
-        let mut batch = Vec::with_capacity(targets.len() * batch_per_target);
+    /// Generate multi-target wild kangaroos with config-driven parameters
+    pub fn generate_wild_batch_multi_config(&self, targets: &[Point], config: &SearchConfig) -> Result<Vec<TaggedKangarooState>> {
+        let mut batch = Vec::with_capacity(targets.len() * config.batch_per_target);
 
         for (target_idx, target) in targets.iter().enumerate() {
-            for _ in 0..batch_per_target {
-                // Generate random offset for wild kangaroo: P - d*G
-                // Use smaller range for efficiency (can be expanded for larger puzzles)
-                let offset = self.random_bigint_mod(&BigInt256::from_u64(1u64 << 40)); // 40-bit range
+            for _ in 0..config.batch_per_target {
+                // Generate offset based on config bounds
+                let offset = if config.is_bounded {
+                    // For bounded searches, start in lower half of range
+                    self.random_bigint_in_range(&config.range_start, &config.range_end.shr(1))
+                } else {
+                    // For unbounded searches, use reasonable range
+                    self.random_bigint_mod(&BigInt256::from_u64(1u64 << 40))
+                };
 
                 // Compute wild start position: target - offset * G
                 let curve = Secp256k1::new();
                 let offset_point = curve.mul(&offset, &curve.g);
-                let wild_point = curve.barrett_p.sub(target, &offset_point);
+
+                // Convert Point coordinates to BigInt256 for arithmetic
+                let target_x = BigInt256::from_u64_array(target.x);
+                let target_y = BigInt256::from_u64_array(target.y);
+                let offset_x = BigInt256::from_u64_array(offset_point.x);
+                let offset_y = BigInt256::from_u64_array(offset_point.y);
+
+                let wild_x = curve.barrett_p.sub(&target_x, &offset_x);
+                let wild_y = curve.barrett_p.sub(&target_y, &offset_y);
+                let wild_point = Point::from_affine(wild_x.to_u64_array(), wild_y.to_u64_array());
 
                 batch.push(TaggedKangarooState {
                     point: wild_point,
@@ -290,5 +314,98 @@ impl TameKangarooGenerator {
             limbs[i] = rand::random::<u64>();
         }
         BigInt256::from_u64_array(limbs) % &modulus
+    }
+
+    /// Generate multi-target wild kangaroos with config-driven parameters
+    pub fn generate_wild_batch_multi_config(&self, targets: &[Point]) -> Result<Vec<TaggedKangarooState>> {
+        let config = self.search_config.as_ref().ok_or_else(|| anyhow!("SearchConfig not set"))?;
+        let mut batch = Vec::with_capacity(targets.len() * config.batch_per_target);
+
+        for (target_idx, target) in targets.iter().enumerate() {
+            for _ in 0..config.batch_per_target {
+                // Generate random offset based on config bounds
+                let offset = if config.is_bounded {
+                    // For bounded searches, start in lower half of range to allow jumps
+                    self.random_bigint_in_range(&config.range_start, &config.range_end.shr(1))
+                } else {
+                    // For unbounded searches, use small random offset
+                    self.random_bigint_mod(&BigInt256::from_u64(1u64 << 40))
+                };
+
+                // Compute wild start position: target - offset * G
+                let curve = Secp256k1::new();
+                let offset_point = curve.mul(&offset, &curve.g);
+
+                // Convert Point coordinates to BigInt256 for arithmetic
+                let target_x = BigInt256::from_u64_array(target.x);
+                let target_y = BigInt256::from_u64_array(target.y);
+                let offset_x = BigInt256::from_u64_array(offset_point.x);
+                let offset_y = BigInt256::from_u64_array(offset_point.y);
+
+                let wild_x = curve.barrett_p.sub(&target_x, &offset_x);
+                let wild_y = curve.barrett_p.sub(&target_y, &offset_y);
+                let wild_point = Point::from_affine(wild_x.to_u64_array(), wild_y.to_u64_array());
+
+                batch.push(TaggedKangarooState {
+                    point: wild_point,
+                    distance: BigInt256::zero(), // Start at distance 0
+                    target_idx: target_idx as u32,
+                    initial_offset: offset,
+                });
+            }
+        }
+
+        Ok(batch)
+    }
+
+    /// Generate tame kangaroos with config parameters
+    pub fn generate_tame_batch_config(&self, total_count: usize) -> Result<Vec<KangarooState>> {
+        let config = self.search_config.as_ref().ok_or_else(|| anyhow!("SearchConfig not set"))?;
+        let mut tames = Vec::with_capacity(total_count);
+
+        for i in 0..total_count {
+            // Space tame starts to cover search space
+            let offset = if config.is_bounded {
+                // For bounded searches, space evenly within range
+                let range_size = config.range_end.sub(&config.range_start);
+                let spacing = range_size.div(&BigInt256::from_u64(total_count as u64));
+                config.range_start.add(&spacing.mul(&BigInt256::from_u64(i as u64)))
+            } else {
+                // For unbounded searches, use large spacing
+                BigInt256::from_u64(i as u64 * 1000000000) // 10^9 spacing
+            };
+
+            let curve = Secp256k1::new();
+            let start_position = curve.mul(&offset, &curve.g);
+
+            let alpha = offset.to_u64_array();
+            let beta = [1, 0, 0, 0]; // Beta coefficient
+
+            tames.push(KangarooState::new(
+                start_position,
+                alpha[0], // Use lowest 64 bits as distance
+                alpha,
+                beta,
+                true, // is_tame = true
+                i as u64,
+            ));
+        }
+
+        tames
+    }
+
+    /// Generate random BigInt256 within a specified range [start, end)
+    fn random_bigint_in_range(&self, start: &BigInt256, end: &BigInt256) -> BigInt256 {
+        let range = end.sub(start);
+        let random_offset = self.random_bigint_mod(&range);
+        start.add(&random_offset)
+    }
+
+    /// Select jump distance using config primes (for magic-9 bias)
+    pub fn select_config_jump(&self, point: &Point, config: &SearchConfig) -> BigInt256 {
+        // Use point coordinates to select pseudo-random prime from config
+        let hash_val = point.x.to_u64_array()[0] ^ point.y.to_u64_array()[0] ^ point.z.to_u64_array()[0];
+        let prime_idx = (hash_val as usize) % config.jump_primes.len();
+        BigInt256::from_u64(config.jump_primes[prime_idx])
     }
 }
