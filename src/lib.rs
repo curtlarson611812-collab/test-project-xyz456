@@ -24,6 +24,7 @@ pub mod parity;
 pub mod targets;
 pub mod utils;
 pub mod security;
+pub mod test_basic;
 
 // Re-export key types for library usage
 pub use config::Config;

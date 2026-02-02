@@ -102,39 +102,8 @@ fn parse_compressed(bytes: &[u8]) -> io::Result<Point> {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid compressed format"));
     }
 
-    let mut x_bytes = [0u8; 32];
-    x_bytes[31..32].copy_from_slice(&bytes[1..2]); // Only last byte for compressed
-    x_bytes[30..31].copy_from_slice(&bytes[2..3]);
-    x_bytes[29..30].copy_from_slice(&bytes[3..4]);
-    x_bytes[28..29].copy_from_slice(&bytes[4..5]);
-    x_bytes[27..28].copy_from_slice(&bytes[5..6]);
-    x_bytes[26..27].copy_from_slice(&bytes[6..7]);
-    x_bytes[25..26].copy_from_slice(&bytes[7..8]);
-    x_bytes[24..25].copy_from_slice(&bytes[8..9]);
-    x_bytes[23..24].copy_from_slice(&bytes[9..10]);
-    x_bytes[22..23].copy_from_slice(&bytes[10..11]);
-    x_bytes[21..22].copy_from_slice(&bytes[11..12]);
-    x_bytes[20..21].copy_from_slice(&bytes[12..13]);
-    x_bytes[19..20].copy_from_slice(&bytes[13..14]);
-    x_bytes[18..19].copy_from_slice(&bytes[14..15]);
-    x_bytes[17..18].copy_from_slice(&bytes[15..16]);
-    x_bytes[16..17].copy_from_slice(&bytes[16..17]);
-    x_bytes[15..16].copy_from_slice(&bytes[17..18]);
-    x_bytes[14..15].copy_from_slice(&bytes[18..19]);
-    x_bytes[13..14].copy_from_slice(&bytes[19..20]);
-    x_bytes[12..13].copy_from_slice(&bytes[20..21]);
-    x_bytes[11..12].copy_from_slice(&bytes[21..22]);
-    x_bytes[10..11].copy_from_slice(&bytes[22..23]);
-    x_bytes[9..10].copy_from_slice(&bytes[23..24]);
-    x_bytes[8..9].copy_from_slice(&bytes[24..25]);
-    x_bytes[7..8].copy_from_slice(&bytes[25..26]);
-    x_bytes[6..7].copy_from_slice(&bytes[26..27]);
-    x_bytes[5..6].copy_from_slice(&bytes[27..28]);
-    x_bytes[4..5].copy_from_slice(&bytes[28..29]);
-    x_bytes[3..4].copy_from_slice(&bytes[29..30]);
-    x_bytes[2..3].copy_from_slice(&bytes[30..31]);
-    x_bytes[1..2].copy_from_slice(&bytes[31..32]);
-    x_bytes[0..1].copy_from_slice(&bytes[32..33]);
+    // Extract x coordinate (32 bytes after the compression prefix)
+    let x_bytes: [u8; 32] = bytes[1..33].try_into().expect("Invalid x coordinate length");
     let x = BigInt256::from_bytes_be(&x_bytes);
     let curve = Secp256k1::new();
 
@@ -157,7 +126,7 @@ fn parse_compressed(bytes: &[u8]) -> io::Result<Point> {
         None => return Err(io::Error::new(io::ErrorKind::InvalidData, "No square root for compressed pubkey")),
     };
 
-    let mut point = Point::from_affine(x.to_u64_array(), y.to_u64_array());
+    let point = Point::from_affine(x.to_u64_array(), y.to_u64_array());
     if !point.validate_curve(&curve) {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Decompressed point not on curve"));
     }
@@ -175,7 +144,7 @@ fn mod_sqrt(a: &BigInt256, p: &BigInt256) -> Option<BigInt256> {
     // For p = 3 mod 4 (which secp256k1 p is), use simpler algorithm
     if (p.limbs[0] & 3) == 3 {
         // a^((p+1)/4) mod p
-        let p_plus_one = p.add(BigInt256::one());
+        let p_plus_one = p.clone().add(BigInt256::one());
         let exp = p_plus_one / BigInt256::from_u64(4);
         let result = mod_pow(a, &exp, p);
 
@@ -272,7 +241,7 @@ pub fn load_test_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
     ];
 
     let points: Vec<(Point, u32)> = test_hex.into_iter().enumerate().filter_map(|(i, hex)| {
-        match parse_compressed(hex.as_bytes()) {
+        match parse_compressed(&hex::decode(hex).unwrap()) {
             Ok(point) => Some((point, i as u32)), // Assign sequential IDs for test puzzles
             Err(_) => None,
         }
@@ -298,7 +267,7 @@ pub fn load_unsolved_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
 
     let mut points_with_ids = Vec::new();
     for (hex, id) in unsolved {
-        if let Ok(point) = parse_compressed(hex.as_bytes()) {
+        if let Ok(point) = parse_compressed(&hex::decode(hex).unwrap()) {
             // Apply magic 9 filter: use approx key estimate for filtering
             let key_estimate = BigInt256::from_u64(1u64 << (id - 1));  // 2^(id-1) as proxy
             let jump_primes = &[3u64, 5, 7, 11, 13, 17, 19, 23];  // Default primes for filter
@@ -352,7 +321,8 @@ fn is_quantum_vulnerable(point: &Point) -> bool {
 
 /// Concise Block: Entropy-Based Quantum Detect
 fn is_quantum_vulnerable_entropy(point: &Point) -> bool {
-    let x_hex = point.x.to_hex();
+    let x_bigint = point.x_bigint();
+    let x_hex = x_bigint.to_hex();
     let entropy = shannon_entropy(&x_hex); // Calc -sum p log p
     entropy < 3.0 // Low entropy exposed vulnerable
 }
@@ -379,7 +349,7 @@ fn shannon_entropy(s: &str) -> f64 {
 
 /// Concise Block: Calc Bias Prob from Scan
 fn calc_bias_prob(points: &Vec<Point>, mod_n: u64) -> f64 {
-    let count = points.iter().filter(|p| p.x.mod_u64(mod_n) == 0).count();
+    let count = points.iter().filter(|p| p.x_bigint().mod_u64(mod_n) == 0).count();
     count as f64 / points.len() as f64
 }
 
@@ -389,7 +359,7 @@ fn combine_multi_bias(probs: Vec<f64>) -> f64 {
 }
 
 /// Concise Block: Layer Mod81 and Vanity in Attractor Proxy
-fn is_attractor_proxy(x: &BigInt256) -> bool {
+pub fn is_attractor_proxy(x: &BigInt256) -> bool {
     let x_hex = x.to_hex();
     if !is_vanity_biased(&x_hex, "02", 16) { return false; } // Vanity '9' end bias
     if !is_mod81_attractor_candidate(x) { return false; } // Ultra reduce first
@@ -406,18 +376,18 @@ fn is_attractor_proxy(x: &BigInt256) -> bool {
 }
 
 /// Concise Block: Scan with CUDA Mod9 in Full Valuable
-fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>)> {
+pub fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
     // Use CUDA mod9 check for acceleration
     let rt = tokio::runtime::Runtime::new()?;
     let hybrid = rt.block_on(crate::gpu::HybridGpuManager::new(0.001, 5))?;
     let x_limbs: Vec<[u64;4]> = points.iter().map(|p| p.x).collect();
-    let mod9_results = rt.block_on(hybrid.dispatch_mod9_check(&x_limbs))?;
+    let mod9_results = hybrid.dispatch_mod9_check(&x_limbs)?;
 
     let mut count = 0;
     let mut clusters = vec![];
     let mut cluster_start = None;
     for (i, &is_mod9) in mod9_results.iter().enumerate() {
-        if is_mod9 && is_attractor_proxy(&points[i].x) {
+        if is_mod9 && is_attractor_proxy(&points[i].x_bigint()) {
             count += 1;
             if cluster_start.is_none() { cluster_start = Some(i); }
         } else if let Some(start) = cluster_start {
@@ -444,14 +414,14 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
     println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
 
     // Scan for attractors and clusters with CUDA mod9 acceleration
-    let (count, percent, clusters) = scan_full_valuable_for_attractors(&points)?;
+    let (count, percent, clusters) = scan_full_valuable_for_attractors(&points).unwrap_or((0, 0.0, vec![]));
     println!("CUDA-Accel Attractors: {} ({:.1}%), Clusters: {:?}", count, percent, clusters);
     if percent > 15.0 {
         println!("Confirmed MANY related keys—bias high!");
     }
 
     // Sort by attractor proxy priority: attractor keys first (lower sort key = higher priority)
-    points.sort_by_key(|p| if is_attractor_proxy(p) { 0 } else { 1 });
+    points.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1 });
 
     let mut config = SearchConfig::for_valuable_p2pk();
     config.name = format!("valuable_p2pk_{}", path);

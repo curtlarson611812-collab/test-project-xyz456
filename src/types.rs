@@ -41,6 +41,21 @@ impl Point {
         self.z == [0; 4]
     }
 
+    /// Get x coordinate as BigInt256
+    pub fn x_bigint(&self) -> BigInt256 {
+        BigInt256 { limbs: self.x }
+    }
+
+    /// Get y coordinate as BigInt256
+    pub fn y_bigint(&self) -> BigInt256 {
+        BigInt256 { limbs: self.y }
+    }
+
+    /// Get low 32 bits of x coordinate
+    pub fn x_low_u32(&self) -> u32 {
+        self.x[0] as u32
+    }
+
     /// Validate that point lies on the secp256k1 curve
     /// Checks if y² = x³ + ax + b mod p
     pub fn validate_curve(&self, curve: &super::math::secp::Secp256k1) -> bool {

@@ -6,6 +6,7 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
+use crate::math::Secp256k1;
 use crate::gpu::{GpuBackend, HybridBackend, CpuBackend, HybridGpuManager, shared::SharedBuffer};
 use crate::types::TaggedKangarooState;
 use crate::kangaroo::SearchConfig;
@@ -151,6 +152,11 @@ impl KangarooManager {
         self.current_steps
     }
 
+    /// Get total operations performed
+    pub fn total_ops(&self) -> u64 {
+        self.total_ops
+    }
+
     /// Get search config
     pub fn search_config(&self) -> &SearchConfig {
         &self.search_config
@@ -197,7 +203,7 @@ impl KangarooManager {
         // Concise Block: Sort Targets by Attractor Proxy in Init
         let mut targets_only: Vec<Point> = multi_targets.iter().map(|(p, _)| *p).collect();
         use crate::utils::pubkey_loader::is_attractor_proxy;
-        targets_only.sort_by_key(|p| if is_attractor_proxy(p) { 0 } else { 1 }); // Attractors first
+        targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1 }); // Attractors first
 
         // Concise Block: Run GPU Prime Mul Test on Manager Init
         let hybrid = HybridGpuManager::new(0.001, 5).await?;
@@ -1278,6 +1284,7 @@ mod tests {
             self.prioritize_harvest_threat();
         }
     }
+
 
     /// Test real pubkey #150 for attractor proxy
     pub fn test_puzzle_150_attractor(&mut self) -> Result<()> {

@@ -151,11 +151,17 @@ impl BigInt256 {
         BigInt256 { limbs: [x, 0, 0, 0] }
     }
 
-    /// Create from hex string
+    /// Create from hex string (pads with leading zeros if shorter than 256 bits)
     pub fn from_hex(hex: &str) -> Self {
         let hex = hex.trim_start_matches("0x");
-        let bytes = hex::decode(hex).expect("Invalid hex string");
-        assert_eq!(bytes.len(), 32, "Hex string must represent 256 bits");
+        let mut bytes = hex::decode(hex).expect("Invalid hex string");
+
+        // Pad with leading zeros to make exactly 32 bytes (256 bits)
+        while bytes.len() < 32 {
+            bytes.insert(0, 0);
+        }
+
+        assert_eq!(bytes.len(), 32, "Hex string too long after padding");
 
         let mut limbs = [0u64; 4];
         // Convert big-endian bytes to little-endian limbs
@@ -332,6 +338,21 @@ impl BigInt256 {
         }
 
         BigInt256 { limbs: result }
+    }
+
+    /// Get low 32 bits as u32
+    pub fn low_u32(&self) -> u32 {
+        self.limbs[0] as u32
+    }
+
+    /// Modular reduction by small modulus (for bias detection)
+    pub fn mod_u64(&self, modulus: u64) -> u64 {
+        // Simple modular reduction for small moduli
+        let mut rem = 0u128;
+        for &limb in self.limbs.iter().rev() {
+            rem = ((rem << 64) | limb as u128) % modulus as u128;
+        }
+        rem as u64
     }
 }
 

@@ -34,6 +34,11 @@ pub struct Secp256k1 {
 }
 
 impl Secp256k1 {
+    /// Get the prime modulus p
+    pub fn modulus(&self) -> &BigInt256 {
+        &self.p
+    }
+
     /// Create new secp256k1 curve instance
     pub fn new() -> Self {
         info!("DEBUG: Secp256k1::new() - creating curve parameters");
@@ -308,7 +313,7 @@ impl Secp256k1 {
         // Basis vectors for lattice decomposition
         let v1_a = BigInt256::from_hex("3086D221A7D46BCDE86C90E49284EB15");
         let v1_b = BigInt256::from_hex("E4437ED6010E88286F547FA90ABFE4C3").negate(&self.barrett_n); // Negated for shortest vectors
-        let v2_a = BigInt256::from_hex("114CA50F7A8E2F3F657C1108D9D44CFD8");
+        let v2_a = BigInt256::from_hex("0114CA50F7A8E2F3F657C1108D9D44CFD8");
         let v2_b = BigInt256::from_hex("3086D221A7D46BCDE86C90E49284EB15");
 
         // Decompose k using basis vectors: find c1, c2 such that k ≈ c1*v1 + c2*v2

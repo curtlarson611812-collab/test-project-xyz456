@@ -63,6 +63,7 @@ impl SearchConfig {
             range_start: BigInt256::zero(),
             range_end: BigInt256::from_u64(1u64 << 40), // Large but reasonable default
             per_puzzle_ranges: None,
+            quantum_threat_level: 7, // Higher threat for P2PK
             name: "valuable_p2pk".to_string(),
         }
     }
@@ -78,6 +79,7 @@ impl SearchConfig {
             range_start: BigInt256::one(),
             range_end: BigInt256::from_u64(1u64 << 32), // Up to 32-bit for tests
             per_puzzle_ranges: None,
+            quantum_threat_level: 3, // Lower threat for tests
             name: "test_puzzles".to_string(),
         }
     }
@@ -93,6 +95,7 @@ impl SearchConfig {
             range_start: BigInt256::one() << 65usize, // 2^65 for typical high puzzles
             range_end: (BigInt256::one() << 66usize) - BigInt256::one(), // 2^66 - 1
             per_puzzle_ranges: None,
+            quantum_threat_level: 8, // High threat for unsolved
             name: "unsolved_puzzles".to_string(),
         }
     }

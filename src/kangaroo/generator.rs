@@ -7,6 +7,7 @@ use crate::types::{KangarooState, Point, TaggedKangarooState};
 use crate::math::{Secp256k1, bigint::BigInt256};
 use crate::kangaroo::SearchConfig;
 use std::ops::Rem;
+use std::ops::Sub;
 use anyhow::anyhow;
 
 use anyhow::Result;
@@ -375,7 +376,9 @@ impl KangarooGenerator {
     /// Concise Block: Negation with Imported Modulus
     pub fn rho_negation_map(&self, point: &Point) -> Point {
         let mut neg = point.clone();
-        neg.y = self.curve.modulus().sub(&neg.y); // -y mod p, since (x,y) ~ (x,-y) on curve
+        let y_bigint = point.y_bigint();
+        let neg_y_bigint = self.curve.modulus().clone().sub(y_bigint);
+        neg.y = neg_y_bigint.to_u64_array();
         neg
     }
 
@@ -387,17 +390,19 @@ impl KangarooGenerator {
 
     /// Concise Block: Separate Rho Partition with Bias
     pub fn rho_specific_partition(&self, point: &Point, dist: &BigInt256, seed: u32, bias_mod: u64) -> u32 {
-        let mix = point.x.low_u32() ^ dist.low_u32() ^ seed; // Low bytes XOR as preset
+        let mix = point.x_low_u32() as u32 ^ dist.low_u32() ^ seed; // Low bytes XOR as preset
         (mix as u64 % bias_mod) as u32 // Bias mod
     }
 
     /// Concise Block: Use Brent's in Rho for Collision
     pub fn rho_walk_with_brents(&self, g: Point, p: Point, bias_mod: u64) -> Option<BigInt256> {
-        let f = |pt: &Point| {
-            let dist = BigInt256::from_u64(1); // Sim jump
-            self.ec_add(pt, &self.ec_mul(&dist, &g)) // Biased add
+        let f = |x: &BigInt256| {
+            let dist = BigInt256::from_u64(1); // Sim jump - would use biased distance
+            let point = Point::from_affine(x.clone().to_u64_array(), BigInt256::zero().to_u64_array()); // Sim
+            // Simplified: just return biased x for cycle detection (would need ec ops)
+            x.clone() // Placeholder - need proper EC operations
         };
-        let x0 = p; // Start at P for DL
+        let x0 = p.x_bigint(); // Start at P.x for DL
         let (cycle_start, mu, lam) = brents_cycle_detection(f, x0);
         // Solve DL from cycle (standard rho solve from mu/lam)
         Some(BigInt256::zero()) // Stub, impl full rho solve
@@ -411,7 +416,7 @@ impl KangarooGenerator {
 
     /// Concise Block: Grover-Like Amplifier for Bias Narrowing
     pub fn grover_amplifier_bias(&self, points: &Vec<Point>, bias_mod: u64) -> Vec<Point> {
-        points.iter().filter(|p| p.x.mod_u64(bias_mod) == 0).cloned().collect() // "Amplify" biased
+        points.iter().filter(|p| p.x_bigint().mod_u64(bias_mod) == 0).cloned().collect() // "Amplify" biased
     }
 
     /// Setup Kangaroos for Multi-Target with Precise Starts

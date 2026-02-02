@@ -36,10 +36,10 @@ pub struct HybridGpuManager {
 
 impl HybridGpuManager {
     /// Concise Block: Use Scan Rate in Hybrid Drift for Swap
-    pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> f64 {
+    pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> Result<f64, Box<dyn std::error::Error>> {
         let sample_points = buffer.as_slice().iter().take(sample_size).cloned().collect();
-        let (_, percent, _) = crate::utils::pubkey_loader::scan_full_valuable_for_attractors(&sample_points);
-        if percent < 10.0 { 0.2 } else { 0.0 } // High rate = low error, Vulkan speed
+        let (_, percent, _) = crate::utils::pubkey_loader::scan_full_valuable_for_attractors(&sample_points)?;
+        Ok(if percent < 10.0 { 0.2 } else { 0.0 }) // High rate = low error, Vulkan speed
     }
 
     /// CPU validation of curve equation: y² = x³ + 7 mod p
@@ -89,7 +89,7 @@ impl HybridGpuManager {
         batch_size: usize,
         total_steps: u64,
         threshold: f64,
-    ) -> Result<()> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let attractor_rate = self.get_attractor_rate(points_data);
         if attractor_rate < 10.0 { // Low hits = bias lost
             // Swap to CUDA for precision mul/add
@@ -98,7 +98,7 @@ impl HybridGpuManager {
             // Vulkan for speed on attractor-rich
             println!("High attractor rate {:.1}%, using Vulkan speed", attractor_rate);
         }
-        let error = self.calculate_drift_error(shared_points, 1000);
+        let error = self.calculate_drift_error(shared_points, 1000)?;
 
         if error > threshold {
             // Swap to CUDA for precision: pause Vulkan, sync buffers, relaunch on CUDA stream
@@ -135,7 +135,7 @@ impl HybridGpuManager {
         // Execute step batch using GpuBackend trait
         if let Err(e) = self.hybrid_backend.step_batch(&mut points_vec, &mut distances_vec, &types_vec) {
             log::error!("Hybrid backend step failed: {}", e);
-            return Err(anyhow::anyhow!("Hybrid backend step failed: {}", e));
+            return Err(anyhow::anyhow!("Hybrid backend step failed: {}", e).into());
         }
 
         // Convert back to data vectors
@@ -287,8 +287,10 @@ impl HybridGpuManager {
     /// Concise Block: Bias Hybrid Swap on Attractor Rate
     pub fn get_attractor_rate(&self, points: &[Point]) -> f64 {
         let sample: Vec<Point> = points.iter().take(100).cloned().collect();
-        let (count, percent, _) = crate::utils::pubkey_loader::scan_valuable_for_attractors(&sample);
-        percent
+        match crate::utils::pubkey_loader::scan_full_valuable_for_attractors(&sample) {
+            Ok((count, percent, _)) => percent,
+            Err(_) => 0.0, // Return 0 on error
+        }
     }
 
     /// Concise Block: Hybrid Test on Real Pubkey Attractor

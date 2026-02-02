@@ -10,6 +10,7 @@ use log::info;
 use speedbitcrack::config::Config;
 use speedbitcrack::kangaroo::{KangarooController, SearchConfig};
 use speedbitcrack::utils::logging::setup_logging;
+use speedbitcrack::test_basic::run_basic_test;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -31,14 +32,23 @@ async fn main() -> Result<()> {
         .arg(
             Arg::new("test")
                 .long("test")
+                .action(clap::ArgAction::SetTrue)
                 .help("Load test puzzle keys for validation")
                 .long_help("Run solved puzzles to validate implementation correctness")
         )
         .arg(
             Arg::new("unsolved")
                 .long("unsolved")
+                .action(clap::ArgAction::SetTrue)
                 .help("Load unsolved puzzle keys for real solving")
                 .long_help("Attempt to solve real Bitcoin puzzles with bounties")
+        )
+        .arg(
+            Arg::new("basic-test")
+                .long("basic-test")
+                .action(clap::ArgAction::SetTrue)
+                .help("Run basic functionality test")
+                .long_help("Test basic operations without full solving")
         )
         .arg(
             Arg::new("steps")
@@ -62,6 +72,12 @@ async fn main() -> Result<()> {
                 .help("Maximum number of cycles to run")
         )
         .get_matches();
+
+    // Check if basic test is requested
+    if matches.get_flag("basic-test") {
+        run_basic_test();
+        return Ok(());
+    }
 
     // Validate that at least one target type is specified
     let has_targets = matches.contains_id("valuable") ||
