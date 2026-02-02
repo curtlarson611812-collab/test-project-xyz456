@@ -427,17 +427,17 @@ impl BigInt256 {
     }
 
     /// Right shift by n bits
-    fn right_shift(&self, n: usize) -> BigInt256 {
+    pub fn right_shift(&self, n: usize) -> BigInt256 {
+        if n >= 256 { return BigInt256::zero(); }
         let limb_shift = n / 64;
         let bit_shift = n % 64;
         let mut result = [0u64; 4];
-
-        for i in limb_shift..4 {
-            let src_idx = i - limb_shift;
+        for i in 0..4 {
+            let src_idx = i + limb_shift;
             if src_idx < 4 {
-                result[src_idx] = self.limbs[i] >> bit_shift;
-                if bit_shift > 0 && src_idx < 3 {
-                    result[src_idx] |= self.limbs[i + 1] << (64 - bit_shift);
+                result[i] = self.limbs[src_idx] >> bit_shift;
+                if bit_shift > 0 && src_idx + 1 < 4 {
+                    result[i] |= self.limbs[src_idx + 1] << (64 - bit_shift);
                 }
             }
         }

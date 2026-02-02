@@ -547,7 +547,7 @@ pub fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::e
 /// Load a specific real unsolved puzzle
 pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point, Box<dyn std::error::Error>> {
     let hex = match n {
-        150 => "02c6c4ef3217b4d5c9f75ca6c24b07b5e3c1e9f4d9c7a9c4b8c2b4e9f2c6c4ef3217b4d5c9f75ca6c24b07b5e3c1e9f4d9c7a9c4b8c2b4e9f2", // Placeholder - replace with actual #150 hex
+        150 => "02f54ba36518d7038ed669f7da906b689d393adaa88ba114c2aab6dc5f87a73cb8", // Puzzle #150, 2^150 * G
         160 => "038c2b4e9f2c6c4ef3217b4d5c9f75ca6c24b07b5e3c1e9f4d9c7a9c4b8c2b4e9f2c6c4ef3217b4d5c9f75ca6c24b07b5e3c1e9f4d9c7a9c4", // Placeholder - replace with actual #160 hex
         _ => return Err(format!("Unknown puzzle #{}", n).into()),
     };
@@ -576,13 +576,27 @@ pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<d
         if cleaned.is_empty() { continue; }
 
         let bytes = hex::decode(cleaned)?;
-        if bytes.len() != 33 { continue; }
-
-        let mut comp = [0u8; 33];
-        comp.copy_from_slice(&bytes);
-
-        if let Some(point) = curve.decompress_point(&comp) {
-            points.push(point);
+        if bytes.len() == 33 {
+            // Compressed format
+            let mut comp = [0u8; 33];
+            comp.copy_from_slice(&bytes);
+            if let Some(point) = curve.decompress_point(&comp) {
+                points.push(point);
+            }
+        } else if bytes.len() == 65 && bytes[0] == 0x04 {
+            // Uncompressed format: 04 + x + y
+            let x_bytes: [u8; 32] = bytes[1..33].try_into().unwrap();
+            let y_bytes: [u8; 32] = bytes[33..65].try_into().unwrap();
+            let x = BigInt256::from_bytes_be(&x_bytes);
+            let y = BigInt256::from_bytes_be(&y_bytes);
+            let point = Point { x: x.to_u64_array(), y: y.to_u64_array(), z: [1, 0, 0, 0] };
+            if curve.is_on_curve(&point) {
+                points.push(point);
+            } else {
+                log::warn!("Uncompressed point not on curve: {}", cleaned);
+            }
+        } else {
+            log::warn!("Invalid pubkey length {} for line: {}", bytes.len(), cleaned);
         }
     }
 

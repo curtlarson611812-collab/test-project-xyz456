@@ -683,6 +683,7 @@ impl Secp256k1 {
         // Legendre symbol (value/p) = value^((p-1)/2) mod p
         let legendre_exp = self.barrett_p.sub(&self.p, &BigInt256::from_u64(1)) >> 1;
         let legendre = self.pow_mod(value, &legendre_exp, &self.p);
+        log::debug!("Mod sqrt debug - value: {}, legendre_exp: {}, legendre: {}", value.to_hex(), legendre_exp.to_hex(), legendre.to_hex());
 
         if legendre == BigInt256::zero() {
             return Some(BigInt256::zero()); // value ≡ 0 mod p
@@ -699,6 +700,7 @@ impl Secp256k1 {
 
         // Verify: candidate^2 ≡ value mod p (critical for correctness)
         let candidate_sq = self.barrett_p.mul(&candidate, &candidate);
+        log::debug!("Candidate: {}, sq: {}", candidate.to_hex(), candidate_sq.to_hex());
         if candidate_sq == *value {
             Some(candidate)
         } else {
@@ -718,7 +720,7 @@ impl Secp256k1 {
                 result = self.barrett_p.mul(&result, &b);
             }
             b = self.barrett_p.mul(&b, &b);
-            e = e >> 1;
+            e = e.right_shift(1);
         }
         result
     }

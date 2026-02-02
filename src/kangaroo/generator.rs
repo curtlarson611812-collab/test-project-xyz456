@@ -4,7 +4,7 @@
 
 use crate::config::Config;
 use crate::types::{KangarooState, Point, TaggedKangarooState};
-use crate::math::{Secp256k1, bigint::BigInt256};
+use crate::math::{Secp256k1, bigint::{BigInt256, BigInt512}};
 use crate::kangaroo::SearchConfig;
 use std::ops::Rem;
 use std::ops::Sub;
@@ -396,16 +396,61 @@ impl KangarooGenerator {
 
     /// Concise Block: Use Brent's in Rho for Collision
     pub fn rho_walk_with_brents(&self, g: Point, p: Point, bias_mod: u64) -> Option<BigInt256> {
-        let f = |x: &BigInt256| {
-            let dist = BigInt256::from_u64(1); // Sim jump - would use biased distance
-            let point = Point::from_affine(x.clone().to_u64_array(), BigInt256::zero().to_u64_array()); // Sim
-            // Simplified: just return biased x for cycle detection (would need ec ops)
-            x.clone() // Placeholder - need proper EC operations
-        };
-        let x0 = p.x_bigint(); // Start at P.x for DL
-        let (cycle_start, mu, lam) = brents_cycle_detection(f, x0);
-        // Solve DL from cycle (standard rho solve from mu/lam)
-        Some(BigInt256::zero()) // Stub, impl full rho solve
+        use std::collections::HashMap;
+
+        const W: usize = 1 << 20; // Jump table size ~1M
+        const DP_BITS: u32 = 32; // Distinguished point bits
+
+        let mut tame = g.clone(); // Tame starts at G
+        let mut wild = p.clone(); // Wild starts at target P
+        let mut tame_steps = BigInt256::zero();
+        let mut wild_steps = BigInt256::zero();
+        let mut tame_dps: HashMap<[u64; 4], BigInt256> = HashMap::new();
+
+        loop {
+            // Tame walk
+            let tame_hash = self.simple_hash(&tame);
+            let jump_idx = if bias_mod == 0 {
+                tame_hash % W as u64
+            } else {
+                (tame_hash % bias_mod) % W as u64
+            } as usize;
+
+            // Add jump (simplified - would use precomputed multiples)
+            tame = self.curve.add(&tame, &self.curve.g_multiples[jump_idx % self.curve.g_multiples.len()]);
+            tame_steps = tame_steps + BigInt256::from_u64(1);
+
+            // Check for DP
+            if tame.x[0] & ((1 << DP_BITS) - 1) == 0 {
+                tame_dps.insert(tame.x, tame_steps.clone());
+            }
+
+            // Wild walk
+            let wild_hash = self.simple_hash(&wild);
+            let jump_idx = if bias_mod == 0 {
+                wild_hash % W as u64
+            } else {
+                (wild_hash % bias_mod) % W as u64
+            } as usize;
+
+            wild = self.curve.add(&wild, &self.curve.g_multiples[jump_idx % self.curve.g_multiples.len()]);
+            wild_steps = wild_steps + BigInt256::from_u64(1);
+
+            // Check for collision
+            if tame_dps.contains_key(&wild.x) {
+                let tame_at_collision = tame_dps[&wild.x].clone();
+                // Solve: tame_steps - tame_at_collision = k mod n
+                let diff = tame_steps - tame_at_collision;
+                let diff_512 = BigInt512::from_bigint256(&diff);
+                return Some(self.curve.barrett_n.reduce(&diff_512).unwrap_or(BigInt256::zero()));
+            }
+        }
+    }
+
+    /// Simple hash function for kangaroo jumps
+    fn simple_hash(&self, point: &Point) -> u64 {
+        // Simple hash using the x coordinate
+        point.x[0] ^ point.x[1] ^ point.x[2] ^ point.x[3]
     }
 
     /// Concise Block: Use Brent's in Rho Cycle
