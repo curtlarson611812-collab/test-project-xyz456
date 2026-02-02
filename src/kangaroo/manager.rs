@@ -1087,11 +1087,11 @@ mod tests {
         Some((inv_prime * diff) % curve.order)
     }
 
-    /// Concise Block: Layer Mod9 in Near Miss Diff
+    /// Concise Block: Layer Vanity Mod in Near Miss Diff
     pub fn calculate_near_miss_diff(&self, trap_x: &BigInt256, dp_x: &BigInt256, threshold: &BigInt256) -> Option<BigInt256> {
         let curve = crate::math::secp::Secp256k1::new();
         let diff = (trap_x.clone() - dp_x.clone()) % curve.p.clone();
-        if diff.clone() % BigInt256::from_u64(9) != BigInt256::zero() { return None; } // Mod9=0 bias for attractor signal
+        if diff.clone() % BigInt256::from_u64(16) != BigInt256::from_u64(9) { return None; } // Vanity bias e.g., mod16=9
         if diff < *threshold { Some(diff) } else { None }
     }
 
@@ -1114,16 +1114,42 @@ mod tests {
         None
     }
 
-    /// Concise Block: Extend Near Miss with BSGS if Not Tabled
+    /// Concise Block: Biased BSGS with Mod Filter
+    fn biased_bsgs_find_k(diff: &BigInt256, g_x: &BigInt256, range_max: u64, m: u64, mod_bias: u64, bias_res: u64) -> Option<u64> {
+        let mut baby = HashMap::new();
+        let mut current = BigInt256::zero();
+        let mut i = 0u64;
+        while i < m {
+            if i % mod_bias == bias_res { // Filter biased i
+                baby.insert(current.clone(), i);
+            }
+            current = current.add(g_x).mod_(&BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F));
+            i += 1;
+        }
+        let giant_step = BigInt256::from_u64(m).mul(g_x).mod_(&BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F));
+        let mut giant = diff.clone();
+        let mut j = 0u64;
+        while j < (range_max / m + 1) {
+            if j % mod_bias == bias_res { // Biased j
+                if let Some(i) = baby.get(&giant) {
+                    return Some(j * m + *i);
+                }
+            }
+            giant = giant.sub(&giant_step).mod_(&BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F));
+            j += 1;
+        }
+        None
+    }
+
+    /// Concise Block: Full Layered Near Miss with Biased BSGS
     pub fn solve_near_collision(&self, trap: &KangarooState, dp: &TaggedKangarooState, diff: BigInt256) -> Option<BigInt256> {
         let table = NearMissTable::new(1000);
         if let Some(k) = table.find_nearest(&diff) {
-            // Prior inv k adjust
             let curve = crate::math::secp::Secp256k1::new();
             let inv_k = curve.order.mod_inverse(&BigInt256::from_u64(k))?;
             let adjusted_prime = dp.initial_offset.clone() * inv_k % curve.order.clone();
             self.solve_collision_prime_adjusted(&trap.distance, &dp.distance, &adjusted_prime)
-        } else if let Some(k) = Self::bsgs_find_k(&diff, &BigInt256::from_u64_array(self.curve.g.x), 1 << 40, 1 << 20) {
+        } else if let Some(k) = Self::biased_bsgs_find_k(&diff, &BigInt256::from_u64_array(self.curve.g.x), 1 << 40, 1 << 20, 81, 0) { // Mod81=0 bias
             let curve = crate::math::secp::Secp256k1::new();
             let inv_k = curve.order.mod_inverse(&BigInt256::from_u64(k))?;
             let adjusted_prime = dp.initial_offset.clone() * inv_k % curve.order.clone();
@@ -1149,6 +1175,28 @@ mod tests {
             state.distance += jump_dist.to_u64_array()[0]; // Convert to u64 for tame
             // DP check, near miss if diff small
         }
+    }
+
+    /// Concise Block: Detect Bias in DP's (Mod n on x with Trailing Zeros)
+    pub fn detect_dp_bias(&self, x: &BigInt256, trailing_zeros: u32, mod_n: u64) -> bool {
+        let mask = (1u64 << trailing_zeros) - 1;
+        if x.limbs[0] & mask != 0 { return false; } // Confirm trailing zeros
+        x.mod_u64(mod_n) == 0 // Bias mod n
+    }
+
+    /// Concise Block: Bias Jump to Force DP Mod n
+    pub fn get_biased_jump_for_dp(&self, bucket: u32, mod_n: u64) -> BigInt256 {
+        let base = crate::math::constants::PRIME_MULTIPLIERS[bucket as usize % 32];
+        let adjust = mod_n - (base % mod_n);
+        BigInt256::from_u64(base + adjust) // To mod n=0
+    }
+
+    /// Concise Block: Detect/Exploit Bias in Step DP Check
+    pub fn check_dp_with_bias(&self, point: &Point, trailing_zeros: u32, mod_n: u64) -> bool {
+        if self.detect_dp_bias(&point.x, trailing_zeros, mod_n) {
+            // Instant win: Bias match, layer in solve
+            true
+        } else { false }
     }
 
     /// Concise Block: Tame Additive Steps (Deterministic Bucket Add)

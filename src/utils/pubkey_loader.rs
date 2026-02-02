@@ -333,11 +333,24 @@ fn is_mod27_attractor_candidate(x: &BigInt256) -> bool {
     x.mod_u64(27) == 0  // Higher 3-power multiple
 }
 
-/// Concise Block: Layer Mod27 in Attractor Proxy
+/// Concise Block: Mod81=0 Filter for Ultra-Fine Reduction
+fn is_mod81_attractor_candidate(x: &BigInt256) -> bool {
+    x.mod_u64(81) == 0  // 3^4 power multiple
+}
+
+/// Concise Block: Detect Vanity Bias in Pubkey Hex
+fn is_vanity_biased(x_hex: &str, prefix_pattern: &str, suffix_mod: u64) -> bool {
+    if x_hex.starts_with(prefix_pattern) { return true; } // e.g., "02" for compressed
+    BigInt256::from_hex(x_hex).mod_u64(suffix_mod) == 9 // Suffix mod for '9' bias
+}
+
+/// Concise Block: Layer Mod81 and Vanity in Attractor Proxy
 fn is_attractor_proxy(x: &BigInt256) -> bool {
-    if !is_mod27_attractor_candidate(x) { return false; } // Finer reduce first
-    if !is_mod9_attractor_candidate(x) { return false; } // Nested mod9
     let x_hex = x.to_hex();
+    if !is_vanity_biased(&x_hex, "02", 16) { return false; } // Vanity '9' end bias
+    if !is_mod81_attractor_candidate(x) { return false; } // Ultra reduce first
+    if !is_mod27_attractor_candidate(x) { return false; } // Nested mod27
+    if !is_mod9_attractor_candidate(x) { return false; } // Mod9
     if !x_hex.ends_with('9') { return false; }
     // Extra: Low SHA %100 <10 for basin proxy
     use sha2::{Sha256, Digest};
