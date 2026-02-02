@@ -643,16 +643,14 @@ impl Secp256k1 {
         // Debug logging for decompression troubleshooting
         log::debug!("Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
 
-        // Pre-check if rhs is quadratic residue
-        let legendre_exp = self.barrett_p.sub(&self.p, &BigInt256::from_u64(1)).right_shift(1);
-        let legendre = self.pow_mod(&rhs, &legendre_exp, &self.p);
-        if legendre != BigInt256::one() {
-            log::warn!("Pre-check non-residue rhs: {}, x: {}", rhs.to_hex(), x.to_hex());
-            return None;
-        }
-
-        // Compute modular square root
-        let y_candidate = self.compute_modular_sqrt(&rhs)?;
+        // Compute modular square root (skip pre-check for debugging)
+        let y_candidate = match self.compute_modular_sqrt(&rhs) {
+            Some(y) => y,
+            None => {
+                log::warn!("Modular sqrt failed for rhs: {}, x: {}", rhs.to_hex(), x.to_hex());
+                return None;
+            }
+        };
 
         // Check parity: compressed[0] == 0x03 means odd y, 0x02 means even y
         let required_parity = compressed[0] == 0x03;
