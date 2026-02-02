@@ -72,16 +72,16 @@ impl SearchConfig {
             jump_primes: vec![3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73], // Extended for magic-9
             dp_bits: 20,
             is_bounded: true,
-            range_start: BigInt256::one().shl(65), // Default 2^65 for higher puzzles
-            range_end: BigInt256::one().shl(66).sub(&BigInt256::one()), // 2^66 - 1
+            range_start: BigInt256::one() << 65usize, // Default 2^65 for higher puzzles
+            range_end: (BigInt256::one() << 66usize) - BigInt256::one(), // 2^66 - 1
         }
     }
 
     /// Create config for specific puzzle bit range
     pub fn for_puzzle_bits(bits: u32) -> Self {
         let mut config = Self::for_unsolved_puzzles();
-        config.range_start = BigInt256::one().shl(bits - 1);
-        config.range_end = BigInt256::one().shl(bits).sub(&BigInt256::one());
+        config.range_start = BigInt256::one() << (bits - 1) as usize;
+        config.range_end = (BigInt256::one() << bits as usize) - BigInt256::one();
         config
     }
 }

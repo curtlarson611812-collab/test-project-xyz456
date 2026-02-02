@@ -4,7 +4,9 @@
 
 pub mod secp;
 pub mod bigint;
+pub mod constants;
 
 // Re-export commonly used types
 pub use secp::{Secp256k1, Scalar};
 pub use bigint::{BigInt256, BarrettReducer, MontgomeryReducer};
+pub use constants::*;

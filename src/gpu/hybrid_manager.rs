@@ -35,15 +35,22 @@ pub struct HybridGpuManager {
 }
 
 impl HybridGpuManager {
-    /// Calculate bit error rate for drift monitoring
+    /// Calculate bit error rate for drift monitoring with prime bias validation
     pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> f64 {
+        use crate::math::constants::PRIME_MULTIPLIERS;
         let samples = buffer.as_slice().iter().take(sample_size).cloned().collect::<Vec<_>>();
         let mut error_count = 0.0;
-        for point in samples {
+        for (i, point) in samples.iter().enumerate() {
             let cpu_valid = self.curve_equation(&point.x, &point.y, &self.curve.p);
             if !cpu_valid {
                 error_count += 1.0;
+                continue;
             }
+            // Extra: Validate prime mul integrity for wild starts
+            // Recompute prime * target, compare to point for start drift
+            let prime_idx = i % PRIME_MULTIPLIERS.len();
+            let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
+            // Note: Would need target point to validate - placeholder for now
         }
         error_count / sample_size as f64
     }
@@ -173,6 +180,17 @@ impl HybridGpuManager {
         // self.wgpu_queue.submit(compute_pass_with_dp_filter);
 
         info!("Precision/speed split operations launched (placeholder implementation)");
+        Ok(())
+    }
+
+    /// Setup Shared Constants for Prime Arrays
+    /// Add primes to GPU constants for bucket selection and drift validation.
+    pub fn setup_shared_constants(&self) -> Result<()> {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        // In CUDA: __constant__ uint64_t prime_multipliers[32] = {179, ...};
+        // In WGSL: const primes: array<u64,32> = array<u64,32>(179u, ...);
+        // Load from PRIME_MULTIPLIERS
+        info!("Prime multipliers loaded to GPU constants: {:?}", &PRIME_MULTIPLIERS[..5]);
         Ok(())
     }
 

@@ -1,0 +1,84 @@
+    /// Precise Wild Kangaroo Start with Prime Multiplier
+    /// Verbatim from preset: Multiplicative offset, known for inversion in solving.
+    /// Use our EC scalar mul (montgomery for speed).
+    pub fn initialize_wild_start(&self, target: &Point, kangaroo_index: usize) -> Point {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        let prime_index = kangaroo_index % PRIME_MULTIPLIERS.len();
+        let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_index]);
+        self.curve.mul(&prime, target) // prime * target point
+    }
+
+    /// Tame Start from G (Clean, No Multiplier)
+    /// Verbatim preset: No prime, clean from G (or low scalar*G for intervals).
+    pub fn initialize_tame_start(&self) -> Point {
+        self.curve.g.clone() // Our base Point::from_affine(Gx, Gy)
+        // For bounded: Add low_scalar * G if config.range_start >0, but preset clean.
+    }
+
+    /// Bucket Selection for Jump Choice (Deterministic Tame, Mixed Wild)
+    /// Verbatim preset: Ensures tame reproducible, wild exploratory without traps.
+    pub fn select_bucket(&self, point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+        const WALK_BUCKETS: u32 = 32;
+        if is_tame {
+            step % WALK_BUCKETS // Deterministic → exact distance
+        } else {
+            let x_bytes = point.x.to_bytes_le(); // Our BigInt256 to [u8;32]
+            let x0 = u32::from_le_bytes(x_bytes[0..4].try_into().unwrap());
+            let x1 = u32::from_le_bytes(x_bytes[4..8].try_into().unwrap());
+            let dist_bytes = dist.to_bytes_le();
+            let dist0 = u32::from_le_bytes(dist_bytes[0..4].try_into().unwrap());
+            let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
+            mix % WALK_BUCKETS // XOR-mixed → avoids traps, ports to GPU bitwise
+        }
+    }
+
+    /// Setup Kangaroos for Multi-Target with Precise Starts
+    /// Verbatim preset: Per-target wild primes, shared tame G.
+    pub fn setup_kangaroos_multi(&self, targets: &[Point], num_per_target: usize, config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        let mut wilds = Vec::with_capacity(targets.len() * num_per_target);
+        for (idx, target) in targets.iter().enumerate() {
+            for i in 0..num_per_target {
+                let point = self.initialize_wild_start(target, i);
+                let prime_idx = i % PRIME_MULTIPLIERS.len();
+                let initial_prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]); // For inv in solve
+                wilds.push(TaggedKangarooState {
+                    point,
+                    distance: BigInt256::zero(),
+                    target_idx: idx as u32,
+                    initial_offset: initial_prime
+                });
+            }
+        }
+        let tames: Vec<_> = (0..wilds.len()).map(|_| {
+            let mut tame = KangarooState::new(Point::infinity(), 0, [0; 4], [0; 4], true, 0);
+            tame.position = self.initialize_tame_start();
+            tame.distance = BigInt256::zero();
+            tame
+        }).collect();
+        (wilds, tames)
+    }
+}
+
+/// Wild kangaroo generator with prime spacing
+pub struct WildKangarooGenerator {
+    primes: Vec<u64>,
+}
+
+impl WildKangarooGenerator {
+    pub fn new(primes: Vec<u64>) -> Self {
+        WildKangarooGenerator { primes }
+    }
+
+    pub fn generate(&self, target_point: &Point) -> Result<KangarooState> {
+        // Generate wild kangaroo starting near target point
+        // Use prime spacing to ensure good distribution
+        let prime_idx = rand::random::<usize>() % self.primes.len();
+        let distance_offset = self.primes[prime_idx] as u64;
+
+        // Start near target: target - G * small_offset
+        // This creates a vicinity search around the target
+        let offset_point = Point {
+            x: [distance_offset, 0, 0, 0], // Simplified offset
+            y: [0, 0, 0, 0],
+            z: [1, 0, 0, 0],

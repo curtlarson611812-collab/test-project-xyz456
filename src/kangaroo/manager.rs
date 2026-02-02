@@ -170,9 +170,9 @@ impl KangarooManager {
         // Create GPU backend
         let gpu_backend: Box<dyn GpuBackend> = Box::new(HybridBackend::new().await?);
 
-        // Generate multi-target kangaroos with config
-        let wild_states = generator.generate_wild_batch_multi_config(&multi_targets, &search_config)?;
-        let tame_states = generator.generate_tame_batch(wild_states.len());
+        // Generate multi-target kangaroos with precise prime starts
+        let targets_only: Vec<Point> = multi_targets.iter().map(|(p, _)| *p).collect();
+        let (wild_states, tame_states) = generator.setup_kangaroos_multi(&targets_only, search_config.batch_per_target, &search_config);
 
         Ok(Self {
             config,
@@ -1027,5 +1027,14 @@ mod tests {
         // TODO: Implement full collision detection and key solving
 
         Ok(())
+    }
+
+    /// Prime-Adjusted Collision Solve
+    /// Verbatim preset: Use stored initial_prime for inv * diff mod N.
+    pub fn solve_collision_prime_adjusted(&self, tame_dist: &BigInt256, wild_dist: &BigInt256, wild_initial_prime: &BigInt256) -> Option<BigInt256> {
+        let one = BigInt256::one();
+        let diff = tame_dist.clone() + one - wild_dist.clone(); // 1 + d_tame - d_wild
+        let inv_prime = self.curve.order.mod_inverse(wild_initial_prime)?; // Extended Euclidean from Phase 3
+        Some((inv_prime * diff) % self.curve.order)
     }
 }

@@ -11,7 +11,7 @@ pub mod controller;
 
 // Re-export main types
 pub use manager::KangarooManager;
-pub use generator::{KangarooGenerator, WildKangarooGenerator, TameKangarooGenerator};
+pub use generator::KangarooGenerator;
 pub use stepper::KangarooStepper;
 pub use collision::{CollisionDetector, CollisionResult};
 pub use search_config::SearchConfig;

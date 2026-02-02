@@ -175,8 +175,8 @@ fn mod_sqrt(a: &BigInt256, p: &BigInt256) -> Option<BigInt256> {
     // For p = 3 mod 4 (which secp256k1 p is), use simpler algorithm
     if (p.limbs[0] & 3) == 3 {
         // a^((p+1)/4) mod p
-        let p_plus_one = p.add(&BigInt256::one());
-        let exp = p_plus_one.div(&BigInt256::from_u64(4));
+        let p_plus_one = p.add(BigInt256::one());
+        let exp = p_plus_one / BigInt256::from_u64(4);
         let result = mod_pow(a, &exp, p);
 
         // Verify: result^2 == a mod p

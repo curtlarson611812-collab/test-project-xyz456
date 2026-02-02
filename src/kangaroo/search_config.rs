@@ -87,8 +87,8 @@ impl SearchConfig {
             jump_primes: vec![3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73],
             dp_bits: 22,            // Balanced DP frequency
             is_bounded: true,       // Puzzles have defined ranges
-            range_start: BigInt256::one().shl(65), // 2^65 for typical high puzzles
-            range_end: BigInt256::one().shl(66).sub(&BigInt256::one()), // 2^66 - 1
+            range_start: BigInt256::one() << 65usize, // 2^65 for typical high puzzles
+            range_end: (BigInt256::one() << 66usize) - BigInt256::one(), // 2^66 - 1
             per_puzzle_ranges: None,
             name: "unsolved_puzzles".to_string(),
         }
@@ -97,8 +97,8 @@ impl SearchConfig {
     /// Create config for specific puzzle range
     pub fn for_puzzle_range(start_bit: u32, end_bit: u32) -> Self {
         let mut config = Self::for_unsolved_puzzles();
-        config.range_start = BigInt256::one() << start_bit;
-        config.range_end = (BigInt256::one() << end_bit) - BigInt256::one();
+        config.range_start = BigInt256::one() << start_bit as usize;
+        config.range_end = (BigInt256::one() << end_bit as usize) - BigInt256::one();
         config.name = format!("puzzle_{}_{}", start_bit, end_bit);
         config
     }
@@ -112,8 +112,8 @@ impl SearchConfig {
     /// Add a specific puzzle range
     pub fn add_puzzle_range(&mut self, puzzle_id: u32, bit_depth: u32) {
         if let Some(ranges) = &mut self.per_puzzle_ranges {
-            let start = BigInt256::one() << (bit_depth - 1);
-            let end = (BigInt256::one() << bit_depth) - BigInt256::one();
+            let start = BigInt256::one() << (bit_depth - 1) as usize;
+            let end = (BigInt256::one() << bit_depth as usize) - BigInt256::one();
             ranges.insert(puzzle_id, (start, end));
         }
     }
@@ -124,8 +124,8 @@ impl SearchConfig {
         if let Some(ranges) = &mut self.per_puzzle_ranges {
             // Add ranges for unsolved puzzles #66 to #160
             for puzzle_id in 66..=160 {
-                let start = BigInt256::one() << (puzzle_id - 1);
-                let end = (BigInt256::one() << puzzle_id) - BigInt256::one();
+                let start = BigInt256::one() << (puzzle_id - 1) as usize;
+                let end = (BigInt256::one() << puzzle_id as usize) - BigInt256::one();
                 ranges.insert(puzzle_id, (start, end));
             }
         }
@@ -200,8 +200,8 @@ mod tests {
     #[test]
     fn test_puzzle_range_config() {
         let config = SearchConfig::for_puzzle_range(64, 65);
-        assert_eq!(config.range_start, BigInt256::one().shl(64));
-        assert_eq!(config.range_end, BigInt256::one().shl(65).sub(&BigInt256::one()));
+        assert_eq!(config.range_start, BigInt256::one() << 64usize);
+        assert_eq!(config.range_end, (BigInt256::one() << 65usize) - BigInt256::one());
         assert_eq!(config.name, "puzzle_64_65");
     }
 

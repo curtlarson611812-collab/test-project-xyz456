@@ -200,14 +200,14 @@ impl KangarooGenerator {
         for i in 0..4 {
             limbs[i] = rand::random::<u64>();
         }
-        BigInt256::from_u64_array(limbs) % modulus
+        BigInt256::from_u64_array(limbs) % modulus.clone()
     }
 
     /// Generate random BigInt256 within a specified range [start, end)
     fn random_bigint_in_range(&self, start: &BigInt256, end: &BigInt256) -> BigInt256 {
-        let range = *end - *start;
+        let range = end.clone() - start.clone();
         let random_offset = self.random_bigint_mod(&range);
-        *start + random_offset
+        start.clone() + random_offset
     }
 
     /// Select jump distance using config primes (for magic-9 bias)
@@ -240,187 +240,69 @@ impl KangarooGenerator {
         }
         Ok(batch)
     }
-}
-
-/// Wild kangaroo generator with prime spacing
-pub struct WildKangarooGenerator {
-    primes: Vec<u64>,
-}
-
-impl WildKangarooGenerator {
-    pub fn new(primes: Vec<u64>) -> Self {
-        WildKangarooGenerator { primes }
+    /// Precise Wild Kangaroo Start with Prime Multiplier
+    /// Verbatim from preset: Multiplicative offset, known for inversion in solving.
+    /// Verbatim from preset: Multiplicative offset, known for inversion in solving.
+    /// Use our EC scalar mul (montgomery for speed).
+    pub fn initialize_wild_start(&self, target: &Point, kangaroo_index: usize) -> Point {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        let prime_index = kangaroo_index % PRIME_MULTIPLIERS.len();
+        let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_index]);
+        self.curve.mul(&prime, target) // prime * target point
     }
 
-    pub fn generate(&self, target_point: &Point) -> Result<KangarooState> {
-        // Generate wild kangaroo starting near target point
-        // Use prime spacing to ensure good distribution
-        let prime_idx = rand::random::<usize>() % self.primes.len();
-        let distance_offset = self.primes[prime_idx] as u64;
-
-        // Start near target: target - G * small_offset
-        // This creates a vicinity search around the target
-        let offset_point = Point {
-            x: [distance_offset, 0, 0, 0], // Simplified offset
-            y: [0, 0, 0, 0],
-            z: [1, 0, 0, 0],
-        };
-
-        // For wild kangaroos: alpha = distance_offset, beta = 1
-        // Start with zero alpha/beta, will be updated during stepping
-        let alpha = [distance_offset, 0, 0, 0]; // Distance traveled
-        let beta = [1, 0, 0, 0]; // Beta coefficient
-
-        Ok(KangarooState::new(
-            *target_point, // Start at target vicinity
-            distance_offset,
-            alpha,
-            beta,
-            false, // is_tame = false (wild)
-            rand::random::<u64>(), // Random ID
-        ))
-    }
-}
-
-/// Tame kangaroo generator starting from G
-pub struct TameKangarooGenerator {
-    attractor_offset: i64,
-}
-
-impl TameKangarooGenerator {
-    pub fn new(attractor_offset: i64) -> Self {
-        TameKangarooGenerator { attractor_offset }
+    /// Tame Start from G (Clean, No Multiplier)
+    /// Verbatim preset: No prime, clean from G (or low scalar*G for intervals).
+    pub fn initialize_tame_start(&self) -> Point {
+        self.curve.g.clone() // Our base Point::from_affine(Gx, Gy)
+        // For bounded: Add low_scalar * G if config.range_start >0, but preset clean.
     }
 
-    pub fn generate(&self, curve: &Secp256k1) -> Result<KangarooState> {
-        // Generate tame kangaroo starting from G + offset
-        // Use attractor offset to ensure different starting points
-        let offset_scalar = BigInt256::from_u64((self.attractor_offset as u64).wrapping_mul(0x100000000)); // Large offset
-        let start_position = curve.mul(&offset_scalar, &curve.g);
-
-        // For tame kangaroos: alpha = offset_scalar, beta = 1
-        // Start with proper alpha/beta for tame kangaroos
-        let alpha = offset_scalar.to_u64_array();
-        let beta = [1, 0, 0, 0]; // Beta coefficient
-
-        Ok(KangarooState::new(
-            start_position,
-            alpha[0], // Use lowest 64 bits as distance
-            alpha,
-            beta,
-            true, // is_tame = true
-            rand::random::<u64>(), // Random ID
-        ))
-    }
-
-
-    /// Generate tame kangaroos (shared across all targets)
-    pub fn generate_tame_batch(&self, total_count: usize) -> Vec<KangarooState> {
-        let mut tames = Vec::with_capacity(total_count);
-
-        for i in 0..total_count {
-            let offset = BigInt256::from_u64(i as u64 * 1000000); // Spaced tame starts
-            let curve = Secp256k1::new();
-            let start_position = curve.mul(&offset, &curve.g);
-
-            let alpha = offset.to_u64_array();
-            let beta = [1, 0, 0, 0]; // Beta coefficient
-
-            tames.push(KangarooState::new(
-                start_position,
-                alpha[0], // Use lowest 64 bits as distance
-                alpha,
-                beta,
-                true, // is_tame = true
-                i as u64,
-            ));
+    /// Bucket Selection for Jump Choice (Deterministic Tame, Mixed Wild)
+    /// Verbatim preset: Ensures tame reproducible, wild exploratory without traps.
+    pub fn select_bucket(&self, point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+        const WALK_BUCKETS: u32 = 32;
+        if is_tame {
+            step % WALK_BUCKETS // Deterministic → exact distance
+        } else {
+            // Convert point.x [u64; 4] to bytes for mixing
+            let mut x_bytes = [0u8; 32];
+            for i in 0..4 {
+                x_bytes[i*8..(i+1)*8].copy_from_slice(&point.x[i].to_le_bytes());
+            }
+            let x0 = u32::from_le_bytes(x_bytes[0..4].try_into().unwrap());
+            let x1 = u32::from_le_bytes(x_bytes[4..8].try_into().unwrap());
+            let dist_bytes = dist.to_bytes_le();
+            let dist0 = u32::from_le_bytes(dist_bytes[0..4].try_into().unwrap());
+            let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
+            mix % WALK_BUCKETS // XOR-mixed → avoids traps, ports to GPU bitwise
         }
-
-        tames
     }
 
-    /// Generate random BigInt256 modulo modulus
-    fn random_bigint_mod(&self, modulus: &BigInt256) -> BigInt256 {
-        // Simple random generation - in production use cryptographically secure randomness
-        let mut limbs = [0u64; 4];
-        for i in 0..4 {
-            limbs[i] = rand::random::<u64>();
-        }
-        BigInt256::from_u64_array(limbs) % &modulus
-    }
-
-
-    /// Generate tame kangaroos with config parameters
-    pub fn generate_tame_batch_config(&self, total_count: usize) -> Result<Vec<KangarooState>> {
-        let config = self.search_config.as_ref().ok_or_else(|| anyhow!("SearchConfig not set"))?;
-        let mut tames = Vec::with_capacity(total_count);
-
-        for i in 0..total_count {
-            // Space tame starts to cover search space
-            let offset = if config.is_bounded {
-                // For bounded searches, space evenly within range
-                let range_size = config.range_end.sub(&config.range_start);
-                let spacing = range_size.div(&BigInt256::from_u64(total_count as u64));
-                config.range_start.add(&spacing.mul(&BigInt256::from_u64(i as u64)))
-            } else {
-                // For unbounded searches, use large spacing
-                BigInt256::from_u64(i as u64 * 1000000000) // 10^9 spacing
-            };
-
-            let curve = Secp256k1::new();
-            let start_position = curve.mul(&offset, &curve.g);
-
-            let alpha = offset.to_u64_array();
-            let beta = [1, 0, 0, 0]; // Beta coefficient
-
-            tames.push(KangarooState::new(
-                start_position,
-                alpha[0], // Use lowest 64 bits as distance
-                alpha,
-                beta,
-                true, // is_tame = true
-                i as u64,
-            ));
-        }
-
-        tames
-    }
-
-    /// Generate random BigInt256 within a specified range [start, end)
-    fn random_bigint_in_range(&self, start: &BigInt256, end: &BigInt256) -> BigInt256 {
-        let range = end - start;
-        let random_offset = self.random_bigint_mod(&range);
-        start + random_offset
-    }
-
-    /// Select jump distance using config primes (for magic-9 bias)
-    pub fn select_config_jump(&self, point: &Point, config: &SearchConfig) -> BigInt256 {
-        // Use point coordinates to select pseudo-random prime from config
-        let hash_val = point.x[0] ^ point.y[0] ^ point.z[0];
-        let prime_idx = (hash_val as usize) % config.jump_primes.len();
-        BigInt256::from_u64(config.jump_primes[prime_idx])
-    }
-
-    /// Generate wild batch for multi-target with per-puzzle ranges
-    pub fn generate_wild_batch_multi_config(&self, targets: &Vec<(Point, u32)>, config: &SearchConfig) -> Result<Vec<TaggedKangarooState>> {
-        let mut batch = Vec::with_capacity(targets.len() * config.batch_per_target);
-        for (target, id) in targets {
-            let (start, end) = config.per_puzzle_ranges.as_ref()
-                .and_then(|r| r.get(id))
-                .cloned()
-                .unwrap_or((BigInt256::zero(), BigInt256::from_u64(1u64 << 40))); // Large but reasonable default
-            for _ in 0..config.batch_per_target {
-                let offset = self.random_bigint_in_range(&start, &end);
-                let offset_point = self.curve.mul(&offset, &self.curve.g);
-                let wild_point = self.curve.add(target, &offset_point.negate(&self.curve));
-                batch.push(TaggedKangarooState {
-                    point: wild_point,
+    /// Setup Kangaroos for Multi-Target with Precise Starts
+    /// Verbatim preset: Per-target wild primes, shared tame G.
+    pub fn setup_kangaroos_multi(&self, targets: &[Point], num_per_target: usize, config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        let mut wilds = Vec::with_capacity(targets.len() * num_per_target);
+        for (idx, target) in targets.iter().enumerate() {
+            for i in 0..num_per_target {
+                let point = self.initialize_wild_start(target, i);
+                let prime_idx = i % PRIME_MULTIPLIERS.len();
+                let initial_prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]); // For inv in solve
+                wilds.push(TaggedKangarooState {
+                    point,
                     distance: BigInt256::zero(),
-                    target_idx: *id,
-                    initial_offset: offset
+                    target_idx: idx as u32,
+                    initial_offset: initial_prime
                 });
             }
         }
-        Ok(batch)
+        let tames: Vec<_> = (0..wilds.len()).map(|_| {
+            let mut tame = KangarooState::new(Point::infinity(), 0, [0; 4], [0; 4], true, 0);
+            tame.position = self.initialize_tame_start();
+            tame.distance = 0; // u64 distance for tame kangaroos
+            tame
+        }).collect();
+        (wilds, tames)
     }
 }
