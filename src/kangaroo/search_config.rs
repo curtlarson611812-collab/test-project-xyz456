@@ -7,6 +7,7 @@
 
 use crate::math::bigint::BigInt256;
 use anyhow::Result;
+use std::collections::HashMap;
 
 /// Configuration for kangaroo search parameters
 #[derive(Clone, Debug)]
@@ -25,6 +26,8 @@ pub struct SearchConfig {
     pub range_start: BigInt256,
     /// End of search range (for bounded searches)
     pub range_end: BigInt256,
+    /// Per-puzzle ranges: puzzle_id -> (start, end) for bounded puzzle searches
+    pub per_puzzle_ranges: Option<HashMap<u32, (BigInt256, BigInt256)>>,
     /// Target name for logging and identification
     pub name: String,
 }
@@ -38,7 +41,8 @@ impl Default for SearchConfig {
             dp_bits: 20,             // ~1M average steps per DP
             is_bounded: false,       // Unbounded for general P2PK
             range_start: BigInt256::zero(),
-            range_end: BigInt256::max_value(),
+            range_end: BigInt256::from_u64(1u64 << 40), // Large but reasonable default
+            per_puzzle_ranges: None,
             name: "default".to_string(),
         }
     }
@@ -54,7 +58,8 @@ impl SearchConfig {
             dp_bits: 24,            // Fewer DPs for efficiency
             is_bounded: false,
             range_start: BigInt256::zero(),
-            range_end: BigInt256::max_value(),
+            range_end: BigInt256::from_u64(1u64 << 40), // Large but reasonable default
+            per_puzzle_ranges: None,
             name: "valuable_p2pk".to_string(),
         }
     }
@@ -69,6 +74,7 @@ impl SearchConfig {
             is_bounded: true,       // Test keys have known small ranges
             range_start: BigInt256::one(),
             range_end: BigInt256::from_u64(1u64 << 32), // Up to 32-bit for tests
+            per_puzzle_ranges: None,
             name: "test_puzzles".to_string(),
         }
     }
@@ -83,6 +89,7 @@ impl SearchConfig {
             is_bounded: true,       // Puzzles have defined ranges
             range_start: BigInt256::one().shl(65), // 2^65 for typical high puzzles
             range_end: BigInt256::one().shl(66).sub(&BigInt256::one()), // 2^66 - 1
+            per_puzzle_ranges: None,
             name: "unsolved_puzzles".to_string(),
         }
     }
@@ -90,25 +97,64 @@ impl SearchConfig {
     /// Create config for specific puzzle range
     pub fn for_puzzle_range(start_bit: u32, end_bit: u32) -> Self {
         let mut config = Self::for_unsolved_puzzles();
-        config.range_start = BigInt256::one().shl(start_bit);
-        config.range_end = BigInt256::one().shl(end_bit).sub(&BigInt256::one());
+        config.range_start = BigInt256::one() << start_bit;
+        config.range_end = (BigInt256::one() << end_bit) - BigInt256::one();
         config.name = format!("puzzle_{}_{}", start_bit, end_bit);
         config
+    }
+
+    /// Enable per-puzzle ranges configuration
+    pub fn with_per_puzzle_ranges(mut self) -> Self {
+        self.per_puzzle_ranges = Some(HashMap::new());
+        self
+    }
+
+    /// Add a specific puzzle range
+    pub fn add_puzzle_range(&mut self, puzzle_id: u32, bit_depth: u32) {
+        if let Some(ranges) = &mut self.per_puzzle_ranges {
+            let start = BigInt256::one() << (bit_depth - 1);
+            let end = (BigInt256::one() << bit_depth) - BigInt256::one();
+            ranges.insert(puzzle_id, (start, end));
+        }
+    }
+
+    /// Load default unsolved puzzle ranges (hardcoded from public data)
+    pub fn load_default_unsolved_ranges(&mut self) {
+        self.per_puzzle_ranges = Some(HashMap::new());
+        if let Some(ranges) = &mut self.per_puzzle_ranges {
+            // Add ranges for unsolved puzzles #66 to #160
+            for puzzle_id in 66..=160 {
+                let start = BigInt256::one() << (puzzle_id - 1);
+                let end = (BigInt256::one() << puzzle_id) - BigInt256::one();
+                ranges.insert(puzzle_id, (start, end));
+            }
+        }
     }
 
     /// Validate configuration parameters
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.batch_per_target == 0 {
-            return Err("batch_per_target must be > 0".to_string());
+            return Err(anyhow::anyhow!("batch_per_target must be > 0"));
         }
         if self.jump_primes.is_empty() {
-            return Err("jump_primes cannot be empty".to_string());
+            return Err(anyhow::anyhow!("jump_primes cannot be empty"));
         }
         if self.dp_bits == 0 || self.dp_bits > 32 {
-            return Err("dp_bits must be between 1 and 32".to_string());
+            return Err(anyhow::anyhow!("dp_bits must be between 1 and 32"));
         }
         if self.is_bounded && self.range_start >= self.range_end {
-            return Err("range_start must be < range_end for bounded searches".to_string());
+            return Err(anyhow::anyhow!("range_start must be < range_end for bounded searches"));
+        }
+        // Validate per-puzzle ranges if present
+        if let Some(ranges) = &self.per_puzzle_ranges {
+            for (puzzle_id, (start, end)) in ranges {
+                if start >= end {
+                    return Err(anyhow::anyhow!("puzzle {}: range_start must be < range_end", puzzle_id));
+                }
+                if *puzzle_id < 64 || *puzzle_id > 160 {
+                    return Err(anyhow::anyhow!("puzzle {}: id must be between 64 and 160", puzzle_id));
+                }
+            }
         }
         Ok(())
     }

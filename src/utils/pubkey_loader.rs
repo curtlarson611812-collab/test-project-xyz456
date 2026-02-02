@@ -12,6 +12,32 @@ use crate::math::bigint::BigInt256;
 use crate::math::secp::Secp256k1;
 use crate::kangaroo::SearchConfig;
 
+/// Preset Magic 9 filter function (verbatim from RS code, no adjustments)
+/// Filters keys based on hex ending, mod 9, and prime residue patterns
+fn is_magic9(key: &BigInt256, primes: &[u64]) -> bool {
+    let hex = key.to_hex();
+    if !hex.ends_with('9') {
+        return false;
+    }  // Preset hex end check
+
+    // Check key % 9 == 0
+    let nine = BigInt256::from_u64(9);
+    if !(key.clone() % nine).is_zero() {
+        return false;
+    }  // Preset mod 9 == 0
+
+    // Check prime residue bias: key % p == 9 % p for any prime p
+    for &p in primes {
+        let p_big = BigInt256::from_u64(p);
+        let key_mod_p = key.clone() % p_big;
+        let nine_mod_p = BigInt256::from_u64(9 % p);
+        if key_mod_p == nine_mod_p {
+            return true;
+        }  // Preset prime residue bias
+    }
+    false
+}
+
 /// Load pubkeys from file (supports uncompressed format: 04 + x + y)
 pub fn load_pubkeys_from_file(path: &str) -> io::Result<Vec<Point>> {
     let file = File::open(path)?;
@@ -230,7 +256,7 @@ pub fn load_all_puzzles_pubkeys() -> Vec<Point> {
 }
 
 /// Load test/solved puzzle pubkeys with optimized configuration for quick validation
-pub fn load_test_puzzle_keys() -> (Vec<Point>, SearchConfig) {
+pub fn load_test_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
     // Test pubkeys for solved puzzles (known private keys for validation)
     let test_hex = vec![
         // #1 (privkey = 1) - compressed pubkey
@@ -245,9 +271,9 @@ pub fn load_test_puzzle_keys() -> (Vec<Point>, SearchConfig) {
         "03A598A8030DA6D86C6BC7F2F5144EA549D28211EA58FAA70EBFB1ECB5C53FE0E6",
     ];
 
-    let points: Vec<Point> = test_hex.into_iter().filter_map(|hex| {
+    let points: Vec<(Point, u32)> = test_hex.into_iter().enumerate().filter_map(|(i, hex)| {
         match parse_compressed(hex.as_bytes()) {
-            Ok(point) => Some(point),
+            Ok(point) => Some((point, i as u32)), // Assign sequential IDs for test puzzles
             Err(_) => None,
         }
     }).collect();
@@ -259,31 +285,49 @@ pub fn load_test_puzzle_keys() -> (Vec<Point>, SearchConfig) {
 }
 
 /// Load unsolved puzzle pubkeys with configuration optimized for real solving
-pub fn load_unsolved_puzzle_keys() -> (Vec<Point>, SearchConfig) {
+/// Returns (points, puzzle_ids) tuples and config with per-puzzle ranges
+pub fn load_unsolved_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
     // Unsolved puzzle pubkeys that have been revealed (but not solved)
     // Note: These are compressed format pubkeys from puzzles where the pubkey was exposed
-    let unsolved_hex = vec![
-        // #66 (66-bit puzzle) - revealed pubkey
-        "02EE07BAA936B8FD3E5736B0474D2CF3DE231D0B17F3F76D4BA3CB4FE9FA52D600",
+    let unsolved = vec![
+        // (hex, puzzle_id)
+        ("02EE07BAA936B8FD3E5736B0474D2CF3DE231D0B17F3F76D4BA3CB4FE9FA52D600".to_string(), 66),
         // Additional unsolved puzzles would be added here as they become available
+        // ("02...", 67), etc.
     ];
 
-    let points: Vec<Point> = unsolved_hex.into_iter().filter_map(|hex| {
-        match parse_compressed(hex.as_bytes()) {
-            Ok(point) => Some(point),
-            Err(_) => None,
+    let mut points_with_ids = Vec::new();
+    for (hex, id) in unsolved {
+        if let Ok(point) = parse_compressed(hex.as_bytes()) {
+            // Apply magic 9 filter: use approx key estimate for filtering
+            let key_estimate = BigInt256::from_u64(1u64 << (id - 1));  // 2^(id-1) as proxy
+            let jump_primes = &[3u64, 5, 7, 11, 13, 17, 19, 23];  // Default primes for filter
+            if is_magic9(&key_estimate, jump_primes) {
+                points_with_ids.push((point, id));
+            }
         }
-    }).collect();
+    }
 
     let mut config = SearchConfig::for_unsolved_puzzles();
+    config.load_default_unsolved_ranges();  // Load per-puzzle ranges
     config.name = "unsolved_puzzles".to_string();
 
-    (points, config)
+    (points_with_ids, config)
 }
 
 /// Load valuable P2PK pubkeys from file with default configuration
+/// Sorts by magic 9 priority for sooner hits
 pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConfig)> {
-    let points = load_pubkeys_from_file(path)?;
+    let mut points = load_pubkeys_from_file(path)?;
+
+    // Sort by magic 9 priority: magic 9 keys first (lower sort key = higher priority)
+    let jump_primes = &[3u64, 5, 7, 11, 13, 17, 19, 23];  // Default primes for filter
+    points.sort_by_key(|p| {
+        // Use point x-coordinate as proxy for key filtering
+        let key_proxy = BigInt256::from_u64_array(p.x);  // x is [u64; 4] in little-endian limbs
+        if is_magic9(&key_proxy, jump_primes) { 0 } else { 1 }  // Priority: 0 for magic9, 1 for others
+    });
+
     let mut config = SearchConfig::for_valuable_p2pk();
     config.name = format!("valuable_p2pk_{}", path);
     Ok((points, config))

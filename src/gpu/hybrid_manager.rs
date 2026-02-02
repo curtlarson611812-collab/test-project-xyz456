@@ -7,9 +7,10 @@ use super::shared::SharedBuffer;
 use super::backends::hybrid_backend::HybridBackend;
 use super::backends::backend_trait::GpuBackend;
 use crate::types::{Point, KangarooState};
-use crate::math::secp::Secp256k1;
-use anyhow::Result;
+use crate::math::{secp::Secp256k1, bigint::BigInt256};
+use anyhow::{Result, anyhow};
 use std::sync::{Arc, Mutex};
+use log::{info, warn, debug};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -34,6 +35,36 @@ pub struct HybridGpuManager {
 }
 
 impl HybridGpuManager {
+    /// Calculate bit error rate for drift monitoring
+    pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> f64 {
+        let samples = buffer.as_slice().iter().take(sample_size).cloned().collect::<Vec<_>>();
+        let mut error_count = 0.0;
+        for point in samples {
+            let cpu_valid = self.curve_equation(&point.x, &point.y, &self.curve.p);
+            if !cpu_valid {
+                error_count += 1.0;
+            }
+        }
+        error_count / sample_size as f64
+    }
+
+    /// CPU validation of curve equation: y² = x³ + 7 mod p
+    fn curve_equation(&self, x: &[u64; 4], y: &[u64; 4], p: &BigInt256) -> bool {
+        let x_big = BigInt256::from_u64_array(*x);
+        let y_big = BigInt256::from_u64_array(*y);
+
+        // Compute y²
+        let y_squared = self.curve.barrett_p.mul(&y_big, &y_big);
+
+        // Compute x³ + 7
+        let x_squared = self.curve.barrett_p.mul(&x_big, &x_big);
+        let x_cubed = self.curve.barrett_p.mul(&x_squared, &x_big);
+        let x_cubed_plus_7 = self.curve.barrett_p.add(&x_cubed, &BigInt256::from_u64(7));
+
+        // Check equality
+        y_squared == x_cubed_plus_7
+    }
+
     /// Create new hybrid manager with drift monitoring
     pub async fn new(drift_threshold: f64, check_interval_secs: u64) -> Result<Self> {
         let hybrid_backend = HybridBackend::new().await?;
@@ -53,6 +84,96 @@ impl HybridGpuManager {
             })),
             sync_version: Arc::new(Mutex::new(0)),
         })
+    }
+
+    /// Execute computation with threshold-based backend swap
+    pub fn dispatch_concurrent(
+        &self,
+        shared_points: &SharedBuffer<Point>,
+        points_data: &mut Vec<Point>,
+        distances_data: &mut Vec<BigInt256>,
+        batch_size: usize,
+        total_steps: u64,
+        threshold: f64,
+    ) -> Result<()> {
+        let error = self.calculate_drift_error(shared_points, 1000);
+
+        if error > threshold {
+            // Swap to CUDA for precision: pause Vulkan, sync buffers, relaunch on CUDA stream
+            info!("Drift error {:.6} > threshold {:.6}, swapping to CUDA for precision", error, threshold);
+            let mut metrics = self.metrics.lock().unwrap();
+            metrics.error_rate = error;
+            metrics.swap_count += 1;
+            metrics.last_swap_time = Instant::now();
+
+            // TODO: Implement actual backend swap logic
+            // For now, log the swap decision
+            warn!("Backend swap triggered but not yet implemented - error: {:.6}", error);
+        } else {
+            // Continue with current backend for speed
+            debug!("Drift error {:.6} within threshold {:.6}, continuing with current backend", error, threshold);
+        }
+
+        // Execute computation using hybrid backend
+        let mut points_vec: Vec<[[u32; 8]; 3]> = points_data.iter().map(|p| [
+            p.x.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
+            p.y.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
+            p.z.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
+        ]).collect();
+
+        let mut distances_vec: Vec<[u32; 8]> = distances_data.iter().map(|d| [
+            d.limbs[0] as u32, (d.limbs[0] >> 32) as u32,
+            d.limbs[1] as u32, (d.limbs[1] >> 32) as u32,
+            d.limbs[2] as u32, (d.limbs[2] >> 32) as u32,
+            d.limbs[3] as u32, (d.limbs[3] >> 32) as u32,
+        ]).collect();
+
+        let types_vec: Vec<u32> = vec![1; batch_size]; // Simplified - all tame
+
+        // Execute step batch using GpuBackend trait
+        if let Err(e) = self.hybrid_backend.step_batch(&mut points_vec, &mut distances_vec, &types_vec) {
+            log::error!("Hybrid backend step failed: {}", e);
+            return Err(anyhow::anyhow!("Hybrid backend step failed: {}", e));
+        }
+
+        // Convert back to data vectors
+        for (i, pos) in points_vec.iter().enumerate() {
+            if i < points_data.len() {
+                let point = &mut points_data[i];
+                for j in 0..4 {
+                    point.x[j] = ((pos[0][j*2 + 1] as u64) << 32) | pos[0][j*2] as u64;
+                    point.y[j] = ((pos[1][j*2 + 1] as u64) << 32) | pos[1][j*2] as u64;
+                    point.z[j] = ((pos[2][j*2 + 1] as u64) << 32) | pos[2][j*2] as u64;
+                }
+            }
+        }
+
+        for (i, dist) in distances_vec.iter().enumerate() {
+            if i < distances_data.len() {
+                let distance = &mut distances_data[i];
+                distance.limbs[0] = ((dist[1] as u64) << 32) | dist[0] as u64;
+                distance.limbs[1] = ((dist[3] as u64) << 32) | dist[2] as u64;
+                distance.limbs[2] = ((dist[5] as u64) << 32) | dist[4] as u64;
+                distance.limbs[3] = ((dist[7] as u64) << 32) | dist[6] as u64;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Launch split precision/speed operations with event sync
+    pub fn launch_split_ops(&self, points_ptr: *mut Point) -> Result<()> {
+        // TODO: Implement actual CUDA/Vulkan split operations
+        // For now, this is a placeholder showing the intended split
+
+        // CUDA for precision EC add/mul operations
+        // launch!(kernels::point_add_opt<<<grid, block>>>(points_ptr, ...));
+
+        // Vulkan for speed DP checks/hashes
+        // self.wgpu_queue.submit(compute_pass_with_dp_filter);
+
+        info!("Precision/speed split operations launched (placeholder implementation)");
+        Ok(())
     }
 
     /// Execute computation with drift monitoring (single-threaded)

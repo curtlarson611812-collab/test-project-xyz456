@@ -32,7 +32,7 @@ pub struct KangarooManager {
     config: Config,
     search_config: SearchConfig,         // Search parameters for this manager
     targets: Vec<Target>,
-    multi_targets: Vec<Point>,           // Multi-target points for batch solving
+    multi_targets: Vec<(Point, u32)>,    // Multi-target points with puzzle IDs for batch solving
     wild_states: Vec<TaggedKangarooState>, // Tagged wild kangaroos per target
     tame_states: Vec<KangarooState>,     // Shared tame kangaroos
     dp_table: Arc<Mutex<DpTable>>,
@@ -132,8 +132,8 @@ impl KangarooManager {
         &self.search_config
     }
 
-    /// Get multi targets
-    pub fn multi_targets(&self) -> &[Point] {
+    /// Get multi targets with puzzle IDs
+    pub fn multi_targets(&self) -> &[(Point, u32)] {
         &self.multi_targets
     }
 
@@ -148,7 +148,7 @@ impl KangarooManager {
     }
 
     /// Create new KangarooManager for multi-target solving with search config
-    pub async fn new_multi_config(multi_targets: Vec<Point>, search_config: SearchConfig) -> Result<Self> {
+    pub async fn new_multi_config(multi_targets: Vec<(Point, u32)>, search_config: SearchConfig) -> Result<Self> {
         // Validate search config
         search_config.validate()?;
 
@@ -171,8 +171,8 @@ impl KangarooManager {
         let gpu_backend: Box<dyn GpuBackend> = Box::new(HybridBackend::new().await?);
 
         // Generate multi-target kangaroos with config
-        let wild_states = generator.generate_wild_batch_multi_config(&multi_targets)?;
-        let tame_states = generator.generate_tame_batch_config(wild_states.len())?;
+        let wild_states = generator.generate_wild_batch_multi_config(&multi_targets, &search_config)?;
+        let tame_states = generator.generate_tame_batch(wild_states.len());
 
         Ok(Self {
             config,
@@ -978,6 +978,18 @@ mod tests {
             for (i, wild_state) in self.wild_states.iter_mut().enumerate() {
                 wild_state.point = wild_points[i];
                 wild_state.distance = wild_distances[i];
+
+                // Per-puzzle range bound check
+                if let Some((_, end)) = self.search_config.per_puzzle_ranges.as_ref()
+                    .and_then(|r| r.get(&wild_state.target_idx)) {
+                    if wild_state.distance >= *end {
+                        // Reset kangaroo to initial state
+                        wild_state.distance = BigInt256::zero();
+                        wild_state.point = Point::infinity();  // Reset position
+                        warn!("Wild kangaroo {} for puzzle {} exceeded range, resetting",
+                              i, wild_state.target_idx);
+                    }
+                }
             }
         }
 

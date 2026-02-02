@@ -41,10 +41,12 @@ impl KangarooController {
         // Load valuable P2PK targets
         if let Some(path) = load_valuable {
             let (points, search_config) = load_valuable_p2pk_keys(&path)?;
-            let manager = KangarooManager::new_multi_config(config.clone(), points, search_config).await?;
+            // Convert to (Point, puzzle_id) tuples with ID 0 for P2PK
+            let targets_with_ids: Vec<(Point, u32)> = points.into_iter().map(|p| (p, 0)).collect();
+            let manager = KangarooManager::new_multi_config(targets_with_ids, search_config).await?;
             let stats = ManagerStats {
                 name: "valuable_p2pk".to_string(),
-                targets_loaded: manager.multi_targets.len(),
+                targets_loaded: manager.multi_targets().len(),
                 total_steps: 0,
                 solutions_found: 0,
                 active_time: std::time::Duration::ZERO,
@@ -55,10 +57,10 @@ impl KangarooController {
         // Load test puzzles
         if load_test {
             let (points, search_config) = load_test_puzzle_keys();
-            let manager = KangarooManager::new_multi_config(config.clone(), points, search_config).await?;
+            let manager = KangarooManager::new_multi_config(points, search_config).await?;
             let stats = ManagerStats {
                 name: "test_puzzles".to_string(),
-                targets_loaded: manager.multi_targets.len(),
+                targets_loaded: manager.multi_targets().len(),
                 total_steps: 0,
                 solutions_found: 0,
                 active_time: std::time::Duration::ZERO,
@@ -69,10 +71,10 @@ impl KangarooController {
         // Load unsolved puzzles
         if load_unsolved {
             let (points, search_config) = load_unsolved_puzzle_keys();
-            let manager = KangarooManager::new_multi_config(config.clone(), points, search_config).await?;
+            let manager = KangarooManager::new_multi_config(points, search_config).await?;
             let stats = ManagerStats {
                 name: "unsolved_puzzles".to_string(),
-                targets_loaded: manager.multi_targets.len(),
+                targets_loaded: manager.multi_targets().len(),
                 total_steps: 0,
                 solutions_found: 0,
                 active_time: std::time::Duration::ZERO,
