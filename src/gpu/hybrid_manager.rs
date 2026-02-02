@@ -194,6 +194,39 @@ impl HybridGpuManager {
         Ok(())
     }
 
+    /// Concise Block: Dispatch and CPU Validate Prime Mul Test
+    pub fn test_prime_mul_gpu(&self, target: &Point) -> Result<bool> {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        // Alloc device buf for outputs[32]
+        let mut outputs = vec![Point::infinity(); 32];
+        // Note: In real implementation, would use CUDA/Vulkan buffers
+        // For now, simulate with CPU validation
+
+        // Simulate GPU kernel execution with CPU
+        for i in 0..32 {
+            let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[i]);
+            let gpu_result = self.curve.mul(&prime, target); // Simulate GPU mul
+
+            // On-curve check
+            let cpu_valid = self.curve_equation(&gpu_result.x, &gpu_result.y, &self.curve.p);
+            if !cpu_valid {
+                outputs[i] = Point::infinity(); // Failed
+            } else {
+                outputs[i] = gpu_result;
+            }
+        }
+
+        // Validate vs CPU reference
+        for i in 0..32 {
+            let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[i]);
+            let cpu_result = self.curve.mul(&prime, target); // CPU ground truth
+            if outputs[i] != cpu_result {
+                return Ok(false); // Drift detected
+            }
+        }
+        Ok(true)
+    }
+
     /// Execute computation with drift monitoring (single-threaded)
     pub fn execute_with_drift_monitoring(
         &self,

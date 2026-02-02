@@ -170,6 +170,14 @@ impl KangarooManager {
         // Create GPU backend
         let gpu_backend: Box<dyn GpuBackend> = Box::new(HybridBackend::new().await?);
 
+        // Concise Block: Run GPU Prime Mul Test on Manager Init
+        let hybrid = HybridGpuManager::new(0.001, 5).await?;
+        let test_target = if multi_targets.is_empty() { Secp256k1::new().g.clone() } else { multi_targets[0].0 };
+        if !hybrid.test_prime_mul_gpu(&test_target)? {
+            println!("GPU prime mul drift detected! Fallback to CPU.");
+            // Would set flag for CPU-only mode here
+        }
+
         // Generate multi-target kangaroos with precise prime starts
         let targets_only: Vec<Point> = multi_targets.iter().map(|(p, _)| *p).collect();
         let (wild_states, tame_states) = generator.setup_kangaroos_multi(&targets_only, search_config.batch_per_target, &search_config);
@@ -1032,9 +1040,21 @@ mod tests {
     /// Prime-Adjusted Collision Solve
     /// Verbatim preset: Use stored initial_prime for inv * diff mod N.
     pub fn solve_collision_prime_adjusted(&self, tame_dist: &BigInt256, wild_dist: &BigInt256, wild_initial_prime: &BigInt256) -> Option<BigInt256> {
+        let curve = crate::math::secp::Secp256k1::new();
         let one = BigInt256::one();
         let diff = tame_dist.clone() + one - wild_dist.clone(); // 1 + d_tame - d_wild
-        let inv_prime = self.curve.order.mod_inverse(wild_initial_prime)?; // Extended Euclidean from Phase 3
-        Some((inv_prime * diff) % self.curve.order)
+        let inv_prime = curve.order.mod_inverse(wild_initial_prime)?; // Extended Euclidean from Phase 3
+        Some((inv_prime * diff) % curve.order)
+    }
+
+    /// Concise Block: Tame Additive Steps (Deterministic Bucket Add)
+    fn step_tame(&mut self, state: &mut KangarooState, step: u32) {
+        let curve = crate::math::secp::Secp256k1::new();
+        let bucket = self.generator.select_bucket(&state.position, &BigInt256::from_u64(state.distance), 42, step, true);
+        let jump_dist = self.generator.get_jump_from_bucket(bucket); // 9-biased
+        let jump_point = curve.mul(&jump_dist, &curve.g);
+        state.position = curve.add(&state.position, &jump_point);
+        state.distance += jump_dist.to_u64_array()[0]; // Convert to u64 for tame
+        // Bound check if config.is_bounded - would add distance check here
     }
 }

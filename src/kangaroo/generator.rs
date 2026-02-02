@@ -258,6 +258,17 @@ impl KangarooGenerator {
         // For bounded: Add low_scalar * G if config.range_start >0, but preset clean.
     }
 
+    /// Concise Block: Tame Start = range_start * G + G (Additive Base)
+    pub fn initialize_tame_start_bounded(&self, config: &SearchConfig) -> Point {
+        if config.is_bounded {
+            let offset = config.range_start.clone();
+            let base_point = self.curve.mul(&offset, &self.curve.g);
+            self.curve.add(&base_point, &self.curve.g) // Additive bias
+        } else {
+            self.curve.g.clone()
+        }
+    }
+
     /// Bucket Selection for Jump Choice (Deterministic Tame, Mixed Wild)
     /// Verbatim preset: Ensures tame reproducible, wild exploratory without traps.
     pub fn select_bucket(&self, point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
@@ -277,6 +288,14 @@ impl KangarooGenerator {
             let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
             mix % WALK_BUCKETS // XOR-mixed → avoids traps, ports to GPU bitwise
         }
+    }
+
+    /// Concise Block: Map Bucket to 9-Biased Jump
+    fn get_jump_from_bucket(&self, bucket: u32) -> BigInt256 {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        let prime = PRIME_MULTIPLIERS[bucket as usize % 32];
+        let biased = prime + (9 - (prime % 9)); // Adjust to mod9=0 for theory
+        BigInt256::from_u64(biased % (1u64 << 32)) // Keep small for speed
     }
 
     /// Setup Kangaroos for Multi-Target with Precise Starts

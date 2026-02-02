@@ -315,10 +315,22 @@ pub fn load_unsolved_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
     (points_with_ids, config)
 }
 
+/// Concise Block: Scan Valuable for Magic 9 Count
+fn count_magic9_in_list(points: &Vec<Point>) -> usize {
+    points.iter().filter(|p| {
+        let x_hex = BigInt256::from_u64_array(p.x).to_hex();
+        x_hex.ends_with('9') && (BigInt256::from_u64_array(p.x).clone() % BigInt256::from_u64(9)).is_zero() // Preset: end '9', mod9=0
+    }).count()
+}
+
 /// Load valuable P2PK pubkeys from file with default configuration
 /// Sorts by magic 9 priority for sooner hits
 pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConfig)> {
     let mut points = load_pubkeys_from_file(path)?;
+
+    // Count magic 9 patterns
+    let magic_count = count_magic9_in_list(&points);
+    println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
 
     // Sort by magic 9 priority: magic 9 keys first (lower sort key = higher priority)
     let jump_primes = &[3u64, 5, 7, 11, 13, 17, 19, 23];  // Default primes for filter
