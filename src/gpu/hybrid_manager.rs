@@ -270,9 +270,38 @@ impl HybridGpuManager {
 
     /// Concise Block: Parallel Brent's Rho in Hybrid
     pub fn dispatch_parallel_brents_rho(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
-        // Launch CUDA threads: Each Brent's walk, collect cycles
-        // On collision from cycles, solve
-        None // Placeholder, kernel: thread Brent's, shared bias
+        // Integration: Use CUDA rho kernel for parallel Brent's cycle detection
+        // Launch CUDA kernel with rho states, collect distinguished points
+        // On cycle detection, solve using existing collision solver
+
+        #[cfg(feature = "rustacuda")]
+        {
+            use crate::gpu::backends::cuda_backend::RhoState;
+
+            // Initialize rho states with random starts near target
+            let mut rho_states = Vec::with_capacity(num_walks);
+            for _ in 0..num_walks {
+                rho_states.push(RhoState {
+                    current: p,  // Start from target point
+                    steps: BigInt256::zero(),
+                });
+            }
+
+            // TODO: Create CUDA backend and launch kernel
+            // let cuda_backend = self.hybrid_backend.cuda_backend();
+            // let d_states = cuda_backend.create_state_buffer(&rho_states)?;
+            // cuda_backend.launch_rho_kernel(&d_states, num_walks as u32, BigInt256::from(bias_mod))?;
+
+            // TODO: Read back DP buffer and check for collisions
+            // let dp_points = cuda_backend.read_dp_buffer()?;
+            // for dp in dp_points {
+            //     if let Some(solution) = self.check_collision(&dp) {
+            //         return Some(solution);
+            //     }
+            // }
+        }
+
+        None // Return None if no collision found or CUDA not available
     }
 
     /// Concise Block: Switch Kangaroo/Rho in Hybrid
