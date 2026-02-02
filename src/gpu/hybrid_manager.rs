@@ -260,6 +260,14 @@ impl HybridGpuManager {
         Ok(())
     }
 
+    /// Concise Block: Parallel Rho Dispatch in Hybrid
+    pub fn dispatch_parallel_rho(&self, g: Point, p: Point, num_walks: usize) -> Option<BigInt256> {
+        // Launch CUDA walks: Each thread rho walk until DP, collect collisions
+        // Sim stub: For each walk, random start, f update until cycle or DP
+        // On collision X_i = X_j, solve k = (a_i - a_j) / (b_j - b_i) mod n
+        None // Placeholder, impl in kernel
+    }
+
     /// Concise Block: Bias Hybrid Swap on Attractor Rate
     pub fn get_attractor_rate(&self, points: &[Point]) -> f64 {
         let sample: Vec<Point> = points.iter().take(100).cloned().collect();

@@ -1233,6 +1233,13 @@ mod tests {
         solved == Some(BigInt256::one()) // k=1
     }
 
+    /// Concise Block: Target Quantum Vulnerable in Manager
+    pub fn target_quantum_vulnerable(&mut self, points: Vec<Point>) {
+        use crate::utils::pubkey_loader::is_quantum_vulnerable;
+        self.targets = points.iter().filter(|p| is_quantum_vulnerable(p)).cloned().collect();
+        // Narrow to exposed, run biased rho
+    }
+
     /// Test real pubkey #150 for attractor proxy
     pub fn test_puzzle_150_attractor(&mut self) -> Result<()> {
         // #150 pubkey hex: 02137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49

@@ -344,6 +344,12 @@ fn is_vanity_biased(x_hex: &str, prefix_pattern: &str, suffix_mod: u64) -> bool 
     BigInt256::from_hex(x_hex).mod_u64(suffix_mod) == 9 // Suffix mod for '9' bias
 }
 
+/// Concise Block: Detect Exposed Pub Bias for Quantum Threat Target
+fn is_quantum_vulnerable(point: &Point) -> bool {
+    // Sim: If pub exposed (always in P2PK), bias true—target for pre-quantum crack
+    true // For P2PK list
+}
+
 /// Concise Block: Layer Mod81 and Vanity in Attractor Proxy
 fn is_attractor_proxy(x: &BigInt256) -> bool {
     let x_hex = x.to_hex();

@@ -338,6 +338,24 @@ impl KangarooGenerator {
         self.select_bucket(point, dist, seed, step, is_tame) // Prior preset
     }
 
+    /// Concise Block: Rho Partition f from Preset Bucket
+    pub fn rho_partition_f(&self, point: &Point, dist: &BigInt256, seed: u32) -> u32 {
+        self.select_bucket(point, dist, seed, 0, false) // Use wild mixed for rho walk
+    }
+
+    /// Concise Block: Negation Map for Rho (Halve Space)
+    pub fn rho_negation_map(&self, point: &Point) -> Point {
+        let mut neg = point.clone();
+        neg.y = BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F).sub(&neg.y); // -y mod p, since (x,y) ~ (x,-y) on curve
+        neg
+    }
+
+    /// Concise Block: Bias Rho Partition to Vulnerable Mod
+    fn rho_partition_quantum_bias(&self, point: &Point, dist: &BigInt256, seed: u32, mod_bias: u64) -> u32 {
+        let bucket = self.rho_partition_f(point, dist, seed);
+        (bucket as u64 % mod_bias) as u32 // Bias mod for vulnerable class
+    }
+
     /// Setup Kangaroos for Multi-Target with Precise Starts
     /// Verbatim preset: Per-target wild primes, shared tame G.
     pub fn setup_kangaroos_multi(&self, targets: &[Point], num_per_target: usize, config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
