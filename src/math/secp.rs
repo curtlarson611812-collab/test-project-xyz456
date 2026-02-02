@@ -643,6 +643,14 @@ impl Secp256k1 {
         // Debug logging for decompression troubleshooting
         log::debug!("Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
 
+        // Pre-check if rhs is quadratic residue
+        let legendre_exp = self.barrett_p.sub(&self.p, &BigInt256::from_u64(1)).right_shift(1);
+        let legendre = self.pow_mod(&rhs, &legendre_exp, &self.p);
+        if legendre != BigInt256::one() {
+            log::warn!("Pre-check non-residue rhs: {}, x: {}", rhs.to_hex(), x.to_hex());
+            return None;
+        }
+
         // Compute modular square root
         let y_candidate = self.compute_modular_sqrt(&rhs)?;
 
@@ -683,30 +691,24 @@ impl Secp256k1 {
         // Legendre symbol (value/p) = value^((p-1)/2) mod p
         let legendre_exp = self.barrett_p.sub(&self.p, &BigInt256::from_u64(1)) >> 1;
         let legendre = self.pow_mod(value, &legendre_exp, &self.p);
-        log::debug!("Mod sqrt debug - value: {}, legendre_exp: {}, legendre: {}", value.to_hex(), legendre_exp.to_hex(), legendre.to_hex());
-
+        log::debug!("Sqrt debug - rhs: {}, legendre_exp: {}, legendre: {}", value.to_hex(), legendre_exp.to_hex(), legendre.to_hex());
         if legendre == BigInt256::zero() {
-            return Some(BigInt256::zero()); // value ≡ 0 mod p
-        } else if legendre != BigInt256::from_u64(1) {
-            log::warn!("Non-quadratic residue in sqrt: {} (legendre: {})", value.to_hex(), legendre.to_hex());
-            return None; // Not a quadratic residue
+            return Some(BigInt256::zero());
+        } else if legendre != BigInt256::one() {
+            log::warn!("Non-residue failure - rhs: {}, legendre: {}", value.to_hex(), legendre.to_hex());
+            return None;
         }
-
-        // For p ≡ 3 mod 4 (which secp256k1 satisfies), sqrt(x) = x^((p+1)/4) mod p
         let exp_num = self.barrett_p.add(&self.p, &BigInt256::from_u64(1));
-        let (exp, _) = exp_num.div_rem(&BigInt256::from_u64(4)); // (p+1)/4
+        let (exp, _) = exp_num.div_rem(&BigInt256::from_u64(4));
 
         let candidate = self.pow_mod(value, &exp, &self.p);
-
-        // Verify: candidate^2 ≡ value mod p (critical for correctness)
         let candidate_sq = self.barrett_p.mul(&candidate, &candidate);
         log::debug!("Candidate: {}, sq: {}", candidate.to_hex(), candidate_sq.to_hex());
         if candidate_sq == *value {
             Some(candidate)
         } else {
-            log::warn!("Sqrt verification fail: candidate_sq: {} != value: {} for rhs: {}",
-                       candidate_sq.to_hex(), value.to_hex(), value.to_hex());
-            None // Verification failed - indicates pow_mod precision issues
+            log::warn!("Sq verify fail - sq: {}, rhs: {}", candidate_sq.to_hex(), value.to_hex());
+            None
         }
     }
 

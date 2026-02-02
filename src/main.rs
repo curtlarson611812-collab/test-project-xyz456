@@ -205,9 +205,9 @@ fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>> {
 fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>> {
     // Hardcoded test puzzles with known solutions
     let test_hex = vec![
-        "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db",  // #64, privkey = 1
-        "02d5fddded9a209ba319c5c2da91692f9d89578a96a6b8ad5f5f02c8fc19ba0e",  // #65, privkey = 32
-        "02a9acc1e48c25ee6c04b8ba765e61b6d9d8e8a4ab6851aeeb3b79d9f10d8ca96",  // #66, privkey = 64
+        "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db", // #64, privkey = 1
+        "02d5fddded9a209ba319c5c2da91692f9d89578a96a6b8ad5f5f02c8fc19ba0e", // #65, privkey = 32
+        "02a9acc1e48c25ee6c04b8ba765e61b6d9d8e8a4ab6851aeeb3b79d9f10d8ca96", // #66, privkey = 64
     ];
 
     let mut points = Vec::new();

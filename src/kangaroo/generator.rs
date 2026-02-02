@@ -510,74 +510,53 @@ impl KangarooGenerator {
     /// Pollard's lambda algorithm for discrete logarithm in intervals
     /// Searches for k in [a, a+w] such that [k]G = Q
     /// Expected time O(√w) with tame/wild kangaroos
+    /// Pollard's lambda algorithm for discrete logarithm in intervals
+    /// Searches for k in [a, a+w] such that [k]G = Q
+    /// Expected time O(√w) with tame/wild kangaroos
     pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256) -> Option<BigInt256> {
-use std::collections::HashMap;
-use std::ops::Add;
-use crate::math::bigint::{BigInt256, BigInt512};
-use crate::types::Point;
+        use std::collections::HashMap;
+        use crate::math::bigint::{BigInt256, BigInt512};
+        use crate::types::Point;
 
-        // Helper function to determine if point should be stored (DP check)
+        let midpoint = curve.barrett_n.add(&a, &w.right_shift(1));
+        let mut tame = curve.mul_constant_time(&midpoint, g).ok()?;
+        let mut wild = q.clone();
+        let mut tame_dp: HashMap<[u64; 4], BigInt256> = HashMap::new();
+        let mut tame_steps = BigInt256::zero();
+        let mut wild_steps = BigInt256::zero();
+
+        // Helper functions
         let is_dp = |p: &Point| -> bool {
-            // Simple DP check: x mod 2^20 == 0 (adjust for your DP bits)
             let dp_bits = 20;
             let mask = (1u64 << dp_bits) - 1;
             (p.x[0] & mask) == 0
         };
 
-        // Helper function to compute jump: point + g_multiples[hash(point) % table_size]
-        let compute_jump = |p: &Point| -> Point {
-            // Simple hash for demo - use proper hash in production
-            let hash = p.x[0] % 1024; // table_size
-            // For demo, just add G - in production use precomputed multiples
-            self.curve.add(p, g)
+        let hash_point = |p: &Point| -> u64 {
+            p.x[0] % 1024 // Simple hash for demo
         };
 
-        // Tame kangaroo starts from midpoint of interval
-        let w_half = w.right_shift(1);
-        let midpoint = curve.barrett_n.add(&a, &w_half);
-        let mut tame = match curve.mul_constant_time(&midpoint, g) {
-            Ok(point) => point,
-            Err(_) => return None,
-        };
-        let mut tame_dp: HashMap<[u64; 4], BigInt256> = HashMap::new();
-        let mut tame_steps = BigInt256::zero();
-
-        // Wild kangaroo starts from target Q
-        let mut wild = q.clone();
-        let mut wild_steps = BigInt256::zero();
-
-        let mut iter_count = 0;
-        loop {
-            // Move tame kangaroo
-            tame = compute_jump(&tame);
+        let max_steps = 10000; // Demo limit
+        for _ in 0..max_steps {
+            // Move tame
+            tame = curve.add(&tame, &curve.g_multiples[hash_point(&tame) as usize % curve.g_multiples.len()]);
             tame_steps = curve.barrett_n.add(&tame_steps, &BigInt256::one());
-
-            // Store tame DP
             if is_dp(&tame) {
                 tame_dp.insert(tame.x, tame_steps.clone());
             }
 
-            // Move wild kangaroo
-            wild = compute_jump(&wild);
+            // Move wild
+            wild = curve.add(&wild, &curve.g_multiples[hash_point(&wild) as usize % curve.g_multiples.len()]);
             wild_steps = curve.barrett_n.add(&wild_steps, &BigInt256::one());
 
-            // Check for collision
+            // Check collision
             if let Some(t_steps) = tame_dp.get(&wild.x) {
-                // Found collision: k = midpoint + tame_steps - wild_steps
-                let neg_wild_steps = wild_steps.negate(&curve.barrett_n);
-                let diff = curve.barrett_n.add(&t_steps, &neg_wild_steps); // tame_steps - wild_steps
+                let neg_wild = wild_steps.negate(&curve.barrett_n);
+                let diff = curve.barrett_n.add(&t_steps, &neg_wild);
                 let k = curve.barrett_n.add(&midpoint, &diff);
-                match curve.barrett_n.reduce(&BigInt512::from_bigint256(&k)) {
-                    Ok(reduced_k) => return Some(reduced_k),
-                    Err(_) => return None,
-                }
-            }
-
-            // Prevent infinite loop in demo - add proper bounds in production
-            iter_count += 1;
-            if iter_count > 10000 {
-                return None;
+                return Some(curve.barrett_n.reduce(&BigInt512::from_bigint256(&k)).ok()?);
             }
         }
+        None
     }
 }
