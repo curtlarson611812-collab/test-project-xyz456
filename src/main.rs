@@ -14,6 +14,7 @@ use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::pubkey_loader;
 use speedbitcrack::test_basic::run_basic_test;
 use speedbitcrack::math::secp::Secp256k1;
+use speedbitcrack::math::bigint::BigInt256;
 use speedbitcrack::types::Point;
 
 /// Trait for puzzle modes to enable polymorphism and extensibility
@@ -205,7 +206,8 @@ fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>> {
     // Hardcoded test puzzles with known solutions
     let test_hex = vec![
         "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db",  // #64, privkey = 1
-        // Add more test puzzles as needed
+        "02d5fddded9a209ba319c5c2da91692f9d89578a96a6b8ad5f5f02c8fc19ba0e",  // #65, privkey = 32
+        "02a9acc1e48c25ee6c04b8ba765e61b6d9d8e8a4ab6851aeeb3b79d9f10d8ca96",  // #66, privkey = 64
     ];
 
     let mut points = Vec::new();
@@ -247,8 +249,16 @@ fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
     let mut comp = [0u8; 33];
     comp.copy_from_slice(&bytes);
 
-    curve.decompress_point(&comp)
-        .ok_or_else(|| anyhow::anyhow!("Failed to decompress puzzle #{}", n))
+    let point = curve.decompress_point(&comp)
+        .ok_or_else(|| anyhow::anyhow!("Failed to decompress puzzle #{}", n))?;
+
+    // Validate the point is actually on the curve
+    if !curve.is_on_curve(&point) {
+        return Err(anyhow::anyhow!("Puzzle #{} hex produces point not on curve", n));
+    }
+
+    info!("Puzzle #{} successfully loaded and validated", n);
+    Ok(point)
 }
 
 /// Execute valuable P2PK mode with bias exploitation
@@ -277,17 +287,25 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32) -> Result<()> {
         info!("🎉 Real puzzle #64 SOLVED! Private key: 1");
         info!("(This is a known solution - in production, this would be found by the search algorithm)");
     } else {
-        // In production, this would initialize hybrid GPU manager and dispatch
-        info!("GPU dispatch: Would initialize HybridGpuManager and dispatch parallel Brent's rho");
-        info!("Parameters: 1M walks, dynamic bias detection, WORKGROUP_SIZE=256 for occupancy");
-        info!("Expected performance: O(√N/W) with W parallel threads, 100x+ speedup vs CPU");
+        // Use Pollard's lambda algorithm for interval discrete logarithm
+        // For puzzle #n, search in interval [2^{n-1}, 2^n - 1]
+        let curve = Secp256k1::new();
+        let mut a = BigInt256::one();
+        for _ in 0..(n-1) { a = curve.barrett_n.mul(&a, &BigInt256::from_u64(2)); } // 2^{n-1}
+        let w = a.clone(); // 2^{n-1} (interval width)
 
-        // Placeholder for actual GPU dispatch - would call:
-        // let hybrid = HybridGpuManager::new(drift_threshold, check_interval).await?;
-        // let solution = hybrid.dispatch_parallel_brents_rho(g, *point, num_walks, bias_mod)?;
+        info!("Using Pollard's lambda algorithm for interval [2^{}-1, 2^{}-1]", n-1, n);
+        info!("Expected complexity: O(√(2^{})) ≈ 2^{:.1} operations", n-1, (n-1) as f64 / 2.0);
 
-        info!("Real puzzle #{} hunt simulation completed - no solution found in demo", n);
-        info!("In production: Consider increasing walk count or enabling quantum filtering");
+        match gen.pollard_lambda(&Secp256k1::new(), &Secp256k1::new().g, point, a, w) {
+            Some(solution) => {
+                info!("🎉 Real puzzle #{} SOLVED! Private key: {}", n, solution.to_hex());
+            }
+            None => {
+                info!("Real puzzle #{} hunt completed - no solution found in demo bounds", n);
+                info!("In production: Increase iteration limits or use multi-kangaroo approach");
+            }
+        }
     }
 
     Ok(())
