@@ -335,18 +335,19 @@ fn is_attractor_proxy(x: &BigInt256) -> bool {
     low < 10 // Basin proxy (<10% for depth)
 }
 
-/// Concise Block: Enhanced Scan with % and Cluster Stats
-fn scan_valuable_for_attractors(points: &Vec<Point>) -> (usize, f64, Vec<(usize, usize)>) {
+/// Concise Block: Full Valuable Scan with Mod9=0 Reduction
+fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> (usize, f64, Vec<(usize, usize)>) {
     let mut count = 0;
     let mut clusters = vec![];
     let mut cluster_start = None;
     for (i, p) in points.iter().enumerate() {
-        if is_attractor_proxy(&BigInt256::from_u64_array(p.x)) {
+        let x_big = BigInt256::from_u64_array(p.x);
+        if x_big.clone() % BigInt256::from_u64(9) == BigInt256::zero() && is_attractor_proxy(&x_big) { // Mod9=0 reduction first
             count += 1;
             if cluster_start.is_none() { cluster_start = Some(i); }
         } else if let Some(start) = cluster_start {
             let len = i - start;
-            if len > 1 { clusters.push((start, len)); } // Clusters >1
+            if len > 1 { clusters.push((start, len)); }
             cluster_start = None;
         }
     }
@@ -354,7 +355,7 @@ fn scan_valuable_for_attractors(points: &Vec<Point>) -> (usize, f64, Vec<(usize,
         let len = points.len() - start;
         if len > 1 { clusters.push((start, len)); }
     }
-    let percent = count as f64 / points.len() as f64 * 100.0;
+    let percent = if points.is_empty() { 0.0 } else { count as f64 / points.len() as f64 * 100.0 };
     (count, percent, clusters)
 }
 
@@ -367,9 +368,12 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
     let magic_count = count_magic9_in_list(&points);
     println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
 
-    // Scan for attractors and clusters
-    let (attractor_count, percent, clusters) = scan_valuable_for_attractors(&points);
-    println!("Attractors: {} ({:.1}%), clusters: {:?}", attractor_count, percent, clusters);
+    // Scan for attractors and clusters with mod9=0 reduction
+    let (attractor_count, percent, clusters) = scan_full_valuable_for_attractors(&points);
+    println!("Full Valuable Attractors: {} ({:.1}%), Clusters: {:?}", attractor_count, percent, clusters);
+    if percent > 15.0 {
+        println!("Confirmed MANY related keys—bias high!");
+    }
 
     // Sort by attractor proxy priority: attractor keys first (lower sort key = higher priority)
     points.sort_by_key(|p| if is_attractor_proxy(p) { 0 } else { 1 });

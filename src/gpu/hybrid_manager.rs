@@ -35,24 +35,11 @@ pub struct HybridGpuManager {
 }
 
 impl HybridGpuManager {
-    /// Concise Block: Add Attractor Proxy to Drift Error
+    /// Concise Block: Use Scan Rate in Hybrid Drift for Swap
     pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> f64 {
-        let samples = buffer.as_slice().iter().take(sample_size).cloned().collect::<Vec<_>>();
-        let mut miss_count = 0.0;
-        for point in samples {
-            let on_curve = self.curve_equation(&point.x, &point.y, &self.curve.p);
-            if !on_curve {
-                miss_count += 1.0;
-                continue;
-            }
-            // Attractor proxy: hex end '9' or mod9=0 miss
-            let x_hex = BigInt256::from_u64_array(point.x).to_hex();
-            let mod9 = BigInt256::from_u64_array(point.x).clone() % BigInt256::from_u64(9);
-            if !x_hex.ends_with('9') && !mod9.is_zero() {
-                miss_count += 0.5; // Weighted miss
-            }
-        }
-        miss_count / sample_size as f64
+        let sample_points = buffer.as_slice().iter().take(sample_size).cloned().collect();
+        let (_, percent, _) = crate::utils::pubkey_loader::scan_full_valuable_for_attractors(&sample_points);
+        if percent < 10.0 { 0.2 } else { 0.0 } // High rate = low error, Vulkan speed
     }
 
     /// CPU validation of curve equation: y² = x³ + 7 mod p

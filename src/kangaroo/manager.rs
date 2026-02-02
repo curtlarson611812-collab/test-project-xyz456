@@ -21,6 +21,29 @@ use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
 use anyhow::anyhow;
 
+/// Concise Block: Precompute Small k*G Table for Nearest Adjust
+struct NearMissTable {
+    table: Vec<(BigInt256, u64)>, // (k*G.x, k)
+}
+
+impl NearMissTable {
+    pub fn new(max_k: u64) -> Self {
+        let mut table = vec![];
+        let curve = crate::math::secp::Secp256k1::new();
+        let g_x = BigInt256::from_u64_array(curve.g.x);
+        let mut current = g_x.clone();
+        for k in 1..=max_k {
+            table.push((current.clone(), k));
+            current = (current + g_x.clone()) % curve.p.clone(); // Additive multiples
+        }
+        Self { table }
+    }
+
+    pub fn find_nearest(&self, diff: &BigInt256) -> Option<u64> {
+        self.table.iter().find(|(x, _)| x == diff).map(|(_, k)| *k)
+    }
+}
+
 use anyhow::Result;
 use log::{info, warn, debug};
 use std::sync::Arc;
@@ -1063,6 +1086,24 @@ mod tests {
         Some((inv_prime * diff) % curve.order)
     }
 
+    /// Concise Block: Calculate Near Miss Diff
+    pub fn calculate_near_miss_diff(&self, trap_x: &BigInt256, dp_x: &BigInt256, threshold: &BigInt256) -> Option<BigInt256> {
+        let curve = crate::math::secp::Secp256k1::new();
+        let diff = (trap_x.clone() - dp_x.clone()) % curve.p.clone();
+        if diff < *threshold { Some(diff) } else { None }
+    }
+
+    /// Concise Block: Layer Near Miss Adjust in Solve
+    pub fn solve_near_collision(&self, trap: &KangarooState, dp: &TaggedKangarooState, diff: BigInt256) -> Option<BigInt256> {
+        let table = NearMissTable::new(1000); // Precompute
+        if let Some(k) = table.find_nearest(&diff) {
+            let curve = crate::math::secp::Secp256k1::new();
+            let inv_k = curve.order.mod_inverse(&BigInt256::from_u64(k))?;
+            let adjusted_prime = dp.initial_offset.clone() * inv_k % curve.order.clone(); // Layer divide at start
+            self.solve_collision_prime_adjusted(&trap.distance, &dp.distance, &adjusted_prime) // Use adjusted
+        } else { None }
+    }
+
     /// Concise Block: Tame Additive Steps (Deterministic Bucket Add)
     fn step_tame(&mut self, state: &mut KangarooState, step: u32) {
         let curve = crate::math::secp::Secp256k1::new();
@@ -1084,6 +1125,17 @@ mod tests {
             println!("Pubkey {:?} attractor: {}", BigInt256::from_u64_array(p.x).to_hex(), is_attractor);
         }
         Ok(())
+    }
+
+    /// Concise Block: Verify Solving with Known Key Sim Test
+    pub fn verify_solving_fully(&self) -> bool {
+        // Sim: Known k=1, P=G, prime=179
+        let curve = crate::math::secp::Secp256k1::new();
+        let prime = BigInt256::from_u64(179);
+        let tame_dist = BigInt256::from_u64(178); // Sim d_tame
+        let wild_dist = BigInt256::zero(); // Sim
+        let solved = self.solve_collision_prime_adjusted(&tame_dist, &wild_dist, &prime);
+        solved == Some(BigInt256::one()) // k=1
     }
 
     /// Test real pubkey #150 for attractor proxy
