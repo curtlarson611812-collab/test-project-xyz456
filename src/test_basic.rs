@@ -6,9 +6,10 @@ use crate::math::{secp::Secp256k1, bigint::{BigInt256, BigInt512, BarrettReducer
 pub fn run_basic_test() {
     println!("Testing basic SpeedBitCrackV3 functionality...");
 
-    // Test loading test puzzles
+    // Test loading test puzzles with robust error handling
     println!("Loading test puzzles...");
-    let (points, _config) = load_test_puzzle_keys();
+    let curve = Secp256k1::new();
+    let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve);
     println!("Loaded {} test puzzles", points.len());
 
     // Debug: Test hex decoding
@@ -56,4 +57,68 @@ pub fn run_basic_test() {
     println!("Hex parsing test passed!");
 
     println!("Basic functionality test completed successfully!");
+}
+
+/// Load test puzzles from file with robust error handling
+fn load_test_puzzles(file_path: &str, curve: &Secp256k1) -> Vec<crate::types::Point> {
+    use std::fs::File;
+    use std::io::{self, BufRead};
+
+    let mut puzzles = Vec::new();
+    let file = match File::open(file_path) {
+        Ok(f) => f,
+        Err(e) => {
+            println!("Warning: Could not open {}: {}", file_path, e);
+            return puzzles;
+        }
+    };
+
+    let reader = io::BufReader::new(file);
+    for (line_num, line_result) in reader.lines().enumerate() {
+        let line = match line_result {
+            Ok(l) => l,
+            Err(e) => {
+                println!("Warning: Error reading line {}: {}", line_num + 1, e);
+                continue;
+            }
+        };
+
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue; // Skip blank lines and comments
+        }
+
+        match crate::utils::pubkey_loader::parse_compressed(&line) {
+            Ok(x) => {
+                // Convert hex back to compressed bytes for decompression
+                let bytes = match hex::decode(&line) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        println!("Warning: Failed to decode hex on line {}: {}", line_num + 1, e);
+                        continue;
+                    }
+                };
+
+                if bytes.len() != 33 {
+                    println!("Warning: Invalid length {} on line {}", bytes.len(), line_num + 1);
+                    continue;
+                }
+
+                let mut compressed = [0u8; 33];
+                compressed.copy_from_slice(&bytes);
+
+                if let Some(point) = curve.decompress_point(&compressed) {
+                    puzzles.push(point);
+                } else {
+                    println!("Warning: Failed to decompress point on line {}", line_num + 1);
+                }
+            }
+            Err(e) => {
+                println!("Warning: Failed to parse compressed key on line {}: {}", line_num + 1, e);
+            }
+        }
+    }
+
+    println!("Successfully loaded {} puzzles from {}", puzzles.len(), file_path);
+    puzzles
 }

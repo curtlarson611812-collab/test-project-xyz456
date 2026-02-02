@@ -616,24 +616,19 @@ impl Secp256k1 {
 
     /// Decompress public key from 33 bytes
     pub fn decompress_point(&self, compressed: &[u8; 33]) -> Option<Point> {
-        info!("DEBUG: Starting decompress for compressed pubkey");
-
         if compressed[0] != 0x02 && compressed[0] != 0x03 {
-            info!("DEBUG: Invalid compressed pubkey format");
+            log::warn!("Invalid compressed format: {:?}", compressed[0]);
             return None; // Invalid format
         }
 
         // Extract x coordinate from bytes 1-32 (big-endian)
         let mut x_bytes = [0u8; 32];
         x_bytes.copy_from_slice(&compressed[1..33]);
-
-        // Convert to BigInt256 (assuming BigInt256 has from_bytes_be method)
         let x = BigInt256::from_bytes_be(&x_bytes);
-        info!("DEBUG: Extracted x coordinate");
 
         // Check if x is valid (x < p)
         if x >= self.p {
-            info!("DEBUG: x coordinate >= p, invalid");
+            log::warn!("x >= p: {}", x.to_hex());
             return None;
         }
 
@@ -643,29 +638,34 @@ impl Secp256k1 {
         let ax = self.barrett_p.mul(&self.a, &x);
         let ax_plus_b = self.barrett_p.add(&ax, &self.b);
         let rhs = self.barrett_p.add(&x_cubed, &ax_plus_b);
-        info!("DEBUG: Computed rhs (y^2 value)");
 
         // Compute modular square root
         let y_candidate = self.compute_modular_sqrt(&rhs)?;
-        info!("DEBUG: Computed modular square root");
 
         // Check parity: compressed[0] == 0x03 means odd y, 0x02 means even y
         let required_parity = compressed[0] == 0x03;
-        let y_candidate_limbs = y_candidate.to_u64_array();
-        let y_parity = (y_candidate_limbs[0] & 1) == 1;
+        let y_parity = (y_candidate.limbs[0] & 1) == 1;
 
         let y = if y_parity == required_parity {
-            BigInt256 { limbs: y_candidate_limbs }
+            y_candidate
         } else {
             // Use the other square root: p - y
-            self.barrett_p.sub(&self.p, &BigInt256 { limbs: y_candidate_limbs })
+            self.barrett_p.sub(&self.p, &y_candidate)
         };
 
-        Some(Point {
+        let point = Point {
             x: x.to_u64_array(),
             y: y.to_u64_array(),
             z: [1, 0, 0, 0], // Z=1 for affine
-        })
+        };
+
+        // Final validation: check if point is actually on curve
+        if !self.is_on_curve(&point) {
+            log::warn!("Decompressed point not on curve for x: {}", x.to_hex());
+            return None;
+        }
+
+        Some(point)
     }
 
     /// Compute modular square root using Tonelli-Shanks algorithm
@@ -675,7 +675,7 @@ impl Secp256k1 {
             return Some(BigInt256::zero());
         }
 
-        // First, check if value is a quadratic residue using Legendre symbol (specs require)
+        // First, check if value is a quadratic residue using Legendre symbol
         // Legendre symbol (value/p) = value^((p-1)/2) mod p
         let legendre_exp = self.barrett_p.sub(&self.p, &BigInt256::from_u64(1)) >> 1;
         let legendre = self.pow_mod(value, &legendre_exp, &self.p);
@@ -683,6 +683,7 @@ impl Secp256k1 {
         if legendre == BigInt256::zero() {
             return Some(BigInt256::zero()); // value ≡ 0 mod p
         } else if legendre != BigInt256::from_u64(1) {
+            log::warn!("Non-quadratic residue in sqrt: {}", value.to_hex());
             return None; // Not a quadratic residue
         }
 
@@ -692,12 +693,13 @@ impl Secp256k1 {
 
         let candidate = self.pow_mod(value, &exp, &self.p);
 
-        // Verify: candidate^2 ≡ value mod p
+        // Verify: candidate^2 ≡ value mod p (critical for correctness)
         let candidate_sq = self.barrett_p.mul(&candidate, &candidate);
         if candidate_sq == *value {
             Some(candidate)
         } else {
-            None // No square root exists
+            log::warn!("Sqrt verification fail: sq != value for {}", value.to_hex());
+            None // Verification failed - indicates pow_mod precision issues
         }
     }
 

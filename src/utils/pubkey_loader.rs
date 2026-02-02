@@ -98,7 +98,21 @@ fn parse_uncompressed(bytes: &[u8]) -> io::Result<Point> {
 }
 
 /// Parse compressed pubkey and decompress (02/03 + x)
-fn parse_compressed(bytes: &[u8]) -> io::Result<Point> {
+/// Parse compressed pubkey from hex string with robust error handling
+pub fn parse_compressed(hex_str: &str) -> Result<BigInt256, Box<dyn std::error::Error>> {
+    let cleaned = hex_str.trim().trim_start_matches("0x");  // Handle prefixed/spaced input
+    if cleaned.is_empty() {
+        return Err("Blank address string".into());  // Explicit error for blank addresses
+    }
+    let bytes = decode(cleaned).map_err(|e| format!("Hex decode fail: {}", e))?;
+    if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
+        return Err("Invalid compressed pubkey length/format".into());
+    }
+    let x_bytes: [u8; 32] = bytes[1..33].try_into().expect("Invalid x length");
+    Ok(BigInt256::from_bytes_be(&x_bytes))
+}
+
+fn parse_compressed_bytes(bytes: &[u8]) -> io::Result<Point> {
     if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid compressed format"));
     }
