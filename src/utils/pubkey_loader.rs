@@ -9,7 +9,7 @@ use std::ops::{Add, Sub};
 use std::collections::HashMap;
 use hex::decode;
 use crate::types::Point;
-use crate::math::bigint::BigInt256;
+use crate::math::bigint::{BigInt256, BigInt512};
 use crate::math::secp::Secp256k1;
 use crate::kangaroo::SearchConfig;
 
@@ -181,9 +181,10 @@ fn mod_pow(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 
 
 /// Modular multiplication: a * b mod modulus
 fn mod_mul(a: &BigInt256, b: &BigInt256, modulus: &BigInt256) -> BigInt256 {
-    // Simple implementation - could use Barrett reduction from Phase 3
-    let curve = Secp256k1::new();
-    curve.barrett_p.reduce(&curve.barrett_p.mul(a, b))
+    // Use Barrett reduction from Phase 3
+    let curve = crate::math::secp::Secp256k1::new();
+    let prod = curve.barrett_p.mul(a, b);
+    curve.barrett_p.reduce(&BigInt512::from_bigint256(&prod)).expect("Barrett reduction should not fail")
 }
 
 /// Full Tonelli-Shanks algorithm for modular square root

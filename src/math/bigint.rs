@@ -163,6 +163,11 @@ impl BigInt512 {
         BigInt512 { limbs: [x, 0, 0, 0, 0, 0, 0, 0] }
     }
 
+    /// Check if zero
+    pub fn is_zero(&self) -> bool {
+        self.limbs == [0; 8]
+    }
+
     /// Create one
     pub fn one() -> Self {
         BigInt512 { limbs: [1, 0, 0, 0, 0, 0, 0, 0] }
@@ -517,78 +522,70 @@ pub struct BarrettReducer {
     /// Modulus
     modulus: BigInt256,
     /// Precomputed mu = floor(2^(512) / modulus)
-    mu: BigInt256,
-    /// Bit length of modulus
+    mu: BigInt512,
+    /// Bit length of modulus / 64
     k: usize,
 }
 
 impl BarrettReducer {
     /// Create new Barrett reducer for given modulus
-    /// Precomputes mu = floor(2^(2*k) / modulus) for Barrett reduction
+    /// Precomputes mu = floor(2^(512) / modulus) for Barrett reduction
     pub fn new(modulus: &BigInt256) -> Result<Self, Box<dyn Error>> {
         if modulus.is_zero() {
             return Err("Modulus cannot be zero".into());
         }
-        let k = 4; // Fixed for BigInt256 (256 bits / 64 bits per limb)
-        // Compute mu = floor(2^(2*k*64) / modulus) = floor(2^512 / modulus)
-        // Since 2^512 is too large for BigInt512, we use the identity:
-        // floor(2^512 / m) = floor( (2^256)^2 / m ) = floor( (2^256 * 2^256) / m )
-        // We compute this using existing BigInt256 operations
-        let two_to_256 = BigInt256::from_u64(1) << 256; // This will overflow, but we handle it
-        // For Barrett, we can use: mu = floor( (2^256)^2 / m ) = floor( 2^512 / m )
-        // But since we can't compute 2^512 directly, we use the approximation method
-        let modulus_512 = BigInt512::from_bigint256(modulus);
-        // Use the fact that 2^512 div m = (2^512 - m + 1) div m, but better to use existing div
-        // For now, use a simplified approach that works for our use case
-        let two_to_512_approx = BigInt512 { limbs: [0, 0, 0, 0, 0, 0, 0, 1] }; // 2^512 represented as BigInt512 max
-        let (mu, _) = two_to_512_approx.div_rem(&modulus_512);
+        let k = 4; // 256 bits / 64 bits per limb
+        // Compute mu = floor(2^512 / modulus)
+        let m_512 = BigInt512::from_bigint256(modulus);
+        // Since BigInt512 represents 0-511 bits, we use (2^512 - 1) / m + 1 if remainder > 0
+        let max_512 = BigInt512 { limbs: [u64::MAX; 8] }; // 2^512 - 1
+        let (mu_256, rem) = max_512.div_rem(&m_512);
+        let mut mu = BigInt512::from_bigint256(&mu_256);
+        if !rem.is_zero() {
+            mu = mu.add(BigInt512::one()); // Ceiling adjustment
+        }
 
         Ok(BarrettReducer { modulus: modulus.clone(), mu, k })
     }
 
     /// Barrett modular reduction: x mod modulus
-    /// Simplified implementation using existing division for correctness
-    pub fn reduce(&self, x: &BigInt256) -> BigInt256 {
-        // For now, fall back to regular division but document this is not true Barrett
-        // TODO: Implement full Barrett with proper 512-bit arithmetic
-        if *x < self.modulus {
-            return x.clone();
+    /// Implements the full Barrett algorithm: q = floor((x >> (b-1)) * μ >> (b+1)), r = x - q*m
+    pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
+        if x.bits() > 512 {
+            return Err("Input exceeds 512 bits".into());
         }
-        let x_512 = BigInt512::from_bigint256(x);
-        let modulus_512 = BigInt512::from_bigint256(&self.modulus);
-        let (_quotient, remainder) = x_512.div_rem(&modulus_512);
-        remainder.to_bigint256()
+        let b = self.k * 64; // 256
+        let q1 = x.shr(b - 1); // high(x, b-1 bits)
+        let q2 = q1.mul(self.mu.clone()); // high * mu (512 bits)
+        let q3 = q2.shr(b + 1); // q_hat
+        let m_512 = BigInt512::from_bigint256(&self.modulus);
+        let q_m = q3.mul(m_512.clone()); // q_hat * m (512 bits)
+        let mut r = x.sub(&q_m);
+        let mut count = 0;
+        while r >= m_512 && count < 3 { // Max 3 for <4m bound
+            r = r.sub(m_512.clone());
+            count += 1;
+        }
+        if count == 3 { log::warn!("Barrett max adjust—input large?"); }
+        Ok(r.to_bigint256())
     }
 
     /// Barrett modular addition
     pub fn add(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        let sum = a.clone() + b.clone();
-        if sum >= self.modulus {
-            sum - self.modulus.clone()
-        } else {
-            sum
-        }
+        let sum_512 = BigInt512::from_bigint256(a).add(BigInt512::from_bigint256(b));
+        self.reduce(&sum_512).unwrap_or_else(|_| BigInt256::zero())
     }
 
     /// Barrett modular subtraction
     pub fn sub(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        if *a >= *b {
-            a.clone() - b.clone()
-        } else {
-            self.modulus.clone() - (b.clone() - a.clone())
-        }
+        let diff = if *a >= *b { a.clone() - b.clone() } else { self.modulus.clone() + a.clone() - b.clone() };
+        diff // Small, no need reduce
     }
 
     /// Barrett modular multiplication: (a * b) mod modulus
-    /// Uses Barrett reduction on the full product
     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
-
-        // Compute full product (truncated to 256 bits, but that's the limitation)
-        let product = a.clone() * b.clone();
-
-        // Apply Barrett reduction
-        self.reduce(&product)
+        let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
+        self.reduce(&prod).expect("Mul reduce fail")
     }
 }
 
@@ -839,8 +836,7 @@ impl BigInt256 {
     /// Modular multiplication using Barrett reduction
     pub fn mod_mul(a: &BigInt256, b: &BigInt256, modulus: &BigInt256) -> BigInt256 {
         let reducer = BarrettReducer::new(modulus).expect("Valid modulus");
-        let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
-        reducer.reduce(&prod.to_bigint256())
+        reducer.mul(a, b)
     }
 
 /// Extended Euclidean algorithm for u128

@@ -512,7 +512,7 @@ impl Secp256k1 {
         }
 
         // Security: Ensure constant-time execution by normalizing inputs
-        let a_reduced = self.barrett_p.reduce(a);
+        let a_reduced = self.barrett_p.reduce(&BigInt512::from_bigint256(a)).expect("Barrett reduction should not fail");
         let modulus_reduced = modulus; // Assume modulus is already valid
 
         let mut old_r = modulus_reduced.clone();
@@ -549,7 +549,7 @@ impl Secp256k1 {
         let mut bytes = [0u8; 32];
         OsRng.fill_bytes(&mut bytes);
         let mut scalar = BigInt256::from_bytes_be(&bytes);
-        scalar = self.barrett_n.reduce(&scalar);
+        scalar = self.barrett_n.reduce(&BigInt512::from_bigint256(&scalar)).expect("Barrett reduction should not fail");
         if scalar.is_zero() { scalar = BigInt256::from_u64(1); }
         scalar
     }
