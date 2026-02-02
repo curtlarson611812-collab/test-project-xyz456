@@ -42,35 +42,6 @@ fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where
     (tortoise, mu, lam)
 }
 
-/// Concise Block: Brent's Cycle Detection for Rho Walks
-fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where F: Fn(&BigInt256) -> BigInt256 { // (start point, μ, λ)
-    let mut tortoise = x0.clone();
-    let mut hare = f(&tortoise);
-    let mut power = 1u64;
-    let mut lam = 1u64;
-    while !tortoise.eq(&hare) {
-        if power == lam {
-            tortoise = hare.clone();
-            power *= 2;
-            lam = 0;
-        }
-        hare = f(&hare);
-        lam += 1;
-    }
-    let mut mu = 0u64;
-    tortoise = x0.clone();
-    hare = x0.clone();
-    for _ in 0..lam {
-        hare = f(&hare);
-    }
-    while !tortoise.eq(&hare) {
-        tortoise = f(&tortoise);
-        hare = f(&hare);
-        mu += 1;
-    }
-    (tortoise, mu, lam)
-}
-
 // Sacred Magic 9 primes — must be default in config, only expanded via flag
 const MAGIC9_PRIMES: [u64; 32] = [
     179, 257, 281, 349, 379, 419, 457, 499,
@@ -463,17 +434,6 @@ impl KangarooGenerator {
         (n.to_f64().sqrt() * bias_prob.sqrt()) as u64 // Adjust sqrt for bias
     }
 
-    /// Concise Block: Use Brent's in Rho for Collision
-    pub fn rho_walk_with_brents(&self, g: Point, p: Point, bias_mod: u64) -> Option<BigInt256> {
-        let f = |pt: &Point| {
-            let dist = BigInt256::from_u64(1); // Sim jump
-            self.ec_add(pt, &self.ec_mul(&dist, &g)) // Biased add
-        };
-        let x0 = p; // Start at P for DL
-        let (cycle_start, mu, lam) = brents_cycle_detection(f, x0.x_bigint());
-        // Solve DL from cycle (standard rho solve from mu/lam)
-        Some(BigInt256::zero()) // Stub, impl full rho solve
-    }
 
     /// Setup Kangaroos for Multi-Target with Precise Starts
     /// Verbatim preset: Per-target wild primes, shared tame G.

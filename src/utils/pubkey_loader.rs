@@ -375,29 +375,11 @@ fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<St
     prevalences
 }
 
-/// Concise Block: Add Pattern to Quantum Detect
-fn is_quantum_vulnerable(point: &Point) -> bool {
-    let x_hex = point.x_bigint().to_hex();
-    x_hex.starts_with("02") && shannon_entropy(&x_hex) < 3.0 // Pattern + entropy
-}
 
 /// Helper function for DP bias detection
 fn detect_dp_bias(x: &BigInt256, dp_bits: u32, mod_n: u64) -> bool {
     // Simple DP check: low bits == 0
     x.mod_u64(1u64 << dp_bits) == 0 && x.mod_u64(mod_n) == 0
-}
-
-/// Helper functions for attractor candidates
-fn is_mod81_attractor_candidate(x: &BigInt256) -> bool {
-    x.mod_u64(81) == 0
-}
-
-fn is_mod27_attractor_candidate(x: &BigInt256) -> bool {
-    x.mod_u64(27) == 0
-}
-
-fn is_mod9_attractor_candidate(x: &BigInt256) -> bool {
-    x.mod_u64(9) == 0
 }
 
 /// Concise Block: Layered Bias Proxy with Coarse-to-Fine Order

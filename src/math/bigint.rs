@@ -5,6 +5,7 @@
 use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
 use log::info;
+use std::error::Error;
 use num_bigint::BigUint;
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
@@ -64,7 +65,7 @@ impl BigInt512 {
 
             // If remainder >= divisor, subtract and set quotient bit
             if remainder >= *other {
-                remainder = remainder.sub(other);
+                remainder = remainder.sub(other.clone());
                 let q_limb_idx = bit_pos / 64;
                 let q_bit_idx = bit_pos % 64;
                 if q_limb_idx < 4 {
@@ -115,6 +116,121 @@ impl BigInt512 {
 
         BigInt512 { limbs: result }
     }
+
+    /// Right shift by n bits
+    pub fn shr(&self, n: usize) -> BigInt512 {
+        if n >= 512 {
+            return BigInt512 { limbs: [0; 8] };
+        }
+
+        let limb_shift = n / 64;
+        let bit_shift = n % 64;
+
+        let mut result = [0u64; 8];
+
+        for i in 0..8 {
+            let src_idx = i + limb_shift;
+            if src_idx < 8 {
+                result[i] = self.limbs[src_idx] >> bit_shift;
+                // Carry from next limb
+                if bit_shift > 0 && src_idx + 1 < 8 {
+                    result[i] |= self.limbs[src_idx + 1] << (64 - bit_shift);
+                }
+            }
+        }
+
+        BigInt512 { limbs: result }
+    }
+
+    /// Clone (already implemented via derive, but explicit)
+    pub fn clone(&self) -> BigInt512 {
+        BigInt512 { limbs: self.limbs }
+    }
+
+    /// Get the number of significant bits
+    pub fn bits(&self) -> usize {
+        for i in (0..8).rev() {
+            if self.limbs[i] != 0 {
+                return 64 * i + 64 - self.limbs[i].leading_zeros() as usize;
+            }
+        }
+        0
+    }
+
+    /// Create from u64
+    pub fn from_u64(x: u64) -> Self {
+        BigInt512 { limbs: [x, 0, 0, 0, 0, 0, 0, 0] }
+    }
+
+    /// Create one
+    pub fn one() -> Self {
+        BigInt512 { limbs: [1, 0, 0, 0, 0, 0, 0, 0] }
+    }
+
+    /// Multiplication (full 512-bit result)
+    pub fn mul(&self, other: &BigInt512) -> BigInt512 {
+        let mut result = [0u64; 16]; // 1024-bit intermediate
+
+        for i in 0..8 {
+            for j in 0..8 {
+                let prod = self.limbs[i] as u128 * other.limbs[j] as u128;
+                let mut carry = prod as u64;
+                let mut k = i + j;
+
+                while carry != 0 && k < 16 {
+                    let sum = result[k] as u128 + carry as u128;
+                    result[k] = sum as u64;
+                    carry = (sum >> 64) as u64;
+                    k += 1;
+                }
+            }
+        }
+
+        // Take lower 8 limbs (512 bits)
+        BigInt512 { limbs: [result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7]] }
+    }
+}
+
+impl std::ops::Mul for BigInt512 {
+    type Output = BigInt512;
+
+    fn mul(self, other: Self) -> Self::Output {
+        (&self).mul(&other)
+    }
+}
+
+impl std::ops::Add for BigInt512 {
+    type Output = BigInt512;
+
+    fn add(self, other: Self) -> Self::Output {
+        let mut result = [0u64; 8];
+        let mut carry = 0u64;
+
+        for i in 0..8 {
+            let (sum, carry1) = self.limbs[i].overflowing_add(other.limbs[i]);
+            let (sum, carry2) = sum.overflowing_add(carry);
+            result[i] = sum;
+            carry = (carry1 as u64) + (carry2 as u64);
+        }
+
+        BigInt512 { limbs: result }
+    }
+}
+
+impl std::ops::Sub for BigInt512 {
+    type Output = BigInt512;
+
+    fn sub(self, other: Self) -> Self::Output {
+        (&self).sub(&other)
+    }
+}
+
+impl std::ops::Shl<usize> for BigInt512 {
+    type Output = BigInt512;
+
+    fn shl(self, n: usize) -> Self::Output {
+        self.left_shift(n)
+    }
 }
 
 impl PartialOrd for BigInt512 {
@@ -134,6 +250,7 @@ impl Ord for BigInt512 {
         std::cmp::Ordering::Equal
     }
 }
+
 
 impl BigInt256 {
     /// Create zero
@@ -695,6 +812,24 @@ impl Mul for BigInt256 {
         BigInt256 { limbs: [result[0], result[1], result[2], result[3]] }
     }
 }
+
+impl BigInt256 {
+    /// Convert to f64 (approximate, for performance calculations)
+    pub fn to_f64(&self) -> f64 {
+        let mut result = 0.0f64;
+        for i in 0..4 {
+            result += self.limbs[i] as f64 * (2.0f64).powi(64 * i as i32);
+        }
+        result
+    }
+}
+
+    /// Modular multiplication using Barrett reduction
+    pub fn mod_mul(a: &BigInt256, b: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+        let reducer = BarrettReducer::new(modulus);
+        let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
+        reducer.reduce(&prod.to_bigint256())
+    }
 
 /// Extended Euclidean algorithm for u128
 fn extended_euclid_u128(a: u128, b: u128) -> (u128, u128, u128) {

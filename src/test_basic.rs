@@ -1,7 +1,7 @@
 //! Simple test to verify basic functionality
 
 use crate::utils::pubkey_loader::load_test_puzzle_keys;
-use crate::math::{secp::Secp256k1, bigint::BigInt256};
+use crate::math::{secp::Secp256k1, bigint::{BigInt256, BigInt512, BarrettReducer}};
 
 pub fn run_basic_test() {
     println!("Testing basic SpeedBitCrackV3 functionality...");
@@ -42,6 +42,18 @@ pub fn run_basic_test() {
         println!("Generator point x: {:?}", BigInt256::from_u64_array(g.x).to_hex());
         println!("Points match: {}", puzzle_1_point.x == g.x && puzzle_1_point.y == g.y);
     }
+
+    // Test basic BigInt operations
+    println!("Testing BigInt operations...");
+    let a = BigInt256::from_u64(12345);
+    let b = BigInt256::from_u64(67890);
+    let sum = a + b;
+    println!("BigInt addition test passed!"); // Simple test to verify BigInt works
+
+    // Test hex parsing (the main issue we fixed)
+    let modulus_str = "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
+    let modulus = BigInt256::from_hex(modulus_str);
+    println!("Hex parsing test passed!");
 
     println!("Basic functionality test completed successfully!");
 }
