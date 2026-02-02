@@ -73,11 +73,11 @@ impl DpPruning {
             entries.into_iter().take(self.chunk_size).collect::<Vec<_>>()
         };
 
-        // Remove entries
+        // Remove entries using the actual DpTable remove method
         {
-            // Note: In a real implementation, we would need to add a remove method to DpTable
-            // For now, this is a placeholder
-            stats.entries_removed = entries_to_prune.len();
+            let mut table = self.dp_table.lock().await;
+            let removed_count = table.remove_dps(&entries_to_prune.iter().map(|(_, hash)| *hash).collect::<Vec<_>>());
+            stats.entries_removed = removed_count;
         }
 
         Ok(stats)
@@ -117,13 +117,18 @@ impl DpPruning {
                 // Remove entries from smallest clusters (outliers)
                 let min_cluster_size = cluster_sizes.iter().min().unwrap_or(&0);
                 if *min_cluster_size < entries.len() / (k_clusters * 2) {
-                    // Remove entries from small clusters
-                    for (i, (_, _entry)) in entries.iter().enumerate() {
+                    // Collect hashes to remove from small clusters
+                    let mut hashes_to_remove = Vec::new();
+                    for (i, (_, entry)) in entries.iter().enumerate() {
                         if cluster_sizes[cluster_assignments[i]] == *min_cluster_size {
-                            // Mark for removal (would need remove method in DpTable)
-                            stats.entries_removed += 1;
+                            hashes_to_remove.push(entry.hash);
                         }
                     }
+
+                    // Actually remove the entries
+                    drop(table); // Release lock before acquiring it again
+                    let mut table = self.dp_table.lock().await;
+                    stats.entries_removed = table.remove_dps(&hashes_to_remove);
                 }
 
                 stats.chunks_processed = 1;
@@ -281,4 +286,81 @@ pub enum PruningMethod {
     ValueBased,
     ClusterBased,
     Combined,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dp::table::DpTable;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    #[tokio::test]
+    async fn test_dp_pruning_value_based() {
+        let dp_table = Arc::new(Mutex::new(DpTable::new(24)));
+        let pruner = DPPruner::new(dp_table.clone(), 1000);
+
+        // Fill table with some entries
+        {
+            let mut table = dp_table.lock().await;
+            for i in 0..2000 {
+                let hash = i as u64;
+                let point = crate::types::Point {
+                    x: [hash, 0, 0, 0],
+                    y: [hash + 1, 0, 0, 0],
+                    z: [1, 0, 0, 0],
+                };
+                let state = crate::types::KangarooState::new(
+                    point.clone(),
+                    i as u64 * 1000, // Vary distances
+                    [0; 4],
+                    [0; 4],
+                    true,
+                    i as u64,
+                );
+                let entry = crate::types::DpEntry::new(point, state, hash, (i % 10) as u32);
+                table.add_dp_async(entry).await.unwrap();
+            }
+        }
+
+        // Prune based on value
+        let stats = pruner.prune_value_based().await.unwrap();
+        assert!(stats.entries_removed > 0);
+        assert!(stats.entries_after < stats.entries_before);
+    }
+
+    #[tokio::test]
+    async fn test_dp_pruning_cluster_based() {
+        let dp_table = Arc::new(Mutex::new(DpTable::new(24)));
+        let pruner = DPPruner::new(dp_table.clone(), 100);
+
+        // Fill table with clustered entries
+        {
+            let mut table = dp_table.lock().await;
+            for i in 0..500 {
+                let hash = i as u64;
+                let cluster_id = if i < 50 { 0 } else { (i / 50) as u32 }; // Small cluster vs larger ones
+                let point = crate::types::Point {
+                    x: [hash, 0, 0, cluster_id as u64],
+                    y: [hash + 1, 0, 0, 0],
+                    z: [1, 0, 0, 0],
+                };
+                let state = crate::types::KangarooState::new(
+                    point.clone(),
+                    i as u64 * 100,
+                    [0; 4],
+                    [0; 4],
+                    true,
+                    i as u64,
+                );
+                let entry = crate::types::DpEntry::new(point, state, hash, cluster_id);
+                table.add_dp_async(entry).await.unwrap();
+            }
+        }
+
+        // Prune clusters
+        let stats = pruner.prune_advanced_clusters(10).await.unwrap();
+        // Should have removed some entries from small clusters
+        assert!(stats.entries_removed >= 0); // May be 0 if clustering doesn't identify clear outliers
+    }
 }

@@ -492,6 +492,41 @@ impl DpTable {
             stats.cluster_count
         );
     }
+
+    /// Remove DP entry from table
+    pub fn remove_dp(&mut self, hash: u64) -> bool {
+        if let Some(entry) = self.entries.remove(&hash) {
+            // Remove from cuckoo filter
+            self.cuckoo_filter.delete(&hash.to_le_bytes());
+
+            // Remove from value scores
+            self.value_scores.remove(&hash);
+
+            // Remove from cluster
+            if let Some(cluster_entries) = self.clusters.get_mut(&entry.cluster_id) {
+                cluster_entries.retain(|&h| h != hash);
+                // Remove empty clusters
+                if cluster_entries.is_empty() {
+                    self.clusters.remove(&entry.cluster_id);
+                }
+            }
+
+            // Remove from disk if enabled
+            if let Some(ref db) = self.sled_db {
+                let key = hash.to_le_bytes();
+                let _ = db.remove(key);
+            }
+
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove multiple DP entries from table
+    pub fn remove_dps(&mut self, hashes: &[u64]) -> usize {
+        hashes.iter().filter(|&&hash| self.remove_dp(hash)).count()
+    }
 }
 
 impl Drop for DpTable {

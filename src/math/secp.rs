@@ -42,6 +42,16 @@ impl Secp256k1 {
         &self.p
     }
 
+    /// Get the group order n
+    pub fn n(&self) -> &BigInt256 {
+        &self.n
+    }
+
+    /// Get the generator point G
+    pub fn g(&self) -> &Point {
+        &self.g
+    }
+
     /// Create new secp256k1 curve instance
     pub fn new() -> Self {
         info!("DEBUG: Secp256k1::new() - creating curve parameters");

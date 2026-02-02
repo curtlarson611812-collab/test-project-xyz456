@@ -14,6 +14,18 @@ impl CpuBackend {
     pub fn new() -> Result<Self> {
         Ok(CpuBackend)
     }
+
+    /// Allocate buffer for CPU operations
+    fn alloc_buffer(&self, size: usize) -> Result<Vec<u64>, anyhow::Error> {
+        Ok(vec![0; size]) // Real vector allocation for CPU operations
+    }
+
+    /// Batch modular inverse using Montgomery reduction
+    fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {
+        use crate::math::bigint::MontgomeryReducer;
+        let reducer = MontgomeryReducer::new(modulus);
+        a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap_or(crate::math::bigint::BigInt256::zero())).collect()
+    }
 }
 
 #[async_trait::async_trait]
@@ -83,7 +95,7 @@ impl GpuBackend for CpuBackend {
 
     fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
         // CPU implementation for batch collision solving
-        // For each pair (alpha, beta), solve: k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod n
+        // For each pair (alpha, beta), solve: k = alpha * inv(beta) mod n
         let mut results = Vec::with_capacity(alphas.len());
 
         for (alpha, beta) in alphas.iter().zip(betas.iter()) {
@@ -91,8 +103,26 @@ impl GpuBackend for CpuBackend {
             let alpha_big = num_bigint::BigUint::from_slice(&alpha.iter().rev().map(|&x| x).collect::<Vec<_>>());
             let beta_big = num_bigint::BigUint::from_slice(&beta.iter().rev().map(|&x| x).collect::<Vec<_>>());
 
-            // For CPU fallback, return placeholder - would compute actual modular inverse
-            results.push([0u64; 4]);
+            // Compute modular inverse and solve
+            if let Some(beta_inv) = beta_big.modinv(&alpha_big) {
+                // For collision solving, we need the modulus n
+                // This is a simplified version - full implementation would use secp256k1 n
+                let n = num_bigint::BigUint::from_slice(&[0xFFFFFFFFu32, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE, 0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141].iter().rev().map(|&x| x).collect::<Vec<_>>());
+                let solution = (&alpha_big * &beta_inv) % &n;
+
+                // Convert back to [u64;4]
+                let solution_bytes = solution.to_bytes_le();
+                let mut result = [0u64; 4];
+                for (i, chunk) in solution_bytes.chunks(8).enumerate() {
+                    if i < 4 {
+                        result[i] = u64::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0),
+                                                       chunk.get(4).copied().unwrap_or(0), chunk.get(5).copied().unwrap_or(0), chunk.get(6).copied().unwrap_or(0), chunk.get(7).copied().unwrap_or(0)]);
+                    }
+                }
+                results.push(result);
+            } else {
+                results.push([0u64; 4]);
+            }
         }
 
         Ok(results)
@@ -103,9 +133,33 @@ impl GpuBackend for CpuBackend {
         // k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod n
         let mut results = Vec::with_capacity(alpha_t.len());
 
+        let n_big = num_bigint::BigUint::from_slice(&n.iter().rev().map(|&x| x).collect::<Vec<_>>());
+
         for i in 0..alpha_t.len() {
-            // For CPU fallback, return placeholder - would compute actual collision solution
-            results.push([0u32; 8]);
+            let alpha_t_big = num_bigint::BigUint::from_slice(&alpha_t[i].iter().rev().map(|&x| x).collect::<Vec<_>>());
+            let alpha_w_big = num_bigint::BigUint::from_slice(&alpha_w[i].iter().rev().map(|&x| x).collect::<Vec<_>>());
+            let beta_t_big = num_bigint::BigUint::from_slice(&beta_t[i].iter().rev().map(|&x| x).collect::<Vec<_>>());
+            let beta_w_big = num_bigint::BigUint::from_slice(&beta_w[i].iter().rev().map(|&x| x).collect::<Vec<_>>());
+
+            // Compute k = (alpha_t - alpha_w) * inv(beta_w - beta_t) mod n
+            let alpha_diff = (&alpha_t_big + &n_big - &alpha_w_big) % &n_big;
+            let beta_diff = (&beta_w_big + &n_big - &beta_t_big) % &n_big;
+
+            if let Some(beta_diff_inv) = beta_diff.modinv(&n_big) {
+                let solution = (&alpha_diff * &beta_diff_inv) % &n_big;
+
+                // Convert back to [u32;8]
+                let solution_bytes = solution.to_bytes_le();
+                let mut result = [0u32; 8];
+                for (i, chunk) in solution_bytes.chunks(4).enumerate() {
+                    if i < 8 {
+                        result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
+                    }
+                }
+                results.push(result);
+            } else {
+                results.push([0u32; 8]);
+            }
         }
 
         Ok(results)
@@ -187,13 +241,88 @@ impl GpuBackend for CpuBackend {
         let mut x_coords = Vec::with_capacity(positions.len());
         let mut y_coords = Vec::with_capacity(positions.len());
 
+        let modulus_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
+
         for point in positions {
-            // For CPU fallback, return placeholder coordinates
-            // In full implementation, would perform actual modular arithmetic
-            x_coords.push([0u32; 8]);
-            y_coords.push([0u32; 8]);
+            let x_big = num_bigint::BigUint::from_slice(&point[0].iter().rev().map(|&x| x).collect::<Vec<_>>());
+            let y_big = num_bigint::BigUint::from_slice(&point[1].iter().rev().map(|&x| x).collect::<Vec<_>>());
+            let z_big = num_bigint::BigUint::from_slice(&point[2].iter().rev().map(|&x| x).collect::<Vec<_>>());
+
+            if z_big == num_bigint::BigUint::ZERO {
+                // Point at infinity
+                x_coords.push([0u32; 8]);
+                y_coords.push([0u32; 8]);
+                continue;
+            }
+
+            // Compute z_inv = inv(z) mod modulus
+            let z_inv = match z_big.modinv(&modulus_big) {
+                Some(inv) => inv,
+                None => {
+                    x_coords.push([0u32; 8]);
+                    y_coords.push([0u32; 8]);
+                    continue;
+                }
+            };
+
+            // Compute z_inv2 = z_inv^2 mod modulus
+            let z_inv2 = (&z_inv * &z_inv) % &modulus_big;
+
+            // Compute z_inv3 = z_inv2 * z_inv mod modulus
+            let z_inv3 = (&z_inv2 * &z_inv) % &modulus_big;
+
+            // Compute x_affine = x * z_inv2 mod modulus
+            let x_affine = (&x_big * &z_inv2) % &modulus_big;
+
+            // Compute y_affine = y * z_inv3 mod modulus
+            let y_affine = (&y_big * &z_inv3) % &modulus_big;
+
+            // Convert back to [u32;8]
+            let x_bytes = x_affine.to_bytes_le();
+            let y_bytes = y_affine.to_bytes_le();
+
+            let mut x_result = [0u32; 8];
+            let mut y_result = [0u32; 8];
+
+            for (i, chunk) in x_bytes.chunks(4).enumerate() {
+                if i < 8 {
+                    x_result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
+                }
+            }
+
+            for (i, chunk) in y_bytes.chunks(4).enumerate() {
+                if i < 8 {
+                    y_result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
+                }
+            }
+
+            x_coords.push(x_result);
+            y_coords.push(y_result);
         }
 
         Ok((x_coords, y_coords))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::bigint::{BigInt256, MontgomeryReducer};
+
+    #[test]
+    fn test_gpu_backend_inverse() -> Result<(), anyhow::Error> {
+        let backend = CpuBackend::new()?;
+        let a = vec![BigInt256::from_u64(3)];
+        let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+
+        let inv_batch = backend.mod_inverse_batch(&a, &modulus);
+        assert_eq!(inv_batch.len(), 1);
+
+        // Verify: inv * 3 ≡ 1 mod p
+        let reducer = MontgomeryReducer::new(&modulus);
+        let product = reducer.mul(&a[0], &inv_batch[0]);
+        assert_eq!(product, BigInt256::one());
+
+        Ok(())
     }
 }
