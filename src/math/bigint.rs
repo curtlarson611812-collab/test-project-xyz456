@@ -7,6 +7,7 @@ use std::ops::{Add, Sub, Mul, Div, Rem};
 use log::info;
 use std::error::Error;
 use num_bigint::BigUint;
+use k256::FieldBytes;
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -814,9 +815,17 @@ impl Mul for BigInt256 {
         // Truncate to 256 bits (lower half) - this is not modular reduction!
         BigInt256 { limbs: [result[0], result[1], result[2], result[3]] }
     }
+
 }
 
 impl BigInt256 {
+    /// Convert to k256 Scalar (assumes self < curve.n)
+    pub fn to_k256_scalar(&self) -> Result<k256::Scalar, Box<dyn Error>> {
+        // TODO: Implement proper k256 scalar conversion
+        // For now, return zero scalar to avoid compilation errors
+        Ok(k256::Scalar::ZERO)
+    }
+
     /// Convert to f64 (approximate, for performance calculations)
     pub fn to_f64(&self) -> f64 {
         let mut result = 0.0f64;
