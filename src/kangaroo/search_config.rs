@@ -28,6 +28,8 @@ pub struct SearchConfig {
     pub range_end: BigInt256,
     /// Per-puzzle ranges: puzzle_id -> (start, end) for bounded puzzle searches
     pub per_puzzle_ranges: Option<HashMap<u32, (BigInt256, BigInt256)>>,
+    /// Quantum threat level (0-10) for bias aggression adjustment
+    pub quantum_threat_level: u32,
     /// Target name for logging and identification
     pub name: String,
 }
@@ -43,6 +45,7 @@ impl Default for SearchConfig {
             range_start: BigInt256::zero(),
             range_end: BigInt256::from_u64(1u64 << 40), // Large but reasonable default
             per_puzzle_ranges: None,
+            quantum_threat_level: 5, // Moderate threat level
             name: "default".to_string(),
         }
     }

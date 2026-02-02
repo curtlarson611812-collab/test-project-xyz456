@@ -12,6 +12,35 @@ use anyhow::anyhow;
 use anyhow::Result;
 use log::warn;
 
+/// Concise Block: Brent's Cycle Detection for Rho Walks
+fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where F: Fn(&BigInt256) -> BigInt256 { // (start point, μ, λ)
+    let mut tortoise = x0.clone();
+    let mut hare = f(&tortoise);
+    let mut power = 1u64;
+    let mut lam = 1u64;
+    while !tortoise.eq(&hare) {
+        if power == lam {
+            tortoise = hare.clone();
+            power *= 2;
+            lam = 0;
+        }
+        hare = f(&hare);
+        lam += 1;
+    }
+    let mut mu = 0u64;
+    tortoise = x0.clone();
+    hare = x0.clone();
+    for _ in 0..lam {
+        hare = f(&hare);
+    }
+    while !tortoise.eq(&hare) {
+        tortoise = f(&tortoise);
+        hare = f(&hare);
+        mu += 1;
+    }
+    (tortoise, mu, lam)
+}
+
 // Sacred Magic 9 primes — must be default in config, only expanded via flag
 const MAGIC9_PRIMES: [u64; 32] = [
     179, 257, 281, 349, 379, 419, 457, 499,
@@ -343,10 +372,10 @@ impl KangarooGenerator {
         self.select_bucket(point, dist, seed, 0, false) // Use wild mixed for rho walk
     }
 
-    /// Concise Block: Negation Map for Rho (Halve Space)
+    /// Concise Block: Negation with Imported Modulus
     pub fn rho_negation_map(&self, point: &Point) -> Point {
         let mut neg = point.clone();
-        neg.y = BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F).sub(&neg.y); // -y mod p, since (x,y) ~ (x,-y) on curve
+        neg.y = self.curve.modulus().sub(&neg.y); // -y mod p, since (x,y) ~ (x,-y) on curve
         neg
     }
 
@@ -354,6 +383,35 @@ impl KangarooGenerator {
     fn rho_partition_quantum_bias(&self, point: &Point, dist: &BigInt256, seed: u32, mod_bias: u64) -> u32 {
         let bucket = self.rho_partition_f(point, dist, seed);
         (bucket as u64 % mod_bias) as u32 // Bias mod for vulnerable class
+    }
+
+    /// Concise Block: Separate Rho Partition with Bias
+    pub fn rho_specific_partition(&self, point: &Point, dist: &BigInt256, seed: u32, bias_mod: u64) -> u32 {
+        let mix = point.x.low_u32() ^ dist.low_u32() ^ seed; // Low bytes XOR as preset
+        (mix as u64 % bias_mod) as u32 // Bias mod
+    }
+
+    /// Concise Block: Use Brent's in Rho for Collision
+    pub fn rho_walk_with_brents(&self, g: Point, p: Point, bias_mod: u64) -> Option<BigInt256> {
+        let f = |pt: &Point| {
+            let dist = BigInt256::from_u64(1); // Sim jump
+            self.ec_add(pt, &self.ec_mul(&dist, &g)) // Biased add
+        };
+        let x0 = p; // Start at P for DL
+        let (cycle_start, mu, lam) = brents_cycle_detection(f, x0);
+        // Solve DL from cycle (standard rho solve from mu/lam)
+        Some(BigInt256::zero()) // Stub, impl full rho solve
+    }
+
+    /// Concise Block: Use Brent's in Rho Cycle
+    pub fn rho_cycle_with_brents<F>(&self, f: F, x0: BigInt256) -> (u64, u64) where F: Fn(&BigInt256) -> BigInt256 {
+        let (_, mu, lam) = brents_cycle_detection(f, x0);
+        (mu, lam)
+    }
+
+    /// Concise Block: Grover-Like Amplifier for Bias Narrowing
+    pub fn grover_amplifier_bias(&self, points: &Vec<Point>, bias_mod: u64) -> Vec<Point> {
+        points.iter().filter(|p| p.x.mod_u64(bias_mod) == 0).cloned().collect() // "Amplify" biased
     }
 
     /// Setup Kangaroos for Multi-Target with Precise Starts

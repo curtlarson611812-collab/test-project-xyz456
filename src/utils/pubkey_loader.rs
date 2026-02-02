@@ -350,6 +350,44 @@ fn is_quantum_vulnerable(point: &Point) -> bool {
     true // For P2PK list
 }
 
+/// Concise Block: Entropy-Based Quantum Detect
+fn is_quantum_vulnerable_entropy(point: &Point) -> bool {
+    let x_hex = point.x.to_hex();
+    let entropy = shannon_entropy(&x_hex); // Calc -sum p log p
+    entropy < 3.0 // Low entropy exposed vulnerable
+}
+
+/// Concise Block: Detect Low Entropy for Grover Threat Bias
+fn is_grover_threat_biased(x_hex: &str) -> bool {
+    // Low entropy: Shannon or simple count unique chars <10
+    let unique: std::collections::HashSet<char> = x_hex.chars().collect();
+    unique.len() < 10 // Low for vanity/threat
+}
+
+/// Calculate Shannon entropy for hex string
+fn shannon_entropy(s: &str) -> f64 {
+    let mut freq = std::collections::HashMap::new();
+    for c in s.chars() {
+        *freq.entry(c).or_insert(0) += 1;
+    }
+    let len = s.len() as f64;
+    freq.values().map(|&count| {
+        let p = count as f64 / len;
+        -p * p.log2()
+    }).sum()
+}
+
+/// Concise Block: Calc Bias Prob from Scan
+fn calc_bias_prob(points: &Vec<Point>, mod_n: u64) -> f64 {
+    let count = points.iter().filter(|p| p.x.mod_u64(mod_n) == 0).count();
+    count as f64 / points.len() as f64
+}
+
+/// Concise Block: Combine Multi-Bias Prob
+fn combine_multi_bias(probs: Vec<f64>) -> f64 {
+    probs.iter().fold(1.0, |acc, &p| acc * p) // Product for layered
+}
+
 /// Concise Block: Layer Mod81 and Vanity in Attractor Proxy
 fn is_attractor_proxy(x: &BigInt256) -> bool {
     let x_hex = x.to_hex();

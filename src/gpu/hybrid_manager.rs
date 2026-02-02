@@ -268,6 +268,22 @@ impl HybridGpuManager {
         None // Placeholder, impl in kernel
     }
 
+    /// Concise Block: Parallel Brent's Rho in Hybrid
+    pub fn dispatch_parallel_brents_rho(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
+        // Launch CUDA threads: Each Brent's walk, collect cycles
+        // On collision from cycles, solve
+        None // Placeholder, kernel: thread Brent's, shared bias
+    }
+
+    /// Concise Block: Switch Kangaroo/Rho in Hybrid
+    pub fn dispatch_switch_mode(&self, has_interval: bool) {
+        if has_interval {
+            // Kangaroo dispatch - would call existing kangaroo methods
+        } else {
+            // dispatch_parallel_rho(/* ... */);
+        }
+    }
+
     /// Concise Block: Bias Hybrid Swap on Attractor Rate
     pub fn get_attractor_rate(&self, points: &[Point]) -> f64 {
         let sample: Vec<Point> = points.iter().take(100).cloned().collect();

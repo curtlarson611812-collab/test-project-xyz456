@@ -1240,6 +1240,45 @@ mod tests {
         // Narrow to exposed, run biased rho
     }
 
+    /// Concise Block: Quantum Mode Switch in Manager
+    pub fn set_quantum_mode(&mut self, enabled: bool) {
+        if enabled {
+            self.target_quantum_vulnerable(self.targets.clone());
+        }
+    }
+
+    /// Concise Block: Narrow Manager to Grover-Threat Biased
+    pub fn narrow_to_grover_threat(&mut self, points: Vec<Point>) {
+        use crate::utils::pubkey_loader::is_grover_threat_biased;
+        self.targets = points.iter().filter(|p| is_grover_threat_biased(&p.x.to_hex())).cloned().collect();
+        // Run biased rho on narrowed
+    }
+
+    /// Concise Block: Log Space Reduction Metrics
+    pub fn log_space_reduction(&self, bias_prob: f64) {
+        let reduced = (2f64.powi(128) * bias_prob).log2();
+        println!("Bias reduced effective space to 2^{:.1}, expected time {:.1}x faster", reduced, 1.0 / bias_prob.sqrt());
+    }
+
+    /// Concise Block: Log Bias Effectiveness
+    pub fn log_bias_effectiveness(&self, bias_prob: f64) {
+        let speed_up = 1.0 / bias_prob.sqrt();
+        println!("Bias prob {:.2}, reduction 1/{:.0}, speedup {:.1}x", bias_prob, 1.0/bias_prob, speed_up);
+    }
+
+    /// Concise Block: Prioritize Harvest-Threat
+    pub fn prioritize_harvest_threat(&mut self) {
+        use crate::utils::pubkey_loader::is_quantum_vulnerable;
+        self.targets.sort_by_key(|p| if is_quantum_vulnerable(p) { 0 } else { 1 });
+    }
+
+    /// Concise Block: Threat Level Flag Adjustment
+    pub fn adjust_bias_aggression(&mut self) {
+        if self.search_config.quantum_threat_level > 5 {
+            self.prioritize_harvest_threat();
+        }
+    }
+
     /// Test real pubkey #150 for attractor proxy
     pub fn test_puzzle_150_attractor(&mut self) -> Result<()> {
         // #150 pubkey hex: 02137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49
