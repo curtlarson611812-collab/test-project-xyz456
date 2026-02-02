@@ -640,6 +640,9 @@ impl Secp256k1 {
         let ax_plus_b = self.barrett_p.add(&ax, &self.b);
         let rhs = self.barrett_p.add(&x_cubed, &ax_plus_b);
 
+        // Debug logging for decompression troubleshooting
+        log::debug!("Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
+
         // Compute modular square root
         let y_candidate = self.compute_modular_sqrt(&rhs)?;
 
@@ -684,7 +687,7 @@ impl Secp256k1 {
         if legendre == BigInt256::zero() {
             return Some(BigInt256::zero()); // value ≡ 0 mod p
         } else if legendre != BigInt256::from_u64(1) {
-            log::warn!("Non-quadratic residue in sqrt: {}", value.to_hex());
+            log::warn!("Non-quadratic residue in sqrt: {} (legendre: {})", value.to_hex(), legendre.to_hex());
             return None; // Not a quadratic residue
         }
 
@@ -699,7 +702,8 @@ impl Secp256k1 {
         if candidate_sq == *value {
             Some(candidate)
         } else {
-            log::warn!("Sqrt verification fail: sq != value for {}", value.to_hex());
+            log::warn!("Sqrt verification fail: candidate_sq: {} != value: {} for rhs: {}",
+                       candidate_sq.to_hex(), value.to_hex(), value.to_hex());
             None // Verification failed - indicates pow_mod precision issues
         }
     }
