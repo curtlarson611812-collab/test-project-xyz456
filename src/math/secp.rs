@@ -5,7 +5,7 @@
 //! SECURITY NOTE: Operations should be constant-time to prevent side-channel attacks.
 //! Where possible, use k256::FieldElement for constant-time field arithmetic.
 
-use super::bigint::{BigInt256, BarrettReducer, MontgomeryReducer};
+use super::bigint::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
 use log::info;
@@ -73,8 +73,8 @@ impl Secp256k1 {
             b: BigInt256::from_u64(7),
             g: g.clone(),
             g_multiples: Vec::new(), // Temporary empty vec
-            barrett_p: temp_barrett_p,
-            barrett_n: temp_barrett_n,
+            barrett_p: temp_barrett_p.expect("Valid secp256k1 prime p"),
+            barrett_n: temp_barrett_n.expect("Valid secp256k1 order n"),
             montgomery_p: temp_montgomery_p,
         };
 
@@ -83,8 +83,8 @@ impl Secp256k1 {
         // Will implement proper EC arithmetic later
         let g_multiples = Vec::new(); // Empty for now
 
-        let barrett_p = BarrettReducer::new(&p);
-        let barrett_n = BarrettReducer::new(&n);
+        let barrett_p = BarrettReducer::new(&p).expect("Valid secp256k1 prime p");
+        let barrett_n = BarrettReducer::new(&n).expect("Valid secp256k1 order n");
         let montgomery_p = MontgomeryReducer::new(&p);
 
         Secp256k1 {
