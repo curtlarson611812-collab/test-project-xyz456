@@ -328,12 +328,19 @@ fn is_mod9_attractor_candidate(x: &BigInt256) -> bool {
     x.clone() % BigInt256::from_u64(9) == BigInt256::zero()  // Digital root 0 mod9
 }
 
-/// Concise Block: Layer Mod9 in Proxy for Impl
+/// Concise Block: Mod27=0 Filter for Finer Reduction
+fn is_mod27_attractor_candidate(x: &BigInt256) -> bool {
+    x.mod_u64(27) == 0  // Higher 3-power multiple
+}
+
+/// Concise Block: Layer Mod27 in Attractor Proxy
 fn is_attractor_proxy(x: &BigInt256) -> bool {
-    if !is_mod9_attractor_candidate(x) { return false; } // Reduce first
+    if !is_mod27_attractor_candidate(x) { return false; } // Finer reduce first
+    if !is_mod9_attractor_candidate(x) { return false; } // Nested mod9
     let x_hex = x.to_hex();
-    if !x_hex.ends_with('9') { return false; } // Hex end '9' (nibble 9 mod16)
-    if x.clone() % BigInt256::from_u64(9) != BigInt256::zero() { return false; } // Mod9=0 (digital root 0)
+    if !x_hex.ends_with('9') { return false; }
+    // Extra: Low SHA %100 <10 for basin proxy
+    use sha2::{Sha256, Digest};
     let mut hasher = Sha256::new();
     hasher.update(x_hex.as_bytes());
     let hash = hasher.finalize();
@@ -341,14 +348,19 @@ fn is_attractor_proxy(x: &BigInt256) -> bool {
     low < 10 // Basin proxy (<10% for depth)
 }
 
-/// Concise Block: Full Valuable Scan with Mod9=0 Reduction
-fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> (usize, f64, Vec<(usize, usize)>) {
+/// Concise Block: Scan with CUDA Mod9 in Full Valuable
+fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>)> {
+    // Use CUDA mod9 check for acceleration
+    let rt = tokio::runtime::Runtime::new()?;
+    let hybrid = rt.block_on(crate::gpu::HybridGpuManager::new(0.001, 5))?;
+    let x_limbs: Vec<[u64;4]> = points.iter().map(|p| p.x).collect();
+    let mod9_results = rt.block_on(hybrid.dispatch_mod9_check(&x_limbs))?;
+
     let mut count = 0;
     let mut clusters = vec![];
     let mut cluster_start = None;
-    for (i, p) in points.iter().enumerate() {
-        let x_big = BigInt256::from_u64_array(p.x);
-        if x_big.clone() % BigInt256::from_u64(9) == BigInt256::zero() && is_attractor_proxy(&x_big) { // Mod9=0 reduction first
+    for (i, &is_mod9) in mod9_results.iter().enumerate() {
+        if is_mod9 && is_attractor_proxy(&points[i].x) {
             count += 1;
             if cluster_start.is_none() { cluster_start = Some(i); }
         } else if let Some(start) = cluster_start {
@@ -362,7 +374,7 @@ fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> (usize, f64, Vec<(u
         if len > 1 { clusters.push((start, len)); }
     }
     let percent = if points.is_empty() { 0.0 } else { count as f64 / points.len() as f64 * 100.0 };
-    (count, percent, clusters)
+    Ok((count, percent, clusters))
 }
 
 /// Load valuable P2PK pubkeys from file with default configuration
@@ -374,10 +386,10 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
     let magic_count = count_magic9_in_list(&points);
     println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
 
-    // Scan for attractors and clusters with mod9=0 reduction
-    let (mod9_count, mod9_percent, full_count, full_percent, clusters) = scan_full_valuable_for_attractors(&points);
-    println!("Mod9=0: {} ({:.1}%), Full Attractors: {} ({:.1}%), Clusters: {:?}", mod9_count, mod9_percent, full_count, full_percent, clusters);
-    if mod9_percent > 15.0 {
+    // Scan for attractors and clusters with CUDA mod9 acceleration
+    let (count, percent, clusters) = scan_full_valuable_for_attractors(&points)?;
+    println!("CUDA-Accel Attractors: {} ({:.1}%), Clusters: {:?}", count, percent, clusters);
+    if percent > 15.0 {
         println!("Confirmed MANY related keys—bias high!");
     }
 

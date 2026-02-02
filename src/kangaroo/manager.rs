@@ -20,6 +20,7 @@ use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
 use anyhow::anyhow;
+use std::collections::HashMap;
 
 /// Concise Block: Precompute Small k*G Table for Nearest Adjust
 struct NearMissTable {
@@ -1086,22 +1087,68 @@ mod tests {
         Some((inv_prime * diff) % curve.order)
     }
 
-    /// Concise Block: Calculate Near Miss Diff
+    /// Concise Block: Layer Mod9 in Near Miss Diff
     pub fn calculate_near_miss_diff(&self, trap_x: &BigInt256, dp_x: &BigInt256, threshold: &BigInt256) -> Option<BigInt256> {
         let curve = crate::math::secp::Secp256k1::new();
         let diff = (trap_x.clone() - dp_x.clone()) % curve.p.clone();
+        if diff.clone() % BigInt256::from_u64(9) != BigInt256::zero() { return None; } // Mod9=0 bias for attractor signal
         if diff < *threshold { Some(diff) } else { None }
     }
 
-    /// Concise Block: Layer Near Miss Adjust in Solve
+    /// Concise Block: BSGS for Small DL on Diff to Find k
+    fn bsgs_find_k(diff: &BigInt256, g_x: &BigInt256, range_max: u64, m: u64) -> Option<u64> { // m=sqrt(range)
+        let mut baby = HashMap::new();
+        let mut current = BigInt256::zero();
+        for i in 0..m {
+            baby.insert(current.clone(), i);
+            current = (current.clone() + g_x.clone()) % BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F); // secp256k1 modulus approximation
+        }
+        let giant_step = BigInt256::from_u64(m) * g_x.clone() % BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F);
+        let mut giant = diff.clone();
+        for j in 0.. (range_max / m + 1) {
+            if let Some(i) = baby.get(&giant) {
+                return Some(j * m + *i); // k = j*m + i
+            }
+            giant = (giant.clone() - giant_step.clone()) % BigInt256::from_u64(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F);
+        }
+        None
+    }
+
+    /// Concise Block: Extend Near Miss with BSGS if Not Tabled
     pub fn solve_near_collision(&self, trap: &KangarooState, dp: &TaggedKangarooState, diff: BigInt256) -> Option<BigInt256> {
-        let table = NearMissTable::new(1000); // Precompute
+        let table = NearMissTable::new(1000);
         if let Some(k) = table.find_nearest(&diff) {
+            // Prior inv k adjust
             let curve = crate::math::secp::Secp256k1::new();
             let inv_k = curve.order.mod_inverse(&BigInt256::from_u64(k))?;
-            let adjusted_prime = dp.initial_offset.clone() * inv_k % curve.order.clone(); // Layer divide at start
-            self.solve_collision_prime_adjusted(&trap.distance, &dp.distance, &adjusted_prime) // Use adjusted
+            let adjusted_prime = dp.initial_offset.clone() * inv_k % curve.order.clone();
+            self.solve_collision_prime_adjusted(&trap.distance, &dp.distance, &adjusted_prime)
+        } else if let Some(k) = Self::bsgs_find_k(&diff, &BigInt256::from_u64_array(self.curve.g.x), 1 << 40, 1 << 20) {
+            let curve = crate::math::secp::Secp256k1::new();
+            let inv_k = curve.order.mod_inverse(&BigInt256::from_u64(k))?;
+            let adjusted_prime = dp.initial_offset.clone() * inv_k % curve.order.clone();
+            self.solve_collision_prime_adjusted(&trap.distance, &dp.distance, &adjusted_prime)
         } else { None }
+    }
+
+    /// Concise Block: Pollard's Lambda Solve in Impl
+    pub fn lambda_collision_solve(&self, tame: &KangarooState, wild: &TaggedKangarooState) -> BigInt256 {
+        let diff = tame.distance.sub(&wild.distance).mod_(&self.curve.order);
+        diff.add_assign(&wild.initial_offset); // + prime offset
+        diff.mod_(&self.curve.order) // Basic lambda k = d_t - d_w + offset mod N
+    }
+
+    /// Concise Block: Use Lambda Bucket in Step Herds
+    fn step_lambda_kangaroo(&mut self, state: &mut KangarooState, is_tame: bool, steps: u64) {
+        let seed = 42u32;
+        for s in 0..steps {
+            let bucket = self.generator.lambda_bucket_select(&state.position, &BigInt256::from_u64(state.distance), seed, s as u32, is_tame);
+            let jump_dist = self.generator.get_jump_from_bucket_mod27(bucket); // Attractor biased
+            let jump_point = self.curve.mul(&jump_dist, &self.curve.g);
+            state.position = self.curve.add(&state.position, &jump_point);
+            state.distance += jump_dist.to_u64_array()[0]; // Convert to u64 for tame
+            // DP check, near miss if diff small
+        }
     }
 
     /// Concise Block: Tame Additive Steps (Deterministic Bucket Add)

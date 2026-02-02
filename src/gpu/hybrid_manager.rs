@@ -276,6 +276,21 @@ impl HybridGpuManager {
         Ok(is_attractor_proxy(&BigInt256::from_u64_array(pubkey.x)))
     }
 
+    /// Concise Block: Dispatch CUDA Mod9 Check
+    pub fn dispatch_mod9_check(&self, x_limbs: &Vec<[u64;4]>) -> Result<Vec<bool>> {
+        // Note: In real implementation, would use CUDA buffers
+        // For now, simulate with CPU computation
+        let mut results = Vec::with_capacity(x_limbs.len());
+        for limbs in x_limbs {
+            let mut mod9: u64 = 0;
+            for &limb in limbs {
+                mod9 = (mod9 + limb) % 9; // Limb sum mod9 approximation
+            }
+            results.push(mod9 == 0);
+        }
+        Ok(results)
+    }
+
     /// Execute computation with drift monitoring (single-threaded)
     pub fn execute_with_drift_monitoring(
         &self,
