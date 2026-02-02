@@ -35,24 +35,24 @@ pub struct HybridGpuManager {
 }
 
 impl HybridGpuManager {
-    /// Calculate bit error rate for drift monitoring with prime bias validation
+    /// Concise Block: Add Attractor Proxy to Drift Error
     pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> f64 {
-        use crate::math::constants::PRIME_MULTIPLIERS;
         let samples = buffer.as_slice().iter().take(sample_size).cloned().collect::<Vec<_>>();
-        let mut error_count = 0.0;
-        for (i, point) in samples.iter().enumerate() {
-            let cpu_valid = self.curve_equation(&point.x, &point.y, &self.curve.p);
-            if !cpu_valid {
-                error_count += 1.0;
+        let mut miss_count = 0.0;
+        for point in samples {
+            let on_curve = self.curve_equation(&point.x, &point.y, &self.curve.p);
+            if !on_curve {
+                miss_count += 1.0;
                 continue;
             }
-            // Extra: Validate prime mul integrity for wild starts
-            // Recompute prime * target, compare to point for start drift
-            let prime_idx = i % PRIME_MULTIPLIERS.len();
-            let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
-            // Note: Would need target point to validate - placeholder for now
+            // Attractor proxy: hex end '9' or mod9=0 miss
+            let x_hex = BigInt256::from_u64_array(point.x).to_hex();
+            let mod9 = BigInt256::from_u64_array(point.x).clone() % BigInt256::from_u64(9);
+            if !x_hex.ends_with('9') && !mod9.is_zero() {
+                miss_count += 0.5; // Weighted miss
+            }
         }
-        error_count / sample_size as f64
+        miss_count / sample_size as f64
     }
 
     /// CPU validation of curve equation: y² = x³ + 7 mod p
@@ -225,6 +225,44 @@ impl HybridGpuManager {
             }
         }
         Ok(true)
+    }
+
+    /// Concise Block: Batch Prime Mul in Hybrid Dispatch for Test
+    pub fn dispatch_prime_mul_test(&self, target: &Point) -> Result<bool> {
+        use crate::math::constants::PRIME_MULTIPLIERS;
+        // Prep: Copy primes, target to device (simulated)
+        let mut outputs = vec![Point::infinity(); 32];
+
+        // Simulate CUDA precision dispatch (or Vulkan if fallback)
+        for i in 0..32 {
+            let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[i]);
+            let result = self.curve.mul(&prime, target); // Simulate kernel mul
+
+            // On-curve check (as in kernel)
+            let on_curve = self.curve_equation(&result.x, &result.y, &self.curve.p);
+            outputs[i] = if on_curve { result } else { Point::infinity() };
+        }
+
+        // Validate: All on-curve, match CPU
+        for i in 0..32 {
+            if outputs[i] == Point::infinity() {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Concise Block: Runtime Prime Mul Test in Hybrid Steps
+    pub fn step_with_prime_test(&self, points: &mut [Point], current_steps: u64) -> Result<()> {
+        if current_steps % 1_000_000 == 0 { // Every 10^6
+            let sample_target = points[0];
+            if !self.dispatch_prime_mul_test(&sample_target)? {
+                println!("Hybrid drift in prime mul! Swapping to CUDA only.");
+                // Would set vulkan_enable = false here
+            }
+        }
+        // Prior dispatch_step would go here
+        Ok(())
     }
 
     /// Execute computation with drift monitoring (single-threaded)

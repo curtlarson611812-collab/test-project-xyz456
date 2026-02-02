@@ -23,6 +23,7 @@ bytemuck = "1.0"                  # Safe casting between byte slices and POD typ
 bincode = "1.3"                   # Binary serialization for rocksdb
 async-trait = "0.1"               # Async traits for GPU backend
 rand = "0.8"                      # Random number generation for entropy
+sha2 = "0.10"                     # SHA256 for attractor proxy
 
 # Optional / Future
 sled = "0.34"                    # Fast embedded database for DP overflow

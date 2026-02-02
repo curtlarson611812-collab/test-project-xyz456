@@ -323,6 +323,43 @@ fn count_magic9_in_list(points: &Vec<Point>) -> usize {
     }).count()
 }
 
+/// Concise Block: Advanced Attractor Proxy Check
+fn is_attractor_proxy(point: &Point) -> bool {
+    let x_hex = BigInt256::from_u64_array(point.x).to_hex();
+    if x_hex.ends_with('9') && BigInt256::from_u64_array(point.x).clone() % BigInt256::from_u64(9) == BigInt256::zero() {
+        return true; // Base magic9
+    }
+    // Extra: Low SHA %100 <10 for basin proxy
+    use sha2::{Sha256, Digest};
+    let mut hasher = Sha256::new();
+    hasher.update(x_hex.as_bytes());
+    let hash = hasher.finalize();
+    let low = u32::from_le_bytes(hash[0..4].try_into().unwrap()) % 100;
+    low < 10
+}
+
+/// Concise Block: Scan Fn with Cluster Detection
+fn scan_valuable_for_attractors(points: &Vec<Point>) -> (usize, Vec<(usize, usize)>) { // (count, clusters start-len)
+    let mut count = 0;
+    let mut clusters = vec![];
+    let mut cluster_start = None;
+    for (i, p) in points.iter().enumerate() {
+        if is_attractor_proxy(p) {
+            count += 1;
+            if cluster_start.is_none() { cluster_start = Some(i); }
+        } else if let Some(start) = cluster_start {
+            let len = i - start;
+            if len > 1 { clusters.push((start, len)); } // Clusters >1
+            cluster_start = None;
+        }
+    }
+    if let Some(start) = cluster_start {
+        let len = points.len() - start;
+        if len > 1 { clusters.push((start, len)); }
+    }
+    (count, clusters)
+}
+
 /// Load valuable P2PK pubkeys from file with default configuration
 /// Sorts by magic 9 priority for sooner hits
 pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConfig)> {
@@ -332,13 +369,12 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
     let magic_count = count_magic9_in_list(&points);
     println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
 
-    // Sort by magic 9 priority: magic 9 keys first (lower sort key = higher priority)
-    let jump_primes = &[3u64, 5, 7, 11, 13, 17, 19, 23];  // Default primes for filter
-    points.sort_by_key(|p| {
-        // Use point x-coordinate as proxy for key filtering
-        let key_proxy = BigInt256::from_u64_array(p.x);  // x is [u64; 4] in little-endian limbs
-        if is_magic9(&key_proxy, jump_primes) { 0 } else { 1 }  // Priority: 0 for magic9, 1 for others
-    });
+    // Scan for attractors and clusters
+    let (attractor_count, clusters) = scan_valuable_for_attractors(&points);
+    println!("Attractors: {} ({:.1}%), clusters: {:?}", attractor_count, attractor_count as f64 / points.len() as f64 * 100.0, clusters);
+
+    // Sort by attractor proxy priority: attractor keys first (lower sort key = higher priority)
+    points.sort_by_key(|p| if is_attractor_proxy(p) { 0 } else { 1 });
 
     let mut config = SearchConfig::for_valuable_p2pk();
     config.name = format!("valuable_p2pk_{}", path);

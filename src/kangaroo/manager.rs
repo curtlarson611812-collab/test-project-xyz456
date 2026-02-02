@@ -170,16 +170,20 @@ impl KangarooManager {
         // Create GPU backend
         let gpu_backend: Box<dyn GpuBackend> = Box::new(HybridBackend::new().await?);
 
+        // Concise Block: Sort Targets by Attractor Proxy in Init
+        let mut targets_only: Vec<Point> = multi_targets.iter().map(|(p, _)| *p).collect();
+        use crate::utils::pubkey_loader::is_attractor_proxy;
+        targets_only.sort_by_key(|p| if is_attractor_proxy(p) { 0 } else { 1 }); // Attractors first
+
         // Concise Block: Run GPU Prime Mul Test on Manager Init
         let hybrid = HybridGpuManager::new(0.001, 5).await?;
-        let test_target = if multi_targets.is_empty() { Secp256k1::new().g.clone() } else { multi_targets[0].0 };
+        let test_target = if targets_only.is_empty() { Secp256k1::new().g.clone() } else { targets_only[0] };
         if !hybrid.test_prime_mul_gpu(&test_target)? {
             println!("GPU prime mul drift detected! Fallback to CPU.");
             // Would set flag for CPU-only mode here
         }
 
         // Generate multi-target kangaroos with precise prime starts
-        let targets_only: Vec<Point> = multi_targets.iter().map(|(p, _)| *p).collect();
         let (wild_states, tame_states) = generator.setup_kangaroos_multi(&targets_only, search_config.batch_per_target, &search_config);
 
         Ok(Self {
@@ -967,7 +971,19 @@ mod tests {
         }
 
         // Create hybrid manager and execute
-        let hybrid_manager = HybridGpuManager::new(0.001, 5)?; // 0.1% error threshold, 5s check interval
+        // Note: In real async code, would use await
+        let rt = tokio::runtime::Runtime::new()?;
+        let hybrid_manager = rt.block_on(HybridGpuManager::new(0.001, 5))?; // 0.1% error threshold, 5s check interval
+
+        // Concise Block: Runtime Prime Mul Test in Hybrid Steps
+        let mut wild_points_vec: Vec<Point> = shared_wild_points.as_slice().iter().cloned().collect();
+        rt.block_on(hybrid_manager.step_with_prime_test(&mut wild_points_vec, self.current_steps))?;
+        // Update shared buffer with tested points
+        for (i, point) in wild_points_vec.iter().enumerate() {
+            if let Some(shared_point) = shared_wild_points.as_mut_slice().get_mut(i) {
+                *shared_point = *point;
+            }
+        }
 
         // For now, execute single-threaded with drift monitoring
         // TODO: Extend hybrid manager to handle tagged multi-target operations
