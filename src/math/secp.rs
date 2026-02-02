@@ -9,7 +9,8 @@ use super::bigint::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
 use log::info;
-use k256::{AffinePoint};
+use k256::{Scalar as K256Scalar, ProjectivePoint, AffinePoint, elliptic_curve::ops::Mul as EcMul};
+use k256::elliptic_curve::{group::GroupEncoding, group::prime::PrimeCurveAffine, sec1::ToEncodedPoint, ops::MulByGenerator};
 use std::error::Error;
 
 /// secp256k1 curve parameters
@@ -675,7 +676,6 @@ impl Default for Secp256k1 {
 }
 
 /// Scalar field element (modulo n)
-pub type Scalar = BigInt256;
 
 /// Affine point operations
 impl Point {
@@ -700,19 +700,6 @@ impl Point {
         curve.compress_point(self)
     }
 
-    /// Convert our Point to k256 AffinePoint (simplified for now)
-    pub fn to_k256_affine(&self) -> Result<AffinePoint, Box<dyn Error>> {
-        // TODO: Implement proper k256 point conversion
-        // For now, return identity to avoid compilation errors
-        Ok(AffinePoint::IDENTITY)
-    }
-
-    /// Create our Point from k256 AffinePoint
-    pub fn from_k256_affine(_affine: &AffinePoint) -> Self {
-        // TODO: Implement proper k256 point conversion
-        // For now, return infinity to avoid compilation errors
-        Point::infinity()
-    }
 }
 
 #[cfg(test)]
@@ -1101,6 +1088,71 @@ mod tests {
         let result = curve.mul_constant_time(&k, &curve.g)?;
         let naive = curve.mul_naive(&k, &curve.g);  // For verification only
         assert_eq!(result, naive);
+
+        Ok(())
+    }
+
+    /// Test constant-time multiplication with known vectors
+    #[test]
+    fn test_constant_time_mul_vectors() -> Result<(), Box<dyn Error>> {
+        let curve = Secp256k1::new();
+
+        // Test [3]G using known vector from specs
+        let three = BigInt256::from_u64(3);
+        let three_g = curve.mul_constant_time(&three, &curve.g)?;
+        let three_g_affine = curve.to_affine(&three_g);
+
+        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")?;
+        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")?;
+
+        assert_eq!(three_g_affine.x, expected_x.to_u64_array());
+        assert_eq!(three_g_affine.y, expected_y.to_u64_array());
+
+        Ok(())
+    }
+
+    /// Test constant-time multiplication with infinity points
+    #[test]
+    fn test_constant_time_mul_infinity() -> Result<(), Box<dyn Error>> {
+        let curve = Secp256k1::new();
+        let inf = Point::infinity();
+
+        // [k] * inf = inf for any k
+        let k = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0")?;
+        assert!(curve.mul_constant_time(&k, &inf)?.is_infinity());
+
+        // [0] * P = inf for any P
+        let p = curve.g;
+        assert!(curve.mul_constant_time(&BigInt256::zero(), &p)?.is_infinity());
+
+        Ok(())
+    }
+
+    /// Test constant-time multiplication correctness vs GLV
+    #[test]
+    fn test_constant_time_vs_glv() -> Result<(), Box<dyn Error>> {
+        let curve = Secp256k1::new();
+
+        // Test multiple scalars
+        let test_scalars = vec![
+            BigInt256::from_u64(1),
+            BigInt256::from_u64(2),
+            BigInt256::from_u64(7),
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140")?, // n-1
+            BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0FEDCBA9876543210FEDCBA9876543210F")?,
+        ];
+
+        for k in test_scalars {
+            let ct_result = curve.mul_constant_time(&k, &curve.g)?;
+            let glv_result = curve.mul(&k, &curve.g); // GLV implementation
+
+            // Convert both to affine for comparison
+            let ct_affine = curve.to_affine(&ct_result);
+            let glv_affine = curve.to_affine(&glv_result);
+
+            assert_eq!(ct_affine.x, glv_affine.x, "X coordinate mismatch for scalar {:?}", k);
+            assert_eq!(ct_affine.y, glv_affine.y, "Y coordinate mismatch for scalar {:?}", k);
+        }
 
         Ok(())
     }
