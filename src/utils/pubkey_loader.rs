@@ -516,7 +516,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
 /// Load valuable P2PK pubkeys from file
 pub fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
     load_from_file("valuable_p2pk_pubkeys.txt", curve)
