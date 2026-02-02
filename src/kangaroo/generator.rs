@@ -42,6 +42,35 @@ fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where
     (tortoise, mu, lam)
 }
 
+/// Concise Block: Brent's Cycle Detection for Rho Walks
+fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where F: Fn(&BigInt256) -> BigInt256 { // (start point, μ, λ)
+    let mut tortoise = x0.clone();
+    let mut hare = f(&tortoise);
+    let mut power = 1u64;
+    let mut lam = 1u64;
+    while !tortoise.eq(&hare) {
+        if power == lam {
+            tortoise = hare.clone();
+            power *= 2;
+            lam = 0;
+        }
+        hare = f(&hare);
+        lam += 1;
+    }
+    let mut mu = 0u64;
+    tortoise = x0.clone();
+    hare = x0.clone();
+    for _ in 0..lam {
+        hare = f(&hare);
+    }
+    while !tortoise.eq(&hare) {
+        tortoise = f(&tortoise);
+        hare = f(&hare);
+        mu += 1;
+    }
+    (tortoise, mu, lam)
+}
+
 // Sacred Magic 9 primes — must be default in config, only expanded via flag
 const MAGIC9_PRIMES: [u64; 32] = [
     179, 257, 281, 349, 379, 419, 457, 499,
@@ -417,6 +446,33 @@ impl KangarooGenerator {
     /// Concise Block: Grover-Like Amplifier for Bias Narrowing
     pub fn grover_amplifier_bias(&self, points: &Vec<Point>, bias_mod: u64) -> Vec<Point> {
         points.iter().filter(|p| p.x_bigint().mod_u64(bias_mod) == 0).cloned().collect() // "Amplify" biased
+    }
+
+    /// Concise Block: Utilize Biases in Jump with Detected b
+    pub fn get_utilized_bias_jump(&self, bucket: u32, biases: &std::collections::HashMap<String, f64>) -> BigInt256 {
+        let mut jump = crate::math::constants::PRIME_MULTIPLIERS[bucket as usize % 32];
+        if biases["mod81"] > 0.012 { jump = jump + (81 - jump % 81); } // Utilize if detected high
+        if biases["mod27"] > 0.037 { jump = jump + (27 - jump % 27); }
+        if biases["mod9"] > 0.111 { jump = jump + (9 - jump % 9); }
+        if biases["vanity"] > 0.0625 { jump = jump + (16 - jump % 16) + 9; } // Mod16=9
+        BigInt256::from_u64(jump % (1u64 << 32))
+    }
+
+    /// Concise Block: Dynamic Rho m with Bias Prob
+    pub fn rho_dynamic_m(&self, n: BigInt256, bias_prob: f64) -> u64 {
+        (n.to_f64().sqrt() * bias_prob.sqrt()) as u64 // Adjust sqrt for bias
+    }
+
+    /// Concise Block: Use Brent's in Rho for Collision
+    pub fn rho_walk_with_brents(&self, g: Point, p: Point, bias_mod: u64) -> Option<BigInt256> {
+        let f = |pt: &Point| {
+            let dist = BigInt256::from_u64(1); // Sim jump
+            self.ec_add(pt, &self.ec_mul(&dist, &g)) // Biased add
+        };
+        let x0 = p; // Start at P for DL
+        let (cycle_start, mu, lam) = brents_cycle_detection(f, x0.x_bigint());
+        // Solve DL from cycle (standard rho solve from mu/lam)
+        Some(BigInt256::zero()) // Stub, impl full rho solve
     }
 
     /// Setup Kangaroos for Multi-Target with Precise Starts

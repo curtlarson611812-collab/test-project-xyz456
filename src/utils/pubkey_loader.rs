@@ -6,6 +6,7 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::ops::{Add, Sub};
+use std::collections::HashMap;
 use hex::decode;
 use crate::types::Point;
 use crate::math::bigint::BigInt256;
@@ -356,6 +357,57 @@ fn calc_bias_prob(points: &Vec<Point>, mod_n: u64) -> f64 {
 /// Concise Block: Combine Multi-Bias Prob
 fn combine_multi_bias(probs: Vec<f64>) -> f64 {
     probs.iter().fold(1.0, |acc, &p| acc * p) // Product for layered
+}
+
+/// Concise Block: Detect Biases with Prevalence b
+fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<String, f64> {
+    let mut prevalences = std::collections::HashMap::new();
+    let mod9_b = calc_bias_prob(points, 9); // From prior
+    prevalences.insert("mod9".to_string(), mod9_b);
+    let mod27_b = calc_bias_prob(points, 27);
+    prevalences.insert("mod27".to_string(), mod27_b);
+    let mod81_b = calc_bias_prob(points, 81);
+    prevalences.insert("mod81".to_string(), mod81_b);
+    let vanity_b = points.iter().filter(|p| is_vanity_biased(&p.x_bigint().to_hex(), "02", 16)).count() as f64 / points.len() as f64;
+    prevalences.insert("vanity".to_string(), vanity_b);
+    let dp_b = points.iter().filter(|p| detect_dp_bias(&p.x_bigint(), 20, 9)).count() as f64 / points.len() as f64;
+    prevalences.insert("dp_mod9".to_string(), dp_b);
+    prevalences
+}
+
+/// Concise Block: Add Pattern to Quantum Detect
+fn is_quantum_vulnerable(point: &Point) -> bool {
+    let x_hex = point.x_bigint().to_hex();
+    x_hex.starts_with("02") && shannon_entropy(&x_hex) < 3.0 // Pattern + entropy
+}
+
+/// Helper function for DP bias detection
+fn detect_dp_bias(x: &BigInt256, dp_bits: u32, mod_n: u64) -> bool {
+    // Simple DP check: low bits == 0
+    x.mod_u64(1u64 << dp_bits) == 0 && x.mod_u64(mod_n) == 0
+}
+
+/// Helper functions for attractor candidates
+fn is_mod81_attractor_candidate(x: &BigInt256) -> bool {
+    x.mod_u64(81) == 0
+}
+
+fn is_mod27_attractor_candidate(x: &BigInt256) -> bool {
+    x.mod_u64(27) == 0
+}
+
+fn is_mod9_attractor_candidate(x: &BigInt256) -> bool {
+    x.mod_u64(9) == 0
+}
+
+/// Concise Block: Layered Bias Proxy with Coarse-to-Fine Order
+fn is_layered_bias_proxy(x: &BigInt256, biases: &std::collections::HashMap<String, f64>) -> bool {
+    if biases["mod81"] > 0.012 && !is_mod81_attractor_candidate(x) { return false; } // Coarse first
+    if biases["mod27"] > 0.037 && !is_mod27_attractor_candidate(x) { return false; }
+    if biases["mod9"] > 0.111 && !is_mod9_attractor_candidate(x) { return false; }
+    if biases["vanity"] > 0.0625 && !is_vanity_biased(&x.to_hex(), "02", 16) { return false; }
+    if biases["dp_mod9"] > 0.111 && !detect_dp_bias(x, 20, 9) { return false; } // Fine last
+    true
 }
 
 /// Concise Block: Layer Mod81 and Vanity in Attractor Proxy

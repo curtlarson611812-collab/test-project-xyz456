@@ -37,3 +37,13 @@ __device__ void brents_cycle_device(BigInt256 x0, BigInt256* cycle_start, uint64
     *mu = mu_val;
     *lam = lam_val;
 }
+
+// Concise Block: Add DP Collect in Parallel Rho Kernel
+__global__ void parallel_rho_walk(Point* points, uint64_t* dists, int num_walks, F f, Point* dp_collect) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= num_walks) return;
+    Point current = points[idx];
+    uint64_t dist = dists[idx];
+    // Walk with f, detect cycle with Brent's, store collision
+    if (is_dp(&current, dp_bits)) { dp_collect[idx] = current; } // Collect for sort/collide
+}

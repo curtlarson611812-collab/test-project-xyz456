@@ -1285,6 +1285,18 @@ mod tests {
         }
     }
 
+    /// Concise Block: Detect Biases in Manager Targets
+    pub fn detect_manager_biases(&self) -> std::collections::HashMap<String, f64> {
+        use crate::utils::pubkey_loader::detect_biases_prevalence;
+        detect_biases_prevalence(&self.targets)
+    }
+
+    /// Concise Block: Log Bias Effectiveness
+    pub fn log_bias_effectiveness(&self, bias_prob: f64) {
+        let speed_up = 1.0 / bias_prob.sqrt();
+        println!("Bias prob {:.2}, reduction 1/{:.0}, speedup {:.1}x", bias_prob, 1.0/bias_prob, speed_up);
+    }
+
 
     /// Test real pubkey #150 for attractor proxy
     pub fn test_puzzle_150_attractor(&mut self) -> Result<()> {
