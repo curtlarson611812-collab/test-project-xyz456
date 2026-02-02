@@ -1073,4 +1073,39 @@ mod tests {
         state.distance += jump_dist.to_u64_array()[0]; // Convert to u64 for tame
         // Bound check if config.is_bounded - would add distance check here
     }
+
+    /// Concise Block: Real Pubkey Test in Manager Load
+    pub fn load_and_test_real_attractors(&mut self, points: Vec<Point>) -> Result<()> {
+        for p in &points {
+            // Note: In real async code, would await
+            let rt = tokio::runtime::Runtime::new()?;
+            let hybrid = rt.block_on(crate::gpu::HybridGpuManager::new(0.001, 5))?;
+            let is_attractor = rt.block_on(hybrid.test_real_pubkey_attractor(p))?;
+            println!("Pubkey {:?} attractor: {}", BigInt256::from_u64_array(p.x).to_hex(), is_attractor);
+        }
+        Ok(())
+    }
+
+    /// Test real pubkey #150 for attractor proxy
+    pub fn test_puzzle_150_attractor(&mut self) -> Result<()> {
+        // #150 pubkey hex: 02137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49
+        let pubkey_hex = "02137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49";
+        let point = crate::utils::pubkey_loader::parse_compressed(pubkey_hex.as_bytes())
+            .map_err(|e| anyhow::anyhow!("Failed to parse pubkey: {}", e))?;
+
+        // Test attractor proxy
+        let is_attractor = {
+            use crate::utils::pubkey_loader::is_attractor_proxy;
+            is_attractor_proxy(&BigInt256::from_u64_array(point.x))
+        };
+        println!("Puzzle #150 attractor proxy: {}", is_attractor);
+
+        // Test with hybrid
+        let rt = tokio::runtime::Runtime::new()?;
+        let hybrid = rt.block_on(crate::gpu::HybridGpuManager::new(0.001, 5))?;
+        let hybrid_result = rt.block_on(hybrid.test_real_pubkey_attractor(&point))?;
+        println!("Puzzle #150 hybrid attractor test: {}", hybrid_result);
+
+        Ok(())
+    }
 }

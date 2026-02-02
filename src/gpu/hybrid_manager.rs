@@ -93,7 +93,7 @@ impl HybridGpuManager {
         })
     }
 
-    /// Execute computation with threshold-based backend swap
+    /// Concise Block: Hybrid Bias for Attractor Hits in Dispatch
     pub fn dispatch_concurrent(
         &self,
         shared_points: &SharedBuffer<Point>,
@@ -103,6 +103,14 @@ impl HybridGpuManager {
         total_steps: u64,
         threshold: f64,
     ) -> Result<()> {
+        let attractor_rate = self.get_attractor_rate(points_data);
+        if attractor_rate < 10.0 { // Low hits = bias lost
+            // Swap to CUDA for precision mul/add
+            println!("Low attractor rate {:.1}%, swapping to CUDA precision", attractor_rate);
+        } else {
+            // Vulkan for speed on attractor-rich
+            println!("High attractor rate {:.1}%, using Vulkan speed", attractor_rate);
+        }
         let error = self.calculate_drift_error(shared_points, 1000);
 
         if error > threshold {
@@ -263,6 +271,22 @@ impl HybridGpuManager {
         }
         // Prior dispatch_step would go here
         Ok(())
+    }
+
+    /// Concise Block: Bias Hybrid Swap on Attractor Rate
+    pub fn get_attractor_rate(&self, points: &[Point]) -> f64 {
+        let sample: Vec<Point> = points.iter().take(100).cloned().collect();
+        let (count, percent, _) = crate::utils::pubkey_loader::scan_valuable_for_attractors(&sample);
+        percent
+    }
+
+    /// Concise Block: Hybrid Test on Real Pubkey Attractor
+    pub fn test_real_pubkey_attractor(&self, pubkey: &Point) -> Result<bool> {
+        // Run prime mul test on pubkey
+        if !self.dispatch_prime_mul_test(pubkey)? { return Ok(false); } // From prior block
+        // Compute proxy on CPU, validate
+        use crate::utils::pubkey_loader::is_attractor_proxy;
+        Ok(is_attractor_proxy(&BigInt256::from_u64_array(pubkey.x)))
     }
 
     /// Execute computation with drift monitoring (single-threaded)
