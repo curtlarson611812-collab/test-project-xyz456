@@ -456,7 +456,7 @@ fn test_deeper_mod9_bias_analysis() -> Result<(), Box<dyn std::error::Error>> {
         points.push(point);
     }
 
-    let (hist, max_bias, most_biased_residue) = analyze_mod9_bias_deeper(&points);
+    let (hist, max_bias, most_biased_residue, _, _) = analyze_mod9_bias_deeper(&points);
 
     println!("Mod9 histogram: {:?}", hist);
     println!("Max bias: {:.3}, Most biased residue: {}", max_bias, most_biased_residue);

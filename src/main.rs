@@ -940,32 +940,55 @@ fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         }
     }
 
-    // Deeper Mod9 Bias Analysis
-    let (mod9_hist, mod9_max_bias, mod9_residue) = speedbitcrack::utils::pubkey_loader::analyze_mod9_bias_deeper(points);
+    // Deeper Mod9 Bias Analysis with Statistical Significance
+    let (mod9_hist, mod9_max_bias, mod9_residue, chi_square, is_significant) = speedbitcrack::utils::pubkey_loader::analyze_mod9_bias_deeper(points);
     info!("🎯 Deeper Mod9 Bias Analysis:");
     info!("  📊 Maximum mod9 bias factor: {:.2}x (uniform = 1.0x)", mod9_max_bias);
     info!("  🔢 Most biased residue: {} (count: {})", mod9_residue, mod9_hist[mod9_residue as usize]);
+    info!("  📈 Chi-square statistic: {:.2} (critical: 15.51, significant: {})", chi_square, is_significant);
 
-    if mod9_max_bias > 1.2 {
-        info!("🎉 Strong mod9 clustering detected at residue {}!", mod9_residue);
+    if mod9_max_bias > 1.2 && is_significant {
+        info!("🎉 Statistically significant mod9 clustering detected at residue {}!", mod9_residue);
         info!("💡 Recommendation: Bias kangaroo jumps toward mod9 ≡ {} residue class.", mod9_residue);
         info!("📈 Theoretical speedup: {:.1}x for O(√(N/{:.1})) operations", (mod9_max_bias as f64).sqrt(), mod9_max_bias);
+
+        // Deeper Subgroup Analysis for the most biased residue
+        if mod9_residue == 0 {
+            let (sub_hist, sub_max_bias, sub_residue) = speedbitcrack::utils::pubkey_loader::analyze_mod9_subgroup_deeper(points, mod9_residue);
+            info!("🔍 Magic 9 Subgroup Analysis (Mod27 within Mod9=0):");
+            info!("  📊 Subgroup bias factor: {:.2}x", sub_max_bias);
+            info!("  🔢 Most biased sub-residue: {} (mod27 ≡ {})", sub_residue, sub_residue * 9 + mod9_residue);
+
+            if sub_max_bias > 1.1 {
+                info!("🎉 Stronger clustering in Magic 9 subgroup detected!");
+                info!("💡 Recommendation: Focus on mod27 subgroup for enhanced bias exploitation.");
+            }
+        }
+    } else if mod9_max_bias > 1.1 {
+        info!("⚠️ Mod9 bias detected but not statistically significant (insufficient sample size or weak clustering)");
     }
 
-    // Iterative Positional Bias Narrowing
+    // Deeper Iterative Positional Bias Narrowing with Overfitting Protection
     let solved_puzzles: Vec<(u32, BigInt256)> = PUZZLE_MAP.iter()
         .filter_map(|entry| entry.priv_hex.map(|hex| (entry.n, BigInt256::from_hex(hex))))
         .collect();
 
     if !solved_puzzles.is_empty() {
-        let (iterative_bias, final_min, final_max, iters) = speedbitcrack::utils::pubkey_loader::iterative_pos_bias_narrowing(&solved_puzzles, 3);
-        info!("🔄 Iterative Positional Bias Narrowing:");
+        let (iterative_bias, final_min, final_max, iters, overfitting_risk) = speedbitcrack::utils::pubkey_loader::iterative_pos_bias_narrowing_deeper(&solved_puzzles, 3);
+        info!("🔄 Deeper Iterative Positional Bias Narrowing:");
         info!("  📊 Cumulative bias factor: {:.3}x after {} iterations", iterative_bias, iters);
+        info!("  ⚠️ Overfitting risk assessment: {:.1}%", overfitting_risk * 100.0);
 
-        if iterative_bias > 1.1 {
-            info!("🎉 Multi-round positional clustering detected!");
+        if iterative_bias > 1.1 && overfitting_risk < 0.5 {
+            info!("🎉 Multi-round positional clustering detected with low overfitting risk!");
             info!("💡 Final narrowed range would focus search in tighter bounds");
             info!("📈 Combined speedup potential: {:.1}x", (iterative_bias as f64).sqrt());
+        } else if iterative_bias > 1.1 && overfitting_risk >= 0.5 {
+            info!("⚠️ Positional clustering detected but high overfitting risk ({:.1}%)", overfitting_risk * 100.0);
+            info!("💡 Consider using fewer iterations or larger sample size");
+        } else if overfitting_risk >= 0.8 {
+            info!("🛑 Iterative narrowing stopped due to high overfitting risk");
+            info!("💡 Sample size too small for reliable multi-round analysis");
         }
     }
 

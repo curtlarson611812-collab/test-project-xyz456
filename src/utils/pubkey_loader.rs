@@ -473,22 +473,26 @@ pub fn analyze_pos_bias_histogram(solved_puzzles: &[(u32, BigInt256)]) -> [f64; 
     result
 }
 
-/// Concise Block: Iterative Positional Bias Narrowing
-/// Performs up to max_iters rounds of slicing to find tighter clusters
-/// Returns (cumulative_bias_factor, final_min_range, final_max_range, iterations_performed)
-pub fn iterative_pos_bias_narrowing(solved_puzzles: &[(u32, BigInt256)], max_iters: usize) -> (f64, BigInt256, BigInt256, usize) {
+/// Concise Block: Deeper Iterative Positional Bias Narrowing with Overfitting Protection
+/// Performs up to max_iters rounds of slicing with Bayesian stopping criteria
+/// Returns (cumulative_bias_factor, final_min_range, final_max_range, iterations_performed, overfitting_risk)
+pub fn iterative_pos_bias_narrowing_deeper(solved_puzzles: &[(u32, BigInt256)], max_iters: usize) -> (f64, BigInt256, BigInt256, usize, f64) {
     if solved_puzzles.is_empty() {
-        return (1.0, BigInt256::one(), BigInt256::from_u64(2), 0);
+        return (1.0, BigInt256::one(), BigInt256::from_u64(2), 0, 0.0);
     }
 
     let mut cumulative_bias = 1.0;
     let mut current_puzzles = solved_puzzles.to_vec();
     let mut current_min = BigInt256::one(); // Start of first puzzle range
-    let mut current_max = BigInt256::from_u64(1) << 160; // End of largest puzzle range (2^160)
+    let mut current_max = BigInt256::from_u64(1) << 100; // End of largest puzzle range (use reasonable limit)
+    let mut overfitting_risk = 0.0;
 
-    for iter in 0..max_iters {
-        if current_puzzles.len() < 10 {
-            // Too few samples, risk of overfitting
+    for iter in 0..max_iters.min(3) { // Limit to 3 iterations maximum
+        let n = current_puzzles.len();
+
+        // Overfitting protection: stop if sample size too small
+        if n < 100 {
+            overfitting_risk = 1.0 - (n as f64 / 100.0).min(1.0);
             break;
         }
 
@@ -499,16 +503,27 @@ pub fn iterative_pos_bias_narrowing(solved_puzzles: &[(u32, BigInt256)], max_ite
         // Find the most biased bin
         let mut max_bias = 0.0;
         let mut best_bin = 0;
+        let mut best_count = 0u32;
 
         for (bin, &bias) in hist.iter().enumerate() {
             if bias > max_bias {
                 max_bias = bias;
                 best_bin = bin;
+                // Get the actual count for Bayesian analysis
+                best_count = (bias * n as f64 / 10.0) as u32; // Approximate count in bin
             }
         }
 
-        // Stop if no significant bias (close to uniform)
-        if max_bias <= 1.1 {
+        // Bayesian stopping criteria: posterior mean should be > 0.1 for significance
+        // Prior: Beta(1,1) uniform, Posterior: Beta(count+1, n-count+1)
+        let posterior_mean = (best_count as f64 + 1.0) / (n as f64 + 2.0);
+        if posterior_mean <= 0.1 {
+            // No significant evidence of clustering
+            break;
+        }
+
+        // Stop if bias is too weak (close to uniform)
+        if max_bias <= 1.05 {
             break;
         }
 
@@ -529,20 +544,65 @@ pub fn iterative_pos_bias_narrowing(solved_puzzles: &[(u32, BigInt256)], max_ite
             break;
         }
 
-        // Update cumulative bias and range
-        cumulative_bias *= max_bias / expected;
+        // Update cumulative bias
+        cumulative_bias *= max_bias;
         current_puzzles = new_puzzles;
 
-        // Update conceptual range (simplified for demonstration)
-        // In practice, this would be more sophisticated based on actual puzzle ranges
+        // Calculate overfitting risk based on variance
+        let bin_probability = 0.1; // Uniform probability per bin
+        let variance = n as f64 * bin_probability * (1.0 - bin_probability);
+        let std_dev = variance.sqrt();
+        overfitting_risk = if std_dev > 0.0 {
+            (max_bias - 1.0) / (3.0 * std_dev / (n as f64).sqrt()) // Z-score like measure
+        } else {
+            0.0
+        };
     }
 
-    (cumulative_bias, current_min, current_max, current_puzzles.len().min(max_iters))
+    (cumulative_bias, current_min, current_max, current_puzzles.len().min(max_iters), overfitting_risk)
 }
 
-/// Concise Block: Deeper Mod9 Histogram Analysis
-/// Returns (histogram[9], max_bias_factor, most_biased_residue)
-pub fn analyze_mod9_bias_deeper(points: &[Point]) -> ([u32; 9], f64, u64) {
+/// Helper function: Calculate positional histogram for a given range
+pub fn analyze_pos_hist_deeper(puzzles: &[(u32, BigInt256)]) -> ([u32; 10], f64, usize, f64) {
+    let mut hist = [0u32; 10];
+    let total = puzzles.len() as f64;
+
+    // Build histogram
+    for (puzzle_n, priv_key) in puzzles {
+        let pos = detect_pos_bias_single(priv_key, *puzzle_n);
+        let bin = (pos * 10.0).min(9.0) as usize;
+        hist[bin] += 1;
+    }
+
+    // Calculate bias factors and find maximum
+    let expected = total / 10.0;
+    let mut max_bias = 0.0;
+    let mut max_bin = 0;
+    let mut chi_square = 0.0;
+
+    for (bin, &count) in hist.iter().enumerate() {
+        let observed = count as f64;
+        if expected > 0.0 {
+            chi_square += (observed - expected).powi(2) / expected;
+        }
+
+        let bias_factor = if expected > 0.0 { observed / expected } else { 1.0 };
+        if bias_factor > max_bias {
+            max_bias = bias_factor;
+            max_bin = bin;
+        }
+    }
+
+    // Chi-square critical value for 9 degrees of freedom at p=0.05 is approximately 16.92
+    let chi_square_critical = 16.92;
+    let is_significant = chi_square > chi_square_critical && total >= 100.0;
+
+    (hist, max_bias, max_bin, if is_significant { chi_square } else { 0.0 })
+}
+
+/// Concise Block: Deeper Mod9 Histogram Analysis with Statistical Significance
+/// Returns (histogram[9], max_bias_factor, most_biased_residue, chi_square_statistic, is_significant)
+pub fn analyze_mod9_bias_deeper(points: &[Point]) -> ([u32; 9], f64, u64, f64, bool) {
     let mut hist = [0u32; 9];
     let total = points.len() as f64;
 
@@ -553,20 +613,72 @@ pub fn analyze_mod9_bias_deeper(points: &[Point]) -> ([u32; 9], f64, u64) {
         hist[residue as usize] += 1;
     }
 
-    // Calculate bias factors and find maximum
+    // Calculate bias factors and statistical significance
     let expected = total / 9.0;
     let mut max_bias = 0.0;
     let mut most_biased_residue = 0u64;
+    let mut chi_square = 0.0;
 
     for (residue, &count) in hist.iter().enumerate() {
-        let bias_factor = if expected > 0.0 { count as f64 / expected } else { 1.0 };
+        let observed = count as f64;
+        let expected_count = expected;
+
+        // Chi-square contribution: (observed - expected)^2 / expected
+        if expected_count > 0.0 {
+            chi_square += (observed - expected_count).powi(2) / expected_count;
+        }
+
+        let bias_factor = if expected_count > 0.0 { observed / expected_count } else { 1.0 };
         if bias_factor > max_bias {
             max_bias = bias_factor;
             most_biased_residue = residue as u64;
         }
     }
 
-    (hist, max_bias, most_biased_residue)
+    // Chi-square critical value for 8 degrees of freedom at p=0.05 is approximately 15.51
+    let chi_square_critical = 15.51;
+    let is_significant = chi_square > chi_square_critical && total >= 100.0; // Need sufficient sample size
+
+    (hist, max_bias, most_biased_residue, chi_square, is_significant)
+}
+
+/// Concise Block: Deeper Mod9 Subgroup Analysis (Mod27 within Mod9 clusters)
+/// Returns (subgroup_hist[3], max_sub_bias, most_biased_sub_residue, parent_residue)
+pub fn analyze_mod9_subgroup_deeper(points: &[Point], parent_residue: u64) -> ([u32; 3], f64, u64) {
+    let mut sub_hist = [0u32; 3]; // For residues 0, 9, 18 within the mod27 subgroup
+
+    // Count points in the parent mod9 residue cluster
+    for point in points {
+        let x_bigint = BigInt256::from_u64_array(point.x);
+        let mod9 = x_bigint.mod_u64(9);
+        if mod9 == parent_residue {
+            let mod27 = x_bigint.mod_u64(27);
+            // Map mod27 residues that fall into this mod9 subgroup
+            // For mod9 = r, the corresponding mod27 residues are r, r+9, r+18
+            if mod27 == parent_residue {
+                sub_hist[0] += 1;
+            } else if mod27 == parent_residue + 9 {
+                sub_hist[1] += 1;
+            } else if mod27 == parent_residue + 18 {
+                sub_hist[2] += 1;
+            }
+        }
+    }
+
+    let sub_total = sub_hist.iter().sum::<u32>() as f64;
+    let expected = sub_total / 3.0;
+    let mut max_sub_bias = 0.0;
+    let mut most_biased_sub = 0u64;
+
+    for (i, &count) in sub_hist.iter().enumerate() {
+        let bias_factor = if expected > 0.0 { count as f64 / expected } else { 1.0 };
+        if bias_factor > max_sub_bias {
+            max_sub_bias = bias_factor;
+            most_biased_sub = i as u64;
+        }
+    }
+
+    (sub_hist, max_sub_bias, most_biased_sub)
 }
 
 /// Concise Block: Detect Biases with Prevalence b
