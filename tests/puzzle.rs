@@ -474,3 +474,43 @@ fn cleanup() {
     // Clean up test files
     let _ = std::fs::remove_file("test_puzzle.txt");
 }
+
+#[test]
+fn test_deeper_mod9_subgroup_analysis() {
+    let curve = Secp256k1::new();
+    let points = load_test_puzzle_keys(&curve);
+
+    let (b_mod9, max_r9, b_mod27, max_r27) = super::deeper_mod9_subgroup(&points);
+
+    // Basic sanity checks
+    assert!(b_mod9 >= 1.0); // Bias should be at least uniform
+    assert!(b_mod27 >= 1.0 / 3.0); // Mod27 bias should be at least 1/3
+    assert!(max_r9 < 9); // Residue should be 0-8
+    assert!(max_r27 < 27); // Residue should be 0-26
+}
+
+#[test]
+fn test_iterative_mod9_slice_analysis() {
+    let curve = Secp256k1::new();
+    let points = load_test_puzzle_keys(&curve);
+
+    let b_prod = super::iterative_mod9_slice(&points, 3);
+
+    // Bias product should be reasonable
+    assert!(b_prod >= 1.0);
+    assert!(b_prod <= 10.0); // Shouldn't be unreasonably high
+}
+
+#[test]
+fn test_iterative_pos_slice_analysis() {
+    let curve = Secp256k1::new();
+    let points = load_test_puzzle_keys(&curve);
+
+    let (b_prod, min_range, max_range) = super::iterative_pos_slice(&points, 3);
+
+    // Basic sanity checks
+    assert!(b_prod >= 1.0);
+    assert!(min_range >= 0.0 && min_range <= 1.0);
+    assert!(max_range >= 0.0 && max_range <= 1.0);
+    assert!(min_range < max_range);
+}

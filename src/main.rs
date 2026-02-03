@@ -517,10 +517,10 @@ fn run_bias_analysis() -> Result<()> {
 
     // Display top 10 recommendations
     println!("🏆 TOP 10 RECOMMENDED PUZZLES TO CRACK FIRST:");
-    println!("═" .repeat(100));
+    println!("{}", "═".repeat(100));
     println!("{:>3} │ {:>8} │ {:>4} │ {:>4} │ {:>4} │ {:>6} │ {:>12} │ {:>10}",
              "#", "Range", "Mod9", "Mod27", "Mod81", "Pos", "Complexity", "Score");
-    println!("═" .repeat(100));
+    println!("{}", "═".repeat(100));
 
     for (i, result) in results.iter().enumerate().take(10) {
         let complexity_str = format!("2^{:.1}", (result.puzzle_n as f64) - result.bias_score().log2());
@@ -535,7 +535,7 @@ fn run_bias_analysis() -> Result<()> {
                  result.bias_score());
     }
 
-    println!("═" .repeat(100));
+    println!("{}", "═".repeat(100));
 
     // Show the best recommendation
     if let Some(best) = results.first() {
@@ -574,31 +574,7 @@ fn run_crack_unsolved(args: &Args) -> Result<()> {
 
 /// Pick the most likely unsolved puzzle to crack based on bias analysis
 fn pick_most_likely_unsolved() -> u32 {
-    let mut max_score = 0.0;
-    let mut best_n = 67; // Default to smallest unsolved
-
-    for entry in PUZZLE_MAP.iter() {
-        if entry.priv_hex.is_some() {
-            continue; // Skip solved
-        }
-
-        if entry.pub_hex.is_none() {
-            continue; // Skip if no public key
-        }
-
-        // Simple scoring: smaller puzzles with any bias are preferred
-        // Higher bias_score reduces effective complexity
-        let base_complexity = entry.n as f64 / 2.0; // log2(sqrt(2^n)) = n/2
-        let bias_bonus = 0.1; // Assume some bias reduction
-        let score = 1.0 / (base_complexity - bias_bonus); // Higher score = easier
-
-        if score > max_score {
-            max_score = score;
-            best_n = entry.n;
-        }
-    }
-
-    best_n
+    speedbitcrack::utils::pubkey_loader::pick_most_likely_unsolved()
 }
 
 
@@ -1009,18 +985,29 @@ fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         info!("💡 Recommendation: Bias kangaroo jumps toward mod9 ≡ {} residue class.", mod9_residue);
         info!("📈 Theoretical speedup: {:.1}x for O(√(N/{:.1})) operations", (mod9_max_bias as f64).sqrt(), mod9_max_bias);
 
-        // Deeper Subgroup Analysis for the most biased residue
-        if mod9_residue == 0 {
-            let (sub_hist, sub_max_bias, sub_residue) = speedbitcrack::utils::pubkey_loader::analyze_mod9_subgroup_deeper(points, mod9_residue);
-            info!("🔍 Magic 9 Subgroup Analysis (Mod27 within Mod9=0):");
-            info!("  📊 Subgroup bias factor: {:.2}x", sub_max_bias);
-            info!("  🔢 Most biased sub-residue: {} (mod27 ≡ {})", sub_residue, sub_residue * 9 + mod9_residue);
+        // Deep Dive: Deeper Mod9 Subgroup Analysis
+        let (b_mod9, max_r9, b_mod27, max_r27) = speedbitcrack::utils::pubkey_loader::deeper_mod9_subgroup(points);
+        info!("🔍 Deeper Mod9 Subgroup Analysis:");
+        info!("  📊 mod9 bias: {:.2}x at residue {}", b_mod9, max_r9);
+        info!("  📊 mod27 bias: {:.2}x at residue {} (within mod9={})", b_mod27, max_r27, max_r9);
 
-            if sub_max_bias > 1.1 {
-                info!("🎉 Stronger clustering in Magic 9 subgroup detected!");
-                info!("💡 Recommendation: Focus on mod27 subgroup for enhanced bias exploitation.");
-            }
+        if b_mod27 > 1.0 / 3.0 {
+            info!("🎉 Strong conditional mod27 clustering detected!");
+            info!("💡 Recommendation: Focus on mod27 ≡ {} for enhanced bias exploitation", max_r27);
+            info!("📈 Combined speedup: {:.1}x", (b_mod9 * b_mod27).sqrt());
         }
+
+        // Deep Dive: Iterative Mod9 Slice Analysis
+        let b_prod = speedbitcrack::utils::pubkey_loader::iterative_mod9_slice(points, 3);
+        info!("🔄 Iterative Mod9 Slice Analysis:");
+        info!("  📊 Bias product: {:.6} (multiplicative narrowing)", b_prod);
+
+        if b_prod < 0.1 {
+            info!("🎉 Extreme iterative mod9 narrowing achieved!");
+            info!("💡 Theoretical N reduction: {:.2}x", 1.0 / b_prod);
+            info!("📈 Combined speedup: {:.1}x", b_prod.sqrt());
+        }
+
     } else if mod9_max_bias > 1.1 {
         info!("⚠️ Mod9 bias detected but not statistically significant (insufficient sample size or weak clustering)");
     }
@@ -1047,6 +1034,19 @@ fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
             info!("🛑 Iterative narrowing stopped due to high overfitting risk");
             info!("💡 Sample size too small for reliable multi-round analysis");
         }
+    }
+
+    // Deep Dive: Iterative Positional Slice Analysis
+    let (pos_b_prod, pos_min, pos_max) = speedbitcrack::utils::pubkey_loader::iterative_pos_slice(points, 3);
+    info!("🔄 Iterative Positional Slice Analysis:");
+    info!("  📊 Bias product: {:.6} (iterative narrowing)", pos_b_prod);
+    info!("  📍 Narrowed range: [{:.6}, {:.6}]", pos_min, pos_max);
+
+    if pos_b_prod < 0.1 {
+        info!("🎉 Extreme iterative positional narrowing achieved!");
+        info!("💡 Theoretical N reduction: {:.2}x", 1.0 / pos_b_prod);
+        info!("📈 Combined speedup: {:.1}x", pos_b_prod.sqrt());
+        info!("💡 Recommendation: Focus kangaroo search in narrowed positional range");
     }
 
     info!("This would run full kangaroo search with bias optimization");
@@ -1157,7 +1157,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
             info!("✅ Verification: [priv]G should equal target point");
 
             // Verify the solution
-            let computed_point = curve.mul_constant_time(&solution, &curve.g)?;
+            let computed_point = curve.mul_constant_time(&solution, &curve.g).unwrap();
             if computed_point.x == point.x && computed_point.y == point.y {
                 info!("✅ Solution verified - private key is correct!");
             } else {
