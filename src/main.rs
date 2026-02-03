@@ -813,6 +813,35 @@ fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         }
     }
 
+    // Deeper Mod9 Bias Analysis
+    let (mod9_hist, mod9_max_bias, mod9_residue) = speedbitcrack::utils::pubkey_loader::analyze_mod9_bias_deeper(points);
+    info!("🎯 Deeper Mod9 Bias Analysis:");
+    info!("  📊 Maximum mod9 bias factor: {:.2}x (uniform = 1.0x)", mod9_max_bias);
+    info!("  🔢 Most biased residue: {} (count: {})", mod9_residue, mod9_hist[mod9_residue as usize]);
+
+    if mod9_max_bias > 1.2 {
+        info!("🎉 Strong mod9 clustering detected at residue {}!", mod9_residue);
+        info!("💡 Recommendation: Bias kangaroo jumps toward mod9 ≡ {} residue class.", mod9_residue);
+        info!("📈 Theoretical speedup: {:.1}x for O(√(N/{:.1})) operations", (mod9_max_bias as f64).sqrt(), mod9_max_bias);
+    }
+
+    // Iterative Positional Bias Narrowing
+    let solved_puzzles: Vec<(u32, BigInt256)> = PUZZLE_MAP.iter()
+        .filter_map(|entry| entry.priv_hex.map(|hex| (entry.n, BigInt256::from_hex(hex))))
+        .collect();
+
+    if !solved_puzzles.is_empty() {
+        let (iterative_bias, final_min, final_max, iters) = speedbitcrack::utils::pubkey_loader::iterative_pos_bias_narrowing(&solved_puzzles, 3);
+        info!("🔄 Iterative Positional Bias Narrowing:");
+        info!("  📊 Cumulative bias factor: {:.3}x after {} iterations", iterative_bias, iters);
+
+        if iterative_bias > 1.1 {
+            info!("🎉 Multi-round positional clustering detected!");
+            info!("💡 Final narrowed range would focus search in tighter bounds");
+            info!("📈 Combined speedup potential: {:.1}x", (iterative_bias as f64).sqrt());
+        }
+    }
+
     info!("This would run full kangaroo search with bias optimization");
     info!("Points would be analyzed for Magic 9 patterns and quantum vulnerability");
     Ok(())

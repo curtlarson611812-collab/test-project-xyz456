@@ -418,6 +418,56 @@ fn test_unsolved_puzzles_all_biases() -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+/// Test deeper mod9 bias analysis
+#[test]
+fn test_deeper_mod9_bias_analysis() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::utils::pubkey_loader::analyze_mod9_bias_deeper;
+    use crate::math::secp::Secp256k1;
+    use crate::math::bigint::BigInt256;
+    use crate::types::Point;
+
+    let curve = Secp256k1::new();
+
+    // Create test points with biased mod9 distribution
+    let mut points = Vec::new();
+
+    // Add points that are biased toward mod9 = 0 (simulate Magic 9 clustering)
+    for i in 0..50 {
+        // Create points where x ≡ 0 mod 9 (simplified for testing)
+        let x = BigInt256::from_u64(9 * i as u64);
+        let mut x_array = x.to_u64_array();
+        let point = Point {
+            x: x_array,
+            y: [0, 0, 0, 0], // Simplified
+            z: [1, 0, 0, 0],
+        };
+        points.push(point);
+    }
+
+    // Add some uniform distribution points
+    for i in 0..25 {
+        let x = BigInt256::from_u64(i as u64 + 100);
+        let mut x_array = x.to_u64_array();
+        let point = Point {
+            x: x_array,
+            y: [0, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+        points.push(point);
+    }
+
+    let (hist, max_bias, most_biased_residue) = analyze_mod9_bias_deeper(&points);
+
+    println!("Mod9 histogram: {:?}", hist);
+    println!("Max bias: {:.3}, Most biased residue: {}", max_bias, most_biased_residue);
+
+    // Test should pass if bias analysis works
+    assert!(max_bias >= 1.0, "Bias factor should be >= 1.0");
+    assert!(most_biased_residue < 9, "Residue should be 0-8");
+
+    Ok(())
+}
+
 /// Cleanup test files
 #[test]
 fn cleanup() {

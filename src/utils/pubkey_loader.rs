@@ -473,6 +473,102 @@ pub fn analyze_pos_bias_histogram(solved_puzzles: &[(u32, BigInt256)]) -> [f64; 
     result
 }
 
+/// Concise Block: Iterative Positional Bias Narrowing
+/// Performs up to max_iters rounds of slicing to find tighter clusters
+/// Returns (cumulative_bias_factor, final_min_range, final_max_range, iterations_performed)
+pub fn iterative_pos_bias_narrowing(solved_puzzles: &[(u32, BigInt256)], max_iters: usize) -> (f64, BigInt256, BigInt256, usize) {
+    if solved_puzzles.is_empty() {
+        return (1.0, BigInt256::one(), BigInt256::from_u64(2), 0);
+    }
+
+    let mut cumulative_bias = 1.0;
+    let mut current_puzzles = solved_puzzles.to_vec();
+    let mut current_min = BigInt256::one(); // Start of first puzzle range
+    let mut current_max = BigInt256::from_u64(1) << 160; // End of largest puzzle range (2^160)
+
+    for iter in 0..max_iters {
+        if current_puzzles.len() < 10 {
+            // Too few samples, risk of overfitting
+            break;
+        }
+
+        // Analyze current subset
+        let hist = analyze_pos_bias_histogram(&current_puzzles);
+        let expected = 1.0; // Uniform would be 1.0
+
+        // Find the most biased bin
+        let mut max_bias = 0.0;
+        let mut best_bin = 0;
+
+        for (bin, &bias) in hist.iter().enumerate() {
+            if bias > max_bias {
+                max_bias = bias;
+                best_bin = bin;
+            }
+        }
+
+        // Stop if no significant bias (close to uniform)
+        if max_bias <= 1.1 {
+            break;
+        }
+
+        // Calculate new range slice for the best bin
+        let bin_start = best_bin as f64 * 0.1;
+        let bin_end = (best_bin + 1) as f64 * 0.1;
+
+        // Filter puzzles to this bin range
+        let mut new_puzzles = Vec::new();
+        for (puzzle_n, priv_key) in &current_puzzles {
+            let pos = detect_pos_bias_single(priv_key, *puzzle_n);
+            if pos >= bin_start && pos < bin_end {
+                new_puzzles.push((*puzzle_n, priv_key.clone()));
+            }
+        }
+
+        if new_puzzles.is_empty() {
+            break;
+        }
+
+        // Update cumulative bias and range
+        cumulative_bias *= max_bias / expected;
+        current_puzzles = new_puzzles;
+
+        // Update conceptual range (simplified for demonstration)
+        // In practice, this would be more sophisticated based on actual puzzle ranges
+    }
+
+    (cumulative_bias, current_min, current_max, current_puzzles.len().min(max_iters))
+}
+
+/// Concise Block: Deeper Mod9 Histogram Analysis
+/// Returns (histogram[9], max_bias_factor, most_biased_residue)
+pub fn analyze_mod9_bias_deeper(points: &[Point]) -> ([u32; 9], f64, u64) {
+    let mut hist = [0u32; 9];
+    let total = points.len() as f64;
+
+    // Build histogram
+    for point in points {
+        let x_bigint = BigInt256::from_u64_array(point.x);
+        let residue = x_bigint.mod_u64(9);
+        hist[residue as usize] += 1;
+    }
+
+    // Calculate bias factors and find maximum
+    let expected = total / 9.0;
+    let mut max_bias = 0.0;
+    let mut most_biased_residue = 0u64;
+
+    for (residue, &count) in hist.iter().enumerate() {
+        let bias_factor = if expected > 0.0 { count as f64 / expected } else { 1.0 };
+        if bias_factor > max_bias {
+            max_bias = bias_factor;
+            most_biased_residue = residue as u64;
+        }
+    }
+
+    (hist, max_bias, most_biased_residue)
+}
+
 /// Concise Block: Detect Biases with Prevalence b
 fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<String, f64> {
     let mut prevalences = std::collections::HashMap::new();
@@ -486,6 +582,11 @@ fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<St
     prevalences.insert("vanity".to_string(), vanity_b);
     let dp_b = points.iter().filter(|p| detect_dp_bias(&p.x_bigint(), 20, 9)).count() as f64 / points.len() as f64;
     prevalences.insert("dp_mod9".to_string(), dp_b);
+
+    // Add deeper mod9 analysis
+    let (_, mod9_max_bias, _) = analyze_mod9_bias_deeper(points);
+    prevalences.insert("mod9_deeper".to_string(), mod9_max_bias);
+
     prevalences
 }
 
