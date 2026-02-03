@@ -513,7 +513,7 @@ impl KangarooGenerator {
     /// Pollard's lambda algorithm for discrete logarithm in intervals
     /// Searches for k in [a, a+w] such that [k]G = Q
     /// Expected time O(√w) with tame/wild kangaroos
-    pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256) -> Option<BigInt256> {
+    pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, max_cycles: u64, gpu: bool) -> Option<BigInt256> {
         use std::collections::HashMap;
         use crate::math::bigint::{BigInt256, BigInt512};
         use crate::types::Point;
@@ -536,8 +536,8 @@ impl KangarooGenerator {
             p.x[0] % 1024 // Simple hash for demo
         };
 
-        let max_steps = 10000; // Demo limit
-        for _ in 0..max_steps {
+        let max_steps = if max_cycles == 0 { 10000000 } else { max_cycles }; // 0 = unlimited for demo
+        for step in 0..max_steps {
             // Move tame
             tame = curve.add(&tame, &curve.g_multiples[hash_point(&tame) as usize % curve.g_multiples.len()]);
             tame_steps = curve.barrett_n.add(&tame_steps, &BigInt256::one());

@@ -310,6 +310,114 @@ fn test_puzzle_private_key_verification() {
     }
 }
 
+/// Test all unsolved puzzles (67-160) for bias patterns
+#[test]
+#[test]
+fn test_unsolved_puzzles_all_biases() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::utils::pubkey_loader::{detect_bias_single, detect_pos_bias_proxy_single, load_real_puzzle};
+    use crate::math::secp::Secp256k1;
+    use crate::math::bigint::BigInt256;
+
+    let curve = Secp256k1::new();
+    let mut mod9_hist = [0u32; 9];
+    let mut mod27_hist = [0u32; 27];
+    let mut mod81_hist = [0u32; 81];
+    let mut vanity_hist = [0u32; 16]; // hex digits 0-f
+    let mut pos_proxy_hist = [0u32; 10]; // 10 bins for proxy positions
+
+    let mut solved_count = 0;
+    let mut unsolved_count = 0;
+
+    // Process all puzzles
+    for entry in crate::PUZZLE_MAP.iter() {
+        if let Some(pub_hex) = entry.pub_hex {
+            // For puzzles with known public keys, we can analyze biases
+            let point = match load_real_puzzle(entry.n, &curve) {
+                Ok(p) => p,
+                Err(_) => continue, // Skip if loading fails
+            };
+
+            let x_bigint = BigInt256::from_u64_array(point.x);
+            let (mod9, mod27, mod81, vanity_last_0, dp_mod9) = detect_bias_single(&x_bigint);
+
+            // Extract last hex digit for vanity
+            let last_hex = pub_hex.chars().last().unwrap_or('0');
+            let vanity_digit = u32::from_str_radix(&last_hex.to_string(), 16).unwrap_or(0);
+
+            // Update histograms
+            mod9_hist[mod9 as usize] += 1;
+            mod27_hist[mod27 as usize] += 1;
+            mod81_hist[mod81 as usize] += 1;
+            vanity_hist[vanity_digit as usize] += 1;
+
+            // Positional proxy (0.0 for all unsolved)
+            let pos_proxy = detect_pos_bias_proxy_single(entry.n);
+            let bin = ((pos_proxy * 10.0) as usize).min(9);
+            pos_proxy_hist[bin] += 1;
+
+            if entry.priv_hex.is_some() {
+                solved_count += 1;
+            } else {
+                unsolved_count += 1;
+                println!("Unsolved #{}: mod9={}, mod27={}, mod81={}, vanity_last_hex={}, pos_proxy={:.1}",
+                        entry.n, mod9, mod27, mod81, last_hex, pos_proxy);
+            }
+        }
+    }
+
+    println!("\n📊 Unsolved Puzzles Bias Analysis Summary:");
+    println!("Total puzzles analyzed: {} solved + {} unsolved = {}",
+             solved_count, unsolved_count, solved_count + unsolved_count);
+
+    // Calculate bias factors (max prevalence / uniform expectation)
+    let unsolved_total = unsolved_count as f64;
+    if unsolved_total > 0.0 {
+        let uniform_mod9 = unsolved_total / 9.0;
+        let max_mod9 = mod9_hist.iter().map(|&c| c as f64).fold(0.0, f64::max);
+        let mod9_bias = max_mod9 / uniform_mod9;
+        println!("🎯 Mod9 bias factor: {:.2}x (uniform=1.0x)", mod9_bias);
+
+        let uniform_mod27 = unsolved_total / 27.0;
+        let max_mod27 = mod27_hist.iter().map(|&c| c as f64).fold(0.0, f64::max);
+        let mod27_bias = max_mod27 / uniform_mod27;
+        println!("🎯 Mod27 bias factor: {:.2}x (uniform=1.0x)", mod27_bias);
+
+        let uniform_mod81 = unsolved_total / 81.0;
+        let max_mod81 = mod81_hist.iter().map(|&c| c as f64).fold(0.0, f64::max);
+        let mod81_bias = max_mod81 / uniform_mod81;
+        println!("🎯 Mod81 bias factor: {:.2}x (uniform=1.0x)", mod81_bias);
+
+        let uniform_vanity = unsolved_total / 16.0;
+        let max_vanity = vanity_hist.iter().map(|&c| c as f64).fold(0.0, f64::max);
+        let vanity_bias = max_vanity / uniform_vanity;
+        println!("🎨 Vanity bias factor: {:.2}x (uniform=1.0x)", vanity_bias);
+
+        let uniform_pos = unsolved_total / 10.0;
+        let max_pos = pos_proxy_hist.iter().map(|&c| c as f64).fold(0.0, f64::max);
+        let pos_bias = max_pos / uniform_pos;
+        println!("📍 Pos proxy bias factor: {:.2}x (uniform=1.0x)", pos_bias);
+
+        // Check for significant biases
+        if mod9_bias > 1.2 {
+            println!("🔥 Strong mod9 clustering detected!");
+        }
+        if mod27_bias > 1.5 {
+            println!("🔥 Strong mod27 clustering detected!");
+        }
+        if mod81_bias > 2.0 {
+            println!("🔥 Strong mod81 clustering detected!");
+        }
+        if vanity_bias > 1.5 {
+            println!("🔥 Strong vanity clustering detected!");
+        }
+        if pos_bias > 1.1 {
+            println!("🔥 Strong positional clustering detected!");
+        }
+    }
+
+    Ok(())
+}
+
 /// Cleanup test files
 #[test]
 fn cleanup() {

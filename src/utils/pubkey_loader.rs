@@ -402,6 +402,77 @@ fn combine_multi_bias(probs: Vec<f64>) -> f64 {
     probs.iter().fold(1.0, |acc, &p| acc * p) // Product for layered
 }
 
+/// Detect bias for a single point (used for individual puzzle analysis)
+pub fn detect_bias_single(x: &BigInt256) -> (u64, u64, u64, bool, bool) {
+    let mod9 = x.mod_u64(9);
+    let mod27 = x.mod_u64(27);
+    let mod81 = x.mod_u64(81);
+
+    // Vanity bias: check if last hex digit is '0' (common vanity pattern)
+    let x_hex = x.to_hex();
+    let vanity_last_0 = x_hex.ends_with('0');
+
+    // DP mod9: trivial check if mod9 matches (for DP framework)
+    let dp_mod9 = true; // Always true for single point - would be used in DP collection
+
+    (mod9, mod27, mod81, vanity_last_0, dp_mod9)
+}
+
+/// Detect dimensionless position bias for a single puzzle
+/// Returns normalized position in [0,1] within the puzzle's interval
+pub fn detect_pos_bias_single(priv_key: &BigInt256, puzzle_n: u32) -> f64 {
+    // For puzzle #N: range is [2^(N-1), 2^N - 1]
+    // pos = (priv - 2^(N-1)) / (2^N - 1 - 2^(N-1)) = (priv - 2^(N-1)) / (2^(N-1))
+
+    // Calculate 2^(N-1) using bit shifting
+    let mut min_range = BigInt256::from_u64(1);
+    for _ in 0..(puzzle_n - 1) {
+        min_range = min_range.clone().add(min_range.clone()); // Double the value
+    }
+    let range_width = min_range.clone(); // 2^(N-1)
+
+    // priv should be >= min_range for valid puzzles
+    if priv_key < &min_range {
+        return 0.0; // Invalid, but return 0
+    }
+
+    let offset = priv_key.clone().sub(min_range.clone());
+    let pos = offset.to_f64() / range_width.to_f64();
+
+    // Clamp to [0,1] in case of rounding issues
+    pos.max(0.0).min(1.0)
+}
+
+/// Detect proxy positional bias for unsolved puzzles
+/// Returns proxy position (0.0 for start of range) since priv is unknown
+pub fn detect_pos_bias_proxy_single(n: u32) -> f64 {
+    // For unsolved puzzles, we use the starting point [2^(n-1)]G as proxy
+    // This gives pos = 0.0, but we can analyze clustering patterns from solved puzzles
+    0.0
+}
+
+/// Analyze positional bias across multiple solved puzzles
+/// Returns histogram of positional clustering (10 bins [0-0.1, 0.1-0.2, ..., 0.9-1.0])
+pub fn analyze_pos_bias_histogram(solved_puzzles: &[(u32, BigInt256)]) -> [f64; 10] {
+    let mut hist = [0u32; 10];
+
+    for (puzzle_n, priv_key) in solved_puzzles {
+        let pos = detect_pos_bias_single(priv_key, *puzzle_n);
+        let bin = (pos * 10.0).min(9.0) as usize; // 0-9 for 10 bins
+        hist[bin] += 1;
+    }
+
+    let total = solved_puzzles.len() as f64;
+    let mut result = [0.0; 10];
+
+    for i in 0..10 {
+        // Normalize: prevalence per bin (uniform would be 1.0)
+        result[i] = if total > 0.0 { (hist[i] as f64) / (total / 10.0) } else { 1.0 };
+    }
+
+    result
+}
+
 /// Concise Block: Detect Biases with Prevalence b
 fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<String, f64> {
     let mut prevalences = std::collections::HashMap::new();
@@ -417,6 +488,7 @@ fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<St
     prevalences.insert("dp_mod9".to_string(), dp_b);
     prevalences
 }
+
 
 
 /// Helper function for DP bias detection
