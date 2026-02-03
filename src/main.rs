@@ -37,6 +37,8 @@ struct Args {
     max_cycles: u64,
     #[arg(long)]
     unsolved: bool,  // Skip private key verification for unsolved puzzles
+    #[arg(long)]
+    bias_analysis: bool,  // Run complete bias analysis on unsolved puzzles
 }
 
 /// Bitcoin Puzzle Database Structure
@@ -406,12 +408,18 @@ fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
 
-    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, gpu={}, max_cycles={}, unsolved={}",
-             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.gpu, args.max_cycles, args.unsolved);
+    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, gpu={}, max_cycles={}, unsolved={}",
+             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.gpu, args.max_cycles, args.unsolved);
 
     // Check if pubkey validation is requested
     if args.check_pubkeys {
         check_puzzle_pubkeys()?;
+        return Ok(());
+    }
+
+    // Check if bias analysis is requested
+    if args.bias_analysis {
+        run_bias_analysis()?;
         return Ok(());
     }
 
@@ -446,6 +454,125 @@ fn main() -> Result<()> {
 
     info!("SpeedBitCrack V3 puzzle mode completed successfully!");
     Ok(())
+}
+
+/// Run complete bias analysis on unsolved puzzles and recommend the best target
+fn run_bias_analysis() -> Result<()> {
+    println!("🎯 Running complete bias analysis on unsolved Bitcoin puzzles (67-160)...");
+    println!("📊 This will analyze mod9, mod27, mod81, vanity, and positional biases");
+    println!("🎯 Goal: Identify which puzzle has the best bias characteristics for cracking\n");
+
+    let curve = Secp256k1::new();
+    let mut results = Vec::new();
+
+    // Analyze each unsolved puzzle
+    for entry in PUZZLE_MAP.iter() {
+        if entry.priv_hex.is_some() {
+            continue; // Skip solved puzzles
+        }
+
+        if let Some(pub_hex) = entry.pub_hex {
+            // Load the point
+            match load_real_puzzle(entry.n, &curve) {
+                Ok(point) => {
+                    // Run bias analysis
+                    let x_bigint = BigInt256::from_u64_array(point.x);
+                    let (mod9, mod27, mod81, _, _) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint);
+                    let pos_proxy = speedbitcrack::utils::pubkey_loader::detect_pos_bias_proxy_single(entry.n);
+
+                    // Calculate range size for complexity estimate
+                    let range_size = BigInt256::from_u64(1) << (entry.n as usize); // 2^n
+
+                    results.push(BiasResult {
+                        puzzle_n: entry.n,
+                        mod9,
+                        mod27,
+                        mod81,
+                        pos_proxy,
+                        range_size,
+                    });
+                }
+                Err(_) => {
+                    println!("⚠️  Failed to load puzzle #{}", entry.n);
+                }
+            }
+        }
+    }
+
+    if results.is_empty() {
+        println!("❌ No unsolved puzzles found with valid public keys");
+        return Ok(());
+    }
+
+    // Sort by estimated crackability (lower is better)
+    results.sort_by(|a, b| a.estimated_complexity().partial_cmp(&b.estimated_complexity()).unwrap());
+
+    // Display top 10 recommendations
+    println!("🏆 TOP 10 RECOMMENDED PUZZLES TO CRACK FIRST:");
+    println!("{}", "═".repeat(100));
+    println!("{:>3} │ {:>8} │ {:>4} │ {:>4} │ {:>4} │ {:>6} │ {:>12} │ {:>10}",
+             "#", "Range", "Mod9", "Mod27", "Mod81", "Pos", "Complexity", "Score");
+    println!("{}", "═".repeat(100));
+
+    for (i, result) in results.iter().enumerate().take(10) {
+        let complexity_str = format!("2^{:.1}", (result.puzzle_n as f64) - result.bias_score().log2());
+        println!("{:>3} │ 2^{:<6} │ {:>4} │ {:>4} │ {:>4} │ {:.3} │ {:>12} │ {:.6}",
+                 result.puzzle_n,
+                 result.puzzle_n,
+                 result.mod9,
+                 result.mod27,
+                 result.mod81,
+                 result.pos_proxy,
+                 complexity_str,
+                 result.bias_score());
+    }
+
+    println!("{}", "═".repeat(100));
+
+    // Show the best recommendation
+    if let Some(best) = results.first() {
+        println!("\n🎯 RECOMMENDED TARGET: Puzzle #{}", best.puzzle_n);
+        println!("📊 Bias Score: {:.6} (lower is better)", best.bias_score());
+        println!("🔢 Range: 2^{} ({:.2e})", best.puzzle_n, best.range_size.to_f64());
+        println!("🎲 Mod9 Residue: {}", best.mod9);
+        println!("🎲 Mod27 Residue: {}", best.mod27);
+        println!("🎲 Mod81 Residue: {}", best.mod81);
+        println!("📍 Pos Proxy: {:.3}", best.pos_proxy);
+        println!("⚡ Estimated Complexity: 2^{:.1} operations", best.estimated_complexity().log2());
+        println!("💡 Run with: cargo run -- --real-puzzle {}", best.puzzle_n);
+    }
+
+    Ok(())
+}
+
+/// Structure to hold bias analysis results
+#[derive(Debug, Clone)]
+struct BiasResult {
+    puzzle_n: u32,
+    mod9: u64,
+    mod27: u64,
+    mod81: u64,
+    pos_proxy: f64,
+    range_size: BigInt256,
+}
+
+impl BiasResult {
+    /// Calculate bias score (lower is better for cracking)
+    fn bias_score(&self) -> f64 {
+        // Combine multiple bias factors
+        let mod9_bias = if self.mod9 == 0 { 2.0 } else { 1.0 }; // Magic 9 bonus
+        let mod27_bias = if self.mod27 == 0 { 1.5 } else { 1.0 };
+        let mod81_bias = if self.mod81 == 0 { 1.3 } else { 1.0 };
+        let pos_bias = if self.pos_proxy < 0.2 { 1.2 } else { 1.0 }; // Low position bonus
+
+        mod9_bias * mod27_bias * mod81_bias * pos_bias
+    }
+
+    /// Estimate complexity after bias adjustment
+    fn estimated_complexity(&self) -> f64 {
+        let original_complexity = self.range_size.to_f64().sqrt();
+        original_complexity / self.bias_score().sqrt()
+    }
 }
 
 /// Run a specific puzzle for testing
