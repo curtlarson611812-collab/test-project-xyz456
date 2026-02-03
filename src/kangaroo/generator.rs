@@ -12,6 +12,10 @@ use anyhow::anyhow;
 
 use anyhow::Result;
 use log::warn;
+use rayon::prelude::*;
+use rand::rngs::OsRng;
+use rand::Rng;
+use std::sync::Arc;
 
 /// Concise Block: Brent's Cycle Detection for Rho Walks
 fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where F: Fn(&BigInt256) -> BigInt256 { // (start point, μ, λ)
@@ -513,7 +517,7 @@ impl KangarooGenerator {
     /// Pollard's lambda algorithm for discrete logarithm in intervals
     /// Searches for k in [a, a+w] such that [k]G = Q
     /// Expected time O(√w) with tame/wild kangaroos
-    pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, max_cycles: u64, gpu: bool) -> Option<BigInt256> {
+    pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, max_cycles: u64, gpu: bool, bias_mod: u64) -> Option<BigInt256> {
         use std::collections::HashMap;
         use crate::math::bigint::{BigInt256, BigInt512};
         use crate::types::Point;
@@ -558,5 +562,34 @@ impl KangarooGenerator {
             }
         }
         None
+    }
+
+    /// Multi-kangaroo parallel Pollard's lambda algorithm
+    /// Uses multiple independent kangaroo pairs for O(√w / t) expected time
+    /// where t is the number of kangaroo pairs
+    pub fn pollard_lambda_parallel(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize, max_cycles: u64, gpu: bool, bias_mod: u64) -> Option<BigInt256> {
+        if gpu {
+            // TODO: GPU implementation - dispatch to hybrid manager
+            warn!("GPU multi-kangaroo not yet implemented, falling back to CPU");
+            // For now, fall back to CPU implementation
+        }
+
+        // CPU parallel implementation using rayon
+        let curve_ref = &curve;
+        let g_arc = Arc::new(g.clone());
+        let q_arc = Arc::new(q.clone());
+        (0..num_kangaroos).into_par_iter().map(|_i| {
+            // Generate random offset for this kangaroo pair
+            // Use a simple approach to get a u64 from the range size
+            let w_array = w.to_u64_array();
+            let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
+            let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
+            let offset = BigInt256::from_u64(offset_u64);
+
+            let adjusted_a = curve_ref.barrett_n.add(&a, &offset);
+            let adjusted_w = w.right_shift((num_kangaroos as f64).log2() as usize); // Split range
+
+            self.pollard_lambda(curve_ref, &g_arc, &q_arc, adjusted_a, adjusted_w, max_cycles / num_kangaroos as u64, false, bias_mod)
+        }).find_any(|sol: &Option<BigInt256>| sol.is_some()).flatten()
     }
 }

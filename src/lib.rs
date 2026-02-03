@@ -23,6 +23,7 @@ pub mod dp;
 pub mod parity;
 pub mod targets;
 pub mod utils;
+pub mod puzzles;
 pub mod security;
 pub mod test_basic;
 

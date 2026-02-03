@@ -53,8 +53,14 @@ impl KangarooStepper {
     /// Step a single kangaroo one jump
     /// Returns updated position and coefficients
     pub fn step_kangaroo(&self, kangaroo: &KangarooState, target: Option<&Point>) -> KangarooState {
+        self.step_kangaroo_with_bias(kangaroo, target, 0) // Default no bias
+    }
+
+    /// Step a single kangaroo one jump with bias-aware jumping
+    /// bias_mod = 0 means no bias, bias_mod > 0 means prefer biased jumps
+    pub fn step_kangaroo_with_bias(&self, kangaroo: &KangarooState, target: Option<&Point>, bias_mod: u64) -> KangarooState {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
-        let jump_op = self.select_jump_operation(kangaroo, target);
+        let jump_op = self.select_bias_aware_jump(kangaroo, target, bias_mod);
         let (new_position, alpha_update, beta_update) = self.apply_jump(kangaroo, jump_op, target);
         let new_alpha = self.update_coefficient(&kangaroo.alpha, &alpha_update, true);
         let new_beta = self.update_coefficient(&kangaroo.beta, &beta_update, false);
@@ -101,6 +107,61 @@ impl KangarooStepper {
                     1 => JumpOp::SubG,
                     2 => JumpOp::AddKG,
                     _ => JumpOp::SubKG,
+                }
+            }
+        }
+    }
+
+    /// Select bias-aware jump operation with configurable modulus preference
+    /// bias_mod = 0 means no bias (uniform), bias_mod > 0 means prefer jumps where hash % bias_mod == 0
+    pub fn select_bias_aware_jump(&self, kangaroo: &KangarooState, target: Option<&Point>, bias_mod: u64) -> JumpOp {
+        if bias_mod == 0 {
+            // No bias, use standard selection
+            return self.select_jump_operation(kangaroo, target);
+        }
+
+        // Use bias-aware selection
+        let pos_hash = self.hash_position(&kangaroo.position);
+
+        // Check if position satisfies bias condition
+        let is_biased = (pos_hash as u64 % bias_mod) == 0;
+
+        // With bias, prefer certain jump operations when condition is met
+        match kangaroo.is_tame {
+            true => {
+                // Tame kangaroo: bias toward target operations when biased
+                if is_biased {
+                    // Biased tame: prefer AddKG/SubKG for stronger target attraction
+                    match pos_hash % 2 {
+                        0 => JumpOp::AddKG,
+                        _ => JumpOp::SubKG,
+                    }
+                } else {
+                    // Non-biased tame: use standard selection
+                    match pos_hash % 4 {
+                        0 => JumpOp::AddG,
+                        1 => JumpOp::SubG,
+                        2 => JumpOp::AddKG,
+                        _ => JumpOp::SubKG,
+                    }
+                }
+            }
+            false => {
+                // Wild kangaroo: bias toward generator operations when biased
+                if is_biased {
+                    // Biased wild: prefer AddG/SubG for stronger generator attraction
+                    match pos_hash % 2 {
+                        0 => JumpOp::AddG,
+                        _ => JumpOp::SubG,
+                    }
+                } else {
+                    // Non-biased wild: use standard selection
+                    match pos_hash % 4 {
+                        0 => JumpOp::AddG,
+                        1 => JumpOp::SubG,
+                        2 => JumpOp::AddKG,
+                        _ => JumpOp::SubKG,
+                    }
                 }
             }
         }
