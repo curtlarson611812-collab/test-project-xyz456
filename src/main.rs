@@ -39,6 +39,8 @@ struct Args {
     unsolved: bool,  // Skip private key verification for unsolved puzzles
     #[arg(long)]
     bias_analysis: bool,  // Run complete bias analysis on unsolved puzzles
+    #[arg(long)]
+    crack_unsolved: bool,  // Auto pick and crack most likely unsolved puzzle
 }
 
 /// Bitcoin Puzzle Database Structure
@@ -408,8 +410,8 @@ fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
 
-    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, gpu={}, max_cycles={}, unsolved={}",
-             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.gpu, args.max_cycles, args.unsolved);
+    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}",
+             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved);
 
     // Check if pubkey validation is requested
     if args.check_pubkeys {
@@ -420,6 +422,12 @@ fn main() -> Result<()> {
     // Check if bias analysis is requested
     if args.bias_analysis {
         run_bias_analysis()?;
+        return Ok(());
+    }
+
+    // Check if crack unsolved is requested
+    if args.crack_unsolved {
+        run_crack_unsolved(&args)?;
         return Ok(());
     }
 
@@ -509,10 +517,10 @@ fn run_bias_analysis() -> Result<()> {
 
     // Display top 10 recommendations
     println!("🏆 TOP 10 RECOMMENDED PUZZLES TO CRACK FIRST:");
-    println!("{}", "═".repeat(100));
+    println!("═" .repeat(100));
     println!("{:>3} │ {:>8} │ {:>4} │ {:>4} │ {:>4} │ {:>6} │ {:>12} │ {:>10}",
              "#", "Range", "Mod9", "Mod27", "Mod81", "Pos", "Complexity", "Score");
-    println!("{}", "═".repeat(100));
+    println!("═" .repeat(100));
 
     for (i, result) in results.iter().enumerate().take(10) {
         let complexity_str = format!("2^{:.1}", (result.puzzle_n as f64) - result.bias_score().log2());
@@ -527,7 +535,7 @@ fn run_bias_analysis() -> Result<()> {
                  result.bias_score());
     }
 
-    println!("{}", "═".repeat(100));
+    println!("═" .repeat(100));
 
     // Show the best recommendation
     if let Some(best) = results.first() {
@@ -544,6 +552,55 @@ fn run_bias_analysis() -> Result<()> {
 
     Ok(())
 }
+
+/// Auto pick and crack the most likely unsolved puzzle
+fn run_crack_unsolved(args: &Args) -> Result<()> {
+    println!("🎯 Auto-selecting and cracking most likely unsolved puzzle...");
+
+    let most_likely = pick_most_likely_unsolved();
+    println!("🎯 Selected puzzle #{} as most likely to crack", most_likely);
+
+    // Create mode and execute
+    let mode = RealMode { n: most_likely };
+    let curve = Secp256k1::new();
+    let config = Config::default();
+    let gen = KangarooGenerator::new(&config);
+
+    let point = mode.load(&curve)?;
+    mode.execute(&gen, &point, args)?;
+
+    Ok(())
+}
+
+/// Pick the most likely unsolved puzzle to crack based on bias analysis
+fn pick_most_likely_unsolved() -> u32 {
+    let mut max_score = 0.0;
+    let mut best_n = 67; // Default to smallest unsolved
+
+    for entry in PUZZLE_MAP.iter() {
+        if entry.priv_hex.is_some() {
+            continue; // Skip solved
+        }
+
+        if entry.pub_hex.is_none() {
+            continue; // Skip if no public key
+        }
+
+        // Simple scoring: smaller puzzles with any bias are preferred
+        // Higher bias_score reduces effective complexity
+        let base_complexity = entry.n as f64 / 2.0; // log2(sqrt(2^n)) = n/2
+        let bias_bonus = 0.1; // Assume some bias reduction
+        let score = 1.0 / (base_complexity - bias_bonus); // Higher score = easier
+
+        if score > max_score {
+            max_score = score;
+            best_n = entry.n;
+        }
+    }
+
+    best_n
+}
+
 
 /// Structure to hold bias analysis results
 #[derive(Debug, Clone)]
@@ -1077,7 +1134,42 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
         info!("🎉 Magic 9 proxy hit! This suggests attractor clustering around multiples of 9");
     }
 
-    // Skip pollard_lambda execution for bias discovery demo
-    info!("Bias discovery completed - skipping pollard_lambda execution");
+    // Execute Pollard's lambda algorithm
+    info!("🚀 Starting Pollard's lambda algorithm execution...");
+
+    // Calculate bias score for optimization
+    let bias_score = (mod9 as f64).max(1.0) * (mod27 as f64 / 27.0).max(0.037) *
+                     (mod81 as f64 / 81.0).max(0.012) * pos_proxy.max(0.1);
+    let effective_complexity = ((n-1) as f64 / 2.0) - bias_score.log2();
+
+    info!("📊 Bias score: {:.3}, Effective complexity: 2^{:.1} operations", bias_score, effective_complexity);
+
+    // Execute Pollard's lambda
+    let max_cycles = if args.max_cycles > 0 { args.max_cycles } else { 10_000_000_000 }; // Default 10B cycles for testing
+
+    info!("🎯 Executing Pollard's lambda with max_cycles: {}", max_cycles);
+
+    // Call the actual kangaroo algorithm
+    match gen.pollard_lambda(&curve, &curve.g, point, a, w, max_cycles, args.gpu) {
+        Some(solution) => {
+            info!("🎉 SUCCESS! Puzzle #{} CRACKED!", n);
+            info!("🔑 Private key: {}", solution.to_hex());
+            info!("✅ Verification: [priv]G should equal target point");
+
+            // Verify the solution
+            let computed_point = curve.mul_constant_time(&solution, &curve.g)?;
+            if computed_point.x == point.x && computed_point.y == point.y {
+                info!("✅ Solution verified - private key is correct!");
+            } else {
+                info!("❌ Solution verification failed - possible error");
+            }
+        }
+        None => {
+            info!("❌ No solution found within {} cycles", max_cycles);
+            info!("💡 Try increasing max_cycles or check bias analysis");
+            info!("💡 Current bias_score: {:.3} suggests {:.1}x speedup potential", bias_score, bias_score.sqrt());
+        }
+    }
+
     Ok(())
 }

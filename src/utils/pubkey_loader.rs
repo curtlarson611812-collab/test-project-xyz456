@@ -696,7 +696,7 @@ fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<St
     prevalences.insert("dp_mod9".to_string(), dp_b);
 
     // Add deeper mod9 analysis
-    let (_, mod9_max_bias, _) = analyze_mod9_bias_deeper(points);
+    let (_, mod9_max_bias, _, _, _) = analyze_mod9_bias_deeper(points);
     prevalences.insert("mod9_deeper".to_string(), mod9_max_bias);
 
     prevalences
