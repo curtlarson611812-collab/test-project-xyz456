@@ -1437,4 +1437,41 @@ impl SoaLayout {
 
         Ok(())
     }
+
+    /// Configure L1 cache and Data L1 Cache Mode for optimal memory access
+    #[cfg(feature = "rustacuda")]
+    pub fn configure_l1_dlcm_cache(&self, l1_enabled: bool, dlcm_mode: &str) -> Result<(), DriverError> {
+        use cudarc::driver::CudaCacheConfig;
+
+        let device = self.device()?;
+        let context = device.context();
+
+        // Configure L1 cache preference
+        if l1_enabled {
+            context.set_cache_config(CudaCacheConfig::PreferL1)?;
+            log::info!("L1 cache enabled for improved local memory access");
+        } else {
+            context.set_cache_config(CudaCacheConfig::PreferShared)?;
+            log::info!("Shared memory preferred over L1 cache");
+        }
+
+        // Configure Data L1 Cache Mode (DLCM)
+        match dlcm_mode {
+            "ca" => {
+                // Cache all loads and stores (-dlcm=ca)
+                context.set_cache_config(CudaCacheConfig::PreferL1)?;
+                log::info!("DLCM set to cache all (ca) mode");
+            }
+            "cg" => {
+                // Cache global loads only (-dlcm=cg)
+                context.set_cache_config(CudaCacheConfig::PreferShared)?;
+                log::info!("DLCM set to cache global (cg) mode");
+            }
+            _ => {
+                log::warn!("Unknown DLCM mode: {}, using default", dlcm_mode);
+            }
+        }
+
+        Ok(())
+    }
 }

@@ -7,6 +7,8 @@ use std::ops::{Add, Sub, Mul, Div, Rem};
 use std::error::Error;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use num_bigint::BigInt;
+use num_traits::Num;
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -273,24 +275,27 @@ impl BigInt256 {
         BigInt256 { limbs: [x, 0, 0, 0] }
     }
 
-    /// Create from hex string (pads with leading zeros if shorter than 256 bits)
+    /// Create from hex string using num_bigint for robust parsing
+    /// Panics on invalid input to maintain backward compatibility
     pub fn from_hex(hex: &str) -> Self {
-        let hex = hex.trim_start_matches("0x");
-        let mut bytes = hex::decode(hex).expect("Invalid hex string");
+        let clean_hex = if hex.starts_with("0x") { &hex[2..] } else { hex };
+        let bigint = BigInt::from_str_radix(clean_hex, 16).expect("Invalid hex string");
 
-        // Pad with leading zeros to make exactly 32 bytes (256 bits)
-        while bytes.len() < 32 {
-            bytes.insert(0, 0);
-        }
+        // Convert to bytes (big-endian)
+        let bytes = bigint.to_bytes_be().1;
 
-        assert_eq!(bytes.len(), 32, "Hex string too long after padding");
+        // Pad or truncate to exactly 32 bytes
+        let mut padded_bytes = [0u8; 32];
+        let copy_len = bytes.len().min(32);
+        let start_idx = 32 - copy_len;
+        padded_bytes[start_idx..32].copy_from_slice(&bytes[bytes.len() - copy_len..]);
 
+        // Convert to limbs (little-endian)
         let mut limbs = [0u64; 4];
-        // Convert big-endian bytes to little-endian limbs
         for i in 0..4 {
-            limbs[i] = u64::from_le_bytes([
-                bytes[31 - i * 8], bytes[30 - i * 8], bytes[29 - i * 8], bytes[28 - i * 8],
-                bytes[27 - i * 8], bytes[26 - i * 8], bytes[25 - i * 8], bytes[24 - i * 8],
+            limbs[i] = u64::from_be_bytes([
+                padded_bytes[i * 8], padded_bytes[i * 8 + 1], padded_bytes[i * 8 + 2], padded_bytes[i * 8 + 3],
+                padded_bytes[i * 8 + 4], padded_bytes[i * 8 + 5], padded_bytes[i * 8 + 6], padded_bytes[i * 8 + 7],
             ]);
         }
 

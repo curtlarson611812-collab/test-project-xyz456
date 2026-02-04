@@ -807,4 +807,43 @@ impl HybridBackend {
         cuda.prefetch_batch(states, batch_start, batch_size).await?;
         Ok(())
     }
+
+    /// Unified memory prefetching for optimal access patterns
+    #[cfg(feature = "rustacuda")]
+    pub async fn prefetch_unified_memory(&self, ptr: *mut RhoState, size_bytes: usize,
+                                        to_gpu: bool) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::gpu::backends::cuda_backend::CudaBackend;
+
+        let cuda = CudaBackend::new()?;
+        let device = cuda.device()?;
+
+        let flags = if to_gpu {
+            cudarc::driver::sys::cudaMemoryAdvise::cudaMemAdviseSetPreferredLocation
+        } else {
+            cudarc::driver::sys::cudaMemoryAdvise::cudaMemAdviseUnsetPreferredLocation
+        };
+
+        // Set memory advice for optimal access pattern
+        device.mem_advise(ptr as *mut std::ffi::c_void, size_bytes, flags, 0)?;
+
+        // Prefetch to target location
+        if to_gpu {
+            device.mem_prefetch_async(
+                ptr as *const std::ffi::c_void,
+                size_bytes,
+                0, // device ordinal
+                None, // default stream
+            )?;
+        } else {
+            // Prefetch to host
+            device.mem_prefetch_async(
+                ptr as *const std::ffi::c_void,
+                size_bytes,
+                cudarc::driver::sys::cudaCpuDeviceId,
+                None,
+            )?;
+        }
+
+        Ok(())
+    }
 }

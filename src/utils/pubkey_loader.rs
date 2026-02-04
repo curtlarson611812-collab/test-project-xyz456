@@ -565,6 +565,34 @@ pub fn iterative_mod9_slice(points: &[Point], max_levels: u32) -> f64 {
 
 /// Generalized mod bias analysis for any modulus
 /// Returns (hist, expected, max_r, b, sig)
+/// SIMD-accelerated bias checking using portable SIMD when available
+/// Falls back to scalar operations when SIMD is not enabled
+#[cfg(feature = "portable_simd")]
+fn simd_bias_check(res: u32, high_res: &[u32]) -> bool {
+    use std::simd::{u32x4, SimdPartialEq};
+
+    // Pad high_res to multiple of 4 for SIMD operations
+    let mut padded = [0u32; 128]; // Maximum expected size for bias checking
+    let copy_len = high_res.len().min(padded.len());
+    padded[..copy_len].copy_from_slice(&high_res[..copy_len]);
+
+    // Process in chunks of 4 using SIMD
+    for i in (0..copy_len).step_by(4) {
+        let vec_res = u32x4::splat(res);
+        let vec_high = u32x4::from_slice(&padded[i..i+4]);
+        if vec_res.simd_eq(vec_high).any() {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(not(feature = "portable_simd"))]
+fn simd_bias_check(res: u32, high_res: &[u32]) -> bool {
+    // Scalar fallback for systems without SIMD support
+    high_res.contains(&res)
+}
+
 fn analyze_mod_bias_deeper(points: &[Point], modulus: u64) -> ([u32; 81], f64, u64, f64, bool) {
     let mut hist = [0u32; 81];
     let total = points.len() as f64;

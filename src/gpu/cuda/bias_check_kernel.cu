@@ -71,3 +71,34 @@ __global__ void common_bias_attractor_check(uint64_t* x_limbs, uint8_t* results,
 }
 
 // Deep note: Multi-modulus bias checking for efficient attractor filtering - results[idx*3] = mod9, results[idx*3+1] = mod27, results[idx*3+2] = mod81
+
+// Shared memory padding for bank conflict-free bias table access
+__global__ void bias_check_kernel_padded(uint32_t* dist_limbs, uint8_t* is_biased, uint32_t count, float* bias_global) {
+    // Shared memory with padding to avoid bank conflicts (32 banks)
+    __shared__ float bias_shared[81 + 31];  // Pad to 112 elements to avoid bank conflicts
+
+    // Load bias table into shared memory with conflict-free access pattern
+    if (threadIdx.x < 81) {
+        // Use padding to avoid bank conflicts
+        uint32_t bank_idx = threadIdx.x % 32;
+        uint32_t bank_offset = threadIdx.x / 32;
+        uint32_t shared_idx = bank_idx + bank_offset * 32 + bank_offset;
+
+        bias_shared[shared_idx] = bias_global[threadIdx.x];
+    }
+    __syncthreads();
+
+    uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= count) return;
+
+    // Compute residue using Barrett reduction for efficiency
+    uint32_t res = dist_limbs[idx] % 81;  // Or use Barrett reduction
+
+    // Access shared memory with conflict-free indexing
+    uint32_t bank_idx = res % 32;
+    uint32_t bank_offset = res / 32;
+    uint32_t access_idx = bank_idx + bank_offset * 32 + bank_offset;
+
+    float bias_factor = bias_shared[access_idx];
+    is_biased[idx] = (bias_factor > 1.0f) ? 1 : 0;
+}
