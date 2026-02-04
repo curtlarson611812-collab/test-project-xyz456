@@ -163,6 +163,9 @@ fn main() {
 
         // Compile rho_kernel.cu to PTX for rho kernel with bias support
         let cuda_home = env::var("CUDA_HOME").unwrap_or("/usr/local/cuda".to_string());
+        let arch = if cfg!(feature = "laptop") { "sm_86" } else { "sm_120" };  // Conditional
+        let compute = if cfg!(feature = "laptop") { "86" } else { "120" };
+        let regs = if cfg!(feature = "laptop") { "48" } else { "64" };
         let rho_ptx = Path::new(&out_dir).join("rho_kernel.ptx");
         let status = Command::new("nvcc")
             .arg("-ptx")
@@ -170,12 +173,12 @@ fn main() {
             .arg("-o")
             .arg(&rho_ptx)
             .arg(format!("-I{}/include", cuda_home))  // For curand_kernel.h
-            .arg("--gpu-architecture=sm_120")  // RTX 5090 (Blackwell)
-            .arg("--gencode=arch=compute_120,code=sm_120")  // Full compat
+            .arg(format!("--gpu-architecture={}", arch))
+            .arg(format!("--gencode=arch=compute_{},code={}", compute, arch))
             .arg("--optimize=3")
             .arg("--use_fast_math")
             .arg("--ftz=true")  // Flush denormals for 5% boost
-            .arg("--maxrregcount=64")  // Balance regs vs occupancy (aim 50-75%)
+            .arg(format!("--maxrregcount={}", regs))  // Lower for laptop occ
             .arg("--dlcm=cg")  // L1 cache for ECC perf
             .arg("--res-usage")  // Optimize resources
             .arg("--ptxas-options=-v")  // Verbose for occupancy check

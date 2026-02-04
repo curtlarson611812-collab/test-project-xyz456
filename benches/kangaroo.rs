@@ -155,5 +155,20 @@ fn bench_puzzle66(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66);
+// Chunk: Laptop-Opt #66 Bench (benches/kangaroo.rs)
+fn bench_puzzle66_laptop(c: &mut Criterion) {
+    let low = BigInt::from(1u64 << 65);
+    let high = (BigInt::from(1u64 << 66) - BigInt::from(1));
+    let known_key = BigInt::from_str_radix("2832ed74f2b5e35ee", 16).unwrap();
+    let target = speedbitcrack::targets::loader::load_puzzle_keys().get(65).unwrap().0;
+    let config = speedbitcrack::config::laptop_3070_config();  // From config.rs
+    let mut group = c.benchmark_group("puzzle66_laptop");
+    group.bench_function("partial_crack", |b| b.iter(|| {
+        let key = speedbitcrack::kangaroo::pollard_lambda_parallel_pos(target, (low.clone(), high.clone()), config.max_kangaroos, 81, 2);  // iters=2
+        black_box(key);
+    }));
+    group.finish();
+}
+
+criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66, bench_puzzle66_laptop);
 criterion_main!(benches);

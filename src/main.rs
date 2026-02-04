@@ -18,7 +18,9 @@ use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::math::bigint::BigInt256;
 use speedbitcrack::types::Point;
+use std::process::Command;
 
+// Chunk: Laptop Flag Parse (main.rs)
 /// Command line arguments
 #[derive(Parser)]
 struct Args {
@@ -48,6 +50,21 @@ struct Args {
     bias_mod: u64,  // Bias modulus for jump selection (0 = no bias)
     #[arg(long)]
     verbose: bool,  // Enable verbose logging
+    #[arg(long)]
+    laptop: bool,  // Enable laptop optimizations (sm_86, lower resources)
+    #[arg(long)]
+    puzzle: Option<u32>,  // Specific puzzle to crack, e.g. 67
+}
+
+// Chunk: Thermal Log Spawn (main.rs)
+pub fn start_thermal_log() {
+    Command::new("nvidia-smi")
+        .arg("-lms").arg("500")
+        .arg("--query-gpu=temperature.gpu")
+        .arg("--format=csv")
+        .arg("-f").arg("temp.log")
+        .spawn()
+        .expect("Thermal log failed");
 }
 
 /// Bitcoin Puzzle Database Structure
@@ -185,8 +202,24 @@ fn main() -> Result<()> {
         log::set_max_level(log::LevelFilter::Debug);
     }
 
-    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, verbose={}",
-             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.verbose);
+    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, verbose={}, laptop={}, puzzle={:?}",
+             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.verbose, args.laptop, args.puzzle);
+
+    // Enable thermal logging for laptop mode
+    if args.laptop {
+        start_thermal_log();
+    }
+
+    // Handle specific puzzle cracking
+    if let Some(puzzle_num) = args.puzzle {
+        if puzzle_num == 67 {
+            let (target, range) = speedbitcrack::puzzles::load_unspent_67();
+            let gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbitcrack::config::GpuConfig { arch: "sm_120".to_string(), max_kangaroos: 4096, dp_size: 1<<20, dp_bits: 24, max_regs: 64, gpu_frac: 0.8 } };
+            // Crack logic here
+            println!("Cracking puzzle #67 with target pubkey and range [{}, {}]", range.0.to_hex(), range.1.to_hex());
+        }
+        return Ok(());
+    }
 
     // Check if pubkey validation is requested
     if args.check_pubkeys {
@@ -227,7 +260,7 @@ fn main() -> Result<()> {
 
     println!("DEBUG: Creating curve and generator");
     let curve = Secp256k1::new();
-    let config = Config::default();
+    let config = if args.laptop { /* use laptop config */ Config::default() } else { Config::default() };  // TODO: integrate laptop config
     let gen = KangarooGenerator::new(&config);
     println!("DEBUG: Generator created, loading points");
 

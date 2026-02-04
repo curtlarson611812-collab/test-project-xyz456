@@ -117,6 +117,28 @@ pub enum SearchMode {
     Interval { low: u64, high: u64 },
 }
 
+// Chunk: 3070 Max-Q Config (config.rs)
+#[derive(Debug, Clone)]
+pub struct GpuConfig {
+    pub arch: String,  // "sm_86" for Ampere
+    pub max_kangaroos: usize,  // 2048 for mem
+    pub dp_size: usize,  // 1<<19 =512K
+    pub dp_bits: u32,  // 24 for prob
+    pub max_regs: i32,  // 48 for occ
+    pub gpu_frac: f64,  // 0.7 for hybrid
+}
+
+pub fn laptop_3070_config() -> GpuConfig {
+    GpuConfig {
+        arch: "sm_86".to_string(),
+        max_kangaroos: 2048,
+        dp_size: 1 << 19,
+        dp_bits: 24,
+        max_regs: 48,
+        gpu_frac: 0.7,
+    }
+}
+
 impl Config {
     /// Parse command line arguments into Config
     pub fn parse() -> Result<Self> {

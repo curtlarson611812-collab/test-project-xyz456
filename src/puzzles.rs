@@ -781,3 +781,13 @@ pub fn get_puzzle_range(n: u32) -> Result<(BigInt256, BigInt256), Box<dyn Error>
 
     Ok((start, end))
 }
+
+// Chunk: Unspent #67 Target (puzzles.rs)
+pub fn load_unspent_67() -> (Point, (BigInt256, BigInt256)) {
+    let pubkey = "03633cbe3ec02b9401c5effa144c5b4d22f87940259634858fc7e59b1c09937852";
+    let curve = Secp256k1::new();
+    let point = curve.decompress_pubkey_hex(pubkey).expect("Invalid pubkey");
+    let low = BigInt256::from(1u64) << 66;  // 2^66
+    let high = (BigInt256::from(1u64) << 67) - BigInt256::from(1);  // 2^67 - 1
+    (point, (low, high))
+}

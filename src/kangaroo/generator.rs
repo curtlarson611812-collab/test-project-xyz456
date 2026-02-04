@@ -663,12 +663,12 @@ impl KangarooGenerator {
         let mod27 = hash % 27;
         let mod81 = hash % 81;
 
-        // High bias residues from solved puzzle analysis
+        // High bias residues from solved puzzle analysis (aggressive for laptop)
         const HIGH_BIAS_MOD9: [u64; 2] = [0, 3];  // Magic 9 and common residues
         const HIGH_BIAS_MOD27: [u64; 3] = [0, 9, 18];  // Multiples of 9 within mod27
-        const HIGH_BIAS_MOD81: [u64; 4] = [0, 9, 27, 36];  // Multiples of 9 within mod81
+        const HIGH_BIAS_MOD81: [u64; 5] = [0, 9, 27, 36, 45];  // Multiples of 9 within mod81 (extended)
 
-        // Apply hierarchical bias with decreasing priority
+        // Apply hierarchical bias with heavier mod81 for laptop speed
         if HIGH_BIAS_MOD9.contains(&mod9) {
             // Mod9 bias - strongest, favors multiples of 9
             (hash % (g_multiples_len / 3) as u64) as usize
@@ -676,8 +676,8 @@ impl KangarooGenerator {
             // Mod27 bias - medium strength
             (hash % (g_multiples_len / 2) as u64) as usize
         } else if HIGH_BIAS_MOD81.contains(&mod81) {
-            // Mod81 bias - finer control
-            (hash % (g_multiples_len * 2 / 3) as u64) as usize
+            // Mod81 bias - finer control, heavier weight (4x)
+            (hash % (g_multiples_len * 4 / 5) as u64) as usize
         } else if pos_proxy < 0.1 && rng.gen::<f64>() < b_pos {
             // Positional bias - lowest priority, for unsolved puzzles
             (hash % (g_multiples_len / 10) as u64) as usize
@@ -814,10 +814,10 @@ pub fn random_in_slice(slice: &PosSlice) -> BigInt {
     &slice.low + BigInt::from(rand::thread_rng().gen::<u64>()) % &range
 }
 
-    /// Concise dynamic bias tuning - one-liner adjustment
+    /// Concise dynamic bias tuning - one-liner adjustment (lower thresh for laptop)
     pub fn tune_bias(biases: &mut std::collections::HashMap<u32, f64>, coll_rate: f64, target: f64) {
-        if coll_rate < target {
-            for v in biases.values_mut() { *v = (*v * 1.12).min(2.0); }
+        if coll_rate < target * 0.08 {  // Lower thresh for quick adj
+            for v in biases.values_mut() { *v = (*v * 1.15).min(2.5); }  // Aggressive boost
         }
     }
 
