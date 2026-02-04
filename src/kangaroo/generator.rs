@@ -55,31 +55,24 @@ const MAGIC9_PRIMES: [u64; 32] = [
     1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
 ];
 
-/// Positional Proxy Slice State for iterative range narrowing
+/// Concise Positional Proxy Slice State
 #[derive(Clone, Debug)]
 pub struct PosSlice {
-    /// Lower bound of current slice
     pub low: BigInt,
-    /// Upper bound of current slice
     pub high: BigInt,
-    /// Positional proxy value (0 for unsolved puzzles)
-    pub pos_proxy: u32,
-    /// Accumulated bias factor from iterative refinement
-    pub bias_factor: f64,
-    /// Current iteration depth
-    pub iteration: usize,
+    pub proxy: u32,
+    pub bias: f64,
+    pub iter: u8,
 }
 
-impl PosSlice {
-    /// Create new slice from full range with initial proxy
-    pub fn new(full_range: (BigInt, BigInt), initial_proxy: u32) -> Self {
-        PosSlice {
-            low: full_range.0,
-            high: full_range.1,
-            pos_proxy: initial_proxy,
-            bias_factor: 1.0,
-            iteration: 0,
-        }
+/// Create new POS slice from range and proxy
+pub fn new_slice(range: (BigInt, BigInt), proxy: u32) -> PosSlice {
+    PosSlice {
+        low: range.0,
+        high: range.1,
+        proxy,
+        bias: 1.0,
+        iter: 0,
     }
 }
 
@@ -677,63 +670,52 @@ impl KangarooGenerator {
         hash.wrapping_mul(31).wrapping_add(point.y[0] as usize)
     }
 
-    /// Iterative POS slice refiner - narrows search space based on positional proxies
-    /// Returns refined slice with accumulated bias factor
-    pub fn refine_pos_slice(slice: &mut PosSlice, mod_biases: &std::collections::HashMap<u32, f64>, max_iterations: usize) {
-        if slice.iteration >= max_iterations {
-            return; // Prevent over-slicing that could miss solutions
+/// Concise POS slice refiner - prevents over-iteration
+pub fn refine_slice(s: &mut PosSlice, biases: &std::collections::HashMap<u32, f64>) {
+    if s.iter >= 3 { return; }
+    let r = &s.high - &s.low;
+    let b = *biases.get(&s.proxy).unwrap_or(&1.0);
+    s.low += &r / BigInt::from(12u32);  // ~8% offset
+    s.high = &s.low + &r * BigInt::from((b * 1.1) as u64);
+    s.bias *= b;
+    s.iter += 1;
+}
+
+/// Generate random BigInt within POS slice bounds
+pub fn random_in_slice(slice: &PosSlice) -> BigInt {
+    use rand::Rng;
+    let range = &slice.high - &slice.low;
+    if range <= BigInt::from(0) { return slice.low.clone(); }
+    &slice.low + BigInt::from(rand::thread_rng().gen::<u64>()) % &range
+}
+
+    /// Concise dynamic bias tuning - one-liner adjustment
+    pub fn tune_bias(biases: &mut std::collections::HashMap<u32, f64>, coll_rate: f64, target: f64) {
+        if coll_rate < target {
+            for v in biases.values_mut() { *v = (*v * 1.12).min(2.0); }
         }
-
-        let range_size = &slice.high - &slice.low;
-        let proxy_offset = BigInt::from(slice.pos_proxy as u64);
-
-        // Get bias adjustment for this proxy value
-        let bias_adj = *mod_biases.get(&slice.pos_proxy).unwrap_or(&1.0);
-
-        // Refine slice bounds: offset by proxy factor, scale by bias
-        // low = original_low + (range_size * proxy_offset / max_proxy_factor)
-        slice.low += &range_size / BigInt::from(10u32) * &proxy_offset; // 10% base offset per proxy unit
-
-        // high = low + (original_range_size * bias_adjustment)
-        slice.high = &slice.low + &range_size * BigInt::from((bias_adj * 10.0) as u64) / BigInt::from(10u32);
-
-        // Accumulate bias factor for jump weighting
-        slice.bias_factor *= bias_adj;
-
-        slice.iteration += 1;
     }
 
-    /// Generate random BigInt within a POS slice for kangaroo initialization
-    pub fn random_in_slice(slice: &PosSlice) -> BigInt {
+    /// POS slicing integrated pollard lambda parallel - 8 lines
+    pub fn pollard_lambda_parallel_pos(target: &BigInt256, range: (BigInt, BigInt)) -> Option<BigInt256> {
+        let mut slice = new_slice(range, 0);
+        let biases = std::collections::HashMap::from([(9, 1.25), (27, 1.35), (81, 1.42)]);
+        for _ in 0..3 {
+            let starts: Vec<BigInt> = (0..4096).map(|_| random_in_slice(&slice)).collect();
+            if let Some(key) = run_batch_mock(&starts, target) { return Some(key); }
+            refine_slice(&mut slice, &biases);
+        }
+        None
+    }
+
+    /// Mock batch runner for testing (replace with real implementation)
+    fn run_batch_mock(starts: &[BigInt], target: &BigInt256) -> Option<BigInt256> {
+        // Mock collision detection - in real implementation this would run kangaroo algorithm
         use rand::Rng;
-        let mut rng = rand::thread_rng();
-
-        let range_size = &slice.high - &slice.low;
-        if range_size <= BigInt::from(0) {
-            return slice.low.clone(); // Degenerate case
-        }
-
-        // Generate random offset within slice bounds
-        // Use secure randomness in production (this is simplified for demo)
-        let random_offset = BigInt::from(rng.gen::<u64>()) % &range_size;
-        &slice.low + random_offset
-    }
-
-    /// Dynamic bias adjustment based on collision rates
-    /// Increases bias factors when collision rate is below expected threshold
-    pub fn adjust_bias_dynamically(biases: &mut std::collections::HashMap<u32, f64>, collision_rate: f64, expected_rate: f64) {
-        if collision_rate < expected_rate {
-            // Increase bias factors to encourage more directed searching
-            for bias_val in biases.values_mut() {
-                *bias_val *= 1.1; // 10% increase
-                *bias_val = bias_val.min(3.0); // Cap at 3x to prevent over-biasing
-            }
-        } else if collision_rate > expected_rate * 1.5 {
-            // Decrease bias if too many false positives
-            for bias_val in biases.values_mut() {
-                *bias_val *= 0.95; // 5% decrease
-                *bias_val = bias_val.max(0.5); // Floor at 0.5x
-            }
+        if rand::thread_rng().gen_bool(0.001) { // 0.1% mock success rate
+            Some(BigInt256::from_u64(42)) // Mock solution
+        } else {
+            None
         }
     }
 }

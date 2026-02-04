@@ -4,6 +4,8 @@ use speedbitcrack::types::{KangarooState, Point};
 use speedbitcrack::kangaroo::collision::Trap;
 #[cfg(feature = "cudarc")]
 use std::process::Command;
+use num_bigint::BigInt;
+use std::collections::HashMap;
 
 fn bench_step_batch(c: &mut Criterion) {
     // Only run CUDA benchmarks if CUDA feature is enabled
@@ -108,5 +110,32 @@ fn bench_occupancy_check(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, bench_step_batch, bench_occupancy_check);
+fn bench_pos_slicing(c: &mut Criterion) {
+    let full_range = (BigInt::from(0u64), BigInt::from(1u64) << 66);
+    let mod_biases: HashMap<u32, f64> = [(9, 1.25), (27, 1.35), (81, 1.42)].into_iter().collect();
+
+    let mut group = c.benchmark_group("pos_slicing");
+    for iters in [0, 1, 2, 3] {  // 0 = no slicing (baseline)
+        group.bench_with_input(
+            BenchmarkId::new("refine_iters", iters),
+            &iters,
+            |b, &iters| {
+                let mut slice = speedbitcrack::kangaroo::generator::PosSlice::new(full_range.clone(), 0);
+                b.iter(|| {
+                    let mut s = slice.clone();
+                    for _ in 0..iters {
+                        speedbitcrack::kangaroo::generator::refine_pos_slice(&mut s, &mod_biases, 5);
+                    }
+                    // simulate 10k kangaroo starts in the slice
+                    let _starts: Vec<BigInt> = (0..10_000).map(|_| {
+                        speedbitcrack::kangaroo::generator::random_in_slice(&s)
+                    }).collect();
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing);
 criterion_main!(benches);

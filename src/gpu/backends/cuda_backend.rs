@@ -704,6 +704,45 @@ impl GpuBackend for CudaBackend {
         cuda_check!(self.stream.synchronize(), "rho_ptx sync");
         Ok(())
     }
+
+    /// Concise mod81 bias kernel call
+    #[cfg(feature = "rustacuda")]
+    pub fn check_mod81_bias(&self, keys: &[BigInt256], high_res: &[u32]) -> Result<Vec<bool>> {
+        let batch_size = keys.len();
+        if batch_size == 0 { return Ok(vec![]); }
+
+        // Convert BigInt256 keys to u64 arrays for kernel
+        let key_arrays: Vec<[u64; 4]> = keys.iter()
+            .map(|k| k.to_u64_array())
+            .collect();
+        let flat_keys: Vec<u64> = key_arrays.into_iter().flatten().collect();
+
+        // Allocate and copy device buffers
+        let d_keys = DeviceBuffer::from_slice(&flat_keys)?;
+        let d_flags = unsafe { DeviceBuffer::uninitialized(batch_size) }?;
+        let d_high_residues = DeviceBuffer::from_slice(high_res)?;
+
+        // Launch kernel
+        let grid_size = ((batch_size as u32 + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE) as u32;
+        let mod81_fn = self.rho_module.get_function(CStr::from_bytes_with_nul(b"mod81_bias_check\0")?)?;
+
+        unsafe {
+            cuda_check!(launch!(mod81_fn<<<(grid_size, 1, 1), (WORKGROUP_SIZE, 1, 1), 0, self.stream>>>(
+                d_keys.as_device_ptr(),
+                d_flags.as_device_ptr(),
+                batch_size as i32,
+                d_high_residues.as_device_ptr(),
+                high_res.len() as i32
+            )), "mod81_bias_check launch");
+        }
+
+        cuda_check!(self.stream.synchronize(), "mod81_bias_check sync");
+
+        // Read results
+        let mut flags = vec![false; batch_size];
+        d_flags.copy_to(&mut flags)?;
+        Ok(flags)
+    }
 }
 
 /// CPU fallback when CUDA is not available
