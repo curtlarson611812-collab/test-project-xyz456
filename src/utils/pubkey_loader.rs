@@ -402,22 +402,41 @@ fn is_vanity_biased(x_hex: &str, prefix_pattern: &str, suffix_mod: u64) -> bool 
 // }
 
 /// Detect bias for a single point (used for individual puzzle analysis)
-pub fn detect_bias_single(x: &BigInt256, n: u32) -> (u64, u64, u64, bool, bool, f64) {
+/// Returns: (bias_modulus, dominant_residue, pos_proxy)
+/// bias_modulus: 0=none, 9=mod9 bias, 27=mod27 bias, 81=mod81 bias
+/// dominant_residue: residue with highest bias potential
+/// pos_proxy: positional proxy bias [0,1]
+pub fn detect_bias_single(x: &BigInt256, n: u32) -> (u64, u64, f64) {
     let mod9 = x.mod_u64(9);
     let mod27 = x.mod_u64(27);
     let mod81 = x.mod_u64(81);
 
-    // Vanity bias: check if last hex digit is '0' (common vanity pattern)
-    let x_hex = x.to_hex();
-    let vanity_last_0 = x_hex.ends_with('0');
+    // Determine bias modulus based on residue patterns
+    let bias_mod = if mod9 == 0 {
+        9  // Strongest bias - multiple of 9
+    } else if mod27 == 0 || mod27 == 9 || mod27 == 18 {
+        27 // Medium bias - multiple of 9 within mod27
+    } else if mod81 == 0 || mod81 == 9 || mod81 == 18 || mod81 == 27 || mod81 == 36 || mod81 == 45 {
+        81 // Finest bias - multiple of 9 within mod81
+    } else {
+        0  // No significant bias detected
+    };
 
-    // DP mod9: trivial check if mod9 matches (for DP framework)
-    let dp_mod9 = true; // Always true for single point - would be used in DP collection
+    // Use the finest modulus residue as dominant
+    let dominant_residue = if bias_mod == 81 {
+        mod81
+    } else if bias_mod == 27 {
+        mod27
+    } else if bias_mod == 9 {
+        mod9
+    } else {
+        mod9 // Default to mod9
+    };
 
     // Positional proxy bias for unsolved puzzles
     let pos_proxy = detect_pos_bias_proxy_single(n);
 
-    (mod9, mod27, mod81, vanity_last_0, dp_mod9, pos_proxy)
+    (bias_mod, dominant_residue, pos_proxy)
 }
 
 /// Detect dimensionless position bias for a single puzzle

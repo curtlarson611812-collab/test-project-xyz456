@@ -405,17 +405,16 @@ fn run_bias_analysis() -> Result<()> {
                 Ok(point) => {
                     // Run bias analysis
                     let x_bigint = BigInt256::from_u64_array(point.x);
-                    let (mod9, mod27, mod81, _, _, _) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, entry.n);
-                    let pos_proxy = speedbitcrack::utils::pubkey_loader::detect_pos_bias_proxy_single(entry.n);
+                    let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, entry.n);
 
                     // Calculate range size for complexity estimate
                     let range_size = BigInt256::from_u64(1) << (entry.n as usize); // 2^n
 
                     results.push(BiasResult {
                         puzzle_n: entry.n,
-                        mod9,
-                        mod27,
-                        mod81,
+                        mod9: if bias_mod == 9 { dominant_residue } else { 0 },
+                        mod27: if bias_mod == 27 { dominant_residue } else { 0 },
+                        mod81: if bias_mod == 81 { dominant_residue } else { 0 },
                         pos_proxy,
                         range_size,
                     });
@@ -760,58 +759,13 @@ fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
     let mut x_bytes = [0u8; 32];
     x_bytes.copy_from_slice(&x_bytes_vec);
     let x_bigint = BigInt256::from_bytes_be(&x_bytes);
-    let (mod9, mod27, mod81, vanity_last_0, dp_mod9, _pos_proxy) = pubkey_loader::detect_bias_single(&x_bigint, n);
+    let (bias_mod, dominant_residue, pos_proxy) = pubkey_loader::detect_bias_single(&x_bigint, n);
 
     info!("🎯 Puzzle #{} Bias Discovery Results:", n);
-    info!("  📊 mod9: {} (uniform prevalence = 1/9 ≈ 0.111)", mod9);
-    info!("  📊 mod27: {} (uniform prevalence = 1/27 ≈ 0.037)", mod27);
-    info!("  📊 mod81: {} (uniform prevalence = 1/81 ≈ 0.012)", mod81);
-    info!("  🎨 vanity_last_0: {} (ending with '0' pattern)", vanity_last_0);
-    info!("  🔍 dp_mod9: {} (trivial for DP framework)", dp_mod9);
-
-    // Add positional bias analysis for solved puzzles
-    if let Some(priv_hex) = entry.priv_hex {
-        let priv_key = BigInt256::from_hex(priv_hex);
-        let pos = detect_pos_bias_single(&priv_key, n);
-        info!("  📍 dimensionless_pos: {:.6} (normalized position in [0,1] interval)", pos);
-
-        if pos < 0.1 {
-            info!("🎯 Low positional bias! Key clusters near interval start - suggests sequential solving patterns.");
-        } else if pos > 0.9 {
-            info!("🎯 High positional bias! Key clusters near interval end - suggests endpoint attractor.");
-        }
-    }
-
-    if mod9 == 0 {
-        info!("🎉 Magic 9 proxy hit! This suggests attractor clustering around multiples of 9.");
-    }
-
-    if mod81 == 0 {
-        info!("🎉 Mod81 attractor candidate! Ultra-coarse filter hit.");
-    }
-
-    if mod27 == 0 {
-        info!("🎉 Mod27 attractor candidate! Medium-coarse filter hit.");
-    }
-
-    info!("🎯 Puzzle #{} Bias Discovery Results:", n);
-    info!("  📊 mod9: {} (uniform prevalence = 1/9 ≈ 0.111)", mod9);
-    info!("  📊 mod27: {} (uniform prevalence = 1/27 ≈ 0.037)", mod27);
-    info!("  📊 mod81: {} (uniform prevalence = 1/81 ≈ 0.012)", mod81);
-    info!("  🎨 vanity_last_0: {} (ending with '0' pattern)", vanity_last_0);
-    info!("  🔍 dp_mod9: {} (trivial for DP framework)", dp_mod9);
-
-    if mod9 == 0 {
-        info!("🎉 Magic 9 proxy hit! This suggests attractor clustering around multiples of 9.");
-    }
-
-    if mod81 == 0 {
-        info!("🎉 Mod81 attractor candidate! Ultra-coarse filter hit.");
-    }
-
-    if mod27 == 0 {
-        info!("🎉 Mod27 attractor candidate! Medium-coarse filter hit.");
-    }
+    info!("  📊 bias_mod: {} (0=none, 9=mod9, 27=mod27, 81=mod81)", bias_mod);
+    info!("  🎯 dominant_residue: {} (primary bias residue)", dominant_residue);
+    info!("  📍 pos_proxy: {:.6} (positional proxy [0,1])", pos_proxy);
+    // Bias information is now handled by the auto_bias_chain function
 
     info!("Puzzle #{} successfully loaded and validated", n);
 
@@ -1031,19 +985,9 @@ fn execute_test(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 
 /// Auto bias chain detection and scoring
 fn auto_bias_chain(gen: &KangarooGenerator, puzzle: u32, point: &Point) -> std::collections::HashMap<u32, f64> {
-    use speedbitcrack::utils::pubkey_loader::detect_bias_single;
-
-    let x_bigint = BigInt256::from_u64_array(point.x);
-    let (mod9, mod27, _, _, _, pos_proxy) = detect_bias_single(&x_bigint, puzzle);
-
-    // Create bias patterns for chain detection
-    let patterns = vec![
-        (9, mod9 as u32),
-        (27, mod27 as u32),
-        (81, (mod27 * 3) as u32), // Extend chain
-    ];
-
-    gen.aggregate_bias(patterns)
+    // Use single point for bias analysis (could be extended to multiple points)
+    let points = vec![*point];
+    gen.aggregate_bias(&points)
 }
 
 /// Score bias effectiveness (product of square roots for combined speedup)
@@ -1121,25 +1065,22 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
 
     // Add bias analysis from public key if available
     let x_bigint = BigInt256::from_u64_array(point.x);
-    let (mod9, mod27, mod81, vanity_last_0, dp_mod9, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, n);
+    let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, n);
     info!("🎯 Puzzle #{} Bias Discovery Results:", n);
-    info!("  📊 mod9: {} (uniform prevalence = 1/9 ≈ 0.111)", mod9);
-    info!("  📊 mod27: {} (uniform prevalence = 1/27 ≈ 0.037)", mod27);
-    info!("  📊 mod81: {} (uniform prevalence = 1/81 ≈ 0.012)", mod81);
-    info!("  🎨 vanity_last_0: {} (ending with '0' pattern)", vanity_last_0);
-    info!("  🔍 dp_mod9: {} (trivial for DP framework)", dp_mod9);
+    info!("  📊 bias_mod: {} (0=none, 9=mod9, 27=mod27, 81=mod81)", bias_mod);
+    info!("  🎯 dominant_residue: {} (primary bias residue)", dominant_residue);
+    info!("  📍 pos_proxy: {:.6} (positional proxy [0,1])", pos_proxy);
 
-    // Check for Magic 9 proxy hits
-    if mod9 == 0 {
-        info!("🎉 Magic 9 proxy hit! This suggests attractor clustering around multiples of 9");
+    // Check for bias hits
+    if bias_mod > 0 {
+        info!("🎉 Bias detected! Modulus {}, dominant residue {}", bias_mod, dominant_residue);
     }
 
     // Execute Pollard's lambda algorithm
     info!("🚀 Starting Pollard's lambda algorithm execution...");
 
     // Calculate bias score for optimization
-    let bias_score = (mod9 as f64).max(1.0) * (mod27 as f64 / 27.0).max(0.037) *
-                     (mod81 as f64 / 81.0).max(0.012) * pos_proxy.max(0.1);
+    let bias_score: f64 = if bias_mod == 9 { 1.4 } else if bias_mod == 27 { 1.25 } else if bias_mod == 81 { 1.15 } else { 1.0 };
     let effective_complexity = ((n-1) as f64 / 2.0) - bias_score.log2();
 
     info!("📊 Bias score: {:.3}, Effective complexity: 2^{:.1} operations", bias_score, effective_complexity);
@@ -1163,7 +1104,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
     info!("🎯 Executing multi-kangaroo parallel with {} kangaroos, max_cycles: {}", num_kangaroos, max_cycles);
 
     // Determine bias parameters
-    let bias_mod = if args.bias_mod > 0 { args.bias_mod } else if mod9 == 0 { 9 } else { 0 };
+    let bias_mod = if args.bias_mod > 0 { args.bias_mod } else { bias_mod };
     let b_pos = if pos_proxy < 0.1 { 1.23 } else { 1.0 }; // Positional bias proxy
 
     // Call the multi-kangaroo parallel algorithm with bias chain

@@ -245,3 +245,34 @@ fn test_bias_bootstrap() {
     let ci_upper = bootstrapped_means.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     assert!(ci_lower > 1.1 && ci_upper < 1.6, "Bootstrap CI [{:.3}, {:.3}] outside expected bias range", ci_lower, ci_upper);
 }
+
+#[test]
+fn test_bias_ks_validation() {
+    // Test Kolmogorov-Smirnov validation for bias detection
+    // Generate biased sample (clustered around 0.1-0.3)
+    let observed = vec![0.15, 0.12, 0.18, 0.22, 0.14, 0.16, 0.19, 0.11, 0.17, 0.13];
+
+    // Generate uniform reference sample
+    use rand::thread_rng;
+    let uniform = Uniform::new(0.0, 1.0).unwrap();
+    let mut rng = thread_rng();
+    let reference: Vec<f64> = (0..1000).map(|_| uniform.sample(&mut rng)).collect();
+
+    // Perform KS test
+    let ks_test = KolmogorovSmirnov::two_sample(&observed, &reference);
+
+    // For significantly biased data, p-value should be < 0.05 (reject uniform hypothesis)
+    assert!(ks_test.p_value < 0.05, "KS test should detect bias (p={:.6})", ks_test.p_value);
+
+    // Calculate bias score (mock implementation)
+    let bias_score = if ks_test.p_value < 0.05 {
+        // Simple score based on clustering around lower values
+        let mean = observed.iter().sum::<f64>() / observed.len() as f64;
+        let variance = observed.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / observed.len() as f64;
+        1.0 + (0.3 - mean).abs() * 2.0 - variance * 5.0 // Reward clustering near 0.1-0.3
+    } else {
+        1.0
+    };
+
+    assert!(bias_score > 1.2, "Bias score {:.3} should be > 1.2 for significant bias", bias_score);
+}

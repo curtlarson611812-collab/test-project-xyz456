@@ -767,8 +767,10 @@ impl KangarooGenerator {
         }
     }
 
-    /// Aggregate bias patterns with Pop!_OS NVIDIA persistence
-    pub fn aggregate_bias(&self, patterns: Vec<(u32, u32)>) -> std::collections::HashMap<u32, f64> {
+    /// Aggregate bias patterns from points with Pop!_OS NVIDIA persistence
+    pub fn aggregate_bias(&self, points: &[Point]) -> std::collections::HashMap<u32, f64> {
+        use crate::utils::pubkey_loader::detect_bias_single;
+
         // Enable NVIDIA persistence for Pop!_OS (boosts long-run hashrate 10%)
         #[cfg(target_os = "linux")]
         {
@@ -779,11 +781,17 @@ impl KangarooGenerator {
         }
 
         let mut bias_map = std::collections::HashMap::new();
-        let total = patterns.len() as f64;
+        let total = points.len() as f64;
 
-        for &(modulus, residue) in &patterns {
-            let key = (residue % modulus) as u32;
-            *bias_map.entry(key).or_insert(0.0) += 1.0 / total;
+        for (i, point) in points.iter().enumerate() {
+            let x_bigint = BigInt256::from_u64_array(point.x);
+            let (bias_mod, dominant_residue, _) = detect_bias_single(&x_bigint, (i + 1) as u32);
+
+            // Only count points with detected bias
+            if bias_mod > 0 {
+                let key = dominant_residue as u32;
+                *bias_map.entry(key).or_insert(0.0) += 1.0 / total;
+            }
         }
 
         bias_map
