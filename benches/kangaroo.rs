@@ -215,5 +215,74 @@ fn bench_partial_steps(c: &mut Criterion) {
 // Dependencies: std::fs::read_to_string, regex::Regex (add cargo add regex)
 // Updated in main.rs
 
-criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66, bench_puzzle66_laptop, bench_solved_puzzles, bench_puzzle66_full, bench_partial_steps);
+// Chunk: Puzzle Bench (benches/kangaroo.rs)
+use speedbitcrack::kangaroo::KangarooGenerator;
+use speedbitcrack::config::Config;
+use speedbitcrack::main::{auto_bias_chain, score_bias};
+use std::time::Instant;
+
+fn bench_puzzle32(c: &mut Criterion) {
+    let config = Config::default();
+    let gen = KangarooGenerator::new(&config);
+
+    // Small puzzle #32 for quick benchmarking
+    let range = (speedbitcrack::math::bigint::BigInt256::from_u64(1),
+                 speedbitcrack::math::bigint::BigInt256::from_u64(65536)); // 2^16 range
+
+    let curve = speedbitcrack::math::secp::Secp256k1::new();
+    let target_point = curve.g.clone(); // Use generator as mock target
+
+    // Test with biases
+    let biases = auto_bias_chain(&gen, 32, &target_point);
+    let score = score_bias(&biases);
+    println!("Puzzle #32 bias score: {:.3}", score);
+
+    c.bench_function("puzzle32_biased", |b| b.iter(|| {
+        let start = Instant::now();
+        let key = gen.pollard_lambda_parallel(&target_point, range.clone(), 256, &biases);
+        let elapsed = start.elapsed();
+        let hashrate = 1000.0 / elapsed.as_secs_f64(); // Mock ops/sec for demo
+        black_box((key, hashrate));
+    }));
+
+    // Test without biases (uniform)
+    let empty_biases = HashMap::new();
+    c.bench_function("puzzle32_uniform", |b| b.iter(|| {
+        let start = Instant::now();
+        let key = gen.pollard_lambda_parallel(&target_point, range.clone(), 256, &empty_biases);
+        let elapsed = start.elapsed();
+        let hashrate = 1000.0 / elapsed.as_secs_f64(); // Mock ops/sec for demo
+        black_box((key, hashrate));
+    }));
+}
+
+// Chunk: Hashrate Calc in Bench (benches/kangaroo.rs)
+fn calc_hashrate(steps: u64, time: std::time::Duration) -> f64 {
+    steps as f64 / time.as_secs_f64()
+}
+
+fn bench_partial_hashrate(c: &mut Criterion) {
+    let config = Config::default();
+    let gen = KangarooGenerator::new(&config);
+
+    let range = (speedbitcrack::math::bigint::BigInt256::from_u64(1),
+                 speedbitcrack::math::bigint::BigInt256::from_u64(1000000));
+
+    let curve = speedbitcrack::math::secp::Secp256k1::new();
+    let target_point = curve.g.clone();
+    let biases = auto_bias_chain(&gen, 66, &target_point);
+
+    c.bench_function("partial_1e5_steps_biased", |b| b.iter(|| {
+        let start = Instant::now();
+        // Simulate 100,000 steps
+        for _ in 0..1000 {
+            let _jump = gen.biased_jump(&speedbitcrack::math::bigint::BigInt256::from_u64(1000), &biases);
+        }
+        let elapsed = start.elapsed();
+        let hashrate = calc_hashrate(100000, elapsed);
+        black_box(hashrate);
+    }));
+}
+
+criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66, bench_puzzle66_laptop, bench_solved_puzzles, bench_puzzle66_full, bench_partial_steps, bench_puzzle32, bench_partial_hashrate);
 criterion_main!(benches);

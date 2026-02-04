@@ -623,3 +623,34 @@ fn test_custom_range_mode() {
     // In real custom mode, would set up search with these bounds
     println!("Custom range test: [{}, {}] parsed successfully", low_hex, high_hex);
 }
+
+// Chunk: Mode Test with Bias Log (tests/puzzle.rs)
+#[test]
+fn test_valuable_mode_bias_logging() {
+    use speedbitcrack::kangaroo::generator::KangarooGenerator;
+    use speedbitcrack::config::Config;
+    use std::collections::HashMap;
+
+    // Test valuable mode with bias application logging
+    let config = Config::default();
+    let gen = KangarooGenerator::new(&config);
+
+    // Create mock target point
+    let curve = speedbitcrack::math::secp::Secp256k1::new();
+    let target_point = curve.g.clone();
+
+    // Test bias detection and scoring
+    let points = vec![target_point.clone()];
+    let biases = gen.aggregate_bias(&points);
+    let score = super::score_bias(&biases);
+
+    // Verify bias detection works
+    assert!(score >= 1.0);
+    assert!(biases.len() > 0);
+
+    // Test biased jump logging (would log "Bias applied" in real execution)
+    let test_distance = speedbitcrack::math::bigint::BigInt256::from_u64(81); // res=0 mod 81
+    let _jump = gen.biased_jump(&test_distance, &biases); // Should log if bias >1.0
+
+    println!("Bias logging test: score={:.3}, biases_count={}, jump_calculated=true", score, biases.len());
+}
