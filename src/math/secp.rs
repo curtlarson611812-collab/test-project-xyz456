@@ -9,8 +9,6 @@ use super::bigint::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
 use log::info;
-use k256::{Scalar as K256Scalar, ProjectivePoint, AffinePoint, elliptic_curve::ops::Mul as EcMul};
-use k256::elliptic_curve::{group::GroupEncoding, group::prime::PrimeCurveAffine, sec1::ToEncodedPoint, ops::MulByGenerator};
 use std::error::Error;
 use std::ops::Add;
 
@@ -96,11 +94,11 @@ impl Secp256k1 {
         // [G, 2G, 3G, 4G, 8G, 16G, -G, -2G, -3G, -4G, -8G, -16G]
         // Provides 10-20x speedup for kangaroo jumps via O(1) point additions
         let mut g_multiples = Vec::with_capacity(12);
-        let two = BigInt256::from_u64(2);
+        let _two = BigInt256::from_u64(2);
         let three = BigInt256::from_u64(3);
-        let four = BigInt256::from_u64(4);
-        let eight = BigInt256::from_u64(8);
-        let sixteen = BigInt256::from_u64(16);
+        let _four = BigInt256::from_u64(4);
+        let _eight = BigInt256::from_u64(8);
+        let _sixteen = BigInt256::from_u64(16);
 
         // Positive multiples
         g_multiples.push(g.clone()); // 1G
@@ -246,7 +244,7 @@ impl Secp256k1 {
         let yy = self.montgomery_p.mul(&py, &py); // YY = Y1^2
         let yyyy = self.montgomery_p.mul(&yy, &yy); // YYYY = YY^2
         let zz = self.montgomery_p.mul(&pz, &pz); // ZZ = Z1^2
-        let zzyy = self.montgomery_p.mul(&zz, &yy); // ZZYY = ZZ * YY (optimization for full Jacobian)
+        let _zzyy = self.montgomery_p.mul(&zz, &yy); // ZZYY = ZZ * YY (optimization for full Jacobian)
 
         // S = 2*((X1 + YY)^2 - XX - YYYY)
         let x_plus_yy = self.barrett_p.add(&px, &yy); // X1 + YY
@@ -391,8 +389,8 @@ impl Secp256k1 {
         );
 
         // Ensure results are in proper range and handle signs
-        let mut k1 = if k1 >= self.n { self.barrett_n.sub(&k1, &self.n) } else { k1 };
-        let mut k2 = if k2 >= self.n { self.barrett_n.sub(&k2, &self.n) } else { k2 };
+        let k1 = if k1 >= self.n { self.barrett_n.sub(&k1, &self.n) } else { k1 };
+        let k2 = if k2 >= self.n { self.barrett_n.sub(&k2, &self.n) } else { k2 };
 
         // Full shortest vector adjustments (specs require for k1 < 0 and k2 < 0)
         let (k1, k2) = if k2 < BigInt256::zero() {
@@ -788,7 +786,7 @@ impl Secp256k1 {
     }
 
     /// Modular exponentiation: base^exp mod modulus
-    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, mod_: &BigInt256) -> BigInt256 {
+    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, _mod_: &BigInt256) -> BigInt256 {
         let mut result = BigInt256::from_u64(1);
         let mut b = base.clone();
         let mut e = exp.clone();

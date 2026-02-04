@@ -5,14 +5,12 @@
 
 use anyhow::Result;
 use clap::Parser;
-use log::{info, warn};
+use log::info;
 
 use speedbitcrack::config::Config;
-use speedbitcrack::kangaroo::{KangarooController, SearchConfig, KangarooGenerator};
-use speedbitcrack::types::SearchMode;
+use speedbitcrack::kangaroo::KangarooGenerator;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::pubkey_loader;
-use speedbitcrack::gpu::hybrid_manager::HybridGpuManager;
 use speedbitcrack::test_basic::run_basic_test;
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
@@ -213,8 +211,8 @@ fn main() -> Result<()> {
     // Handle specific puzzle cracking
     if let Some(puzzle_num) = args.puzzle {
         if puzzle_num == 67 {
-            let (target, range) = speedbitcrack::puzzles::load_unspent_67();
-            let gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbitcrack::config::GpuConfig { arch: "sm_120".to_string(), max_kangaroos: 4096, dp_size: 1<<20, dp_bits: 24, max_regs: 64, gpu_frac: 0.8 } };
+            let (_target, range) = speedbitcrack::puzzles::load_unspent_67();
+            let _gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbitcrack::config::GpuConfig { arch: "sm_120".to_string(), max_kangaroos: 4096, dp_size: 1<<20, dp_bits: 24, max_regs: 64, gpu_frac: 0.8 } };
             // Crack logic here
             println!("Cracking puzzle #67 with target pubkey and range [{}, {}]", range.0.to_hex(), range.1.to_hex());
         }
@@ -287,7 +285,7 @@ fn run_bias_analysis() -> Result<()> {
             continue; // Skip solved puzzles
         }
 
-        if let Some(pub_hex) = entry.pub_hex {
+        if let Some(_pub_hex) = entry.pub_hex {
             // Load the point
             match load_real_puzzle(entry.n, &curve) {
                 Ok(point) => {
@@ -330,7 +328,7 @@ fn run_bias_analysis() -> Result<()> {
              "#", "Range", "Mod9", "Mod27", "Mod81", "Pos", "Complexity", "Score");
     println!("{}", "═".repeat(100));
 
-    for (i, result) in results.iter().enumerate().take(10) {
+    for (_i, result) in results.iter().enumerate().take(10) {
         let complexity_str = format!("2^{:.1}", (result.puzzle_n as f64) - result.bias_score().log2());
         println!("{:>3} │ 2^{:<6} │ {:>4} │ {:>4} │ {:>4} │ {:.3} │ {:>12} │ {:.6}",
                  result.puzzle_n,
@@ -437,7 +435,7 @@ fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
     let curve = Secp256k1::new();
 
     // Parse and decompress the pubkey
-    let x = match parse_compressed(pubkey_hex) {
+    let _x = match parse_compressed(pubkey_hex) {
         Ok(x) => x,
         Err(e) => {
             info!("Failed to parse pubkey: {}", e);
@@ -475,7 +473,7 @@ fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
     // For puzzle #64, we know the private key is 1, so [1]G = target
     // This is just a test - real solving would use kangaroo methods
     let config = Config::default();
-    let gen = KangarooGenerator::new(&config);
+    let _gen = KangarooGenerator::new(&config);
 
     // Simple test: check if multiplying by 1 gives us the target
     let one = BigInt256::from_u64(1);
@@ -500,7 +498,7 @@ fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
 }
 
 /// Load valuable P2PK pubkeys for bias exploitation and attractor scanning
-fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>> {
+fn load_valuable_p2pk(_curve: &Secp256k1) -> Result<Vec<Point>> {
     // For now, return empty vec as we don't have the file
     // In production, this would load from valuable_p2pk_pubkeys.txt
     info!("Valuable P2PK mode: Would load points from valuable_p2pk_pubkeys.txt");
@@ -600,7 +598,7 @@ fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
     let mut x_bytes = [0u8; 32];
     x_bytes.copy_from_slice(&x_bytes_vec);
     let x_bigint = BigInt256::from_bytes_be(&x_bytes);
-    let (mod9, mod27, mod81, vanity_last_0, dp_mod9, pos_proxy) = pubkey_loader::detect_bias_single(&x_bigint, n);
+    let (mod9, mod27, mod81, vanity_last_0, dp_mod9, _pos_proxy) = pubkey_loader::detect_bias_single(&x_bigint, n);
 
     info!("🎯 Puzzle #{} Bias Discovery Results:", n);
     info!("  📊 mod9: {} (uniform prevalence = 1/9 ≈ 0.111)", mod9);
@@ -760,7 +758,7 @@ fn get_positional_bias_info() -> (f64, Vec<(String, f64)>) {
 }
 
 /// Execute valuable P2PK mode with bias exploitation
-fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
+fn execute_valuable(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     info!("Valuable P2PK mode: Loaded {} points for bias analysis", points.len());
 
     // Analyze positional bias from solved puzzles
@@ -825,7 +823,7 @@ fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         .collect();
 
     if !solved_puzzles.is_empty() {
-        let (iterative_bias, final_min, final_max, iters, overfitting_risk) = speedbitcrack::utils::pubkey_loader::iterative_pos_bias_narrowing_deeper(&solved_puzzles, 3);
+        let (iterative_bias, _final_min, _final_max, iters, overfitting_risk) = speedbitcrack::utils::pubkey_loader::iterative_pos_bias_narrowing_deeper(&solved_puzzles, 3);
         info!("🔄 Deeper Iterative Positional Bias Narrowing:");
         info!("  📊 Cumulative bias factor: {:.3}x after {} iterations", iterative_bias, iters);
         info!("  ⚠️ Overfitting risk assessment: {:.1}%", overfitting_risk * 100.0);
@@ -862,7 +860,7 @@ fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 }
 
 /// Execute test puzzles mode for validation
-fn execute_test(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
+fn execute_test(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     info!("Test puzzles mode: Loaded {} known puzzles for validation", points.len());
     info!("This would verify ECDLP implementation by solving known puzzles");
     info!("Expected: Quick solutions for puzzles like #64 (privkey = 1)");
@@ -959,7 +957,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
         None
     };
 
-    if let Some(h) = &hybrid {
+    if let Some(_h) = &hybrid {
         info!("GPU hybrid acceleration enabled - using parallel multi-kangaroo dispatch");
     }
 

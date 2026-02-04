@@ -1,7 +1,6 @@
 //! Simple test to verify basic functionality
 
-use crate::utils::pubkey_loader::load_test_puzzle_keys;
-use crate::math::{secp::Secp256k1, bigint::{BigInt256, BigInt512, BarrettReducer}};
+use crate::math::{secp::Secp256k1, bigint::BigInt256};
 use crate::types::Point;
 
 pub fn run_basic_test() {
@@ -10,7 +9,7 @@ pub fn run_basic_test() {
     return;
 
     // Test loading test puzzles with robust error handling
-    println!("Loading test puzzles...");
+    // println!("Loading test puzzles...");
     let curve = Secp256k1::new();
     let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve);
     println!("Loaded {} test puzzles", points.len());

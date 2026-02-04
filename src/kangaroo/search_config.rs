@@ -6,7 +6,6 @@
 //! - Unsolved puzzles (bounded, prime-biased jumps, long runs)
 
 use crate::math::bigint::BigInt256;
-use anyhow::Result;
 use std::collections::HashMap;
 
 /// Configuration for kangaroo search parameters

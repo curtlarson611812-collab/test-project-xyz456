@@ -12,7 +12,7 @@ use log::{warn, debug};
 /// Parity checker for CPU vs GPU verification
 pub struct ParityChecker {
     cpu_stepper: KangarooStepper,
-    gpu_backend: Box<dyn GpuBackend>,
+    // gpu_backend: Box<dyn GpuBackend>, // TODO: Implement GPU parity checking
     test_steps: usize,
 }
 
@@ -26,7 +26,6 @@ impl ParityChecker {
 
         ParityChecker {
             cpu_stepper,
-            gpu_backend,
             test_steps: 10_000_000, // 10M steps
         }
     }
@@ -154,11 +153,10 @@ impl ParityChecker {
     /// Run quick parity test (1K steps) for development
     pub async fn run_quick_test(&self) -> Result<bool> {
         // Temporarily reduce test steps
-        let original_steps = self.test_steps;
+        let _original_steps = self.test_steps;
         // This would require mutable self, so we'll create a temp checker
         let quick_checker = ParityChecker {
             cpu_stepper: self.cpu_stepper.clone(),
-            gpu_backend: Box::new(CpuBackend),
             test_steps: 1000,
         };
 

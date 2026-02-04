@@ -6,7 +6,6 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::ops::{Add, Sub};
-use std::collections::HashMap;
 use hex::decode;
 use crate::types::Point;
 use crate::math::bigint::{BigInt256, BigInt512};
@@ -448,7 +447,7 @@ pub fn detect_pos_bias_single(priv_key: &BigInt256, puzzle_n: u32) -> f64 {
 
 /// Detect proxy positional bias for unsolved puzzles
 /// Returns proxy position (0.0 for start of range) since priv is unknown
-pub fn detect_pos_bias_proxy_single(n: u32) -> f64 {
+pub fn detect_pos_bias_proxy_single(_n: u32) -> f64 {
     // For unsolved puzzles, we use the starting point [2^(n-1)]G as proxy
     // This gives pos = 0.0, but we can analyze clustering patterns from solved puzzles
     0.0
@@ -488,7 +487,7 @@ pub fn pick_most_likely_unsolved() -> u32 {
 /// Analyzes mod27 subgroups within the most biased mod9 residue
 /// Returns (b_mod9, max_r9, b_mod27, max_r27)
 pub fn deeper_mod9_subgroup(points: &[Point]) -> (f64, u64, f64, u64) {
-    let (hist9, _expected9, max_r9, b_mod9, _sig9) = analyze_mod9_bias_deeper(points);
+    let (_hist9, _expected9, max_r9, b_mod9, _sig9) = analyze_mod9_bias_deeper(points);
 
     // Analyze mod27 subgroups within the most biased mod9 residue
     let mut sub_hist27 = [0u32; 3];  // For r=0,9,18 mod27 within mod9=max_r9
@@ -535,12 +534,12 @@ pub fn iterative_mod9_slice(points: &[Point], max_levels: u32) -> f64 {
     let mut sub_points = points.to_vec();
     let mut current_modulus = 9u64;
 
-    for level in 0..max_levels.min(3) {
+    for _level in 0..max_levels.min(3) {
         if sub_points.len() < 100 {
             break; // Stop if too few points (overfitting protection)
         }
 
-        let (hist, _expected, max_r, b, _sig) = analyze_mod_bias_deeper(&sub_points, current_modulus);
+        let (_hist, _expected, max_r, b, _sig) = analyze_mod_bias_deeper(&sub_points, current_modulus);
 
         // Stop if bias is not significant or below uniform
         let uniform_bias = 1.0 / current_modulus as f64;
@@ -594,7 +593,7 @@ fn analyze_mod_bias_deeper(points: &[Point], modulus: u64) -> ([u32; 81], f64, u
     // Chi-square test for significance (simplified for degrees of freedom)
     let chi_square = hist.iter().enumerate()
         .take(modulus as usize)
-        .map(|(r, &count)| {
+        .map(|(_r, &count)| {
             let observed = count as f64;
             (observed - expected).powi(2) / expected
         })
@@ -636,7 +635,7 @@ pub fn iterative_pos_slice(points: &[Point], max_iters: u32) -> (f64, f64, f64) 
     let mut current_max = 1.0;
     let mut sub_points = points.to_vec();
 
-    for iter in 0..max_iters.min(3) {
+    for _iter in 0..max_iters.min(3) {
         if sub_points.len() < 100 {
             break; // Overfitting protection
         }
@@ -708,11 +707,11 @@ pub fn iterative_pos_bias_narrowing_deeper(solved_puzzles: &[(u32, BigInt256)], 
 
     let mut cumulative_bias = 1.0;
     let mut current_puzzles = solved_puzzles.to_vec();
-    let mut current_min = BigInt256::one(); // Start of first puzzle range
-    let mut current_max = BigInt256::from_u64(1) << 100; // End of largest puzzle range (use reasonable limit)
+    let current_min = BigInt256::one(); // Start of first puzzle range
+    let current_max = BigInt256::from_u64(1) << 100; // End of largest puzzle range (use reasonable limit)
     let mut overfitting_risk = 0.0;
 
-    for iter in 0..max_iters.min(3) { // Limit to 3 iterations maximum
+    for _iter in 0..max_iters.min(3) { // Limit to 3 iterations maximum
         let n = current_puzzles.len();
 
         // Overfitting protection: stop if sample size too small
@@ -723,7 +722,7 @@ pub fn iterative_pos_bias_narrowing_deeper(solved_puzzles: &[(u32, BigInt256)], 
 
         // Analyze current subset
         let hist = analyze_pos_bias_histogram(&current_puzzles);
-        let expected = 1.0; // Uniform would be 1.0
+        let _expected = 1.0; // Uniform would be 1.0
 
         // Find the most biased bin
         let mut max_bias = 0.0;

@@ -3,8 +3,6 @@
 //! Intelligent dispatch between Vulkan (bulk) and CUDA (precision) backends
 
 use super::backend_trait::GpuBackend;
-use super::cuda_backend::CudaBackend;
-use super::vulkan_backend::WgpuBackend;
 use super::cpu_backend::CpuBackend;
 use crate::kangaroo::collision::Trap;
 use anyhow::Result;
@@ -75,9 +73,9 @@ impl HybridBackend {
         positions: &mut Vec<[[u32; 8]; 3]>,
         distances: &mut Vec<[u32; 8]>,
         types: &Vec<u32>,
-        batch_size: usize,
+        _batch_size: usize,
     ) -> Result<Vec<Trap>> {
-        let (cuda_ratio, vulkan_ratio) = self.profile_device_performance().await;
+        let (_cuda_ratio, _vulkan_ratio) = self.profile_device_performance().await;
 
         let mut all_traps = Vec::new();
 

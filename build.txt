@@ -1,0 +1,989 @@
+warning: unused imports: `AffinePoint`, `ProjectivePoint`, and `Scalar as K256Scalar`
+  --> src/math/secp.rs:12:12
+   |
+12 | use k256::{Scalar as K256Scalar, ProjectivePoint, AffinePoint, elliptic_curve::ops::Mul as EcMul};
+   |            ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `group::GroupEncoding`, `group::prime::PrimeCurveAffine`, `ops::MulByGenerator`, and `sec1::ToEncodedPoint`
+  --> src/math/secp.rs:13:28
+   |
+13 | ...::{group::GroupEncoding, group::prime::PrimeCurveAffine, sec1::ToEncodedPoint, ops::MulByGenerator};
+   |       ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `log::info`
+ --> src/math/bigint.rs:7:5
+  |
+7 | use log::info;
+  |     ^^^^^^^^^
+
+warning: unused import: `num_bigint::BigUint`
+ --> src/math/bigint.rs:9:5
+  |
+9 | use num_bigint::BigUint;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `k256::FieldBytes`
+  --> src/math/bigint.rs:10:5
+   |
+10 | use k256::FieldBytes;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+  --> src/kangaroo/manager.rs:24:5
+   |
+24 | use std::collections::HashMap;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::ops::Rem`
+  --> src/kangaroo/generator.rs:10:5
+   |
+10 | use std::ops::Rem;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `anyhow::anyhow`
+  --> src/kangaroo/generator.rs:12:5
+   |
+12 | use anyhow::anyhow;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `statrs::distribution::ChiSquared`
+  --> src/kangaroo/generator.rs:20:5
+   |
+20 | use statrs::distribution::ChiSquared;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `anyhow::Result`
+ --> src/kangaroo/search_config.rs:9:5
+  |
+9 | use anyhow::Result;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `SearchConfig`
+ --> src/kangaroo/controller.rs:8:30
+  |
+8 | use super::{KangarooManager, SearchConfig};
+  |                              ^^^^^^^^^^^^
+
+warning: unused imports: `Arc` and `Mutex`
+  --> src/kangaroo/controller.rs:13:17
+   |
+13 | use std::sync::{Arc, Mutex};
+   |                 ^^^  ^^^^^
+
+warning: unused import: `crate::types::Point`
+ --> src/gpu/backends/cuda_backend.rs:9:5
+  |
+9 | use crate::types::Point;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `num_bigint::BigUint`
+  --> src/gpu/backends/cuda_backend.rs:12:5
+   |
+12 | use num_bigint::BigUint;
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `anyhow`
+ --> src/gpu/backends/cpu_backend.rs:7:22
+  |
+7 | use anyhow::{Result, anyhow};
+  |                      ^^^^^^
+
+warning: unused import: `super::cuda_backend::CudaBackend`
+ --> src/gpu/backends/hybrid_backend.rs:6:5
+  |
+6 | use super::cuda_backend::CudaBackend;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::vulkan_backend::WgpuBackend`
+ --> src/gpu/backends/hybrid_backend.rs:7:5
+  |
+7 | use super::vulkan_backend::WgpuBackend;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Result` and `anyhow`
+ --> src/gpu/shared.rs:6:14
+  |
+6 | use anyhow::{Result, anyhow};
+  |              ^^^^^^  ^^^^^^
+
+warning: unused import: `KangarooState`
+ --> src/gpu/hybrid_manager.rs:9:27
+  |
+9 | use crate::types::{Point, KangarooState};
+  |                           ^^^^^^^^^^^^^
+
+warning: unused import: `anyhow`
+  --> src/gpu/hybrid_manager.rs:11:22
+   |
+11 | use anyhow::{Result, anyhow};
+   |                      ^^^^^^
+
+warning: unused import: `tokio`
+  --> src/gpu/hybrid_manager.rs:16:5
+   |
+16 | use tokio;
+   |     ^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src/utils/pubkey_loader.rs:9:5
+  |
+9 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `cudarc`
+   --> src/security.rs:103:15
+    |
+103 |     #[cfg(not(feature = "cudarc"))]
+    |               ^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cuda-runtime-sys`, `default`, `fuzz`, `laptop`, `libfuzzer-sys`, `rustacuda`, `smoke`, `vulkano`, and `wgpu`
+    = help: consider adding `cudarc` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unused import: `crate::utils::pubkey_loader::load_test_puzzle_keys`
+  --> src/test_basic.rs:3:5
+   |
+ 3 | use crate::utils::pubkey_loader::load_test_puzzle_keys;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+  --> src/lib.rs:28:1
+   |
+28 | pub mod test_basic;
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BarrettReducer` and `BigInt512`
+  --> src/test_basic.rs:4:56
+   |
+ 4 | use crate::math::{secp::Secp256k1, bigint::{BigInt256, BigInt512, BarrettReducer}};
+   |                                                        ^^^^^^^^^  ^^^^^^^^^^^^^^
+   |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+  --> src/lib.rs:28:1
+   |
+28 | pub mod test_basic;
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: unreachable statement
+  --> src/test_basic.rs:13:5
+   |
+10 |     return;
+   |     ------ any code following this expression is unreachable
+...
+13 |     println!("Loading test puzzles...");
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+   = note: this warning originates in the macro `println` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused import: `elliptic_curve::ops::Mul`
+  --> src/math/secp.rs:12:64
+   |
+12 | use k256::{Scalar as K256Scalar, ProjectivePoint, AffinePoint, elliptic_curve::ops::Mul as EcMul};
+   |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::gpu::GpuBackend`
+ --> src/kangaroo/collision.rs:4:5
+  |
+4 | use crate::gpu::GpuBackend;
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `rayon::prelude`
+  --> src/kangaroo/controller.rs:14:5
+   |
+14 | use rayon::prelude::*;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused variable: `two`
+  --> src/math/secp.rs:99:13
+   |
+99 |         let two = BigInt256::from_u64(2);
+   |             ^^^ help: if this is intentional, prefix it with an underscore: `_two`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `four`
+   --> src/math/secp.rs:101:13
+    |
+101 |         let four = BigInt256::from_u64(4);
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_four`
+
+warning: unused variable: `eight`
+   --> src/math/secp.rs:102:13
+    |
+102 |         let eight = BigInt256::from_u64(8);
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_eight`
+
+warning: unused variable: `sixteen`
+   --> src/math/secp.rs:103:13
+    |
+103 |         let sixteen = BigInt256::from_u64(16);
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sixteen`
+
+warning: unused variable: `zzyy`
+   --> src/math/secp.rs:249:13
+    |
+249 |         let zzyy = self.montgomery_p.mul(&zz, &yy); // ZZYY = ZZ * YY (optimization for full Jacobian)
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_zzyy`
+
+warning: variable does not need to be mutable
+   --> src/math/secp.rs:394:13
+    |
+394 |         let mut k1 = if k1 >= self.n { self.barrett_n.sub(&k1, &self.n) } else { k1 };
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/math/secp.rs:395:13
+    |
+395 |         let mut k2 = if k2 >= self.n { self.barrett_n.sub(&k2, &self.n) } else { k2 };
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `mod_`
+   --> src/math/secp.rs:791:58
+    |
+791 |     fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, mod_: &BigInt256) -> BigInt256 {
+    |                                                          ^^^^ help: if this is intentional, prefix it with an underscore: `_mod_`
+
+warning: unused variable: `r_mod`
+   --> src/math/bigint.rs:641:13
+    |
+641 |         let r_mod = BigInt256::zero(); // 2^256 mod modulus = 0 since 2^256 > modulus
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_r_mod`
+
+warning: unused variable: `modulus`
+   --> src/math/bigint.rs:761:58
+    |
+761 |     fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+    |                                                          ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `original_steps`
+   --> src/parity/checker.rs:157:13
+    |
+157 |         let original_steps = self.test_steps;
+    |             ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_original_steps`
+
+warning: variable does not need to be mutable
+  --> src/kangaroo/generator.rs:24:49
+   |
+24 | pub fn biased_brent_cycle<F>(start: &BigInt256, mut f: F, biases: &std::collections::HashMap<u32, f64...
+   |                                                 ----^
+   |                                                 |
+   |                                                 help: remove this `mut`
+
+warning: unused variable: `f`
+  --> src/kangaroo/generator.rs:24:49
+   |
+24 | ...: &BigInt256, mut f: F, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256>
+   |                  ^^^^^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: unused variable: `b`
+  --> src/kangaroo/generator.rs:43:9
+   |
+43 |     let b = biases.get(&res.low_u32()).unwrap_or(&1.0);
+   |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `config`
+   --> src/kangaroo/generator.rs:540:83
+    |
+540 | ...t: usize, config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `hash_point`
+   --> src/kangaroo/generator.rs:590:13
+    |
+590 |         let hash_point = |p: &Point| -> u64 {
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_hash_point`
+
+warning: unused variable: `step`
+   --> src/kangaroo/generator.rs:595:13
+    |
+595 |         for step in 0..max_steps {
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `bias_mod`
+   --> src/kangaroo/generator.rs:657:57
+    |
+657 | ...&Point, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {
+    |            ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bias_mod`
+
+warning: unused variable: `range`
+   --> src/kangaroo/generator.rs:805:9
+    |
+805 |     let range = &slice.high - &slice.low;
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_range`
+
+warning: variable does not need to be mutable
+   --> src/kangaroo/generator.rs:831:9
+    |
+831 |     let mut slice = new_slice(range, 0);
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `target`
+   --> src/kangaroo/generator.rs:830:36
+    |
+830 | pub fn pollard_lambda_parallel_pos(target: &BigInt256, range: (BigInt, BigInt)) -> Option<BigInt256> {
+    |                                    ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `slice`
+   --> src/kangaroo/generator.rs:831:9
+    |
+831 |     let mut slice = new_slice(range, 0);
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_slice`
+
+warning: unused variable: `biases`
+   --> src/kangaroo/generator.rs:832:9
+    |
+832 |     let biases = std::collections::HashMap::from([(9, 1.25), (27, 1.35), (81, 1.42)]);
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_biases`
+
+warning: unused variable: `starts`
+   --> src/kangaroo/generator.rs:843:19
+    |
+843 | fn run_batch_mock(starts: &[BigInt], target: &BigInt256) -> Option<BigInt256> {
+    |                   ^^^^^^ help: if this is intentional, prefix it with an underscore: `_starts`
+
+warning: unused variable: `target`
+   --> src/kangaroo/generator.rs:843:38
+    |
+843 | fn run_batch_mock(starts: &[BigInt], target: &BigInt256) -> Option<BigInt256> {
+    |                                      ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `i`
+  --> src/kangaroo/stepper.rs:45:17
+   |
+45 |             for i in 17..=32 {
+   |                 ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `target`
+  --> src/kangaroo/stepper.rs:89:63
+   |
+89 |     fn select_jump_operation(&self, kangaroo: &KangarooState, target: Option<&Point>) -> JumpOp {
+   |                                                               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `entry2`
+   --> src/kangaroo/collision.rs:164:59
+    |
+164 | ...&DpEntry, entry2: &DpEntry, solution: &BigInt256) -> Option<Solution> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_entry2`
+
+warning: unused variable: `solution_g`
+   --> src/kangaroo/collision.rs:169:13
+    |
+169 |         let solution_g = self.curve.mul(solution, g);
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_solution_g`
+
+warning: variable does not need to be mutable
+   --> src/kangaroo/collision.rs:303:13
+    |
+303 |         let mut current_pos = kangaroo.position;
+    |             ----^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/kangaroo/collision.rs:326:13
+    |
+326 |         let mut current_point = *start_point;
+    |             ----^^^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `attractor_point`
+   --> src/kangaroo/collision.rs:351:32
+    |
+351 |     pub fn apply_g_link(&self, attractor_point: &Point, tame_distance: u64, target_point: &Point) ->...
+    |                                ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_attractor_point`
+
+warning: unused variable: `target_point`
+   --> src/kangaroo/collision.rs:351:77
+    |
+351 | ...64, target_point: &Point) -> Option<[u64; 4]> {
+    |        ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_target_point`
+
+warning: unused variable: `config`
+  --> src/kangaroo/controller.rs:34:9
+   |
+34 |         config: Config,
+   |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `manager`
+  --> src/kangaroo/controller.rs:91:14
+   |
+91 |         for (manager, stats) in &mut self.managers {
+   |              ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manager`
+
+warning: unused variable: `base`
+  --> src/gpu/backends/cpu_backend.rs:37:51
+   |
+37 | ...ec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+   |                 ^^^^ help: if this is intentional, prefix it with an underscore: `_base`
+
+warning: unused variable: `prime`
+  --> src/gpu/backends/cpu_backend.rs:43:13
+   |
+43 |         for prime in primes {
+   |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_prime`
+
+warning: unused variable: `positions`
+  --> src/gpu/backends/cpu_backend.rs:53:26
+   |
+53 | ...(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Resul...
+   |            ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_positions`
+
+warning: unused variable: `distances`
+  --> src/gpu/backends/cpu_backend.rs:53:60
+   |
+53 | ...8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+   |            ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_distances`
+
+warning: unused variable: `types`
+  --> src/gpu/backends/cpu_backend.rs:53:90
+   |
+53 | ...c<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+   |                ^^^^^ help: if this is intentional, prefix it with an underscore: `_types`
+
+warning: unused variable: `target`
+   --> src/gpu/backends/cpu_backend.rs:131:127
+    |
+131 | ...[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `mu`
+   --> src/gpu/backends/cpu_backend.rs:168:54
+    |
+168 | ...ec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+    |                  ^^ help: if this is intentional, prefix it with an underscore: `_mu`
+
+warning: unused variable: `use_montgomery`
+   --> src/gpu/backends/cpu_backend.rs:168:85
+    |
+168 | ..., mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+    |                                     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_montgomery`
+
+warning: unused variable: `batch_size`
+  --> src/gpu/backends/hybrid_backend.rs:78:9
+   |
+78 |         batch_size: usize,
+   |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_batch_size`
+
+warning: unused variable: `cuda_ratio`
+  --> src/gpu/backends/hybrid_backend.rs:80:14
+   |
+80 |         let (cuda_ratio, vulkan_ratio) = self.profile_device_performance().await;
+   |              ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cuda_ratio`
+
+warning: unused variable: `vulkan_ratio`
+  --> src/gpu/backends/hybrid_backend.rs:80:26
+   |
+80 |         let (cuda_ratio, vulkan_ratio) = self.profile_device_performance().await;
+   |                          ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vulkan_ratio`
+
+warning: value assigned to `all_traps` is never read
+  --> src/gpu/backends/hybrid_backend.rs:82:29
+   |
+82 |         let mut all_traps = Vec::new();
+   |                             ^^^^^^^^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `p`
+  --> src/gpu/hybrid_manager.rs:54:58
+   |
+54 |     fn curve_equation(&self, x: &[u64; 4], y: &[u64; 4], p: &BigInt256) -> bool {
+   |                                                          ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `total_steps`
+   --> src/gpu/hybrid_manager.rs:110:9
+    |
+110 |         total_steps: u64,
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_total_steps`
+
+warning: unused variable: `points_ptr`
+   --> src/gpu/hybrid_manager.rs:187:36
+    |
+187 |     pub fn launch_split_ops(&self, points_ptr: *mut Point) -> Result<()> {
+    |                                    ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_points_ptr`
+
+warning: unused variable: `g`
+   --> src/gpu/hybrid_manager.rs:292:48
+    |
+292 | ...nts_rho(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
+    |                   ^ help: if this is intentional, prefix it with an underscore: `_g`
+
+warning: unused variable: `p`
+   --> src/gpu/hybrid_manager.rs:292:58
+    |
+292 | ...elf, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
+    |                   ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `num_walks`
+   --> src/gpu/hybrid_manager.rs:292:68
+    |
+292 | ...Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_walks`
+
+warning: unused variable: `bias_mod`
+   --> src/gpu/hybrid_manager.rs:292:86
+    |
+292 | ... usize, bias_mod: u64) -> Option<BigInt256> {
+    |            ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bias_mod`
+
+warning: unused variable: `g`
+   --> src/gpu/hybrid_manager.rs:412:60
+    |
+412 | ...o_async(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Result<Option<BigInt256>, ...
+    |                   ^ help: if this is intentional, prefix it with an underscore: `_g`
+
+warning: unused variable: `p`
+   --> src/gpu/hybrid_manager.rs:412:70
+    |
+412 | ...elf, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Result<Option<BigInt256>, anyhow::Er...
+    |                   ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `num_walks`
+   --> src/gpu/hybrid_manager.rs:412:80
+    |
+412 | ...Point, num_walks: usize, bias_mod: u64) -> Result<Option<BigInt256>, anyhow::Error> {
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_walks`
+
+warning: unused variable: `bias_mod`
+   --> src/gpu/hybrid_manager.rs:412:98
+    |
+412 | ... usize, bias_mod: u64) -> Result<Option<BigInt256>, anyhow::Error> {
+    |            ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bias_mod`
+
+warning: unused variable: `cpu_steps`
+   --> src/gpu/hybrid_manager.rs:472:13
+    |
+472 |         let cpu_steps = steps - gpu_steps;
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cpu_steps`
+
+warning: unused variable: `n`
+   --> src/utils/pubkey_loader.rs:451:37
+    |
+451 | pub fn detect_pos_bias_proxy_single(n: u32) -> f64 {
+    |                                     ^ help: if this is intentional, prefix it with an underscore: `_n`
+
+warning: unused variable: `hist9`
+   --> src/utils/pubkey_loader.rs:491:10
+    |
+491 |     let (hist9, _expected9, max_r9, b_mod9, _sig9) = analyze_mod9_bias_deeper(points);
+    |          ^^^^^ help: if this is intentional, prefix it with an underscore: `_hist9`
+
+warning: unused variable: `level`
+   --> src/utils/pubkey_loader.rs:538:9
+    |
+538 |     for level in 0..max_levels.min(3) {
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_level`
+
+warning: unused variable: `hist`
+   --> src/utils/pubkey_loader.rs:543:14
+    |
+543 |         let (hist, _expected, max_r, b, _sig) = analyze_mod_bias_deeper(&sub_points, current_modulus);
+    |              ^^^^ help: if this is intentional, prefix it with an underscore: `_hist`
+
+warning: unused variable: `r`
+   --> src/utils/pubkey_loader.rs:597:16
+    |
+597 |         .map(|(r, &count)| {
+    |                ^ help: if this is intentional, prefix it with an underscore: `_r`
+
+warning: unused variable: `iter`
+   --> src/utils/pubkey_loader.rs:639:9
+    |
+639 |     for iter in 0..max_iters.min(3) {
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_iter`
+
+warning: variable does not need to be mutable
+   --> src/utils/pubkey_loader.rs:711:9
+    |
+711 |     let mut current_min = BigInt256::one(); // Start of first puzzle range
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/utils/pubkey_loader.rs:712:9
+    |
+712 |     let mut current_max = BigInt256::from_u64(1) << 100; // End of largest puzzle range (use reasona...
+    |         ----^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `iter`
+   --> src/utils/pubkey_loader.rs:715:9
+    |
+715 |     for iter in 0..max_iters.min(3) { // Limit to 3 iterations maximum
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_iter`
+
+warning: unused variable: `expected`
+   --> src/utils/pubkey_loader.rs:726:13
+    |
+726 |         let expected = 1.0; // Uniform would be 1.0
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_expected`
+
+warning: associated function `mod_inverse_u64` is never used
+   --> src/math/bigint.rs:806:8
+    |
+632 | impl MontgomeryReducer {
+    | ---------------------- associated function in this implementation
+...
+806 |     fn mod_inverse_u64(a: u64, modulus: u64) -> Option<u64> {
+    |        ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `extended_euclid_u128` is never used
+   --> src/math/bigint.rs:931:4
+    |
+931 | fn extended_euclid_u128(a: u128, b: u128) -> (u128, u128, u128) {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `NearMissTable` is never constructed
+  --> src/kangaroo/manager.rs:27:8
+   |
+27 | struct NearMissTable {
+   |        ^^^^^^^^^^^^^
+
+warning: associated items `new` and `find_nearest` are never used
+  --> src/kangaroo/manager.rs:32:12
+   |
+31 | impl NearMissTable {
+   | ------------------ associated items in this implementation
+32 |     pub fn new(max_k: u64) -> Self {
+   |            ^^^
+...
+44 |     pub fn find_nearest(&self, diff: &BigInt256) -> Option<u64> {
+   |            ^^^^^^^^^^^^
+
+warning: associated items `u32_array_to_u64_array` and `convert_gpu_results_to_kangaroos` are never used
+   --> src/kangaroo/manager.rs:632:8
+    |
+ 74 | impl KangarooManager {
+    | -------------------- associated items in this implementation
+...
+632 |     fn u32_array_to_u64_array(u32_arr: [u32; 8]) -> [u64; 4] {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+643 |     fn convert_gpu_results_to_kangaroos(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+   --> src/kangaroo/generator.rs:379:8
+    |
+115 | impl KangarooGenerator {
+    | ---------------------- associated items in this implementation
+...
+379 |     fn get_jump_from_bucket(&self, bucket: u32) -> BigInt256 {
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+387 |     fn get_jump_from_bucket_mod9(&self, bucket: u32) -> BigInt256 {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+396 |     fn get_jump_from_bucket_mod27(&self, bucket: u32) -> BigInt256 {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+405 |     fn get_jump_from_bucket_mod81(&self, bucket: u32) -> BigInt256 {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+414 |     fn get_jump_vanity_biased(&self, bucket: u32, mod_n: u64, bias_res: u64) -> BigInt256 {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+422 |     fn lambda_bucket_select(&self, point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: b...
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+441 |     fn rho_partition_quantum_bias(&self, point: &Point, dist: &BigInt256, seed: u32, mod_bias: u64) ...
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+843 | fn run_batch_mock(starts: &[BigInt], target: &BigInt256) -> Option<BigInt256> {
+    |    ^^^^^^^^^^^^^^
+
+warning: field `expanded_mode` is never read
+  --> src/kangaroo/stepper.rs:15:5
+   |
+12 | pub struct KangarooStepper {
+   |            --------------- field in this struct
+...
+15 |     expanded_mode: bool,
+   |     ^^^^^^^^^^^^^
+   |
+   = note: `KangarooStepper` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: methods `u32_array_to_bigint` and `hash_position` are never used
+   --> src/kangaroo/collision.rs:155:8
+    |
+ 27 | impl CollisionDetector {
+    | ---------------------- methods in this implementation
+...
+155 |     fn u32_array_to_bigint(&self, array: &[u32; 8]) -> BigInt256 {
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+524 |     fn hash_position(&self, p: &Point) -> u32 {
+    |        ^^^^^^^^^^^^^
+
+warning: methods `alloc_buffer` and `mod_inverse_batch` are never used
+  --> src/gpu/backends/cpu_backend.rs:19:8
+   |
+12 | impl CpuBackend {
+   | --------------- methods in this implementation
+...
+19 |     fn alloc_buffer(&self, size: usize) -> Result<Vec<u64>, anyhow::Error> {
+   |        ^^^^^^^^^^^^
+...
+24 |     fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::...
+   |        ^^^^^^^^^^^^^^^^^
+
+warning: fields `check_interval` and `sync_version` are never read
+  --> src/gpu/hybrid_manager.rs:33:5
+   |
+29 | pub struct HybridGpuManager {
+   |            ---------------- fields in this struct
+...
+33 |     check_interval: Duration,
+   |     ^^^^^^^^^^^^^^
+34 |     metrics: Arc<Mutex<DriftMetrics>>,
+35 |     sync_version: Arc<Mutex<u64>>,
+   |     ^^^^^^^^^^^^
+
+warning: methods `check_collision`, `hash_dp_point`, `mock_dp_table_contains`, and `run_vulkan_computation` are never used
+   --> src/gpu/hybrid_manager.rs:378:8
+    |
+ 38 | impl HybridGpuManager {
+    | --------------------- methods in this implementation
+...
+378 |     fn check_collision(&self, _dp: &std::marker::PhantomData<()>) -> Option<BigInt256> {
+    |        ^^^^^^^^^^^^^^^
+...
+383 |     fn hash_dp_point(&self, dp: &crate::gpu::backends::cuda_backend::DpPoint) -> u64 {
+    |        ^^^^^^^^^^^^^
+...
+389 |     fn mock_dp_table_contains(&self, _hash: u64) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+624 |     fn run_vulkan_computation(
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `dp_bits` and `sled_path` are never read
+  --> src/dp/table.rs:21:5
+   |
+20 | pub struct DpTable {
+   |            ------- fields in this struct
+21 |     dp_bits: usize,
+   |     ^^^^^^^
+...
+27 |     sled_path: Option<PathBuf>,
+   |     ^^^^^^^^^
+
+warning: method `spill_batch_to_disk_async` is never used
+   --> src/dp/table.rs:428:14
+    |
+ 65 | impl DpTable {
+    | ------------ method in this implementation
+...
+428 |     async fn spill_batch_to_disk_async(&self, entries: Vec<DpEntry>) -> Result<()> {
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `gpu_backend` is never read
+  --> src/parity/checker.rs:15:5
+   |
+13 | pub struct ParityChecker {
+   |            ------------- field in this struct
+14 |     cpu_stepper: KangarooStepper,
+15 |     gpu_backend: Box<dyn GpuBackend>,
+   |     ^^^^^^^^^^^
+
+warning: function `is_quantum_vulnerable` is never used
+   --> src/utils/pubkey_loader.rs:361:4
+    |
+361 | fn is_quantum_vulnerable(_point: &Point) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `is_quantum_vulnerable_entropy` is never used
+   --> src/utils/pubkey_loader.rs:367:4
+    |
+367 | fn is_quantum_vulnerable_entropy(point: &Point) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `is_grover_threat_biased` is never used
+   --> src/utils/pubkey_loader.rs:375:4
+    |
+375 | fn is_grover_threat_biased(x_hex: &str) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `shannon_entropy` is never used
+   --> src/utils/pubkey_loader.rs:382:4
+    |
+382 | fn shannon_entropy(s: &str) -> f64 {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `calc_bias_prob` is never used
+   --> src/utils/pubkey_loader.rs:395:4
+    |
+395 | fn calc_bias_prob(points: &Vec<Point>, mod_n: u64) -> f64 {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `combine_multi_bias` is never used
+   --> src/utils/pubkey_loader.rs:401:4
+    |
+401 | fn combine_multi_bias(probs: Vec<f64>) -> f64 {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `detect_biases_prevalence` is never used
+   --> src/utils/pubkey_loader.rs:910:4
+    |
+910 | fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<String, f64> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `detect_dp_bias` is never used
+   --> src/utils/pubkey_loader.rs:933:4
+    |
+933 | fn detect_dp_bias(x: &BigInt256, dp_bits: u32, mod_n: u64) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `is_layered_bias_proxy` is never used
+   --> src/utils/pubkey_loader.rs:939:4
+    |
+939 | fn is_layered_bias_proxy(x: &BigInt256, biases: &std::collections::HashMap<String, f64>) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `speedbitcrack` (lib) generated 121 warnings (run `cargo fix --lib -p speedbitcrack` to apply 92 suggestions)
+warning: unused import: `warn`
+ --> src/main.rs:8:17
+  |
+8 | use log::{info, warn};
+  |                 ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `KangarooController` and `SearchConfig`
+  --> src/main.rs:11:31
+   |
+11 | use speedbitcrack::kangaroo::{KangarooController, SearchConfig, KangarooGenerator};
+   |                               ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `speedbitcrack::types::SearchMode`
+  --> src/main.rs:12:5
+   |
+12 | use speedbitcrack::types::SearchMode;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `speedbitcrack::gpu::hybrid_manager::HybridGpuManager`
+  --> src/main.rs:15:5
+   |
+15 | use speedbitcrack::gpu::hybrid_manager::HybridGpuManager;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `target`
+   --> src/main.rs:216:18
+    |
+216 |             let (target, range) = speedbitcrack::puzzles::load_unspent_67();
+    |                  ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `gpu_config`
+   --> src/main.rs:217:17
+    |
+217 | ...   let gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbi...
+    |           ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_gpu_config`
+
+warning: unused variable: `pub_hex`
+   --> src/main.rs:290:21
+    |
+290 |         if let Some(pub_hex) = entry.pub_hex {
+    |                     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pub_hex`
+
+warning: unused variable: `i`
+   --> src/main.rs:333:10
+    |
+333 |     for (i, result) in results.iter().enumerate().take(10) {
+    |          ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `x`
+   --> src/main.rs:440:9
+    |
+440 |     let x = match parse_compressed(pubkey_hex) {
+    |         ^ help: if this is intentional, prefix it with an underscore: `_x`
+
+warning: unused variable: `gen`
+   --> src/main.rs:478:9
+    |
+478 |     let gen = KangarooGenerator::new(&config);
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_gen`
+
+warning: unused variable: `curve`
+   --> src/main.rs:503:23
+    |
+503 | fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>> {
+    |                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_curve`
+
+warning: unused variable: `pos_proxy`
+   --> src/main.rs:603:54
+    |
+603 | ..._mod9, pos_proxy) = pubkey_loader::detect_bias_single(&x_bigint, n);
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pos_proxy`
+
+warning: unused variable: `gen`
+   --> src/main.rs:763:21
+    |
+763 | fn execute_valuable(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_gen`
+
+warning: unused variable: `final_min`
+   --> src/main.rs:828:30
+    |
+828 | ..._bias, final_min, final_max, iters, overfitting_risk) = speedbitcrack::utils::pubkey_loader::iter...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_final_min`
+
+warning: unused variable: `final_max`
+   --> src/main.rs:828:41
+    |
+828 | ...l_min, final_max, iters, overfitting_risk) = speedbitcrack::utils::pubkey_loader::iterative_pos_b...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_final_max`
+
+warning: unused variable: `gen`
+   --> src/main.rs:865:17
+    |
+865 | fn execute_test(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
+    |                 ^^^ help: if this is intentional, prefix it with an underscore: `_gen`
+
+warning: unused variable: `h`
+   --> src/main.rs:962:17
+    |
+962 |     if let Some(h) = &hybrid {
+    |                 ^ help: if this is intentional, prefix it with an underscore: `_h`
+
+warning: struct `PuzzleData` is never constructed
+  --> src/main.rs:72:8
+   |
+72 | struct PuzzleData {
+   |        ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `run_puzzle_test` is never used
+   --> src/main.rs:420:4
+    |
+420 | fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `analyze_solved_positional_bias` is never used
+   --> src/main.rs:712:4
+    |
+712 | fn analyze_solved_positional_bias() -> f64 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `speedbitcrack` (bin "speedbitcrack") generated 20 warnings (run `cargo fix --bin "speedbitcrack" -p speedbitcrack` to apply 17 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.08s

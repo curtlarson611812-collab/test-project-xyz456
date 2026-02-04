@@ -5,13 +5,11 @@
 //! - Test puzzles (bounded, quick validation)
 //! - Unsolved puzzles (bounded, long-running)
 
-use super::{KangarooManager, SearchConfig};
+use super::KangarooManager;
 use crate::types::Point;
 use crate::config::Config;
 use crate::utils::pubkey_loader::{load_valuable_p2pk_keys, load_test_puzzle_keys, load_unsolved_puzzle_keys};
 use anyhow::Result;
-use std::sync::{Arc, Mutex};
-use rayon::prelude::*;
 
 /// Statistics for controller operations
 #[derive(Debug, Clone)]
@@ -31,7 +29,7 @@ pub struct KangarooController {
 impl KangarooController {
     /// Create controller with specified target lists
     pub async fn new_with_lists(
-        config: Config,
+        _config: Config,
         load_valuable: Option<String>, // Path to valuable P2PK file
         load_test: bool,
         load_unsolved: bool,
@@ -88,7 +86,7 @@ impl KangarooController {
     /// Run all managers in parallel for specified steps
     pub fn run_parallel(&mut self, steps_per_cycle: u64) -> Result<()> {
         // Sequential execution for now to avoid Send trait issues
-        for (manager, stats) in &mut self.managers {
+        for (_manager, stats) in &mut self.managers {
             let start_time = std::time::Instant::now();
 
             // Run steps on this manager

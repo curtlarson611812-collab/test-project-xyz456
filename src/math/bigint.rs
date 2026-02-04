@@ -4,10 +4,7 @@
 
 use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
-use log::info;
 use std::error::Error;
-use num_bigint::BigUint;
-use k256::FieldBytes;
 use rand::{thread_rng, Rng};
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
@@ -638,7 +635,7 @@ impl MontgomeryReducer {
 
         // R^(-1) mod modulus - for Montgomery, R_inv = R^(-1) mod N
         // Since R = 2^256 and 2^256 > modulus for secp256k1, R_inv = 2^256 mod modulus
-        let r_mod = BigInt256::zero(); // 2^256 mod modulus = 0 since 2^256 > modulus
+        let _r_mod = BigInt256::zero(); // 2^256 mod modulus = 0 since 2^256 > modulus
         let r_inv = BigInt256::zero(); // R_inv would be computed properly in full implementation
 
         // Compute n_prime = -modulus^(-1) mod 2^64
@@ -758,7 +755,7 @@ impl MontgomeryReducer {
 
     /// Constant-time modular exponentiation using square-and-multiply
     /// No timing leaks through early exit or branch prediction
-    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, _modulus: &BigInt256) -> BigInt256 {
         let mut result = BigInt256::one();
         let mut b = base.clone();
         let mut e = exp.clone();
@@ -802,33 +799,33 @@ impl MontgomeryReducer {
         true
     }
 
-    /// Modular inverse for u64 using extended Euclidean algorithm
-    fn mod_inverse_u64(a: u64, modulus: u64) -> Option<u64> {
-        let mut t = 0i64;
-        let mut new_t = 1i64;
-        let mut r = modulus as i64;
-        let mut new_r = a as i64;
-
-        while new_r != 0 {
-            let quotient = r / new_r;
-            let temp_t = t - quotient * new_t;
-            t = new_t;
-            new_t = temp_t;
-
-            let temp_r = r - quotient * new_r;
-            r = new_r;
-            new_r = temp_r;
-        }
-
-        if r > 1 {
-            return None;
-        }
-        if t < 0 {
-            t += modulus as i64;
-        }
-
-        Some(t as u64)
-    }
+    // Modular inverse for u64 using extended Euclidean algorithm
+    // fn mod_inverse_u64(a: u64, modulus: u64) -> Option<u64> {
+    //     let mut t = 0i64;
+    //     let mut new_t = 1i64;
+    //     let mut r = modulus as i64;
+    //     let mut new_r = a as i64;
+    //
+    //     while new_r != 0 {
+    //         let quotient = r / new_r;
+    //         let temp_t = t - quotient * new_t;
+    //         t = new_t;
+    //         new_t = temp_t;
+    //
+    //         let temp_r = r - quotient * new_r;
+    //         r = new_r;
+    //         new_r = temp_r;
+    //     }
+    //
+    //     if r > 1 {
+    //         return None;
+    //     }
+    //     if t < 0 {
+    //         t += modulus as i64;
+    //     }
+    //
+    //     Some(t as u64)
+    // }
 }
 
 // Basic arithmetic implementations
@@ -928,43 +925,43 @@ impl BigInt256 {
     }
 
 /// Extended Euclidean algorithm for u128
-fn extended_euclid_u128(a: u128, b: u128) -> (u128, u128, u128) {
-    let (mut old_r, mut r) = (a, b);
-    let (mut old_s, mut s) = (1u128, 0u128);
-    let (mut old_t, mut t) = (0u128, 1u128);
-
-    while r != 0 {
-        let quotient = old_r / r;
-        let temp = r;
-        r = old_r - quotient * r;
-        old_r = temp;
-
-        let temp = s;
-        // Handle potential negative results by using wrapping operations
-        let qs = quotient * s;
-        s = if old_s >= qs {
-            old_s - qs
-        } else {
-            // Wrap around: equivalent to old_s - qs mod 2^128
-            // For our use case (finding modular inverse), we need to handle the sign
-            let diff = qs - old_s;
-            (1u128 << 64).wrapping_sub(diff % (1u128 << 64))
-        };
-        old_s = temp;
-
-        let temp = t;
-        let qt = quotient * t;
-        t = if old_t >= qt {
-            old_t - qt
-        } else {
-            let diff = qt - old_t;
-            (1u128 << 64).wrapping_sub(diff % (1u128 << 64))
-        };
-        old_t = temp;
-    }
-
-    (old_r, old_s, old_t)
-}
+// fn extended_euclid_u128(a: u128, b: u128) -> (u128, u128, u128) {
+//     let (mut old_r, mut r) = (a, b);
+//     let (mut old_s, mut s) = (1u128, 0u128);
+//     let (mut old_t, mut t) = (0u128, 1u128);
+//
+//     while r != 0 {
+//         let quotient = old_r / r;
+//         let temp = r;
+//         r = old_r - quotient * r;
+//         old_r = temp;
+//
+//         let temp = s;
+//         // Handle potential negative results by using wrapping operations
+//         let qs = quotient * s;
+//         s = if old_s >= qs {
+//             old_s - qs
+//         } else {
+//             // Wrap around: equivalent to old_s - qs mod 2^128
+//             // For our use case (finding modular inverse), we need to handle the sign
+//             let diff = qs - old_s;
+//             (1u128 << 64).wrapping_sub(diff % (1u128 << 64))
+//         };
+//         old_s = temp;
+//
+//         let temp = t;
+//         let qt = quotient * t;
+//         t = if old_t >= qt {
+//             old_t - qt
+//         } else {
+//             let diff = qt - old_t;
+//             (1u128 << 64).wrapping_sub(diff % (1u128 << 64))
+//         };
+//         old_t = temp;
+//     }
+//
+//     (old_r, old_s, old_t)
+// }
 
 impl Div for BigInt256 {
     type Output = Self;

@@ -4,7 +4,7 @@
 
 use super::backend_trait::GpuBackend;
 use crate::kangaroo::collision::Trap;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 /// CPU backend for software fallback implementation
 pub struct CpuBackend;
@@ -15,17 +15,17 @@ impl CpuBackend {
         Ok(CpuBackend)
     }
 
-    /// Allocate buffer for CPU operations
-    fn alloc_buffer(&self, size: usize) -> Result<Vec<u64>, anyhow::Error> {
-        Ok(vec![0; size]) // Real vector allocation for CPU operations
-    }
+    // Allocate buffer for CPU operations
+    // fn alloc_buffer(&self, size: usize) -> Result<Vec<u64>, anyhow::Error> {
+    //     Ok(vec![0; size]) // Real vector allocation for CPU operations
+    // }
 
-    /// Batch modular inverse using Montgomery reduction
-    fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {
-        use crate::math::bigint::MontgomeryReducer;
-        let reducer = MontgomeryReducer::new(modulus);
-        a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap_or(crate::math::bigint::BigInt256::zero())).collect()
-    }
+    // Batch modular inverse using Montgomery reduction
+    // fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {
+    //     use crate::math::bigint::MontgomeryReducer;
+    //     let reducer = MontgomeryReducer::new(modulus);
+    //     a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap_or(crate::math::bigint::BigInt256::zero())).collect()
+    // }
 }
 
 #[async_trait::async_trait]
@@ -34,13 +34,13 @@ impl GpuBackend for CpuBackend {
         Self::new()
     }
 
-    fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+    fn precomp_table(&self, primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
         // CPU implementation for jump table precomputation
         // Calculate G * 2^i for efficient jumping
         let mut positions = Vec::with_capacity(primes.len());
         let mut distances = Vec::with_capacity(primes.len());
 
-        for prime in primes {
+        for _prime in primes {
             // For CPU fallback, just return placeholder data
             // In full implementation, would compute actual elliptic curve points
             positions.push([[0u32; 8]; 3]); // Placeholder position
@@ -50,7 +50,7 @@ impl GpuBackend for CpuBackend {
         Ok((positions, distances))
     }
 
-    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+    fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
         // Simple CPU implementation - just return empty traps for now
         // TODO: Implement actual kangaroo stepping logic
         Ok(vec![])
@@ -128,7 +128,7 @@ impl GpuBackend for CpuBackend {
         Ok(results)
     }
 
-    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
         // CPU implementation for advanced collision solving
         // k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod n
         let mut results = Vec::with_capacity(alpha_t.len());
@@ -165,7 +165,7 @@ impl GpuBackend for CpuBackend {
         Ok(results)
     }
 
-    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, _mu: [u32;9], modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
         // CPU implementation of Barrett modular reduction
         // x mod m using Barrett reduction algorithm
         let mut results = Vec::with_capacity(x.len());

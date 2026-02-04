@@ -7,9 +7,7 @@ use crate::types::{KangarooState, Point, TaggedKangarooState};
 use crate::math::{Secp256k1, bigint::{BigInt256, BigInt512}};
 use crate::kangaroo::SearchConfig;
 use num_bigint::BigInt;
-use std::ops::Rem;
 use std::ops::Sub;
-use anyhow::anyhow;
 
 use anyhow::Result;
 use log::warn;
@@ -17,11 +15,10 @@ use rayon::prelude::*;
 use rand::rngs::OsRng;
 use rand::Rng;
 use std::sync::Arc;
-use statrs::distribution::ChiSquared;
 // SIMD removed for stability - using regular loops instead
 
 /// Chunk: Bias-Aware Brent's (collision.rs)
-pub fn biased_brent_cycle<F>(start: &BigInt256, mut f: F, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256>
+pub fn biased_brent_cycle<F>(start: &BigInt256, _f: F, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256>
 where F: FnMut(&BigInt256) -> BigInt256 {
     let mut tortoise = start.clone();
     let mut hare = f_biased(&tortoise, biases);  // Bias wrap
@@ -41,7 +38,7 @@ where F: FnMut(&BigInt256) -> BigInt256 {
 fn f_biased(x: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
     let res = x.clone() % BigInt256::from_u64(81u64);
     let b = biases.get(&res.low_u32()).unwrap_or(&1.0);
-    x.clone() + BigInt256::from_u64(rand::random::<u64>())
+    x.clone() + BigInt256::from_u64((rand::random::<f64>() * *b) as u64)
 }
 
 // Concise Block: Brent's Cycle Detection for Rho Walks
@@ -376,52 +373,52 @@ impl KangarooGenerator {
     }
 
     /// Concise Block: Map Bucket to 9-Biased Jump
-    fn get_jump_from_bucket(&self, bucket: u32) -> BigInt256 {
-        use crate::math::constants::PRIME_MULTIPLIERS;
-        let prime = PRIME_MULTIPLIERS[bucket as usize % 32];
-        let biased = prime + (9 - (prime % 9)); // Adjust to mod9=0 for theory
-        BigInt256::from_u64(biased % (1u64 << 32)) // Keep small for speed
-    }
+    // fn get_jump_from_bucket(&self, bucket: u32) -> BigInt256 {
+    //     use crate::math::constants::PRIME_MULTIPLIERS;
+    //     let prime = PRIME_MULTIPLIERS[bucket as usize % 32];
+    //     let biased = prime + (9 - (prime % 9)); // Adjust to mod9=0 for theory
+    //     BigInt256::from_u64(biased % (1u64 << 32)) // Keep small for speed
+    // }
 
     /// Concise Block: Mod9-Biased Jump from Bucket
-    fn get_jump_from_bucket_mod9(&self, bucket: u32) -> BigInt256 {
-        use crate::math::constants::PRIME_MULTIPLIERS;
-        let base_prime = PRIME_MULTIPLIERS[bucket as usize % 32];
-        let adjust = 9 - (base_prime % 9); // To next multiple of 9
-        let biased = base_prime + adjust;
-        BigInt256::from_u64(biased % (1 << 32)) // Small, mod9=0
-    }
+    // fn get_jump_from_bucket_mod9(&self, bucket: u32) -> BigInt256 {
+    //     use crate::math::constants::PRIME_MULTIPLIERS;
+    //     let base_prime = PRIME_MULTIPLIERS[bucket as usize % 32];
+    //     let adjust = 9 - (base_prime % 9); // To next multiple of 9
+    //     let biased = base_prime + adjust;
+    //     BigInt256::from_u64(biased % (1 << 32)) // Small, mod9=0
+    // }
 
     /// Concise Block: Mod27-Biased Jump from Bucket
-    fn get_jump_from_bucket_mod27(&self, bucket: u32) -> BigInt256 {
-        use crate::math::constants::PRIME_MULTIPLIERS;
-        let base_prime = PRIME_MULTIPLIERS[bucket as usize % 32];
-        let adjust = 27 - (base_prime % 27); // To next multiple of 27
-        let biased = base_prime + adjust;
-        BigInt256::from_u64(biased % (1 << 32)) // Small, mod27=0
-    }
+    // fn get_jump_from_bucket_mod27(&self, bucket: u32) -> BigInt256 {
+    //     use crate::math::constants::PRIME_MULTIPLIERS;
+    //     let base_prime = PRIME_MULTIPLIERS[bucket as usize % 32];
+    //     let adjust = 27 - (base_prime % 27); // To next multiple of 27
+    //     let biased = base_prime + adjust;
+    //     BigInt256::from_u64(biased % (1 << 32)) // Small, mod27=0
+    // }
 
     /// Concise Block: Mod81-Biased Jump from Bucket
-    fn get_jump_from_bucket_mod81(&self, bucket: u32) -> BigInt256 {
-        use crate::math::constants::PRIME_MULTIPLIERS;
-        let base_prime = PRIME_MULTIPLIERS[bucket as usize % 32];
-        let adjust = 81 - (base_prime % 81); // To next multiple of 81
-        let biased = base_prime + adjust;
-        BigInt256::from_u64(biased % (1 << 32)) // Small, mod81=0
-    }
+    // fn get_jump_from_bucket_mod81(&self, bucket: u32) -> BigInt256 {
+    //     use crate::math::constants::PRIME_MULTIPLIERS;
+    //     let base_prime = PRIME_MULTIPLIERS[bucket as usize % 32];
+    //     let adjust = 81 - (base_prime % 81); // To next multiple of 81
+    //     let biased = base_prime + adjust;
+    //     BigInt256::from_u64(biased % (1 << 32)) // Small, mod81=0
+    // }
 
     /// Concise Block: Vanity-Biased Jump Adjust
-    fn get_jump_vanity_biased(&self, bucket: u32, mod_n: u64, bias_res: u64) -> BigInt256 {
-        use crate::math::constants::PRIME_MULTIPLIERS;
-        let base = PRIME_MULTIPLIERS[bucket as usize % 32];
-        let adjust = mod_n - (base % mod_n) + bias_res; // To mod n = bias_res
-        BigInt256::from_u64(base + adjust % mod_n)
-    }
+    // fn get_jump_vanity_biased(&self, bucket: u32, mod_n: u64, bias_res: u64) -> BigInt256 {
+    //     use crate::math::constants::PRIME_MULTIPLIERS;
+    //     let base = PRIME_MULTIPLIERS[bucket as usize % 32];
+    //     let adjust = mod_n - (base % mod_n) + bias_res; // To mod n = bias_res
+    //     BigInt256::from_u64(base + adjust % mod_n)
+    // }
 
     /// Concise Block: Pollard's Lambda Bucket as Jump Hash
-    fn lambda_bucket_select(&self, point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
-        self.select_bucket(point, dist, seed, step, is_tame) // Prior preset
-    }
+    // fn lambda_bucket_select(&self, point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+    //     self.select_bucket(point, dist, seed, step, is_tame) // Prior preset
+    // }
 
     /// Concise Block: Rho Partition f from Preset Bucket
     pub fn rho_partition_f(&self, point: &Point, dist: &BigInt256, seed: u32) -> u32 {
@@ -438,10 +435,10 @@ impl KangarooGenerator {
     }
 
     /// Concise Block: Bias Rho Partition to Vulnerable Mod
-    fn rho_partition_quantum_bias(&self, point: &Point, dist: &BigInt256, seed: u32, mod_bias: u64) -> u32 {
-        let bucket = self.rho_partition_f(point, dist, seed);
-        (bucket as u64 % mod_bias) as u32 // Bias mod for vulnerable class
-    }
+    // fn rho_partition_quantum_bias(&self, point: &Point, dist: &BigInt256, seed: u32, mod_bias: u64) -> u32 {
+    //     let bucket = self.rho_partition_f(point, dist, seed);
+    //     (bucket as u64 % mod_bias) as u32 // Bias mod for vulnerable class
+    // }
 
     /// Concise Block: Separate Rho Partition with Bias
     pub fn rho_specific_partition(&self, point: &Point, dist: &BigInt256, seed: u32, bias_mod: u64) -> u32 {
@@ -537,7 +534,7 @@ impl KangarooGenerator {
 
     /// Setup Kangaroos for Multi-Target with Precise Starts
     /// Verbatim preset: Per-target wild primes, shared tame G.
-    pub fn setup_kangaroos_multi(&self, targets: &[Point], num_per_target: usize, config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
+    pub fn setup_kangaroos_multi(&self, targets: &[Point], num_per_target: usize, _config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
         use crate::math::constants::PRIME_MULTIPLIERS;
         let mut wilds = Vec::with_capacity(targets.len() * num_per_target);
         for (idx, target) in targets.iter().enumerate() {
@@ -587,12 +584,12 @@ impl KangarooGenerator {
             (p.x[0] & mask) == 0
         };
 
-        let hash_point = |p: &Point| -> u64 {
+        let _hash_point = |p: &Point| -> u64 {
             p.x[0] % 1024 // Simple hash for demo
         };
 
         let max_steps = if max_cycles == 0 { 10000000 } else { max_cycles }; // 0 = unlimited for demo
-        for step in 0..max_steps {
+        for _step in 0..max_steps {
             // Move tame with bias-aware jumping
             let tame_jump_idx = self.select_bias_aware_jump(&tame, bias_mod, b_pos, pos_proxy);
             tame = curve.add(&tame, &curve.g_multiples[tame_jump_idx % curve.g_multiples.len()]);
@@ -654,7 +651,7 @@ impl KangarooGenerator {
 
 
     /// Select bias-aware jump operation with hierarchical modulus preferences (mod9 -> mod27 -> mod81 -> pos)
-    pub fn select_bias_aware_jump(&self, point: &Point, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {
+    pub fn select_bias_aware_jump(&self, point: &Point, _bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {
         use rand::Rng;
         let mut rng = rand::thread_rng();
 
@@ -802,7 +799,7 @@ pub fn simd_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
 
 // Chunk: SIMD Random in Slice (generator.rs)
 pub fn vec_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
-    let range = &slice.high - &slice.low;
+    let _range = &slice.high - &slice.low;
     let mut rands = vec![num_bigint::BigInt::from(0); count];
     for i in 0..count {
         let rand_val = rand::random::<u64>() % 1000000;  // Assume small range for now
@@ -827,9 +824,9 @@ pub fn tune_bias(biases: &mut std::collections::HashMap<u32, f64>, coll_rate: f6
 }
 
 /// POS slicing integrated pollard lambda parallel - 8 lines
-pub fn pollard_lambda_parallel_pos(target: &BigInt256, range: (BigInt, BigInt)) -> Option<BigInt256> {
-    let mut slice = new_slice(range, 0);
-    let biases = std::collections::HashMap::from([(9, 1.25), (27, 1.35), (81, 1.42)]);
+pub fn pollard_lambda_parallel_pos(_target: &BigInt256, range: (BigInt, BigInt)) -> Option<BigInt256> {
+    let _slice = new_slice(range, 0);
+    let _biases = std::collections::HashMap::from([(9, 1.25), (27, 1.35), (81, 1.42)]);
         for _ in 0..3 {
             // TODO: Implement batch processing
             // let starts: Vec<BigInt> = (0..4096).map(|_| random_in_slice(&slice)).collect();
@@ -840,7 +837,7 @@ pub fn pollard_lambda_parallel_pos(target: &BigInt256, range: (BigInt, BigInt)) 
 }
 
 /// Mock batch runner for testing (replace with real implementation)
-fn run_batch_mock(starts: &[BigInt], target: &BigInt256) -> Option<BigInt256> {
+fn run_batch_mock(_starts: &[BigInt], _target: &BigInt256) -> Option<BigInt256> {
         // Mock collision detection - in real implementation this would run kangaroo algorithm
         use rand::Rng;
         if rand::thread_rng().gen_bool(0.001) { // 0.1% mock success rate

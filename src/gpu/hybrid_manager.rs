@@ -6,14 +6,13 @@
 use super::shared::SharedBuffer;
 use super::backends::hybrid_backend::HybridBackend;
 use super::backends::backend_trait::GpuBackend;
-use crate::types::{Point, KangarooState};
+use crate::types::Point;
 use crate::math::{secp::Secp256k1, bigint::BigInt256};
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use std::sync::{Arc, Mutex};
 use log::{info, warn, debug};
 use std::thread;
 use std::time::{Duration, Instant};
-use tokio;
 
 /// Metrics for drift monitoring
 #[derive(Debug, Clone)]
@@ -30,9 +29,7 @@ pub struct HybridGpuManager {
     hybrid_backend: HybridBackend,
     curve: Secp256k1,
     drift_threshold: f64,
-    check_interval: Duration,
-    metrics: Arc<Mutex<DriftMetrics>>,
-    sync_version: Arc<Mutex<u64>>,
+            metrics: Arc<Mutex<DriftMetrics>>,
 }
 
 impl HybridGpuManager {
@@ -51,7 +48,7 @@ impl HybridGpuManager {
     }
 
     /// CPU validation of curve equation: y² = x³ + 7 mod p
-    fn curve_equation(&self, x: &[u64; 4], y: &[u64; 4], p: &BigInt256) -> bool {
+    fn curve_equation(&self, x: &[u64; 4], y: &[u64; 4], _p: &BigInt256) -> bool {
         let x_big = BigInt256::from_u64_array(*x);
         let y_big = BigInt256::from_u64_array(*y);
 
@@ -68,7 +65,7 @@ impl HybridGpuManager {
     }
 
     /// Create new hybrid manager with drift monitoring
-    pub async fn new(drift_threshold: f64, check_interval_secs: u64) -> Result<Self> {
+    pub async fn new(drift_threshold: f64, _check_interval_secs: u64) -> Result<Self> {
         let hybrid_backend = HybridBackend::new().await?;
         // Log CUDA version for compatibility (only if CUDA feature enabled)
         #[cfg(feature = "rustacuda")]
@@ -82,7 +79,6 @@ impl HybridGpuManager {
             hybrid_backend,
             curve,
             drift_threshold,
-            check_interval: Duration::from_secs(check_interval_secs),
             metrics: Arc::new(Mutex::new(DriftMetrics {
                 error_rate: 0.0,
                 cuda_throughput: 0.0,
@@ -90,7 +86,6 @@ impl HybridGpuManager {
                 swap_count: 0,
                 last_swap_time: Instant::now(),
             })),
-            sync_version: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -107,7 +102,7 @@ impl HybridGpuManager {
         points_data: &mut Vec<Point>,
         distances_data: &mut Vec<BigInt256>,
         batch_size: usize,
-        total_steps: u64,
+        _total_steps: u64,
         threshold: f64,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let attractor_rate = self.get_attractor_rate(points_data);
@@ -184,7 +179,7 @@ impl HybridGpuManager {
     }
 
     /// Launch split precision/speed operations with event sync
-    pub fn launch_split_ops(&self, points_ptr: *mut Point) -> Result<()> {
+    pub fn launch_split_ops(&self, _points_ptr: *mut Point) -> Result<()> {
         // TODO: Implement actual CUDA/Vulkan split operations
         // For now, this is a placeholder showing the intended split
 
@@ -289,7 +284,7 @@ impl HybridGpuManager {
     }
 
     /// Concise Block: Parallel Brent's Rho in Hybrid
-    pub fn dispatch_parallel_brents_rho(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
+    pub fn dispatch_parallel_brents_rho(&self, _g: Point, _p: Point, _num_walks: usize, _bias_mod: u64) -> Option<BigInt256> {
         // Integration: Use CUDA rho kernel for parallel Brent's cycle detection
         // Launch CUDA kernel with rho states, collect distinguished points
         // On cycle detection, solve using existing collision solver
@@ -409,7 +404,7 @@ impl HybridGpuManager {
 
     /// Async version of parallel Brent's rho dispatch
     /// Allows CPU work to overlap with GPU computation
-    pub async fn dispatch_parallel_brents_rho_async(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Result<Option<BigInt256>, anyhow::Error> {
+    pub async fn dispatch_parallel_brents_rho_async(&self, _g: Point, _p: Point, _num_walks: usize, _bias_mod: u64) -> Result<Option<BigInt256>, anyhow::Error> {
         #[cfg(feature = "rustacuda")]
         {
             use crate::gpu::backends::cuda_backend::{RhoState, CudaBackend};
@@ -469,7 +464,7 @@ impl HybridGpuManager {
     pub async fn dispatch_hybrid_balanced(&self, steps: u64, gpu_load: f64) -> Result<Option<BigInt256>, anyhow::Error> {
         // Heuristic: GPU gets 90% load on RTX 5090 (high parallelism), CPU handles validation
         let gpu_steps = (steps as f64 * gpu_load.max(0.8).min(0.95)) as u64;  // 80-95% GPU
-        let cpu_steps = steps - gpu_steps;
+        let _cpu_steps = steps - gpu_steps;
 
         // Async dispatch: GPU for bulk steps, CPU for collision detection
         let gpu_result: Result<Option<BigInt256>> = async {
@@ -620,84 +615,7 @@ impl HybridGpuManager {
         Ok(())
     }
 
-    /// Run Vulkan computation with drift monitoring
-    fn run_vulkan_computation(
-        &self,
-        shared_points: &Arc<Mutex<SharedBuffer<Point>>>,
-        shared_distances: &Arc<Mutex<SharedBuffer<u64>>>,
-        metrics: &Arc<Mutex<DriftMetrics>>,
-        sync_version: &Arc<Mutex<u64>>,
-        batch_size: usize,
-        total_steps: u64,
-    ) {
-        let start_time = Instant::now();
-        let mut steps_completed = 0u64;
-
-        while steps_completed < total_steps {
-            let batch_start = Instant::now();
-
-            // Execute computation using hybrid backend (falls back to Vulkan)
-            {
-                let mut points_guard = shared_points.lock().unwrap();
-                let mut distances_guard = shared_distances.lock().unwrap();
-
-                // Convert to Vec for backend API (simplified - would use slices)
-                let mut positions_vec: Vec<[[u32; 8]; 3]> = points_guard.as_slice().iter().map(|p| [
-                    p.x.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
-                    p.y.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
-                    p.z.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
-                ]).collect();
-
-                let mut distances_vec: Vec<[u32; 8]> = distances_guard.as_slice().iter().map(|&d| [
-                    d as u32, (d >> 32) as u32, 0, 0, 0, 0, 0, 0
-                ]).collect();
-
-                let types_vec: Vec<u32> = vec![1; batch_size]; // Simplified - all tame
-
-                // Execute step batch using GpuBackend trait
-                if let Err(e) = self.hybrid_backend.step_batch(&mut positions_vec, &mut distances_vec, &types_vec) {
-                    log::error!("Hybrid backend step failed: {}", e);
-                    break;
-                }
-
-                // Convert back (simplified)
-                for (i, pos) in positions_vec.iter().enumerate() {
-                    if i < points_guard.len() {
-                        let point = &mut points_guard.as_mut_slice()[i];
-                        for j in 0..4 {
-                            point.x[j] = ((pos[0][j*2 + 1] as u64) << 32) | pos[0][j*2] as u64;
-                            point.y[j] = ((pos[1][j*2 + 1] as u64) << 32) | pos[1][j*2] as u64;
-                            point.z[j] = ((pos[2][j*2 + 1] as u64) << 32) | pos[2][j*2] as u64;
-                        }
-                    }
-                }
-
-                for (i, dist) in distances_vec.iter().enumerate() {
-                    if i < distances_guard.len() {
-                        distances_guard.as_mut_slice()[i] = ((dist[1] as u64) << 32) | dist[0] as u64;
-                    }
-                }
-
-                // Update sync version
-                *sync_version.lock().unwrap() += 1;
-            }
-
-            steps_completed += batch_size as u64;
-
-            // Update throughput metrics
-            let batch_time = batch_start.elapsed();
-            let throughput = batch_size as f64 / batch_time.as_secs_f64();
-            metrics.lock().unwrap().vulkan_throughput = throughput;
-
-            // Small delay to prevent tight looping
-            thread::sleep(Duration::from_micros(1000));
-        }
-
-        let total_time = start_time.elapsed();
-        log::info!("Vulkan computation completed {} steps in {:.2}s ({:.0} ops/s)",
-                  steps_completed, total_time.as_secs_f64(),
-                  steps_completed as f64 / total_time.as_secs_f64());
-    }
+    /// Run Vulkan computation with drift monitoring - removed as unused
 
     /// Compute drift error by comparing sample points to CPU ground truth
     fn compute_drift_error(&self, points: &SharedBuffer<Point>, distances: &SharedBuffer<u64>, curve: &Secp256k1) -> f64 {

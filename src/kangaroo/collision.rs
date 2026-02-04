@@ -1,7 +1,6 @@
 use crate::types::{Solution, KangarooState, Point, DpEntry};
 use crate::dp::DpTable;
 use crate::math::{Secp256k1, BigInt256};
-use crate::gpu::GpuBackend;
 use anyhow::Result;
 use num_bigint::BigUint;
 
@@ -152,21 +151,21 @@ impl CollisionDetector {
     }
 
     /// Convert [u32; 8] array back to BigInt256
-    fn u32_array_to_bigint(&self, array: &[u32; 8]) -> BigInt256 {
-        let mut limbs = [0u64; 4];
-        for i in 0..4 {
-            limbs[i] = (array[i * 2] as u64) | ((array[i * 2 + 1] as u64) << 32);
-        }
-        BigInt256 { limbs }
-    }
+    // fn u32_array_to_bigint(&self, array: &[u32; 8]) -> BigInt256 {
+    //     let mut limbs = [0u64; 4];
+    //     for i in 0..4 {
+    //         limbs[i] = (array[i * 2] as u64) | ((array[i * 2 + 1] as u64) << 32);
+    //     }
+    //     BigInt256 { limbs }
+    // }
 
     /// Verify collision solution is correct
-    fn verify_collision_solution(&self, entry1: &DpEntry, entry2: &DpEntry, solution: &BigInt256) -> Option<Solution> {
+    fn verify_collision_solution(&self, entry1: &DpEntry, _entry2: &DpEntry, solution: &BigInt256) -> Option<Solution> {
         // Verify: entry1_point = solution * G + entry1_distance
         // and     entry2_point = solution * G + entry2_distance
         // This is a simplified check - full verification would be more thorough
         let g = self.curve.g();
-        let solution_g = self.curve.mul(solution, g);
+        let _solution_g = self.curve.mul(solution, g);
         // Check if the solution produces the expected relationship
         // This is a simplified check - full verification would be more thorough
         Some(Solution {
@@ -300,7 +299,7 @@ impl CollisionDetector {
         // This is a simplified version - in practice, we'd need the jump table
         // to properly reconstruct the path by reversing operations
         let mut path = Vec::new();
-        let mut current_pos = kangaroo.position;
+        let current_pos = kangaroo.position;
         let mut current_dist = BigUint::from(kangaroo.distance);
 
         // Add starting position
@@ -323,7 +322,7 @@ impl CollisionDetector {
     /// Walk forward from collision point (for verification or path reconstruction)
     pub fn walk_forward(&self, start_point: &Point, target_point: &Point, max_steps: usize) -> Option<Vec<Point>> {
         let mut path = Vec::new();
-        let mut current_point = *start_point;
+        let current_point = *start_point;
         path.push(current_point);
 
         // Simple forward walking - in practice, this would use the jump table
@@ -348,7 +347,7 @@ impl CollisionDetector {
     }
 
     /// Apply G-Link solving when attractor is found (advanced kangaroo technique)
-    pub fn apply_g_link(&self, attractor_point: &Point, tame_distance: u64, target_point: &Point) -> Option<[u64; 4]> {
+    pub fn apply_g_link(&self, _attractor_point: &Point, tame_distance: u64, _target_point: &Point) -> Option<[u64; 4]> {
         // G-Link solving: When we find an attractor point (where tame and wild meet),
         // we can solve for keys in a subgroup by computing:
         // k = (distance_from_attractor_to_target) * modular_inverse(step_size) mod subgroup_order
@@ -521,10 +520,10 @@ impl CollisionDetector {
         })
     }
 
-    fn hash_position(&self, p: &Point) -> u32 {
-        let aff = self.curve.to_affine(p);
-        (0..4).fold(0u32, |h, i| h ^ (aff.x[i] ^ aff.y[i]) as u32)
-    }
+    // fn hash_position(&self, p: &Point) -> u32 {
+    //     let aff = self.curve.to_affine(p);
+    //     (0..4).fold(0u32, |h, i| h ^ (aff.x[i] ^ aff.y[i]) as u32)
+    // }
 }
 
 #[cfg(test)]

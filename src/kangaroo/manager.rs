@@ -21,30 +21,29 @@ use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
 use anyhow::anyhow;
-use std::collections::HashMap;
 
 /// Concise Block: Precompute Small k*G Table for Nearest Adjust
-struct NearMissTable {
-    table: Vec<(BigInt256, u64)>, // (k*G.x, k)
-}
-
-impl NearMissTable {
-    pub fn new(max_k: u64) -> Self {
-        let mut table = vec![];
-        let curve = crate::math::secp::Secp256k1::new();
-        let g_x = BigInt256::from_u64_array(curve.g.x);
-        let mut current = g_x.clone();
-        for k in 1..=max_k {
-            table.push((current.clone(), k));
-            current = (current + g_x.clone()) % curve.p.clone(); // Additive multiples
-        }
-        Self { table }
-    }
-
-    pub fn find_nearest(&self, diff: &BigInt256) -> Option<u64> {
-        self.table.iter().find(|(x, _)| x == diff).map(|(_, k)| *k)
-    }
-}
+// struct NearMissTable {
+//     table: Vec<(BigInt256, u64)>, // (k*G.x, k)
+// }
+//
+// impl NearMissTable {
+//     pub fn new(max_k: u64) -> Self {
+//         let mut table = vec![];
+//         let curve = crate::math::secp::Secp256k1::new();
+//         let g_x = BigInt256::from_u64_array(curve.g.x);
+//         let mut current = g_x.clone();
+//         for k in 1..=max_k {
+//             table.push((current.clone(), k));
+//             current = (current + g_x.clone()) % curve.p.clone(); // Additive multiples
+//         }
+//         Self { table }
+//     }
+//
+//     pub fn find_nearest(&self, diff: &BigInt256) -> Option<u64> {
+//         self.table.iter().find(|(x, _)| x == diff).map(|(_, k)| *k)
+//     }
+// }
 
 use anyhow::Result;
 use log::{info, warn, debug};

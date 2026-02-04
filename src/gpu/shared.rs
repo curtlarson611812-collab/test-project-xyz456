@@ -3,7 +3,6 @@
 //! Provides synchronized memory access between CUDA and Vulkan backends
 //! to prevent drift in long-running computations through concurrent execution
 
-use anyhow::{Result, anyhow};
 
 #[cfg(feature = "wgpu")]
 use wgpu;

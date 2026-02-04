@@ -6,10 +6,8 @@
 
 use super::backend_trait::GpuBackend;
 use crate::kangaroo::collision::Trap;
-use crate::types::Point;
 use crate::math::bigint::BigInt256;
 use anyhow::{Result, anyhow};
-use num_bigint::BigUint;
 
 #[cfg(feature = "rustacuda")]
 use rustacuda::device::Device as CudaDevice;

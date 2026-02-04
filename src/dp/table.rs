@@ -18,7 +18,7 @@ use bincode;
 /// Smart Distinguished Points table
 /// Cuckoo/Bloom + value-based + clustering — no simple hashmap for DP
 pub struct DpTable {
-    dp_bits: usize,
+    // dp_bits: usize, // TODO: Use for DP bit calculations
     cuckoo_filter: CuckooFilter<DefaultHasher>,
     entries: HashMap<u64, DpEntry>, // Keyed by x_hash
     max_size: usize,
@@ -82,7 +82,6 @@ impl DpTable {
         };
 
         DpTable {
-            dp_bits,
             cuckoo_filter,
             entries: HashMap::new(),
             max_size,
@@ -425,34 +424,34 @@ impl DpTable {
     }
 
     /// Async batch spill multiple DP entries to disk storage (rule #12 combo)
-    async fn spill_batch_to_disk_async(&self, entries: Vec<DpEntry>) -> Result<()> {
-        if entries.is_empty() {
-            return Ok(());
-        }
-
-        let db = self.sled_db.as_ref().map(|arc| arc.clone());
-        let mut batch_data = Vec::new();
-
-        for entry in entries {
-            let key = entry.x_hash.to_be_bytes();
-            let serialized = bincode::serialize(&entry)?;
-            batch_data.push((key, serialized));
-        }
-
-        task::spawn_blocking(move || {
-            if let Some(db) = db {
-                for (key, serialized) in batch_data {
-                    db.insert(key, serialized)?;
-                }
-                db.flush()?; // Ensure all data is written
-                Ok(())
-            } else {
-                Err(anyhow::anyhow!("Sled database not enabled"))
-            }
-        }).await??;
-
-        Ok(())
-    }
+    // async fn spill_batch_to_disk_async(&self, entries: Vec<DpEntry>) -> Result<()> {
+    //     if entries.is_empty() {
+    //         return Ok(());
+    //     }
+    //
+    //     let db = self.sled_db.as_ref().map(|arc| arc.clone());
+    //     let mut batch_data = Vec::new();
+    //
+    //     for entry in entries {
+    //         let key = entry.x_hash.to_be_bytes();
+    //         let serialized = bincode::serialize(&entry)?;
+    //         batch_data.push((key, serialized));
+    //     }
+    //
+    //     task::spawn_blocking(move || {
+    //         if let Some(db) = db {
+    //             for (key, serialized) in batch_data {
+    //                 db.insert(key, serialized)?;
+    //             }
+    //             db.flush()?; // Ensure all data is written
+    //             Ok(())
+    //         } else {
+    //             Err(anyhow::anyhow!("Sled database not enabled"))
+    //         }
+    //     }).await??;
+    //
+    //     Ok(())
+    // }
 
     /// Synchronous spill DP entry to disk storage
     fn spill_to_disk_sync(&self, entry: DpEntry) -> Result<()> {

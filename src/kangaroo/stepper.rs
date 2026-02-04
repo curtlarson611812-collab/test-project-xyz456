@@ -12,7 +12,7 @@ use anyhow::Result;
 pub struct KangarooStepper {
     curve: Secp256k1,
     jump_table: Vec<Point>, // Precomputed jump points
-    expanded_mode: bool,
+    // expanded_mode: bool, // TODO: Implement expanded jump mode
     dp_bits: usize, // DP bits for negation check
 }
 
@@ -30,7 +30,6 @@ impl KangarooStepper {
         KangarooStepper {
             curve,
             jump_table,
-            expanded_mode,
             dp_bits,
         }
     }
@@ -42,7 +41,7 @@ impl KangarooStepper {
         if expanded {
             // Add more multiples for expanded mode (17G through 32G)
             let mut current = table.last().unwrap().clone();
-            for i in 17..=32 {
+            for _i in 17..=32 {
                 current = curve.add(&current, &curve.g);
                 table.push(current.clone());
             }
@@ -86,7 +85,7 @@ impl KangarooStepper {
     }
 
     /// Select appropriate jump operation
-    fn select_jump_operation(&self, kangaroo: &KangarooState, target: Option<&Point>) -> JumpOp {
+    fn select_jump_operation(&self, kangaroo: &KangarooState, _target: Option<&Point>) -> JumpOp {
         // Use position hash to deterministically select jump operation
         let pos_hash = self.hash_position(&kangaroo.position);
 
