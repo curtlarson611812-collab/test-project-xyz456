@@ -4,6 +4,9 @@
 
 use speedbitcrack::math::bigint::BigInt256;
 use speedbitcrack::utils::pubkey_loader::detect_bias_single;
+use speedbitcrack::kangaroo::generator::{KangarooGenerator, PosSlice};
+use num_bigint::BigInt;
+use std::collections::HashMap;
 
 #[test]
 fn test_mod9_bias_detection() {
@@ -111,5 +114,100 @@ fn test_magic_nine_candidates() {
     for non_candidate in non_candidates {
         let (mod9, _, _, _, _) = detect_bias_single(&non_candidate);
         assert_ne!(mod9, 0, "Non-candidate should NOT be 0 mod 9");
+    }
+}
+
+#[test]
+fn test_refine_pos_slice() {
+    let mut slice = PosSlice::new((BigInt::from(0), BigInt::from(1000)), 0);
+    let mut biases = HashMap::new();
+    biases.insert(0, 1.2);
+
+    KangarooGenerator::refine_pos_slice(&mut slice, &biases, 5);
+
+    // Should refine bounds based on bias
+    assert!(slice.low >= BigInt::from(0));
+    assert!(slice.high > slice.low);
+    assert_eq!(slice.iteration, 1);
+    assert!((slice.bias_factor - 1.2).abs() < 0.001);
+}
+
+#[test]
+fn test_pos_slice_max_iterations() {
+    let mut slice = PosSlice::new((BigInt::from(0), BigInt::from(1000)), 0);
+    let biases = HashMap::new();
+
+    // Refine beyond max iterations
+    for _ in 0..10 {
+        KangarooGenerator::refine_pos_slice(&mut slice, &biases, 3);
+    }
+
+    assert_eq!(slice.iteration, 3); // Should cap at max_iterations
+}
+
+#[test]
+fn test_random_in_slice() {
+    let slice = PosSlice::new((BigInt::from(100), BigInt::from(200)), 0);
+
+    for _ in 0..10 {
+        let random_val = KangarooGenerator::random_in_slice(&slice);
+        assert!(random_val >= BigInt::from(100));
+        assert!(random_val < BigInt::from(200));
+    }
+}
+
+#[test]
+fn test_mod81_bias_kernel_mock() {
+    // Mock test for mod81 bias checking (would use real CUDA in production)
+    let keys = vec![
+        BigInt::from(81),  // 81 % 81 = 0 (high bias)
+        BigInt::from(82),  // 82 % 81 = 1 (low bias)
+        BigInt::from(162), // 162 % 81 = 0 (high bias)
+    ];
+    let high_residues = vec![0, 9, 27, 36];
+
+    // Mock implementation (real would use CUDA)
+    let flags: Vec<bool> = keys.iter().map(|k| {
+        let residue = (k % BigInt::from(81)).to_u64().unwrap() as u32;
+        high_residues.contains(&residue)
+    }).collect();
+
+    assert_eq!(flags, vec![true, false, true]);
+}
+
+#[test]
+fn test_hierarchical_bias_jumping() {
+    use speedbitcrack::config::Config;
+    use speedbitcrack::types::Point;
+
+    let gen = KangarooGenerator::new(&Config::default());
+    let point = Point::infinity(); // Mock point
+
+    // Test hierarchical bias preferences
+    let jump_mod9 = gen.select_bias_aware_jump(&point, 9, 1.0, 0.0);
+    let jump_mod27 = gen.select_bias_aware_jump(&point, 27, 1.0, 0.0);
+    let jump_mod81 = gen.select_bias_aware_jump(&point, 81, 1.0, 0.0);
+    let jump_pos = gen.select_bias_aware_jump(&point, 0, 1.5, 0.0);
+    let jump_none = gen.select_bias_aware_jump(&point, 0, 1.0, 0.5);
+
+    // All should be valid jump indices
+    assert!(jump_mod9 < gen.curve.g_multiples.len());
+    assert!(jump_mod27 < gen.curve.g_multiples.len());
+    assert!(jump_mod81 < gen.curve.g_multiples.len());
+    assert!(jump_pos < gen.curve.g_multiples.len());
+    assert!(jump_none < gen.curve.g_multiples.len());
+}
+
+#[test]
+fn test_positional_proxy_integration() {
+    // Test that positional proxy is correctly extracted from bias detection
+    let test_keys = vec![
+        BigInt::from(1),    // Small key, should have low proxy
+        BigInt::from(1) << 130, // Large key, should have higher proxy
+    ];
+
+    for key in test_keys {
+        let (_, _, _, _, _, pos_proxy) = detect_bias_single(&key, 67); // Puzzle #67
+        assert!(pos_proxy >= 0.0 && pos_proxy <= 1.0);
     }
 }

@@ -39,12 +39,20 @@ pub struct RhoState {
 }
 
 /// Distinguished point for collision detection
-#[cfg(feature = "rustacuda")]
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone)]
 pub struct DpPoint {
     pub x: [u64; 4],
     pub steps: BigInt256,
+}
+
+impl Default for DpPoint {
+    fn default() -> Self {
+        DpPoint {
+            x: [0; 4],
+            steps: BigInt256::zero(),
+        }
+    }
 }
 
 /// Workgroup size for CUDA kernels - tuned for occupancy on RTX 5090
@@ -619,6 +627,82 @@ impl GpuBackend for CudaBackend {
         let mut host_val = 0u32;
         buffer.copy_to(&mut host_val)?;
         Ok(host_val)
+    }
+
+    /// Dispatch mod81 bias checking on rho states
+    /// Returns flags indicating which states have high-bias residues
+    #[cfg(feature = "rustacuda")]
+    pub fn dispatch_mod81_bias(&self, rho_states: &[RhoState], high_residues: &[u32]) -> Result<Vec<bool>> {
+        let batch_size = rho_states.len();
+        if batch_size == 0 {
+            return Ok(vec![]);
+        }
+
+        // Extract keys from rho states (simplified - in practice would need full BigInt extraction)
+        let keys: Vec<u64> = rho_states.iter()
+            .flat_map(|state| state.current.x.iter().cloned())
+            .collect();
+
+        // Allocate device buffers
+        let d_keys = DeviceBuffer::from_slice(&keys)?;
+        let d_flags = unsafe { DeviceBuffer::uninitialized(batch_size) }?;
+        let d_high_residues = DeviceBuffer::from_slice(high_residues)?;
+
+        // Launch kernel
+        let grid_size = ((batch_size as u32 + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE) as u32;
+        let mod81_fn = self.rho_module.get_function(CStr::from_bytes_with_nul(b"mod81_bias_check\0")?)?;
+
+        unsafe {
+            cuda_check!(launch!(mod81_fn<<<(grid_size, 1, 1), (WORKGROUP_SIZE, 1, 1), 0, self.stream>>>(
+                d_keys.as_device_ptr(),
+                d_flags.as_device_ptr(),
+                batch_size as i32,
+                d_high_residues.as_device_ptr(),
+                high_residues.len() as i32
+            )), "mod81_bias_check launch");
+        }
+
+        cuda_check!(self.stream.synchronize(), "mod81_bias_check sync");
+
+        // Read results
+        let mut flags = vec![false; batch_size];
+        d_flags.copy_to(&mut flags)?;
+
+        Ok(flags)
+    }
+
+    /// Allocate pinned memory for DP buffers (faster async transfers)
+    #[cfg(feature = "rustacuda")]
+    pub fn alloc_pinned_dp(&self, size: usize) -> Result<DeviceBuffer<DpPoint>> {
+        // For pinned memory, we'd need cuda_host_alloc, but simplified here
+        // In production, use cudaHostAlloc for page-locked host memory
+        unsafe { DeviceBuffer::uninitialized(size) }
+    }
+
+    /// Load and execute PTX kernel with bias parameters
+    #[cfg(feature = "rustacuda")]
+    pub fn load_and_exec_rho_ptx(&self, ptx_path: &str, bias_params: &[f32]) -> Result<(), CudaError> {
+        // Load PTX with RTX 5090 optimization flags
+        let ptx_flags = ["-arch=sm_89", "-O3", "-use_fast_math"];
+        let module = CudaModule::from_ptx_file(ptx_path, &ptx_flags)?;
+
+        let func = module.get_function(CStr::from_bytes_with_nul(b"rho_kernel\0")?)?;
+
+        // Convert bias params to device buffer
+        let d_bias = DeviceBuffer::from_slice(bias_params)?;
+
+        // Launch with optimized grid/block dimensions
+        let grid_dim = dim3 { x: 1024, y: 1, z: 1 }; // 1024 blocks
+        let block_dim = dim3 { x: 256, y: 1, z: 1 };  // 256 threads per block
+
+        unsafe {
+            cuda_check!(launch!(func<<<grid_dim, block_dim, 0, self.stream>>>(
+                d_bias.as_device_ptr()
+            )), "rho_ptx launch");
+        }
+
+        cuda_check!(self.stream.synchronize(), "rho_ptx sync");
+        Ok(())
     }
 }
 

@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::types::{KangarooState, Point, TaggedKangarooState};
 use crate::math::{Secp256k1, bigint::{BigInt256, BigInt512}};
 use crate::kangaroo::SearchConfig;
+use num_bigint::BigInt;
 use std::ops::Rem;
 use std::ops::Sub;
 use anyhow::anyhow;
@@ -53,6 +54,34 @@ const MAGIC9_PRIMES: [u64; 32] = [
     967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
     1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
 ];
+
+/// Positional Proxy Slice State for iterative range narrowing
+#[derive(Clone, Debug)]
+pub struct PosSlice {
+    /// Lower bound of current slice
+    pub low: BigInt,
+    /// Upper bound of current slice
+    pub high: BigInt,
+    /// Positional proxy value (0 for unsolved puzzles)
+    pub pos_proxy: u32,
+    /// Accumulated bias factor from iterative refinement
+    pub bias_factor: f64,
+    /// Current iteration depth
+    pub iteration: usize,
+}
+
+impl PosSlice {
+    /// Create new slice from full range with initial proxy
+    pub fn new(full_range: (BigInt, BigInt), initial_proxy: u32) -> Self {
+        PosSlice {
+            low: full_range.0,
+            high: full_range.1,
+            pos_proxy: initial_proxy,
+            bias_factor: 1.0,
+            iteration: 0,
+        }
+    }
+}
 
 /// Kangaroo generator for tame and wild kangaroos
 pub struct KangarooGenerator {
@@ -581,45 +610,60 @@ impl KangarooGenerator {
         }
 
         // CPU parallel implementation using rayon
-        let curve_ref = &curve;
+        let curve_arc = Arc::new(curve.clone());
         let g_arc = Arc::new(g.clone());
         let q_arc = Arc::new(q.clone());
-        let a_clone = a.clone();
-        let w_clone = w.clone();
-        (0..num_kangaroos).into_par_iter().map(move |_| {
+        let a_arc = Arc::new(a.clone());
+        let w_arc = Arc::new(w.clone());
+        (0..num_kangaroos).into_par_iter().map(|_| {
             // Generate random offset for this kangaroo pair
-            let w_array = w_clone.to_u64_array();
+            let w_array = w_arc.to_u64_array();
             let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
             let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
             let offset = BigInt256::from_u64(offset_u64);
 
-            let adjusted_a = curve_ref.barrett_n.add(&a_clone, &offset);
-            let adjusted_w = w_clone.right_shift((num_kangaroos as f64).log2() as usize); // Split range
+            let adjusted_a = curve_arc.barrett_n.add(&a_arc, &offset);
+            let adjusted_w = w_arc.right_shift((num_kangaroos as f64).log2() as usize); // Split range
 
-            self.pollard_lambda(curve_ref, &g_arc, &q_arc, adjusted_a, adjusted_w, max_cycles / num_kangaroos as u64, bias_mod, b_pos, pos_proxy)
+            self.pollard_lambda(&curve_arc, &g_arc, &q_arc, adjusted_a, adjusted_w, max_cycles / num_kangaroos as u64, bias_mod, b_pos, pos_proxy)
         }).find_any(|sol: &Option<BigInt256>| sol.is_some()).flatten()
     }
 
 
-    /// Select bias-aware jump operation with configurable modulus and positional preferences
-    fn select_bias_aware_jump(&self, point: &Point, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {
+    /// Select bias-aware jump operation with hierarchical modulus preferences (mod9 -> mod27 -> mod81 -> pos)
+    pub fn select_bias_aware_jump(&self, point: &Point, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {
         use rand::Rng;
         let mut rng = rand::thread_rng();
 
-        let hash = self.hash_position(point);
+        let hash = self.hash_position(point) as u64;
         let g_multiples_len = self.curve.g_multiples.len();
 
-        // Apply modulus bias if specified
-        if bias_mod > 0 && (hash as u64 % bias_mod) == 0 {
-            // Favor biased jumps - stay in the biased residue class
-            (hash % (g_multiples_len / 4)) as usize
+        // Hierarchical bias checking: mod9 first, then mod27, then mod81
+        let mod9 = hash % 9;
+        let mod27 = hash % 27;
+        let mod81 = hash % 81;
+
+        // High bias residues from solved puzzle analysis
+        const HIGH_BIAS_MOD9: [u64; 2] = [0, 3];  // Magic 9 and common residues
+        const HIGH_BIAS_MOD27: [u64; 3] = [0, 9, 18];  // Multiples of 9 within mod27
+        const HIGH_BIAS_MOD81: [u64; 4] = [0, 9, 27, 36];  // Multiples of 9 within mod81
+
+        // Apply hierarchical bias with decreasing priority
+        if HIGH_BIAS_MOD9.contains(&mod9) {
+            // Mod9 bias - strongest, favors multiples of 9
+            (hash % (g_multiples_len / 3) as u64) as usize
+        } else if HIGH_BIAS_MOD27.contains(&mod27) {
+            // Mod27 bias - medium strength
+            (hash % (g_multiples_len / 2) as u64) as usize
+        } else if HIGH_BIAS_MOD81.contains(&mod81) {
+            // Mod81 bias - finer control
+            (hash % (g_multiples_len * 2 / 3) as u64) as usize
         } else if pos_proxy < 0.1 && rng.gen::<f64>() < b_pos {
-            // Apply positional bias for low proxy values
-            // Favor jumps toward lower indices (assuming lower indices = lower positions)
-            (hash % (g_multiples_len / 10)) as usize
+            // Positional bias - lowest priority, for unsolved puzzles
+            (hash % (g_multiples_len / 10) as u64) as usize
         } else {
             // Standard random selection
-            (hash % g_multiples_len) as usize
+            (hash % g_multiples_len as u64) as usize
         }
     }
 
@@ -631,5 +675,65 @@ impl KangarooGenerator {
         hash = hash.wrapping_mul(31).wrapping_add(point.x[2] as usize);
         hash = hash.wrapping_mul(31).wrapping_add(point.x[3] as usize);
         hash.wrapping_mul(31).wrapping_add(point.y[0] as usize)
+    }
+
+    /// Iterative POS slice refiner - narrows search space based on positional proxies
+    /// Returns refined slice with accumulated bias factor
+    pub fn refine_pos_slice(slice: &mut PosSlice, mod_biases: &std::collections::HashMap<u32, f64>, max_iterations: usize) {
+        if slice.iteration >= max_iterations {
+            return; // Prevent over-slicing that could miss solutions
+        }
+
+        let range_size = &slice.high - &slice.low;
+        let proxy_offset = BigInt::from(slice.pos_proxy as u64);
+
+        // Get bias adjustment for this proxy value
+        let bias_adj = *mod_biases.get(&slice.pos_proxy).unwrap_or(&1.0);
+
+        // Refine slice bounds: offset by proxy factor, scale by bias
+        // low = original_low + (range_size * proxy_offset / max_proxy_factor)
+        slice.low += &range_size / BigInt::from(10u32) * &proxy_offset; // 10% base offset per proxy unit
+
+        // high = low + (original_range_size * bias_adjustment)
+        slice.high = &slice.low + &range_size * BigInt::from((bias_adj * 10.0) as u64) / BigInt::from(10u32);
+
+        // Accumulate bias factor for jump weighting
+        slice.bias_factor *= bias_adj;
+
+        slice.iteration += 1;
+    }
+
+    /// Generate random BigInt within a POS slice for kangaroo initialization
+    pub fn random_in_slice(slice: &PosSlice) -> BigInt {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+
+        let range_size = &slice.high - &slice.low;
+        if range_size <= BigInt::from(0) {
+            return slice.low.clone(); // Degenerate case
+        }
+
+        // Generate random offset within slice bounds
+        // Use secure randomness in production (this is simplified for demo)
+        let random_offset = BigInt::from(rng.gen::<u64>()) % &range_size;
+        &slice.low + random_offset
+    }
+
+    /// Dynamic bias adjustment based on collision rates
+    /// Increases bias factors when collision rate is below expected threshold
+    pub fn adjust_bias_dynamically(biases: &mut std::collections::HashMap<u32, f64>, collision_rate: f64, expected_rate: f64) {
+        if collision_rate < expected_rate {
+            // Increase bias factors to encourage more directed searching
+            for bias_val in biases.values_mut() {
+                *bias_val *= 1.1; // 10% increase
+                *bias_val = bias_val.min(3.0); // Cap at 3x to prevent over-biasing
+            }
+        } else if collision_rate > expected_rate * 1.5 {
+            // Decrease bias if too many false positives
+            for bias_val in biases.values_mut() {
+                *bias_val *= 0.95; // 5% decrease
+                *bias_val = bias_val.max(0.5); // Floor at 0.5x
+            }
+        }
     }
 }
