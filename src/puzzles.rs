@@ -52,9 +52,6 @@ pub fn load_puzzles_txt(path: &str) -> Result<HashMap<u32, (String, Option<Strin
             .map_err(|e| anyhow::anyhow!("Invalid puzzle number '{}' on line {}: {}", parts[0], line_num + 1, e))?;
         let pubkey = parts[1].to_string();
         let priv_hex = if parts[2].is_empty() { None } else { Some(parts[2].to_string()) };
-        let priv_debug = priv_hex.as_ref().map(|s| s.as_str()).unwrap_or("None");
-        let priv_len = priv_hex.as_ref().map(|s| s.len()).unwrap_or(0);
-        println!("DEBUG: Line {}: n={}, priv_hex='{}' (len={})", line_num + 1, n, priv_debug, priv_len);
         let low = BigInt256::from_hex(parts[3]);
         let high = BigInt256::from_hex(parts[4]);
 

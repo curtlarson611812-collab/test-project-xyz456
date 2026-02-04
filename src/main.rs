@@ -1029,6 +1029,28 @@ fn execute_test(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     Ok(())
 }
 
+/// Auto bias chain detection and scoring
+fn auto_bias_chain(gen: &KangarooGenerator, puzzle: u32, point: &Point) -> std::collections::HashMap<u32, f64> {
+    use speedbitcrack::utils::pubkey_loader::detect_bias_single;
+
+    let x_bigint = BigInt256::from_u64_array(point.x);
+    let (mod9, mod27, _, _, _, pos_proxy) = detect_bias_single(&x_bigint, puzzle);
+
+    // Create bias patterns for chain detection
+    let patterns = vec![
+        (9, mod9 as u32),
+        (27, mod27 as u32),
+        (81, (mod27 * 3) as u32), // Extend chain
+    ];
+
+    gen.aggregate_bias(patterns)
+}
+
+/// Score bias effectiveness (product of square roots for combined speedup)
+fn score_bias(biases: &std::collections::HashMap<u32, f64>) -> f64 {
+    biases.values().fold(1.0, |acc, &w| acc * w.sqrt())
+}
+
 /// Execute real puzzle mode for production hunting
 fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> Result<()> {
     println!("DEBUG: execute_real called with n={}", n);
@@ -1074,6 +1096,17 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
     }
     if args.max_cycles > 0 {
         info!("Limited to {} maximum cycles for testing", args.max_cycles);
+    }
+
+    // Auto bias chain detection and scoring
+    let biases = auto_bias_chain(gen, n, point);
+    let bias_score = score_bias(&biases);
+
+    if bias_score > 1.2 {
+        info!("🎯 HIGH BIAS SCORE: {:.3} > 1.2 - Running with full bias chain optimization!", bias_score);
+        info!("💡 Expected {:.1}x speedup from bias exploitation", bias_score);
+    } else {
+        info!("📊 Low bias score: {:.3} - Running uniform search", bias_score);
     }
 
     // Add proxy bias analysis for unsolved puzzles
@@ -1133,8 +1166,9 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
     let bias_mod = if args.bias_mod > 0 { args.bias_mod } else if mod9 == 0 { 9 } else { 0 };
     let b_pos = if pos_proxy < 0.1 { 1.23 } else { 1.0 }; // Positional bias proxy
 
-    // Call the multi-kangaroo parallel algorithm
-    match gen.pollard_lambda_parallel(&curve, &curve.g, point, a, w, num_kangaroos, max_cycles, args.gpu, bias_mod, b_pos, pos_proxy) {
+    // Call the multi-kangaroo parallel algorithm with bias chain
+    let biases_ref = if bias_score > 1.2 { Some(&biases) } else { None };
+    match gen.pollard_lambda_parallel(&curve, &curve.g, point, a, w, num_kangaroos, max_cycles, args.gpu, bias_mod, b_pos, pos_proxy, biases_ref) {
         Some(solution) => {
             info!("🎉 SUCCESS! Puzzle #{} CRACKED!", n);
             info!("🔑 Private key: {}", solution.to_hex());

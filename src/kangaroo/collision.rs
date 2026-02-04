@@ -557,6 +557,18 @@ mod tests {
         assert!(solution.is_none());
     }
 
+    /// Brent's cycle detection fallback for DP misses
+    pub fn brents_cycle_fallback(&self, start_dist: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+        use crate::kangaroo::generator::biased_brent_cycle;
+
+        // Use the biased Brent's cycle detection from generator.rs
+        biased_brent_cycle(start_dist, |x| {
+            // Simple hash-based jump for cycle detection
+            let hash = (x.low_u32() as u64).wrapping_mul(0x9e3779b9) % 1000;
+            x + BigInt256::from_u64(hash + 1)
+        }, biases)
+    }
+
     #[test]
     fn test_hash_position() {
         let detector = CollisionDetector::new();
