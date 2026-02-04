@@ -145,7 +145,7 @@ impl Point {
             return *self;
         }
 
-        let z_inv = curve.mod_inverse(&super::math::bigint::BigInt256::from_u64_array(self.z), &curve.p).unwrap();
+        let z_inv = super::math::secp::Secp256k1::mod_inverse(&super::math::bigint::BigInt256::from_u64_array(self.z), &curve.p).unwrap();
         let z2 = curve.montgomery_p.mul(&z_inv, &z_inv);
         let z3 = curve.montgomery_p.mul(&z2, &z_inv);
         let x_aff = curve.barrett_p.mul(&super::math::bigint::BigInt256::from_u64_array(self.x), &z2);

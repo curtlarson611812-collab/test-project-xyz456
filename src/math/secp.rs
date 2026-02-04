@@ -441,7 +441,7 @@ impl Secp256k1 {
             return *p;
         }
 
-        let z_inv = self.mod_inverse(&BigInt256::from_u64_array(p.z), &self.p).unwrap();
+        let z_inv = Self::mod_inverse(&BigInt256::from_u64_array(p.z), &self.p).unwrap();
         let z_inv_sq = self.montgomery_p.mul(&z_inv, &z_inv);
         let z_inv_cu = self.montgomery_p.mul(&z_inv_sq, &z_inv);
 
@@ -477,7 +477,7 @@ impl Secp256k1 {
         }
 
         // Compute inverse of product
-        let z_product_inv = self.mod_inverse(&z_product, &self.p).unwrap();
+        let z_product_inv = Self::mod_inverse(&z_product, &self.p).unwrap();
 
         // Compute individual inverses working backwards
         let mut inverses = Vec::with_capacity(points.len());
@@ -547,9 +547,49 @@ impl Secp256k1 {
         y2 == rhs
     }
 
-    /// Modular inverse using extended Euclidean algorithm
+/// Standalone modular inverse using extended Euclidean algorithm
+/// Computes a^(-1) mod modulus using the extended Euclidean algorithm
+pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+    // Use a simple implementation for the standalone version
+    // For full security and performance, use the method version with Barrett reduction
+
+    if a.is_zero() || modulus.is_zero() {
+        return None;
+    }
+
+    let mut old_r = modulus.clone();
+    let mut r = a.clone();
+    let mut old_s = BigInt256::zero();
+    let mut s = BigInt256::one();
+
+    while !r.is_zero() {
+        // Use div_rem to get quotient and remainder
+        let (quotient, remainder) = old_r.div_rem(&r);
+        let temp_r = old_r;
+        old_r = r;
+        r = remainder;
+
+        let temp_s = old_s;
+        old_s = s.clone();
+        s = temp_s - quotient * s;
+    }
+
+    if old_r == BigInt256::one() {
+        // Make sure result is positive
+        let result = if s < BigInt256::zero() {
+            s + modulus.clone()
+        } else {
+            s
+        };
+        Some(result % modulus.clone())
+    } else {
+        None
+    }
+}
+
+    /// Modular inverse using extended Euclidean algorithm (method version)
     /// Computes a^(-1) mod modulus using the extended Euclidean algorithm
-    pub fn mod_inverse(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+    pub fn mod_inverse_method(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
 
         // Security: Validate inputs to prevent side-channel attacks

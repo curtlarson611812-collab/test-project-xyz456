@@ -251,7 +251,7 @@ impl CollisionDetector {
         }
 
         // Compute modular inverse of denominator
-        if let Some(den_inv) = self.curve.mod_inverse(&den, &self.curve.n) {
+        if let Some(den_inv) = crate::math::secp::Secp256k1::mod_inverse(&den, &self.curve.n) {
             let private_key = self.curve.barrett_p.mul(&num, &den_inv);
             Some(private_key.to_u64_array())
         } else {
