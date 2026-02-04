@@ -276,10 +276,10 @@ impl BigInt256 {
     }
 
     /// Create from hex string using num_bigint for robust parsing
-    /// Panics on invalid input to maintain backward compatibility
-    pub fn from_hex(hex: &str) -> Self {
+    /// Returns Result to handle invalid input gracefully
+    pub fn from_hex(hex: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let clean_hex = if hex.starts_with("0x") { &hex[2..] } else { hex };
-        let bigint = BigInt::from_str_radix(clean_hex, 16).expect("Invalid hex string");
+        let bigint = BigInt::from_str_radix(clean_hex, 16).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         // Convert to bytes (big-endian)
         let bytes = bigint.to_bytes_be().1;
@@ -299,7 +299,7 @@ impl BigInt256 {
             ]);
         }
 
-        BigInt256 { limbs }
+        Ok(BigInt256 { limbs })
     }
 
     /// Create from big-endian bytes
@@ -1052,7 +1052,7 @@ mod tests {
     fn test_bigint256_arithmetic() {
         let a = BigInt256::from_u64(12345);
         let b = BigInt256::from_u64(67890);
-        let sum = a + b;
+        let sum = a.clone() + b.clone();
         assert_eq!(sum, BigInt256::from_u64(80235));
 
         let diff = b - a;

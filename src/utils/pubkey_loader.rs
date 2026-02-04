@@ -1140,7 +1140,7 @@ pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<d
 }
 
 // Chunk: AVX Bias Check (pubkey_loader.rs)
-use std::simd::{u32x8, SimdPartialEq};
+use std::simd::prelude::*;
 pub fn simd_bias_check(res: u32, high_residues: &[u32]) -> bool {
     let mut padded = [0u32; 128];
     for (i, &val) in high_residues.iter().enumerate().take(128) {

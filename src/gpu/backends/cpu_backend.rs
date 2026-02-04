@@ -43,7 +43,7 @@ impl CpuBackend {
 
     // Chunk: CPU Full Solve (src/gpu/backends/cpu_backend.rs)
     // Dependencies: collision::check_and_resolve_collisions, cpu_batch_step
-    pub fn cpu_kangaroo(target: &BigInt256, range: (BigInt256, BigInt256), count: usize, dp_table: &DpTable) -> Option<BigInt256> {
+    pub fn cpu_kangaroo(_target: &BigInt256, range: (BigInt256, BigInt256), count: usize, _dp_table: &DpTable) -> Option<BigInt256> {
         let mut states = (0..count).map(|_| RhoState::random_in_range(&range)).collect::<Vec<_>>();
         let jumps = vec![BigInt256::from_u64(1)]; // TODO: Initialize proper jump table
         loop {

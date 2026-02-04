@@ -9,56 +9,61 @@ pub fn run_basic_test() {
     return;
 
     // Test loading test puzzles with robust error handling
+    // TODO: Uncomment when needed for puzzle testing
     // println!("Loading test puzzles...");
-    let curve = Secp256k1::new();
-    let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve);
-    println!("Loaded {} test puzzles", points.len());
+    // let curve = Secp256k1::new();
+    // let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve);
+    // println!("Loaded {} test puzzles", points.len());
 
     // Debug: Test hex decoding
-    println!("Testing hex decoding...");
-    let test_hex = "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798";
-    match hex::decode(test_hex) {
-        Ok(bytes) => {
-            println!("Hex decode successful, {} bytes", bytes.len());
-            println!("First few bytes: {:?}", &bytes[0..10]);
-        }
-        Err(e) => println!("Hex decode failed: {:?}", e),
-    }
+    // TODO: Uncomment when needed for hex testing
+    // println!("Testing hex decoding...");
+    // let test_hex = "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798";
+    // match hex::decode(test_hex) {
+    //     Ok(bytes) => {
+    //         println!("Hex decode successful, {} bytes", bytes.len());
+    //         println!("First few bytes: {:?}", &bytes[0..10]);
+    //     }
+    //     Err(e) => println!("Hex decode failed: {:?}", e),
+    // }
 
     // Test curve operations
-    println!("Testing curve operations...");
-    let curve = Secp256k1::new();
+    // TODO: Uncomment when needed for curve testing
+    // println!("Testing curve operations...");
+    // let curve = Secp256k1::new();
 
-    // Test point multiplication with known values
-    let g = curve.g; // Generator point
-    println!("Generator point x: {:?}", BigInt256::from_u64_array(g.x).to_hex());
-
-    // Test multiplication by 2 (should give known point)
-    let two = BigInt256::from_u64(2);
-    let two_g = curve.mul(&two, &g);
-    println!("2G point x: {:?}", BigInt256::from_u64_array(two_g.x).to_hex());
-
-    // Test known puzzle #1: privkey = 1, pubkey should be G
-    if !points.is_empty() {
-        let puzzle_1_point = &points[0];
-        println!("Puzzle #1 point x: {:?}", BigInt256::from_u64_array(puzzle_1_point.x).to_hex());
-        println!("Generator point x: {:?}", BigInt256::from_u64_array(g.x).to_hex());
-        println!("Points match: {}", puzzle_1_point.x == g.x && puzzle_1_point.y == g.y);
-    }
-
-    // Test basic BigInt operations
-    println!("Testing BigInt operations...");
-    let a = BigInt256::from_u64(12345);
-    let b = BigInt256::from_u64(67890);
-    let _sum = a + b;
-    println!("BigInt addition test passed!"); // Simple test to verify BigInt works
-
-    // Test hex parsing (the main issue we fixed)
-    let modulus_str = "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
-    let _modulus = BigInt256::from_hex(modulus_str);
-    println!("Hex parsing test passed!");
-
-    println!("Basic functionality test completed successfully!");
+    // TODO: Uncomment when needed for comprehensive testing
+    // // Test point multiplication with known values
+    // let g = curve.g; // Generator point
+    // println!("Generator point x: {:?}", BigInt256::from_u64_array(g.x).to_hex());
+    //
+    // // Test multiplication by 2 (should give known point)
+    // let two = BigInt256::from_u64(2);
+    // let two_g = curve.mul(&two, &g);
+    // println!("2G point x: {:?}", BigInt256::from_u64_array(two_g.x).to_hex());
+    //
+    // // Test known puzzle #1: privkey = 1, pubkey should be G
+    // // TODO: Uncomment when puzzle loading is restored
+    // // if !points.is_empty() {
+    // //     let puzzle_1_point = &points[0];
+    // //     println!("Puzzle #1 point x: {:?}", BigInt256::from_u64_array(puzzle_1_point.x).to_hex());
+    // //     println!("Generator point x: {:?}", BigInt256::from_u64_array(g.x).to_hex());
+    // //     println!("Points match: {}", puzzle_1_point.x == g.x && puzzle_1_point.y == g.y);
+    // // }
+    //
+    // // Test basic BigInt operations
+    // println!("Testing BigInt operations...");
+    // let a = BigInt256::from_u64(12345);
+    // let b = BigInt256::from_u64(67890);
+    // let _sum = a + b;
+    // println!("BigInt addition test passed!"); // Simple test to verify BigInt works
+    //
+    // // Test hex parsing (the main issue we fixed)
+    // let modulus_str = "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
+    // let _modulus = BigInt256::from_hex(modulus_str);
+    // println!("Hex parsing test passed!");
+    //
+    // println!("Basic functionality test completed successfully!");
 }
 
 /// Load test puzzles from file with robust error handling

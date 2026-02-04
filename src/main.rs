@@ -19,7 +19,6 @@ use speedbitcrack::types::{Point, RhoState};
 use std::process::Command;
 use std::fs::read_to_string;
 use regex::Regex;
-use serde_json;
 
 // Chunk: Laptop Flag Parse (main.rs)
 /// Command line arguments
@@ -227,8 +226,8 @@ pub fn save_checkpoint(states: &[speedbitcrack::types::RhoState], path: &std::pa
 
 // Chunk: Checkpoint Save (Rust) - Add to kangaroo/manager.rs.
 // Dependencies: bincode::{serialize_into, deserialize_from}, std::fs::File, kangaroo::manager::save_checkpoint
-fn crack_loop(target: &BigInt256, range: (BigInt256, BigInt256), config: &mut speedbitcrack::config::GpuConfig) -> Option<BigInt256> {
-    let mut states = if let Ok(file) = std::fs::File::open("checkpoint.bin") {
+fn crack_loop(_target: &BigInt256, _range: (BigInt256, BigInt256), config: &mut speedbitcrack::config::GpuConfig) -> Option<BigInt256> {
+    let states = if let Ok(file) = std::fs::File::open("checkpoint.bin") {
         bincode::deserialize_from(file).unwrap_or(vec![RhoState::default(); config.max_kangaroos])
     } else { vec![RhoState::default(); config.max_kangaroos] };
     let mut total_steps = 0;

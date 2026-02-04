@@ -801,7 +801,7 @@ impl Secp256k1 {
     }
 
     /// Point addition: p1 + p2 on secp256k1 curve
-    pub fn point_add(&self, p1: &Point, p2: &Point) -> Point {
+    pub fn point_add(&self, p1: &Point, _p2: &Point) -> Point {
         // Simplified point addition - in production this would use proper Jacobian arithmetic
         // For now, return p1 (placeholder)
         p1.clone()
@@ -1245,7 +1245,7 @@ mod tests {
         assert_eq!(curve.mul_constant_time(&two, &curve.g)?, double_g);
 
         // Random scalar (small for test)
-        let k = BigInt256::from_hex("0000000000000000000000000000000000000000000000000000000000001234")?;
+        let k = BigInt256::from_hex("0000000000000000000000000000000000000000000000000000000000001234").unwrap();
         let result = curve.mul_constant_time(&k, &curve.g)?;
         let naive = curve.mul_naive(&k, &curve.g);  // For verification only
         assert_eq!(result, naive);
@@ -1263,8 +1263,8 @@ mod tests {
         let three_g = curve.mul_constant_time(&three, &curve.g)?;
         let three_g_affine = curve.to_affine(&three_g);
 
-        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")?;
-        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")?;
+        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b").unwrap();
+        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d").unwrap();
 
         assert_eq!(three_g_affine.x, expected_x.to_u64_array());
         assert_eq!(three_g_affine.y, expected_y.to_u64_array());
@@ -1279,7 +1279,7 @@ mod tests {
         let inf = Point::infinity();
 
         // [k] * inf = inf for any k
-        let k = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0")?;
+        let k = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0").unwrap();
         assert!(curve.mul_constant_time(&k, &inf)?.is_infinity());
 
         // [0] * P = inf for any P
@@ -1299,8 +1299,8 @@ mod tests {
             BigInt256::from_u64(1),
             BigInt256::from_u64(2),
             BigInt256::from_u64(7),
-            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140")?, // n-1
-            BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0FEDCBA9876543210FEDCBA9876543210F")?,
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140").unwrap(), // n-1
+            BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0FEDCBA9876543210FEDCBA9876543210F").unwrap(),
         ];
 
         for k in test_scalars {

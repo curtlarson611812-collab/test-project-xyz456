@@ -5,7 +5,6 @@
 use super::backend_trait::GpuBackend;
 use crate::kangaroo::collision::Trap;
 use anyhow::{Result, anyhow};
-use std::path::Path;
 
 #[cfg(feature = "wgpu")]
 use wgpu;

@@ -343,7 +343,7 @@ impl HybridBackend {
 
     // Chunk: Enhanced Scaled Dispatch with Rules and Metrics (src/gpu/backends/hybrid_backend.rs)
     // Dependencies: apply_rule_based_adjustments, optimize_based_on_metrics, load_comprehensive_nsight_metrics
-    pub fn dispatch_hybrid_scaled_with_rules_and_metrics(config: &mut GpuConfig, target: &BigInt256, range: (BigInt256, BigInt256), total_steps: u64) -> Option<BigInt256> {
+    pub fn dispatch_hybrid_scaled_with_rules_and_metrics(config: &mut GpuConfig, _target: &BigInt256, _range: (BigInt256, BigInt256), total_steps: u64) -> Option<BigInt256> {
         let mut completed = 0;
         let batch_size = 1000000;  // 1M steps/batch
         let mut rules_applied = false;
@@ -714,15 +714,15 @@ impl HybridBackend {
     pub fn tune_ml_predict(&self, config: &mut GpuConfig) {
         use crate::utils::logging::load_history;
 
-        let hist = load_history("history.json");
+        let hist = load_history("history.json").unwrap_or_default();
         config.gpu_frac = self.predict_frac(&hist).clamp(0.5, 0.9);
 
         log::info!("ML prediction adjusted GPU fraction to {:.2}", config.gpu_frac);
     }
 
     /// Hybrid async dispatch with overlapping compute and memory operations
-    pub async fn hybrid_overlap(&self, config: &GpuConfig, target: &BigInt256,
-                               range: (BigInt256, BigInt256), batch_steps: u64)
+    pub async fn hybrid_overlap(&self, _config: &GpuConfig, _target: &BigInt256,
+                               _range: (BigInt256, BigInt256), _batch_steps: u64)
                                -> Result<Option<BigInt256>, Box<dyn std::error::Error>> {
         #[cfg(feature = "rustacuda")]
         {

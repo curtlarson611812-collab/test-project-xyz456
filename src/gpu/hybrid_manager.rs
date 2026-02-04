@@ -369,24 +369,27 @@ impl HybridGpuManager {
         }
     }
 
-    #[cfg(not(feature = "rustacuda"))]
-    fn check_collision(&self, _dp: &std::marker::PhantomData<()>) -> Option<BigInt256> {
-        None
-    }
+    // TODO: Uncomment when implementing CPU fallback collision detection
+    // #[cfg(not(feature = "rustacuda"))]
+    // fn check_collision(&self, _dp: &std::marker::PhantomData<()>) -> Option<BigInt256> {
+    //     None
+    // }
 
     /// Hash DP point for table lookup
-    fn hash_dp_point(&self, dp: &crate::gpu::backends::cuda_backend::DpPoint) -> u64 {
-        // Simple hash of x coordinate for DP table lookup
-        dp.x[0] ^ dp.x[1] ^ dp.x[2] ^ dp.x[3]
-    }
+    // TODO: Uncomment when implementing DP point hashing
+    // fn hash_dp_point(&self, dp: &crate::gpu::backends::cuda_backend::DpPoint) -> u64 {
+    //     // Simple hash of x coordinate for DP table lookup
+    //     dp.x[0] ^ dp.x[1] ^ dp.x[2] ^ dp.x[3]
+    // }
 
     /// Mock DP table check (would be real hash table in production)
-    fn mock_dp_table_contains(&self, _hash: u64) -> bool {
-        // Mock implementation - would check real DP table
-        // For testing, return true occasionally
-        use rand::Rng;
-        rand::thread_rng().gen_bool(0.1) // 10% collision rate for testing
-    }
+    // TODO: Uncomment when implementing mock DP table testing
+    // fn mock_dp_table_contains(&self, _hash: u64) -> bool {
+    //     // Mock implementation - would check real DP table
+    //     // For testing, return true occasionally
+    //     use rand::Rng;
+    //     rand::thread_rng().gen_bool(0.1) // 10% collision rate for testing
+    // }
 
     /// Calculate optimal kangaroo count for GPU cores
     /// Balances parallelism with memory constraints and warp efficiency

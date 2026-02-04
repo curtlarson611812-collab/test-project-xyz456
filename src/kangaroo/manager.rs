@@ -627,52 +627,53 @@ impl KangarooManager {
         Ok(is_valid)
     }
 
-    /// Convert u32 array to u64 array (GPU format to CPU format)
-    fn u32_array_to_u64_array(u32_arr: [u32; 8]) -> [u64; 4] {
-        [
-            (u32_arr[0] as u64) | ((u32_arr[1] as u64) << 32),
-            (u32_arr[2] as u64) | ((u32_arr[3] as u64) << 32),
-            (u32_arr[4] as u64) | ((u32_arr[5] as u64) << 32),
-            (u32_arr[6] as u64) | ((u32_arr[7] as u64) << 32),
-        ]
-    }
+    // TODO: Uncomment when implementing GPU kangaroo conversion
+    // /// Convert u32 array to u64 array (GPU format to CPU format)
+    // fn u32_array_to_u64_array(u32_arr: [u32; 8]) -> [u64; 4] {
+    //     [
+    //         (u32_arr[0] as u64) | ((u32_arr[1] as u64) << 32),
+    //         (u32_arr[2] as u64) | ((u32_arr[3] as u64) << 32),
+    //         (u32_arr[4] as u64) | ((u32_arr[5] as u64) << 32),
+    //         (u32_arr[6] as u64) | ((u32_arr[7] as u64) << 32),
+    //     ]
+    // }
 
-    /// Convert GPU computation results back to KangarooState format
-    /// Used after GPU stepping operations to reconstruct kangaroo states
-    fn convert_gpu_results_to_kangaroos(
-        &self,
-        original_kangaroos: &[KangarooState],
-        gpu_positions: &[[[u32; 8]; 3]],
-        gpu_distances: &[[u32; 8]]
-    ) -> Vec<KangarooState> {
-        original_kangaroos.iter().enumerate().map(|(i, original)| {
-            if i < gpu_positions.len() && i < gpu_distances.len() {
-                // Convert GPU output back to our format
-                let gpu_pos = gpu_positions[i];
-                let gpu_dist = gpu_distances[i];
-
-                // Convert u32 arrays back to BigInt256
-                let position = Point {
-                    x: Self::u32_array_to_u64_array(gpu_pos[0]),
-                    y: Self::u32_array_to_u64_array(gpu_pos[1]),
-                    z: Self::u32_array_to_u64_array(gpu_pos[2]),
-                };
-                let distance_u64 = Self::u32_array_to_u64_array(gpu_dist);
-
-                KangarooState {
-                    position,
-                    distance: distance_u64[0], // Use first limb as distance
-                    alpha: original.alpha,
-                    beta: original.beta,
-                    is_tame: original.is_tame,
-                    id: original.id,
-                }
-            } else {
-                // Fallback to original if GPU data unavailable
-                original.clone()
-            }
-        }).collect()
-    }
+    // /// Convert GPU computation results back to KangarooState format
+    // /// Used after GPU stepping operations to reconstruct kangaroo states
+    // fn convert_gpu_results_to_kangaroos(
+    //     &self,
+    //     original_kangaroos: &[KangarooState],
+    //     gpu_positions: &[[[u32; 8]; 3]],
+    //     gpu_distances: &[[u32; 8]]
+    // ) -> Vec<KangarooState> {
+    //     original_kangaroos.iter().enumerate().map(|(i, original)| {
+    //         if i < gpu_positions.len() && i < gpu_distances.len() {
+    //             // Convert GPU output back to our format
+    //             let gpu_pos = gpu_positions[i];
+    //             let gpu_dist = gpu_distances[i];
+    //
+    //             // Convert u32 arrays back to BigInt256
+    //             let position = Point {
+    //                 x: Self::u32_array_to_u64_array(gpu_pos[0]),
+    //                 y: Self::u32_array_to_u64_array(gpu_pos[1]),
+    //                 z: Self::u32_array_to_u64_array(gpu_pos[2]),
+    //             };
+    //             let distance_u64 = Self::u32_array_to_u64_array(gpu_dist);
+    //
+    //             KangarooState {
+    //                 position,
+    //                 distance: distance_u64[0], // Use first limb as distance
+    //                 alpha: original.alpha,
+    //                 beta: original.beta,
+    //                 is_tame: original.is_tame,
+    //                 id: original.id,
+    //             }
+    //         } else {
+    //             // Fallback to original if GPU data unavailable
+    //             original.clone()
+    //         }
+    //     }).collect()
+    // }
 }
 
 // Chunk: Bias Stabilize (manager.rs)

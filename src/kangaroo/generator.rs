@@ -620,6 +620,36 @@ impl KangarooGenerator {
     /// Multi-kangaroo parallel Pollard's lambda algorithm
     /// Uses multiple independent kangaroo pairs for O(√w / t) expected time
     /// where t is the number of kangaroo pairs
+    /// Initialize kangaroo states for parallel execution
+    fn pollard_init_parallel(&self, curve: &Arc<Secp256k1>, g: &Arc<Point>, q: &Arc<Point>,
+                           a: &Arc<BigInt256>, w: &Arc<BigInt256>, num_kangaroos: usize)
+                           -> Vec<(BigInt256, BigInt256)> {
+        (0..num_kangaroos).map(|_| {
+            // Generate random offset for this kangaroo pair
+            let w_clone = (**w).clone();
+            let w_array = w_clone.to_u64_array();
+            let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
+            let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
+            let offset = BigInt256::from_u64(offset_u64);
+
+            let adjusted_a = curve.barrett_n.add(a, &offset);
+            let adjusted_w = w.right_shift((num_kangaroos as f64).log2() as usize); // Split range
+
+            (adjusted_a, adjusted_w)
+        }).collect()
+    }
+
+    /// Run parallel kangaroo search
+    fn pollard_run_parallel(&self, curve: &Arc<Secp256k1>, g: &Arc<Point>, q: &Arc<Point>,
+                          states: Vec<(BigInt256, BigInt256)>, max_cycles: u64,
+                          bias_mod: u64, b_pos: f64, pos_proxy: f64) -> Option<BigInt256> {
+        let states_len = states.len() as u64;
+        states.into_par_iter().find_map_first(|(adjusted_a, adjusted_w)| {
+            self.pollard_lambda(curve, g, q, adjusted_a, adjusted_w,
+                              max_cycles / states_len, bias_mod, b_pos, pos_proxy)
+        })
+    }
+
     pub fn pollard_lambda_parallel(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize, max_cycles: u64, gpu: bool, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> Option<BigInt256> {
         if gpu {
             // GPU implementation - dispatch to hybrid manager
@@ -634,19 +664,9 @@ impl KangarooGenerator {
         let q_arc = Arc::new(q.clone());
         let a_arc = Arc::new(a.clone());
         let w_arc = Arc::new(w.clone());
-        (0..num_kangaroos).into_par_iter().map(|_| {
-            // Generate random offset for this kangaroo pair
-            let w_clone = (*w_arc).clone();
-            let w_array = w_clone.to_u64_array();
-            let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
-            let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
-            let offset = BigInt256::from_u64(offset_u64);
 
-            let adjusted_a = curve_arc.barrett_n.add(&a_arc, &offset);
-            let adjusted_w = w_arc.right_shift((num_kangaroos as f64).log2() as usize); // Split range
-
-            self.pollard_lambda(&curve_arc, &g_arc, &q_arc, adjusted_a, adjusted_w, max_cycles / num_kangaroos as u64, bias_mod, b_pos, pos_proxy)
-        }).find_any(|sol: &Option<BigInt256>| sol.is_some()).flatten()
+        let states = self.pollard_init_parallel(&curve_arc, &g_arc, &q_arc, &a_arc, &w_arc, num_kangaroos);
+        self.pollard_run_parallel(&curve_arc, &g_arc, &q_arc, states, max_cycles, bias_mod, b_pos, pos_proxy)
     }
 
 
@@ -836,14 +856,15 @@ pub fn pollard_lambda_parallel_pos(_target: &BigInt256, range: (BigInt, BigInt))
     None
 }
 
-/// Mock batch runner for testing (replace with real implementation)
-fn run_batch_mock(_starts: &[BigInt], _target: &BigInt256) -> Option<BigInt256> {
-        // Mock collision detection - in real implementation this would run kangaroo algorithm
-        use rand::Rng;
-        if rand::thread_rng().gen_bool(0.001) { // 0.1% mock success rate
-            Some(BigInt256::from_u64(42)) // Mock solution
-        } else {
-            None
-        }
-    }
+// Mock batch runner for testing (replace with real implementation)
+// TODO: Uncomment when implementing mock testing
+// fn run_batch_mock(_starts: &[BigInt], _target: &BigInt256) -> Option<BigInt256> {
+//     // Mock collision detection - in real implementation this would run kangaroo algorithm
+//     use rand::Rng;
+//     if rand::thread_rng().gen_bool(0.001) { // 0.1% mock success rate
+//         Some(BigInt256::from_u64(42)) // Mock solution
+//     } else {
+//         None
+//     }
+// }
 }

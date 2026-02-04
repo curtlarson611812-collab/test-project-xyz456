@@ -7,6 +7,7 @@ use std::time::Instant;
 use std::collections::HashMap;
 use std::fs::File;
 use serde_json::{to_writer, from_reader};
+use anyhow::bail;
 use std::fs::read_to_string;
 use regex::Regex;
 use serde_json;
@@ -344,7 +345,7 @@ pub fn generate_metric_based_recommendations(metrics: &NsightMetrics) -> Vec<Str
 /// ML-based optimization history management functions
 /// Append profiling history for ML training data
 pub fn append_history(path: &str, eff: f64, mem: f64, alu: f64, frac: f64) -> Result<(), Box<dyn std::error::Error>> {
-    let mut hist: Vec<(f64, f64, f64, f64)> = load_history(path);
+    let mut hist: Vec<(f64, f64, f64, f64)> = load_history(path).unwrap_or_default();
     hist.push((eff, mem, alu, frac));
 
     // Keep only last 100 entries to prevent file from growing too large
@@ -360,15 +361,19 @@ pub fn append_history(path: &str, eff: f64, mem: f64, alu: f64, frac: f64) -> Re
 }
 
 /// Load historical profiling data for ML prediction
-pub fn load_history(path: &str) -> Vec<(f64, f64, f64, f64)> {
-    File::open(path)
-        .and_then(|file| from_reader(file).map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "JSON parse error")))
-        .unwrap_or_default()
+pub fn load_history(path: &str) -> Result<Vec<(f64, f64, f64, f64)>, Box<dyn std::error::Error>> {
+    match File::open(path) {
+        Ok(file) => match from_reader(file) {
+            Ok(history) => Ok(history),
+            Err(e) => Err(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Failed to parse history JSON: {}", e)))),
+        },
+        Err(e) => Err(Box::new(e)),
+    }
 }
 
 /// Integrate ML prediction into GPU config tuning
-pub fn tune_ml_predict(config: &mut crate::config::GpuConfig) {
-    use crate::gpu::backends::hybrid_backend::HybridBackend;
+pub fn tune_ml_predict(_config: &mut crate::config::GpuConfig) {
+    
 
     // This would need to be called from the hybrid backend context
     // For now, just ensure the functions are available
