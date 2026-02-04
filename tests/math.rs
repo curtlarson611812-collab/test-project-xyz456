@@ -115,6 +115,44 @@ mod tests {
         assert_eq!(jumps[1], BigInt256::from_u64(2));
     }
 
+    #[test]
+    fn test_small_odd_prime_starts() {
+        use speedbitcrack::math::constants::PRIME_MULTIPLIERS;
+        use speedbitcrack::kangaroo::generator::{KangarooGenerator, Config};
+        use speedbitcrack::math::secp::Secp256k1;
+
+        let curve = Secp256k1::new();
+        let config = Config::default();
+        let gen = KangarooGenerator::new(&config);
+
+        // Test wild start initialization
+        let target = curve.g.clone();
+        let wild_start = gen.initialize_wild_start(&target, 0);
+
+        // Should be prime_0 * G
+        let prime_0 = PRIME_MULTIPLIERS[0];
+        let expected = curve.mul_constant_time(&BigInt256::from_u64(prime_0), &curve.g).unwrap();
+
+        // Check that the start is different from G (properly offset)
+        assert_ne!(wild_start, curve.g);
+        assert_eq!(wild_start, expected);
+
+        // Test tame start initialization
+        let tame_start = gen.initialize_tame_start();
+        assert_eq!(tame_start, curve.g);
+
+        // Test prime cycling (should use different primes for different indices)
+        let wild_start_1 = gen.initialize_wild_start(&target, 1);
+        let prime_1 = PRIME_MULTIPLIERS[1];
+        let expected_1 = curve.mul_constant_time(&BigInt256::from_u64(prime_1), &curve.g).unwrap();
+        assert_eq!(wild_start_1, expected_1);
+        assert_ne!(wild_start, wild_start_1);
+
+        // Test prime wrapping (index >= 32 should cycle back)
+        let wild_start_32 = gen.initialize_wild_start(&target, 32);
+        assert_eq!(wild_start_32, wild_start); // Should cycle back to prime_0
+    }
+
     // Chunk: BigInt Add/Shl Test (tests/math.rs)
     // Dependencies: math::BigInt256
     #[test]

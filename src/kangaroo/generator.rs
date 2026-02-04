@@ -150,20 +150,18 @@ impl KangarooGenerator {
         Ok(all_kangaroos)
     }
 
-    /// Wild kangaroos — EXACT Magic 9 prime spacing (multiplicative offset)
+    /// Wild kangaroos — EXACT SmallOddPrime spacing (multiplicative offset)
     fn generate_wild_for_target(&self, target: &Point, count: usize) -> Result<Vec<KangarooState>> {
-        let mut wilds = Vec::new();
-        let primes = if self.config.prime_spacing_with_entropy {
-            self.generate_entropy_primes(count)?
-        } else {
-            self.config.wild_primes.clone()
-        };
+        use crate::math::constants::PRIME_MULTIPLIERS;
 
-        for (i, &prime) in primes.iter().enumerate().take(count) {
-            // Start position = prime * target_point (exact multiplicative offset)
-            // Use k256 Scalar for native performance (rule #4: Barrett/Montgomery hybrid only)
-            let prime_scalar = k256::Scalar::from(prime);
-            let start_pos = target.mul_scalar(&prime_scalar, &self.curve); // Direct scalar multiplication
+        let mut wilds = Vec::new();
+
+        for i in 0..count {
+            // Use SmallOddPrime start: prime * target
+            let start_pos = self.initialize_wild_start(target, i);
+
+            let prime_idx = i % PRIME_MULTIPLIERS.len();
+            let prime = PRIME_MULTIPLIERS[prime_idx];
 
             let state = KangarooState::new(
                 start_pos,
@@ -256,15 +254,19 @@ impl KangarooGenerator {
         let mut tames = Vec::with_capacity(total_count);
 
         for i in 0..total_count {
-            let offset = BigInt256::from_u64(i as u64 * 1000000); // Spaced tame starts
+            // Use deterministic tame start from generator
+            let start_position = self.initialize_tame_start();
+
+            // For tame kangaroos, we start at different offsets from G
+            let offset = BigInt256::from_u64(i as u64);
             let curve = Secp256k1::new();
-            let start_position = curve.mul(&offset, &curve.g);
+            let actual_start = curve.add(&start_position, &curve.mul(&offset, &curve.g));
 
             let alpha = offset.to_u64_array();
             let beta = [1, 0, 0, 0]; // Beta coefficient
 
             tames.push(KangarooState::new(
-                start_position,
+                actual_start,
                 alpha[0], // Use lowest 64 bits as distance
                 alpha,
                 beta,
@@ -327,20 +329,71 @@ impl KangarooGenerator {
     /// Verbatim from preset: Multiplicative offset, known for inversion in solving.
     /// Verbatim from preset: Multiplicative offset, known for inversion in solving.
     /// Use our EC scalar mul (montgomery for speed).
-    /// Initialize wild kangaroo start with SmallOddPrime multiplier
+    /// Initialize wild kangaroo start with SmallOddPrime multiplier using k256
     pub fn initialize_wild_start(&self, target: &Point, kangaroo_index: usize) -> Point {
         use crate::math::constants::PRIME_MULTIPLIERS;
+        use k256::{ProjectivePoint, Scalar};
 
         let prime_idx = kangaroo_index % PRIME_MULTIPLIERS.len();
-        let prime = PRIME_MULTIPLIERS[prime_idx];
-        let prime_bigint = BigInt256::from_u64(prime);
+        let prime_u64 = PRIME_MULTIPLIERS[prime_idx];
 
-        // wild_start = prime * target_pubkey (locked multiplicative offset)
-        self.curve.mul_constant_time(&prime_bigint, target)
-            .unwrap_or_else(|_| {
-                warn!("Failed to compute wild start with prime {}, using fallback", prime);
-                *target // Fallback to target itself
-            })
+        // Convert target Point to k256 ProjectivePoint
+        let target_x = BigInt256::from_u64_array(target.x);
+        let target_y = BigInt256::from_u64_array(target.y);
+
+        // Convert to k256 format (big-endian bytes)
+        let mut x_bytes = [0u8; 32];
+        let mut y_bytes = [0u8; 32];
+        for i in 0..8 {
+            for j in 0..4 {
+                x_bytes[i*4 + j] = ((target_x.limbs[7-i] >> (24 - j*8)) & 0xFF) as u8;
+                y_bytes[i*4 + j] = ((target_y.limbs[7-i] >> (24 - j*8)) & 0xFF) as u8;
+            }
+        }
+
+        let target_k256 = ProjectivePoint::from_encoded_point(
+            &k256::EncodedPoint::from_affine_coordinates(&x_bytes.into(), &y_bytes.into(), false)
+        ).unwrap_or(ProjectivePoint::GENERATOR); // Fallback
+
+        let prime_scalar = Scalar::from(prime_u64);
+
+        // wild_start = prime * target_pubkey
+        let result_k256 = target_k256 * prime_scalar;
+
+        // Convert back to our Point format
+        let result_affine = result_k256.to_affine();
+        let result_x_bytes = result_affine.x().to_bytes();
+        let result_y_bytes = result_affine.y().to_bytes();
+
+        // Convert from big-endian bytes back to little-endian limbs
+        let mut result_x_limbs = [0u64; 4];
+        let mut result_y_limbs = [0u64; 4];
+
+        for i in 0..8 {
+            for j in 0..4 {
+                let byte_idx = i*4 + j;
+                if byte_idx < 32 {
+                    result_x_limbs[i] |= (result_x_bytes[31 - byte_idx] as u64) << (24 - j*8);
+                    result_y_limbs[i] |= (result_y_bytes[31 - byte_idx] as u64) << (24 - j*8);
+                }
+            }
+        }
+
+        Point {
+            x: result_x_limbs,
+            y: result_y_limbs,
+            z: [1, 0, 0, 0], // Affine point
+        }
+    }
+
+    /// Initialize tame kangaroo start (deterministic from generator)
+    pub fn initialize_tame_start(&self) -> Point {
+        use crate::math::constants::GENERATOR;
+        Point {
+            x: GENERATOR.x,
+            y: GENERATOR.y,
+            z: GENERATOR.z,
+        }
     }
 
     /// Legacy initialize_wild_start (kept for compatibility)

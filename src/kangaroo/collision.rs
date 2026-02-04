@@ -569,6 +569,64 @@ mod tests {
         }, biases)
     }
 
+    /// Solve collision using SmallOddPrime inversion
+    pub fn solve_collision(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
+        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
+        use crate::math::secp::mod_inverse;
+
+        let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
+        let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
+
+        // d_tame - d_wild (distance difference)
+        let tame_dist = BigInt256::from_u64_array(tame.distance);
+        let wild_dist = BigInt256::from_u64_array(wild.distance);
+        let diff = CURVE_ORDER_BIGINT.sub(&tame_dist, &wild_dist);
+
+        // k = inv(prime) * (d_tame - d_wild) mod n
+        if let Some(inv_prime) = mod_inverse(&prime, &CURVE_ORDER_BIGINT) {
+            let k = CURVE_ORDER_BIGINT.mul(&diff, &inv_prime);
+            let result = CURVE_ORDER_BIGINT.reduce(&k, &CURVE_ORDER_BIGINT);
+            Some(result)
+        } else {
+            warn!("Failed to compute modular inverse for prime {}", PRIME_MULTIPLIERS[prime_idx]);
+            None
+        }
+    }
+
+    /// Solve collision using SmallOddPrime inversion
+    pub fn solve_collision_with_prime(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
+        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
+
+        let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
+        let prime = PRIME_MULTIPLIERS[prime_idx];
+        let prime_bigint = BigInt256::from_u64(prime);
+
+        // For collision: tame_dist ≡ wild_dist + k * prime mod order
+        // So: k ≡ (tame_dist - wild_dist) * inv(prime) mod order
+
+        // Calculate difference: tame_dist - wild_dist
+        let tame_dist = BigInt256::from_u64_array(tame.distance);
+        let wild_dist = BigInt256::from_u64_array(wild.distance);
+        let diff = if tame_dist >= wild_dist {
+            tame_dist - wild_dist
+        } else {
+            // Handle modular arithmetic wraparound
+            CURVE_ORDER_BIGINT.clone() + tame_dist - wild_dist
+        };
+
+        // Find modular inverse of prime
+        if let Some(inv_prime) = self.curve.mod_inverse(&prime_bigint, &CURVE_ORDER_BIGINT) {
+            // Calculate k = diff * inv_prime mod order
+            let k = self.curve.barrett_n.mul(&diff, &inv_prime);
+            let k_reduced = self.curve.barrett_n.reduce(&BigInt512::from_bigint256(&k), &CURVE_ORDER_BIGINT);
+
+            Some(k_reduced)
+        } else {
+            warn!("Failed to compute modular inverse for prime {}", prime);
+            None
+        }
+    }
+
     #[test]
     fn test_hash_position() {
         let detector = CollisionDetector::new();
