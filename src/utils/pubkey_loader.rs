@@ -111,7 +111,7 @@ pub fn parse_compressed(hex_str: &str) -> Result<BigInt256, Box<dyn std::error::
     if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
         return Err("Invalid compressed pubkey length/format".into());
     }
-    let x_bytes: [u8; 32] = bytes[1..33].try_into().expect("Invalid x length");
+    let x_bytes: [u8; 32] = bytes[1..33].try_into().expect("Invalid pubkey length");
     Ok(BigInt256::from_bytes_be(&x_bytes))
 }
 
@@ -121,7 +121,7 @@ fn parse_compressed_bytes(bytes: &[u8]) -> io::Result<Point> {
     }
 
     // Extract x coordinate (32 bytes after the compression prefix)
-    let x_bytes: [u8; 32] = bytes[1..33].try_into().expect("Invalid x coordinate length");
+    let x_bytes: [u8; 32] = bytes[1..33].try_into().expect("Invalid pubkey length");
     let x = BigInt256::from_bytes_be(&x_bytes);
     let curve = Secp256k1::new();
 

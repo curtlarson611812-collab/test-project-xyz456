@@ -3,7 +3,7 @@
 //! High-performance Pollard's rho/kangaroo implementation for secp256k1
 //! Supports multiple target types with optimized search parameters
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use log::info;
 
@@ -54,6 +54,8 @@ struct Args {
     laptop: bool,  // Enable laptop optimizations (sm_86, lower resources)
     #[arg(long)]
     puzzle: Option<u32>,  // Specific puzzle to crack, e.g. 67
+    #[arg(long)]
+    test_solved: Option<u32>,  // Test solved puzzle verification, e.g. 32, 64, 66
 }
 
 // Chunk: Thermal Log Spawn (main.rs)
@@ -253,19 +255,38 @@ fn main() -> Result<()> {
         log::set_max_level(log::LevelFilter::Debug);
     }
 
-    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, verbose={}, laptop={}, puzzle={:?}",
-             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.verbose, args.laptop, args.puzzle);
+    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, verbose={}, laptop={}, puzzle={:?}, test_solved={:?}",
+             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.verbose, args.laptop, args.puzzle, args.test_solved);
 
     // Enable thermal logging for laptop mode
     if args.laptop {
         start_thermal_log();
     }
 
+    // Handle solved puzzle testing
+    if let Some(puzzle_num) = args.test_solved {
+        test_solved_puzzle(puzzle_num)?;
+        return Ok(());
+    }
+
     // Handle specific puzzle cracking
     if let Some(puzzle_num) = args.puzzle {
         if puzzle_num == 67 {
             let (_target, range) = speedbitcrack::puzzles::load_unspent_67();
-            let mut gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbitcrack::config::GpuConfig { arch: "sm_120".to_string(), max_kangaroos: 4096, dp_size: 1<<20, dp_bits: 24, max_regs: 64, gpu_frac: 0.8 } };
+            let mut gpu_config = if args.laptop {
+                let mut config = speedbitcrack::config::laptop_3070_config();
+                config.max_kangaroos = args.num_kangaroos;
+                config
+            } else {
+                speedbitcrack::config::GpuConfig {
+                    arch: "sm_120".to_string(),
+                    max_kangaroos: args.num_kangaroos,
+                    dp_size: 1<<20,
+                    dp_bits: 24,
+                    max_regs: 64,
+                    gpu_frac: 0.8
+                }
+            };
 
             // Load Nsight metrics and apply comprehensive optimization
             if let Some(metrics) = speedbitcrack::utils::logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
@@ -505,6 +526,44 @@ impl BiasResult {
         let original_complexity = self.range_size.to_f64().sqrt();
         original_complexity / self.bias_score().sqrt()
     }
+}
+
+/// Test solved puzzles by verifying private key generates correct public key
+fn test_solved_puzzle(puzzle_num: u32) -> Result<()> {
+    use speedbitcrack::math::{secp::Secp256k1, bigint::BigInt256};
+
+    println!("🧪 Testing solved puzzle #{}", puzzle_num);
+
+    let (expected_point, private_key) = match puzzle_num {
+        32 => speedbitcrack::puzzles::load_solved_32(),
+        64 => speedbitcrack::puzzles::load_solved_64(),
+        66 => speedbitcrack::puzzles::load_solved_66(),
+        _ => {
+            println!("❌ Puzzle #{} is not solved or not supported for testing", puzzle_num);
+            return Ok(());
+        }
+    };
+
+    let curve = Secp256k1::new();
+
+    // Generate public key from private key
+    let computed_point = curve.mul_constant_time(&private_key, &curve.g)
+        .map_err(|e| anyhow!("Point multiplication failed: {}", e))?;
+
+    // Verify they match
+    if computed_point.x == expected_point.x && computed_point.y == expected_point.y {
+        println!("✅ Puzzle #{} VERIFIED: Private key correctly generates expected public key", puzzle_num);
+        println!("   Private key: {}", private_key.to_hex());
+        println!("   Public key X: {}", BigInt256::from_u64_array(expected_point.x).to_hex());
+        println!("   Public key Y: {}", BigInt256::from_u64_array(expected_point.y).to_hex());
+    } else {
+        println!("❌ Puzzle #{} FAILED: Private key does not generate expected public key", puzzle_num);
+        println!("   Expected X: {}", BigInt256::from_u64_array(expected_point.x).to_hex());
+        println!("   Computed X: {}", BigInt256::from_u64_array(computed_point.x).to_hex());
+        return Err(anyhow!("Puzzle verification failed"));
+    }
+
+    Ok(())
 }
 
 /// Run a specific puzzle for testing

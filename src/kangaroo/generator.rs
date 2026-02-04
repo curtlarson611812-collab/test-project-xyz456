@@ -3,9 +3,10 @@
 //! Strict tame/wild start logic — fixed primes for wild, G-based tame, no entropy unless flagged
 
 use crate::config::Config;
-use crate::types::{KangarooState, Point, TaggedKangarooState};
+use crate::types::{KangarooState, Point, TaggedKangarooState, RhoState};
 use crate::math::{Secp256k1, bigint::{BigInt256, BigInt512}};
 use crate::kangaroo::SearchConfig;
+use crate::dp::DpTable;
 use num_bigint::BigInt;
 use std::ops::Sub;
 
@@ -621,7 +622,7 @@ impl KangarooGenerator {
     /// Uses multiple independent kangaroo pairs for O(√w / t) expected time
     /// where t is the number of kangaroo pairs
     /// Initialize kangaroo states for parallel execution
-    fn pollard_init_parallel(&self, curve: &Arc<Secp256k1>, g: &Arc<Point>, q: &Arc<Point>,
+    fn pollard_init_parallel(&self, curve: &Arc<Secp256k1>, _g: &Arc<Point>, _q: &Arc<Point>,
                            a: &Arc<BigInt256>, w: &Arc<BigInt256>, num_kangaroos: usize)
                            -> Vec<(BigInt256, BigInt256)> {
         (0..num_kangaroos).map(|_| {
@@ -650,23 +651,36 @@ impl KangarooGenerator {
         })
     }
 
-    pub fn pollard_lambda_parallel(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize, max_cycles: u64, gpu: bool, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> Option<BigInt256> {
-        if gpu {
-            // GPU implementation - dispatch to hybrid manager
-            // Note: HybridGpuManager::new() is async, so for now we create a simple instance
-            warn!("GPU multi-kangaroo dispatch not yet fully implemented - using CPU fallback");
-            // For now, fall back to CPU implementation
-        }
-
-        // CPU parallel implementation using rayon
+    fn pollard_init(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize) -> Vec<(BigInt256, BigInt256)> {
         let curve_arc = Arc::new(curve.clone());
         let g_arc = Arc::new(g.clone());
         let q_arc = Arc::new(q.clone());
         let a_arc = Arc::new(a.clone());
         let w_arc = Arc::new(w.clone());
+        self.pollard_init_parallel(&curve_arc, &g_arc, &q_arc, &a_arc, &w_arc, num_kangaroos)
+    }
 
-        let states = self.pollard_init_parallel(&curve_arc, &g_arc, &q_arc, &a_arc, &w_arc, num_kangaroos);
+    fn pollard_run(&self, curve: &Secp256k1, g: &Point, q: &Point, states: Vec<(BigInt256, BigInt256)>, max_cycles: u64, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> Option<BigInt256> {
+        let curve_arc = Arc::new(curve.clone());
+        let g_arc = Arc::new(g.clone());
+        let q_arc = Arc::new(q.clone());
         self.pollard_run_parallel(&curve_arc, &g_arc, &q_arc, states, max_cycles, bias_mod, b_pos, pos_proxy)
+    }
+
+    fn pollard_resolve(&self, _dp_table: &DpTable, _states: &[RhoState]) -> Option<BigInt256> {
+        // Placeholder - would check collisions in dp_table
+        None
+    }
+
+    pub fn pollard_lambda_parallel(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize, max_cycles: u64, gpu: bool, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> Option<BigInt256> {
+        if gpu {
+            // GPU implementation - dispatch to hybrid manager
+            // Note: HybridGpuManager::new() is async, so for now we create a simple instance
+            warn!("GPU multi-kangaroo dispatch not yet fully implemented - using CPU fallback");
+        }
+
+        let states = self.pollard_init(curve, g, q, a, w, num_kangaroos);
+        self.pollard_run(curve, g, q, states, max_cycles, bias_mod, b_pos, pos_proxy)
     }
 
 

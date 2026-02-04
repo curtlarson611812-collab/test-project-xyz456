@@ -2,12 +2,12 @@
 //!
 //! Logs for attractors, convergence, pruning stats, checkpoint summaries
 
+use anyhow::Result;
 use log::{info, error, debug};
 use std::time::Instant;
 use std::collections::HashMap;
 use std::fs::File;
 use serde_json::{to_writer, from_reader};
-use anyhow::bail;
 use std::fs::read_to_string;
 use regex::Regex;
 use serde_json;
@@ -361,14 +361,9 @@ pub fn append_history(path: &str, eff: f64, mem: f64, alu: f64, frac: f64) -> Re
 }
 
 /// Load historical profiling data for ML prediction
-pub fn load_history(path: &str) -> Result<Vec<(f64, f64, f64, f64)>, Box<dyn std::error::Error>> {
-    match File::open(path) {
-        Ok(file) => match from_reader(file) {
-            Ok(history) => Ok(history),
-            Err(e) => Err(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Failed to parse history JSON: {}", e)))),
-        },
-        Err(e) => Err(Box::new(e)),
-    }
+pub fn load_history(path: &str) -> Result<Vec<(f64, f64, f64, f64)>> {
+    let file = File::open(path)?;
+    Ok(from_reader(file)?)
 }
 
 /// Integrate ML prediction into GPU config tuning

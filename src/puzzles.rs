@@ -619,7 +619,7 @@ pub const PUZZLE_MAP: [PuzzleEntry; 160] = [
         range_start_hex: "20000000000000000",
         range_end_hex: "3ffffffffffffffff",
         address: "1JPSB92a7V1eZ4dAKGEmW9S3J3B3rrm3y3",
-        pub_hex: Some("02a9acc1e48c25ee6c04b8ba765e61b6d9d8e8a4ab6851aeeb3b79d9f10d8ca96"),
+        pub_hex: None, // Will be computed from private key
         priv_hex: Some("2000000000000000000000000000000000000000000000000000000000000000"),
     },
     // Bitcoin Puzzle #67 (UNSOLVED) - TARGET FOR CRACKING
@@ -800,13 +800,57 @@ pub fn load_solved(n: u32) -> (BigInt, BigInt, BigInt) {  // low, high, known_ke
     }
 }
 
-// Chunk: Unspent #67 Target (puzzles.rs)
-pub fn load_unspent_67() -> (Point, (BigInt256, BigInt256)) {
-    let pubkey = "03633cbe3ec02b9401c5effa144c5b4d22f87940259634858fc7e59b1c09937852";
+// Chunk: Solved Puzzles for Testing (puzzles.rs)
+pub fn load_solved_32() -> (Point, BigInt256) {
+    let pubkey = "0209c58240e50e3ba3f833c82655e8725c037a2294e14cf5d73a5df8d56159de69";
+    let privkey = "00000000000000000000000000000000000000000000000000000000b862a62e";
     let curve = Secp256k1::new();
     let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
     let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
-    let low = BigInt256::one() << 66;  // 2^66
-    let high = (low.clone() << 1) - BigInt256::one();  // 2^67 - 1
+    let private_key = BigInt256::from_hex(privkey);
+    (point, private_key)
+}
+
+pub fn load_solved_64() -> (Point, BigInt256) {
+    let pubkey = "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db";
+    let privkey = "8000000000000000000000000000000000000000000000000000000000000000";
+    let curve = Secp256k1::new();
+    let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
+    let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
+    let private_key = BigInt256::from_hex(privkey);
+    (point, private_key)
+}
+
+pub fn load_solved_66() -> (Point, BigInt256) {
+    // Puzzle #66: private key = 2^65 = 0x2000000000000000000000000000000000000000000000000000000000000000
+    let privkey = "2000000000000000000000000000000000000000000000000000000000000000";
+    let curve = Secp256k1::new();
+    let private_key = BigInt256::from_hex(privkey);
+
+    // Generate pubkey from private key: P = privkey * G
+    let pubkey_point = curve.mul_constant_time(&private_key, &curve.g).expect("Pubkey generation failed");
+
+    (pubkey_point, private_key)
+}
+
+// Chunk: Unspent #67 Target (puzzles.rs)
+pub fn load_unspent_67() -> (Point, (BigInt256, BigInt256)) {
+    let pubkey = "0212209f5ec514a1580a2937bd833979d933199fc230e204c6cdc58872b7d46f75";
+    let curve = Secp256k1::new();
+    let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
+    let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
+    let low = BigInt256::from_hex("40000000000000000");  // 2^66
+    let high = BigInt256::from_hex("7ffffffffffffffff");  // 2^67 - 1
+    (point, (low, high))
+}
+
+// Chunk: Unspent #150 Target (puzzles.rs)
+pub fn load_unspent_150() -> (Point, (BigInt256, BigInt256)) {
+    let pubkey = "02f54ba36518d7038ed669f7da906b689d393adaa88ba114c2aab6dc5f87a73cb8";
+    let curve = Secp256k1::new();
+    let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
+    let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
+    let low = BigInt256::one() << 149;  // 2^149
+    let high = (low.clone() << 1) - BigInt256::one();  // 2^150 - 1
     (point, (low, high))
 }

@@ -118,7 +118,7 @@ impl Secp256k1 {
         let montgomery_p = MontgomeryReducer::new(&p);
 
         Secp256k1 {
-            p, n, a, b, g, g_multiples,
+            p: p, n: n, a, b, g, g_multiples,
             barrett_p, barrett_n, montgomery_p,
         }
     }
@@ -786,7 +786,7 @@ impl Secp256k1 {
     }
 
     /// Modular exponentiation: base^exp mod modulus
-    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, _mod_: &BigInt256) -> BigInt256 {
+    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, _mod: &BigInt256) -> BigInt256 {
         let mut result = BigInt256::from_u64(1);
         let mut b = base.clone();
         let mut e = exp.clone();

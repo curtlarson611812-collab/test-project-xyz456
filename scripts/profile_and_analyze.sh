@@ -180,7 +180,7 @@ def generate_report(suggestions):
 
     # Performance score calculation
     score = (green_count * 100 + yellow_count * 60 + red_count * 20) / max(total_rules, 1)
-    print(".1f"
+    print(f"📈 Overall Performance Score: {score:.1f}")
     if score > 80:
         print("🎉 Excellent performance! Ready for production.")
     elif score > 60:
