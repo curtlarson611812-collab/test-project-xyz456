@@ -7,6 +7,7 @@ use crate::math::secp::Secp256k1;
 use crate::math::bigint::BigInt256;
 use crate::types::Point;
 use std::error::Error;
+use num_bigint::BigInt;
 
 /// Entry for a single Bitcoin puzzle
 #[derive(Debug, Clone)]
@@ -803,8 +804,8 @@ pub fn load_solved(n: u32) -> (BigInt, BigInt, BigInt) {  // low, high, known_ke
 pub fn load_unspent_67() -> (Point, (BigInt256, BigInt256)) {
     let pubkey = "03633cbe3ec02b9401c5effa144c5b4d22f87940259634858fc7e59b1c09937852";
     let curve = Secp256k1::new();
-    let point = curve.decompress_pubkey_hex(pubkey).expect("Invalid pubkey");
-    let low = BigInt256::from(1u64) << 66;  // 2^66
-    let high = (BigInt256::from(1u64) << 67) - BigInt256::from(1);  // 2^67 - 1
+    let point = curve.decompress_point(pubkey).expect("Invalid pubkey");
+    let low = BigInt256::one().shl(66);  // 2^66
+    let high = low.clone().shl(1) - BigInt256::one();  // 2^67 - 1
     (point, (low, high))
 }

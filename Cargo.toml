@@ -25,6 +25,7 @@ async-trait = "0.1"               # Async traits for GPU backend
 rand = "0.8"                      # Random number generation for entropy
 sha2 = "0.10"                     # SHA256 for attractor proxy
 blake3 = "1.5.0"                  # Fast hash for DP table
+statrs = "0.16.0"                 # Stats for bias tests (KS, Chi2)
 
 # Optional / Future
 sled = "0.34"                    # Fast embedded database for DP overflow
@@ -63,4 +64,3 @@ tempfile = "3.0"  # For temporary directories in tests
 criterion = { version = "0.5", features = ["html_reports"] }  # Performance benchmarking
 proptest = "1.0"   # Property-based testing
 tokio-test = "0.4" # Async testing utilities
-statrs = "0.16.0"  # Stats for bias tests (KS, Chi2)

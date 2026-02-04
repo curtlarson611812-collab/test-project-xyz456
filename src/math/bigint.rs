@@ -288,23 +288,6 @@ impl BigInt256 {
         assert_eq!(bytes.len(), 32, "Hex string too long after padding");
 
         let mut limbs = [0u64; 4];
-
-    // Chunk: Limbs Accessor (math/bigint.rs)
-    // Assume struct BigInt256 { limbs: [u64; 4], }  // Little-endian
-    pub fn limbs(&self) -> &[u64; 4] {
-        &self.limbs
-    }
-    pub fn limbs_vec(&self) -> Vec<u64> {  // If vec needed for SIMD pack
-        self.limbs.to_vec()
-    }
-
-    // Chunk: Full 256-Bit Random (math/bigint.rs)
-    pub fn random() -> Self {
-        let mut rng = thread_rng();
-        let mut limbs = [0u64; 4];
-        rng.fill(&mut limbs);  // Full 256 bits uniform
-        BigInt256 { limbs }    // Little-endian
-    }
         // Convert big-endian bytes to little-endian limbs
         for i in 0..4 {
             limbs[i] = u64::from_le_bytes([
@@ -327,6 +310,23 @@ impl BigInt256 {
         }
         // limbs[0] is most significant (big-endian), convert to little-endian
         BigInt256 { limbs: [limbs[3], limbs[2], limbs[1], limbs[0]] }
+    }
+
+    // Chunk: Limbs Accessor (math/bigint.rs)
+    // Assume struct BigInt256 { limbs: [u64; 4], }  // Little-endian
+    pub fn limbs(&self) -> &[u64; 4] {
+        &self.limbs
+    }
+    pub fn limbs_vec(&self) -> Vec<u64> {  // If vec needed for SIMD pack
+        self.limbs.to_vec()
+    }
+
+    // Chunk: Full 256-Bit Random (math/bigint.rs)
+    pub fn random() -> Self {
+        let mut rng = thread_rng();
+        let mut limbs = [0u64; 4];
+        rng.fill(&mut limbs);  // Full 256 bits uniform
+        BigInt256 { limbs }    // Little-endian
     }
 
     /// Create from u64 array (little-endian)

@@ -17,6 +17,8 @@ use rayon::prelude::*;
 use rand::rngs::OsRng;
 use rand::Rng;
 use std::sync::Arc;
+use statrs::distribution::{ChiSquared, InverseCdf};
+use std::simd::{u64x4, Simd};
 
 /// Chunk: Bias-Aware Brent's (collision.rs)
 pub fn biased_brent_cycle<F>(start: &BigInt256, mut f: F, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256>
@@ -637,7 +639,8 @@ impl KangarooGenerator {
         let w_arc = Arc::new(w.clone());
         (0..num_kangaroos).into_par_iter().map(|_| {
             // Generate random offset for this kangaroo pair
-            let w_array = w_arc.to_u64_array();
+            let w_clone = (*w_arc).clone();
+            let w_array = w_clone.to_u64_array();
             let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
             let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
             let offset = BigInt256::from_u64(offset_u64);
@@ -737,8 +740,6 @@ pub fn batch_refine_slices(slices: &mut [PosSlice], biases: &std::collections::H
 // Usage: In init, let mut slices = vec![new_slice(); 4096]; batch_refine_slices(&mut slices, &biases);
 
 // Chunk: χ² Convergence Check (generator.rs)
-// Dependencies: statrs::distribution::ChiSquared, InverseCdf
-use statrs::distribution::{ChiSquared, InverseCdf};
 pub fn should_refine(slice: &PosSlice, obs_freq: &[f64], exp_uniform: f64) -> bool {
     let df = obs_freq.len() as f64 - 1.0;
     let chi2: f64 = obs_freq.iter().map(|&o| (o - exp_uniform).powi(2) / exp_uniform).sum();
@@ -794,7 +795,6 @@ pub fn simd_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt256> {
 }
 
 // Chunk: SIMD Random in Slice (generator.rs)
-use std::simd::{u64x4, Simd};
 pub fn vec_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
     let range = &slice.high - &slice.low;
     let mut rands = vec![BigInt::zero(); count];
