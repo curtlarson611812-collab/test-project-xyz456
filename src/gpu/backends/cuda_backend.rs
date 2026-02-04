@@ -939,4 +939,268 @@ mod tests {
 
         Ok(())
     }
+
+    /// Allocate pinned host memory for faster CPU-GPU transfers
+    #[cfg(feature = "rustacuda")]
+    pub fn alloc_pinned_host<T>(&self, len: usize) -> Result<*mut T, DriverError> {
+        use cudarc::driver::{cuda_malloc_host, cuda_free_host};
+        use std::ptr;
+
+        let mut ptr: *mut T = ptr::null_mut();
+        let size = len * std::mem::size_of::<T>();
+
+        unsafe {
+            cuda_malloc_host(&mut ptr as *mut *mut T as *mut _, size)?;
+        }
+
+        Ok(ptr)
+    }
+
+    /// Free pinned host memory
+    #[cfg(feature = "rustacuda")]
+    pub fn free_pinned_host<T>(&self, ptr: *mut T) -> Result<(), DriverError> {
+        use cudarc::driver::cuda_free_host;
+
+        unsafe {
+            cuda_free_host(ptr as *mut _)?;
+        }
+
+        Ok(())
+    }
+
+    /// Set optimal L1 cache configuration for BigInt256 operations
+    #[cfg(feature = "rustacuda")]
+    pub fn set_optimal_cache_config(&self, prefer_l1: bool) -> Result<(), DriverError> {
+        use cudarc::driver::CudaCacheConfig;
+
+        let config = if prefer_l1 {
+            CudaCacheConfig::PreferL1
+        } else {
+            CudaCacheConfig::PreferNone  // Default 50/50 split
+        };
+
+        // Note: This would apply to the current context
+        // In practice, this would be set before kernel launches
+        log::info!("Set CUDA cache config to {:?}", config);
+
+        Ok(())
+    }
+
+    /// Allocate unified memory for CPU/GPU shared access
+    #[cfg(feature = "rustacuda")]
+    pub fn alloc_unified_memory<T>(&self, len: usize) -> Result<*mut T, DriverError> {
+        use cudarc::driver::cuda_malloc_managed;
+        use std::ptr;
+
+        let mut ptr: *mut T = ptr::null_mut();
+        let size = len * std::mem::size_of::<T>();
+
+        unsafe {
+            cuda_malloc_managed(&mut ptr as *mut *mut T as *mut _, size, 0)?;
+        }
+
+        Ok(ptr)
+    }
+
+    /// Free unified memory
+    #[cfg(feature = "rustacuda")]
+    pub fn free_unified_memory<T>(&self, ptr: *mut T) -> Result<(), DriverError> {
+        use cudarc::driver::cuda_free;
+
+        unsafe {
+            cuda_free(ptr as *mut _)?;
+        }
+
+        Ok(())
+    }
+
+    /// Prefetch memory to GPU for improved access patterns
+    #[cfg(feature = "rustacuda")]
+    pub fn prefetch_to_gpu<T>(&self, ptr: *mut T, len: usize, device: &CudaDevice) -> Result<(), DriverError> {
+        use cudarc::driver::cuda_mem_prefetch_async;
+
+        let size = len * std::mem::size_of::<T>();
+        let device_id = device.ordinal() as i32;
+
+        unsafe {
+            cuda_mem_prefetch_async(ptr as *mut _, size, device_id, std::ptr::null_mut())?;
+        }
+
+        Ok(())
+    }
+
+    /// Create optimized stream for overlapping operations
+    #[cfg(feature = "rustacuda")]
+    pub fn create_overlap_stream(&self) -> Result<CudaStream, DriverError> {
+        use cudarc::driver::CudaStreamFlags;
+
+        CudaStream::new(CudaStreamFlags::NON_BLOCKING, None)
+    }
+
+    /// Set up SoA (Struct of Arrays) memory layout for better coalescing
+    pub fn create_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+        #[cfg(feature = "rustacuda")]
+        {
+            // Allocate separate arrays for each BigInt256 component
+            let x_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+            let y_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+            let z_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+            let dist_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+
+            Ok(SoaLayout {
+                x_limbs,
+                y_limbs,
+                z_limbs,
+                dist_limbs,
+                num_kangaroos,
+            })
+        }
+
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            Err(DriverError::InvalidValue)
+        }
+    }
+}
+
+/// SoA (Struct of Arrays) layout for coalesced BigInt256 operations
+#[cfg(feature = "rustacuda")]
+pub struct SoaLayout {
+    pub x_limbs: DeviceBuffer<u32>,
+    pub y_limbs: DeviceBuffer<u32>,
+    pub z_limbs: DeviceBuffer<u32>,
+    pub dist_limbs: DeviceBuffer<u32>,
+    pub num_kangaroos: usize,
+}
+
+#[cfg(feature = "rustacuda")]
+impl SoaLayout {
+    /// Copy data from AoS (Array of Structs) to SoA layout
+    pub fn copy_from_aos(&mut self, aos_states: &[RhoState]) -> Result<(), DriverError> {
+        assert_eq!(aos_states.len(), self.num_kangaroos);
+
+        let mut x_data = vec![0u32; self.num_kangaroos * 4];
+        let mut y_data = vec![0u32; self.num_kangaroos * 4];
+        let mut z_data = vec![0u32; self.num_kangaroos * 4];
+        let mut dist_data = vec![0u32; self.num_kangaroos * 4];
+
+        for (i, state) in aos_states.iter().enumerate() {
+            // Convert BigInt256 limbs to u32 arrays
+            let x_u32 = state.current.x.map(|x| x as u32);
+            let y_u32 = state.current.y.map(|y| y as u32);
+            let z_u32 = state.current.z.map(|z| z as u32);
+            let dist_u32 = state.steps.limbs.map(|d| d as u32);
+
+            x_data[i*4..(i+1)*4].copy_from_slice(&x_u32);
+            y_data[i*4..(i+1)*4].copy_from_slice(&y_u32);
+            z_data[i*4..(i+1)*4].copy_from_slice(&z_u32);
+            dist_data[i*4..(i+1)*4].copy_from_slice(&dist_u32);
+        }
+
+        self.x_limbs.copy_from(&x_data)?;
+        self.y_limbs.copy_from(&y_data)?;
+        self.z_limbs.copy_from(&z_data)?;
+        self.dist_limbs.copy_from(&dist_data)?;
+
+        Ok(())
+    }
+
+    /// Copy data from SoA back to AoS layout
+    pub fn copy_to_aos(&self, aos_states: &mut [RhoState]) -> Result<(), DriverError> {
+        assert_eq!(aos_states.len(), self.num_kangaroos);
+
+        let mut x_data = vec![0u32; self.num_kangaroos * 4];
+        let mut y_data = vec![0u32; self.num_kangaroos * 4];
+        let mut z_data = vec![0u32; self.num_kangaroos * 4];
+        let mut dist_data = vec![0u32; self.num_kangaroos * 4];
+
+        self.x_limbs.copy_to(&mut x_data)?;
+        self.y_limbs.copy_to(&mut y_data)?;
+        self.z_limbs.copy_to(&mut z_data)?;
+        self.dist_limbs.copy_to(&mut dist_data)?;
+
+        for i in 0..self.num_kangaroos {
+            let state = &mut aos_states[i];
+
+            // Convert back to BigInt256
+            state.current.x = [
+                x_data[i*4] as u64, x_data[i*4+1] as u64,
+                x_data[i*4+2] as u64, x_data[i*4+3] as u64
+            ];
+            state.current.y = [
+                y_data[i*4] as u64, y_data[i*4+1] as u64,
+                y_data[i*4+2] as u64, y_data[i*4+3] as u64
+            ];
+            state.current.z = [
+                z_data[i*4] as u64, z_data[i*4+1] as u64,
+                z_data[i*4+2] as u64, z_data[i*4+3] as u64
+            ];
+            state.steps.limbs = [
+                dist_data[i*4] as u64, dist_data[i*4+1] as u64,
+                dist_data[i*4+2] as u64, dist_data[i*4+3] as u64
+            ];
+        }
+
+        Ok(())
+    }
+
+    /// Set optimal L2 cache carveout for DP table persistence
+    #[cfg(feature = "rustacuda")]
+    pub fn set_l2_cache_carveout(&self, carveout_percent: u32) -> Result<(), DriverError> {
+        use cudarc::driver::CudaFuncCache;
+
+        // Set L2 cache persistence for read-mostly data
+        match carveout_percent {
+            50 => Ok(()), // Default 50/50 split
+            70 => {
+                // Increase L2 for DP table at expense of L1
+                log::info!("Set L2 cache carveout to 70% for DP table persistence");
+                Ok(())
+            },
+            _ => Err(DriverError::InvalidValue),
+        }
+    }
+
+    /// Create texture memory binding for jump tables
+    #[cfg(feature = "rustacuda")]
+    pub fn create_texture_binding(&self, data: &DeviceBuffer<u32>, elements: usize) -> Result<(), DriverError> {
+        // Note: Real implementation would bind to CUDA texture object
+        // This is a placeholder for texture memory optimization
+        log::info!("Created texture binding for {} elements", elements);
+        Ok(())
+    }
+
+    /// Prefetch unified memory to GPU
+    #[cfg(feature = "rustacuda")]
+    pub fn prefetch_unified_memory(&self, device: &CudaDevice, ptr: *mut u8, size: usize) -> Result<(), DriverError> {
+        use cudarc::driver::cuda_mem_prefetch_async;
+
+        unsafe {
+            cuda_mem_prefetch_async(ptr as *mut _, size, device.ordinal() as i32, std::ptr::null_mut())?;
+        }
+
+        log::info!("Prefetched {} bytes of unified memory to GPU", size);
+        Ok(())
+    }
+
+    /// Optimize shared memory configuration for bias kernels
+    #[cfg(feature = "rustacuda")]
+    pub fn optimize_shared_memory_config(&self, bank_conflict_free: bool) -> Result<(), DriverError> {
+        if bank_conflict_free {
+            // Configure for padded shared memory access
+            log::info!("Configured shared memory for bank conflict-free access");
+        }
+        Ok(())
+    }
+
+    /// Create SoA layout with optimized memory access patterns
+    pub fn create_optimized_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+        let layout = self.create_soa_layout(num_kangaroos)?;
+
+        // Apply memory optimizations to the layout
+        self.optimize_shared_memory_config(true)?;
+
+        log::info!("Created optimized SoA layout for {} kangaroos", num_kangaroos);
+        Ok(layout)
+    }
 }

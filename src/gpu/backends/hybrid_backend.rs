@@ -211,23 +211,148 @@ impl HybridBackend {
         Ok(all_traps)
     }
 
-    // Chunk: Scaled Dispatch Loop (src/gpu/backends/hybrid_backend.rs)
-    // Dependencies: adjust_gpu_frac, scale_kangaroos, profile_hashrates
-    pub fn dispatch_hybrid_scaled(config: &mut GpuConfig, target: &BigInt256, range: (BigInt256, BigInt256), total_steps: u64) -> Option<BigInt256> {
+    // Chunk: Metrics-Based Dynamic Optimization (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: NsightMetrics, generate_metric_based_recommendations
+    pub fn optimize_based_on_metrics_placeholder(config: &mut GpuConfig, metrics: &logging::NsightMetrics) {
+        Self::optimize_based_on_metrics(config, metrics);
+    }
+
+    pub fn optimize_based_on_metrics(config: &mut GpuConfig, metrics: &logging::NsightMetrics) {
+        // Apply metric-based optimizations
+        let mut optimization_applied = false;
+
+        // Memory-bound optimizations
+        if metrics.dram_utilization > 0.8 || metrics.l2_hit_rate < 0.7 {
+            // Reduce kangaroo count to fit in cache better
+            config.max_kangaroos = (config.max_kangaroos * 3 / 4).max(512);
+            log::info!("Applied memory optimization: reduced kangaroos to {} due to high DRAM utilization", config.max_kangaroos);
+            optimization_applied = true;
+        }
+
+        // Occupancy optimizations
+        if metrics.sm_efficiency < 0.7 || metrics.achieved_occupancy < 0.6 {
+            // Reduce kangaroo count to improve occupancy
+            config.max_kangaroos = (config.max_kangaroos * 4 / 5).max(256);
+            log::info!("Applied occupancy optimization: reduced kangaroos to {} due to low SM efficiency", config.max_kangaroos);
+            optimization_applied = true;
+        }
+
+        // Compute-bound optimizations
+        if metrics.alu_utilization > 0.9 && metrics.sm_efficiency > 0.8 {
+            // Can handle more parallelism
+            config.max_kangaroos = (config.max_kangaroos * 5 / 4).min(4096);
+            log::info!("Applied compute optimization: increased kangaroos to {} due to high ALU utilization", config.max_kangaroos);
+            optimization_applied = true;
+        }
+
+        // Register pressure optimizations
+        if metrics.register_usage > 64 {
+            config.max_kangaroos = (config.max_kangaroos * 2 / 3).max(256);
+            log::info!("Applied register optimization: reduced kangaroos to {} due to high register usage", config.max_kangaroos);
+            optimization_applied = true;
+        }
+
+        if !optimization_applied && metrics.sm_efficiency > 0.8 && metrics.l2_hit_rate > 0.8 {
+            log::info!("GPU performing well - no optimization needed");
+        }
+
+        // Log recommendations
+        if !metrics.optimization_recommendations.is_empty() {
+            log::info!("Nsight recommendations:");
+            for rec in &metrics.optimization_recommendations {
+                log::info!("  - {}", rec);
+            }
+        }
+    }
+
+    // Chunk: Rule-Based Configuration Adjustment (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: serde_json, std::fs::read_to_string
+    pub fn apply_rule_based_adjustments_placeholder(config: &mut GpuConfig) {
+        Self::apply_rule_based_adjustments(config);
+    }
+
+    pub fn apply_rule_based_adjustments(config: &mut GpuConfig) {
+        // Load rule suggestions and apply automatic adjustments
+        if let Ok(json_str) = std::fs::read_to_string("suggestions.json") {
+            if let Ok(suggestions) = serde_json::from_str::<std::collections::HashMap<String, String>>(&json_str) {
+                let mut adjustments_made = Vec::new();
+
+                // Apply specific rule-based adjustments
+                if suggestions.values().any(|s| s.contains("Low Coalescing") || s.contains("SoA")) {
+                    config.max_kangaroos = (config.max_kangaroos * 3 / 4).max(512);
+                    adjustments_made.push("Reduced kangaroos for SoA coalescing optimization");
+                }
+
+                if suggestions.values().any(|s| s.contains("High Registers") || s.contains("reduce locals")) {
+                    config.max_regs = config.max_regs.min(48);
+                    adjustments_made.push("Reduced max registers for occupancy optimization");
+                }
+
+                if suggestions.values().any(|s| s.contains("High Divergence") || s.contains("subgroup")) {
+                    config.max_kangaroos = (config.max_kangaroos * 4 / 5).max(256);
+                    adjustments_made.push("Reduced kangaroos to mitigate divergence impact");
+                }
+
+                if suggestions.values().any(|s| s.contains("modular") || s.contains("Barrett")) {
+                    config.gpu_frac = (config.gpu_frac * 0.9).max(0.5);
+                    adjustments_made.push("Adjusted GPU fraction for modular arithmetic optimization");
+                }
+
+                // Log applied adjustments
+                for adjustment in adjustments_made {
+                    log::info!("Rule-based adjustment: {}", adjustment);
+                }
+
+                if adjustments_made.is_empty() {
+                    log::info!("No rule-based adjustments needed - performance looks good");
+                }
+            }
+        }
+    }
+
+    // Chunk: Enhanced Scaled Dispatch with Rules and Metrics (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: apply_rule_based_adjustments, optimize_based_on_metrics, load_comprehensive_nsight_metrics
+    pub fn dispatch_hybrid_scaled_with_rules_and_metrics(config: &mut GpuConfig, target: &BigInt256, range: (BigInt256, BigInt256), total_steps: u64) -> Option<BigInt256> {
         let mut completed = 0;
         let batch_size = 1000000;  // 1M steps/batch
+        let mut rules_applied = false;
+        let mut metrics_checked = false;
+
         while completed < total_steps {
             let batch = batch_size.min((total_steps - completed) as usize);
+
+            // Apply rule-based adjustments (once per run)
+            if !rules_applied {
+                log::info!("Applying Nsight rule-based configuration adjustments...");
+                Self::apply_rule_based_adjustments(config);
+                rules_applied = true;
+            }
+
+            // Load and apply metrics-based optimization
+            if !metrics_checked {
+                if let Some(metrics) = logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
+                    log::info!("Loaded Nsight metrics: SM eff={:.1}%, Occ={:.1}%, L2 hit={:.1}%, DRAM util={:.1}%",
+                              metrics.sm_efficiency * 100.0,
+                              metrics.achieved_occupancy * 100.0,
+                              metrics.l2_hit_rate * 100.0,
+                              metrics.dram_utilization * 100.0);
+
+                    Self::optimize_based_on_metrics(config, &metrics);
+                    metrics_checked = true;
+                }
+            }
+
             // Note: dispatch_hybrid function needs to be implemented or imported
             let result = None; // Placeholder - need to implement dispatch_hybrid
             if let Some(key) = result { return Some(key); }
             completed += batch as u64;
 
-            // Scale every batch
-            let util = logging::load_nsight_util("ci_metrics.json").unwrap_or(0.8);  // Parse eff
-            let temp = logging::get_avg_temp("temp.log").unwrap_or(70);  // From auto_tune_from_temp
-            Self::adjust_gpu_frac(config, util, temp);
-            Self::scale_kangaroos(config, util, temp);
+            // Legacy thermal scaling (still useful as fallback)
+            let temp = logging::get_avg_temp("temp.log").unwrap_or(70);
+            if temp > 75 {
+                config.max_kangaroos /= 2;
+                log::warn!("Thermal throttling: reduced kangaroos to {} due to high temp ({}°C)", config.max_kangaroos, temp);
+            }
         }
         None
     }

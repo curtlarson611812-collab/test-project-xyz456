@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, black_box};
 use speedbitcrack::gpu::backend::GpuBackend;
 use speedbitcrack::types::{KangarooState, Point};
 use speedbitcrack::kangaroo::collision::Trap;

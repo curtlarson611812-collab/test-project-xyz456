@@ -7,8 +7,8 @@ use speedbitcrack::utils::pubkey_loader::detect_bias_single;
 use speedbitcrack::kangaroo::generator::{KangarooGenerator, PosSlice};
 use num_bigint::BigInt;
 use std::collections::HashMap;
-// Assume statrs is added to Cargo.toml
 use statrs::distribution::{KolmogorovSmirnov, Uniform};
+use rand::{Rng, thread_rng};
 
 #[test]
 fn test_mod9_bias_detection() {
@@ -215,12 +215,13 @@ fn test_positional_proxy_integration() {
 }
 
 // Chunk: KS Bias Validation (tests/bias_validation.rs)
-// Dependencies: statrs::distribution::{KolmogorovSmirnov, Uniform}
+// Dependencies: statrs::distribution::{KolmogorovSmirnov, Uniform}, rand::{Rng, thread_rng}
 #[test]
 fn test_bias_ks() {
     let observed = vec![0.2, 0.15, 0.25, 0.1, 0.3];  // Biased mod5 freq
-    let uniform = Uniform::new(0.0, 1.0);
-    let samples: Vec<f64> = (0..1000).map(|_| uniform.sample(&mut rand::thread_rng())).collect();
+    let uniform = Uniform::new(0.0, 1.0).unwrap();
+    let mut rng = thread_rng();
+    let samples: Vec<f64> = (0..1000).map(|_| uniform.sample(&mut rng)).collect();
     let ks = KolmogorovSmirnov::two_sample(&observed, &samples);
     assert!(ks.p_value < 0.05);  // Significant bias
 }

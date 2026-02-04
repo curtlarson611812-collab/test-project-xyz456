@@ -501,6 +501,38 @@ impl BigInt256 {
         }
         rem as u64
     }
+
+    /// Get low 64 bits as u64
+    pub fn low_u64(&self) -> u64 {
+        self.limbs[0]
+    }
+
+
+    /// Check if this number is a distinguished point (trailing zeros >= bits)
+    pub fn is_dp(&self, bits: u32) -> bool {
+        self.trailing_zeros() >= bits
+    }
+
+    /// Get the number of bits needed to represent this number
+    pub fn bits(&self) -> usize {
+        for i in (0..4).rev() {
+            if self.limbs[i] != 0 {
+                return (i * 64) + (64 - self.limbs[i].leading_zeros() as usize);
+            }
+        }
+        0
+    }
+
+    /// Get the bit at the specified position (0 = LSB)
+    pub fn bit(&self, pos: usize) -> bool {
+        let limb_idx = pos / 64;
+        let bit_idx = pos % 64;
+        if limb_idx >= 4 {
+            false
+        } else {
+            (self.limbs[limb_idx] & (1u64 << bit_idx)) != 0
+        }
+    }
 }
 
 impl Drop for BigInt256 {

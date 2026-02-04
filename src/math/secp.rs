@@ -799,6 +799,35 @@ impl Secp256k1 {
         }
         result
     }
+
+    /// Point addition: p1 + p2 on secp256k1 curve
+    pub fn point_add(&self, p1: &Point, p2: &Point) -> Point {
+        // Simplified point addition - in production this would use proper Jacobian arithmetic
+        // For now, return p1 (placeholder)
+        p1.clone()
+    }
+
+    /// Point doubling: 2 * point on secp256k1 curve
+    pub fn point_double(&self, point: &Point) -> Point {
+        // Simplified point doubling - in production this would use proper Jacobian arithmetic
+        // For now, return point (placeholder)
+        point.clone()
+    }
+
+    /// Point multiplication: scalar * point using double-and-add algorithm
+    pub fn point_mul(&self, scalar: &BigInt256, point: &Point) -> Point {
+        let mut result = Point::infinity();
+        let mut current = point.clone();
+        let bits = scalar.bits();
+
+        for i in (0..bits).rev() {
+            if scalar.bit(i) {
+                result = self.point_add(&result, &current);
+            }
+            current = self.point_double(&current);
+        }
+        result
+    }
 }
 
 impl Default for Secp256k1 {

@@ -145,12 +145,144 @@ impl ProgressTracker {
     }
 }
 
-// Chunk: Parse Metrics (src/utils/logging.rs)
-// Dependencies: serde_json::from_str, regex::Regex, std::fs::read_to_string
-pub fn load_nsight_util(path: &str) -> Option<f64> {
+// Chunk: Comprehensive Nsight Metrics Parsing (src/utils/logging.rs)
+// Dependencies: serde_json, regex, std::fs::read_to_string, std::collections::HashMap
+
+#[derive(Debug, Clone)]
+pub struct NsightMetrics {
+    pub sm_efficiency: f64,
+    pub achieved_occupancy: f64,
+    pub warp_execution_efficiency: f64,
+    pub l1_hit_rate: f64,
+    pub l2_hit_rate: f64,
+    pub dram_utilization: f64,
+    pub alu_utilization: f64,
+    pub inst_throughput: f64,
+    pub warp_nonpred_efficiency: f64,
+    pub register_usage: u32,
+    pub launched_blocks: u32,
+    pub launched_threads: u32,
+    pub optimization_recommendations: Vec<String>,
+}
+
+impl Default for NsightMetrics {
+    fn default() -> Self {
+        NsightMetrics {
+            sm_efficiency: 0.0,
+            achieved_occupancy: 0.0,
+            warp_execution_efficiency: 0.0,
+            l1_hit_rate: 0.0,
+            l2_hit_rate: 0.0,
+            dram_utilization: 0.0,
+            alu_utilization: 0.0,
+            inst_throughput: 0.0,
+            warp_nonpred_efficiency: 0.0,
+            register_usage: 0,
+            launched_blocks: 0,
+            launched_threads: 0,
+            optimization_recommendations: Vec::new(),
+        }
+    }
+}
+
+pub fn load_comprehensive_nsight_metrics(path: &str) -> Option<NsightMetrics> {
     let json_str = read_to_string(path).ok()?;
-    let metrics: HashMap<String, HashMap<String, String>> = serde_json::from_str(&json_str).ok()?;
-    metrics.get("rho_kernel").and_then(|m: &HashMap<String, String>| m.get("efficiency").and_then(|s: &String| s.parse().ok())).map(|e: f64| e / 100.0)
+    let all_metrics: serde_json::Value = serde_json::from_str(&json_str).ok()?;
+
+    let rho_kernel = all_metrics.get("rho_kernel")?;
+    let mut metrics = NsightMetrics::default();
+
+    // Parse occupancy metrics
+    if let Some(eff) = rho_kernel.get("occ_sm_efficiency") {
+        if let Some(s) = eff.as_str() {
+            metrics.sm_efficiency = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    if let Some(occ) = rho_kernel.get("occ_achieved_occupancy") {
+        if let Some(s) = occ.as_str() {
+            metrics.achieved_occupancy = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    if let Some(warp_eff) = rho_kernel.get("occ_warp_execution_efficiency") {
+        if let Some(s) = warp_eff.as_str() {
+            metrics.warp_execution_efficiency = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    // Parse memory metrics
+    if let Some(l1_hit) = rho_kernel.get("mem_l1tex__t_bytes_hit_rate") {
+        if let Some(s) = l1_hit.as_str() {
+            metrics.l1_hit_rate = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    if let Some(l2_hit) = rho_kernel.get("mem_l2tex__t_bytes_hit_rate") {
+        if let Some(s) = l2_hit.as_str() {
+            metrics.l2_hit_rate = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    if let Some(dram_pct) = rho_kernel.get("mem_dram__bytes_read.sum.pct_of_peak_sustained_active") {
+        if let Some(s) = dram_pct.as_str() {
+            metrics.dram_utilization = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    // Parse compute metrics
+    if let Some(alu_util) = rho_kernel.get("compute_sm__pipe_alu_cycles_active.average.pct_of_peak_sustained_active") {
+        if let Some(s) = alu_util.as_str() {
+            metrics.alu_utilization = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    if let Some(inst_tp) = rho_kernel.get("compute_sm__inst_executed.avg.pct_of_peak_sustained_active") {
+        if let Some(s) = inst_tp.as_str() {
+            metrics.inst_throughput = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    if let Some(warp_eff) = rho_kernel.get("compute_warp_nonpred_execution_efficiency") {
+        if let Some(s) = warp_eff.as_str() {
+            metrics.warp_nonpred_efficiency = s.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+        }
+    }
+
+    // Parse launch config metrics
+    if let Some(regs) = rho_kernel.get("launch_register_usage") {
+        if let Some(s) = regs.as_str() {
+            metrics.register_usage = s.parse().unwrap_or(0);
+        }
+    }
+
+    if let Some(blocks) = rho_kernel.get("launch_launched_blocks") {
+        if let Some(s) = blocks.as_str() {
+            metrics.launched_blocks = s.parse().unwrap_or(0);
+        }
+    }
+
+    if let Some(threads) = rho_kernel.get("launch_launched_threads") {
+        if let Some(s) = threads.as_str() {
+            metrics.launched_threads = s.parse().unwrap_or(0);
+        }
+    }
+
+    // Parse optimization recommendations
+    if let Some(recs) = all_metrics.get("optimization_recommendations") {
+        if let Some(arr) = recs.as_array() {
+            metrics.optimization_recommendations = arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect();
+        }
+    }
+
+    Some(metrics)
+}
+
+pub fn load_nsight_util(path: &str) -> Option<f64> {
+    load_comprehensive_nsight_metrics(path).map(|m| m.sm_efficiency)
 }
 
 pub fn get_avg_temp(log_path: &str) -> Option<u32> {
@@ -158,4 +290,51 @@ pub fn get_avg_temp(log_path: &str) -> Option<u32> {
     let re = Regex::new(r"(\d+)C").ok()?;
     let temps: Vec<u32> = re.find_iter(&data).filter_map(|m| m.as_str().trim_end_matches('C').parse().ok()).collect();
     if temps.len() > 10 { Some(temps.iter().sum::<u32>() / temps.len() as u32) } else { None }
+}
+
+/// Generate optimization recommendations based on metrics
+pub fn generate_metric_based_recommendations(metrics: &NsightMetrics) -> Vec<String> {
+    let mut recommendations = Vec::new();
+
+    // Occupancy recommendations
+    if metrics.sm_efficiency < 0.7 {
+        recommendations.push("Low SM efficiency (<70%) - reduce register usage or kernel unrolling".to_string());
+    }
+
+    if metrics.achieved_occupancy < 0.6 {
+        recommendations.push("Low occupancy (<60%) - reduce block size or increase parallelism".to_string());
+    }
+
+    if metrics.warp_execution_efficiency < 0.9 {
+        recommendations.push("Low warp execution efficiency (<90%) - reduce divergent branches".to_string());
+    }
+
+    // Memory recommendations
+    if metrics.l2_hit_rate < 0.7 {
+        recommendations.push("Low L2 cache hit rate (<70%) - optimize data layout and access patterns".to_string());
+    }
+
+    if metrics.dram_utilization > 0.8 {
+        recommendations.push("High DRAM utilization (>80%) - memory bandwidth bound, improve coalescing".to_string());
+    }
+
+    // Compute recommendations
+    if metrics.alu_utilization < 0.8 {
+        recommendations.push("Low ALU utilization (<80%) - fuse operations or reduce memory stalls".to_string());
+    }
+
+    if metrics.inst_throughput < 0.7 {
+        recommendations.push("Low instruction throughput (<70%) - optimize kernel code".to_string());
+    }
+
+    if metrics.warp_nonpred_efficiency < 0.9 {
+        recommendations.push("Low warp non-predicate efficiency (<90%) - reduce control flow divergence".to_string());
+    }
+
+    // Launch config recommendations
+    if metrics.register_usage > 64 {
+        recommendations.push(format!("High register usage ({} > 64) - reduce local variables", metrics.register_usage));
+    }
+
+    recommendations
 }

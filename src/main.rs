@@ -19,6 +19,7 @@ use speedbitcrack::types::{Point, RhoState};
 use std::process::Command;
 use std::fs::read_to_string;
 use regex::Regex;
+use serde_json;
 
 // Chunk: Laptop Flag Parse (main.rs)
 /// Command line arguments
@@ -67,14 +68,29 @@ pub fn start_thermal_log() {
         .expect("Thermal log failed");
 }
 
-// Chunk: Thermal Auto-Tune (src/main.rs)
-// Dependencies: std::fs::read_to_string, regex::Regex for parse temp.log
+// Chunk: Comprehensive Auto-Tune with Metrics (src/main.rs)
+// Dependencies: std::fs::read_to_string, regex::Regex, logging::NsightMetrics
 fn auto_tune_kangaroos(config: &mut speedbitcrack::config::GpuConfig) {
+    // First try metrics-based optimization
+    if let Some(metrics) = logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
+        log::info!("Applying Nsight metrics-based optimization...");
+        speedbitcrack::gpu::backends::hybrid_backend::HybridBackend::optimize_based_on_metrics_placeholder(config, &metrics);
+    }
+
+    // Fallback to thermal-based tuning
     let temp_str = read_to_string("temp.log").unwrap_or(String::new());
     let re = Regex::new(r"(\d+)C").unwrap();
     let temps: Vec<u32> = re.captures_iter(&temp_str).map(|c| c[1].parse().unwrap()).collect();
-    let avg_temp = temps.iter().sum::<u32>() / temps.len() as u32;
-    if avg_temp > 80 { config.max_kangaroos /= 2; } else if avg_temp < 65 { config.max_kangaroos *= 2; }
+    if !temps.is_empty() {
+        let avg_temp = temps.iter().sum::<u32>() / temps.len() as u32;
+        if avg_temp > 80 {
+            config.max_kangaroos = config.max_kangaroos.saturating_div(2);
+            log::warn!("Thermal throttling: reduced kangaroos to {} (avg temp: {}°C)", config.max_kangaroos, avg_temp);
+        } else if avg_temp < 65 && config.max_kangaroos < 4096 {
+            config.max_kangaroos = config.max_kangaroos.saturating_mul(2).min(4096);
+            log::info!("Cool temperatures: increased kangaroos to {} (avg temp: {}°C)", config.max_kangaroos, avg_temp);
+        }
+    }
 }
 
 /// Bitcoin Puzzle Database Structure
@@ -250,9 +266,49 @@ fn main() -> Result<()> {
     if let Some(puzzle_num) = args.puzzle {
         if puzzle_num == 67 {
             let (_target, range) = speedbitcrack::puzzles::load_unspent_67();
-            let _gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbitcrack::config::GpuConfig { arch: "sm_120".to_string(), max_kangaroos: 4096, dp_size: 1<<20, dp_bits: 24, max_regs: 64, gpu_frac: 0.8 } };
+            let mut gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbitcrack::config::GpuConfig { arch: "sm_120".to_string(), max_kangaroos: 4096, dp_size: 1<<20, dp_bits: 24, max_regs: 64, gpu_frac: 0.8 } };
+
+            // Load Nsight metrics and apply comprehensive optimization
+            if let Some(metrics) = logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
+                info!("🎯 Loaded comprehensive Nsight metrics - applying full optimization...");
+
+                // Apply rule-based adjustments first
+                speedbitcrack::gpu::backends::hybrid_backend::HybridBackend::apply_rule_based_adjustments_placeholder(&mut gpu_config);
+
+                // Then apply metrics-based optimizations
+                speedbitcrack::gpu::backends::hybrid_backend::HybridBackend::optimize_based_on_metrics_placeholder(&mut gpu_config, &metrics);
+
+                // Log comprehensive performance analysis
+                info!("📊 GPU Performance Metrics:");
+                info!("   • SM Efficiency: {:.1}%", metrics.sm_efficiency * 100.0);
+                info!("   • Occupancy: {:.1}%", metrics.achieved_occupancy * 100.0);
+                info!("   • L2 Cache Hit Rate: {:.1}%", metrics.l2_hit_rate * 100.0);
+                info!("   • DRAM Utilization: {:.1}%", metrics.dram_utilization * 100.0);
+                info!("   • ALU Utilization: {:.1}%", metrics.alu_utilization * 100.0);
+                info!("   • L1 Cache Hit Rate: {:.1}%", metrics.l1_hit_rate * 100.0);
+
+                // Log CUDA memory optimization recommendations
+                if metrics.dram_utilization > 0.8 {
+                    info!("🧠 CUDA Memory Recommendations:");
+                    info!("   • Implement SoA layout for BigInt256 operations");
+                    info!("   • Use shared memory for Barrett reduction constants");
+                    info!("   • Consider texture memory for jump table access");
+                }
+
+                if !metrics.optimization_recommendations.is_empty() {
+                    info!("💡 Nsight Optimization Recommendations:");
+                    for rec in &metrics.optimization_recommendations {
+                        info!("   • {}", rec);
+                    }
+                }
+            } else {
+                info!("⚠️  No Nsight metrics found - using default configuration");
+                info!("💡 Run './scripts/profile_and_analyze.sh' to generate optimization metrics");
+            }
+
             // Crack logic here
-            println!("Cracking puzzle #67 with target pubkey and range [{}, {}]", range.0.to_hex(), range.1.to_hex());
+            println!("Cracking puzzle #67 with optimized config: {} kangaroos", gpu_config.max_kangaroos);
+            println!("Target range: [{}, {}]", range.0.to_hex(), range.1.to_hex());
         }
         return Ok(());
     }

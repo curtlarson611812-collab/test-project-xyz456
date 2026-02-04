@@ -3,6 +3,7 @@
 
 use speedbitcrack::kangaroo::KangarooManager;
 use speedbitcrack::config::Config;
+use speedbitcrack::math::constants::DP_BITS;
 use std::time::Duration;
 
 #[cfg(test)]

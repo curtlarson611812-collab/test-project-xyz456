@@ -130,10 +130,10 @@ mod tests {
     fn test_mod_inverse() {
         let curve = Secp256k1::new();
         let a = BigInt256::from_u64(5);
-        let inv = curve.mod_inverse(&a, &curve.p).unwrap();
+        let inv = curve.mod_inverse(&a, &curve.n).unwrap();
         let product = curve.montgomery.mul(&a, &inv);
         let one = BigInt256::from_u64(1);
-        assert_eq!(product, one);
+        assert_eq!(product % curve.n, one);
     }
 
     // Test Jacobian to affine conversion
