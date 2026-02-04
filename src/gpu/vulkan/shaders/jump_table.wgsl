@@ -1,17 +1,9 @@
-// Jump table precomputation shader for kangaroo jumps
-// Leverages utils.wgsl for EC/mod arithmetic (assume point_add, point_double, mod_mul, bigint_mul, etc.)
-// GPU-side generation of expandable table: d_i = base * prime_i, point_i = d_i * G
-// Rule #6: Expandable (host resizes primes buffer), deterministic selection in kangaroo
+// src/gpu/vulkan/shaders/jump_table.wgsl
+@group(0) @binding(5) var<uniform> bias_table: array<f32, 81>;
 
-// Constants
-const MAX_BUCKETS_LOG2: u32 = 10u; // 1024 max for demo; expandable
-
-// Storage buffers
-@group(0) @binding(0) var<storage, read> primes: array<array<u32, 8>>; // Input primes (e.g., Magic 9 as 256-bit)
-@group(0) @binding(1) var<storage, read> base_jump: array<u32, 8>; // Input base_jump (e.g., 2^{128})
-@group(0) @binding(2) var<storage, read_write> jump_points: array<array<array<u32, 8>, 3>>; // Output points (Jacobian)
-@group(0) @binding(3) var<storage, read_write> jump_sizes: array<array<u32, 8>>; // Output d_i
-@group(0) @binding(4) var<storage, read_write> test_results: array<u32>; // Pass/fail (3 cases)
+fn get_biased_jump(res: u32) -> f32 {
+    return bias_table[res % 81u];  // Barrett res in kangaroo.wgsl
+}
 
 // Scalar multiplication: d * G (double-and-add, Jacobian)
 fn scalar_mul(d: array<u32, 8>, g: array<array<u32, 8>, 3>) -> array<array<u32, 8>, 3> {

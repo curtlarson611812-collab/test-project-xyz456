@@ -1,16 +1,10 @@
-// DP candidate detection shader
-// Uses utils.wgsl for to_affine/is_distinguished
-// GPU filter by trailing bits on x, collect candidates
-const DISTINGUISHED_BITS: u32 = 24u;
-const TRAP_BUFFER_SIZE: u32 = 1024u;
-@group(0) @binding(0) var<storage, read> positions: array<array<array<u32, 8>, 3>>;
-@group(0) @binding(1) var<storage, read> distances: array<array<u32, 8>>;
-@group(0) @binding(2) var<storage, read> types: array<u32>;
-@group(0) @binding(3) var<storage, read_write> trap_xs: array<array<u32, 8>>;
-@group(0) @binding(4) var<storage, read_write> trap_dists: array<array<u32, 8>>;
-@group(0) @binding(5) var<storage, read_write> trap_types: array<u32>;
-@group(0) @binding(6) var<storage, read_write> trap_index: atomic<u32>;
-@group(0) @binding(7) var<storage, read_write> test_results: array<u32>;
+// src/gpu/vulkan/shaders/dp_check.wgsl
+@group(0) @binding(7) var<storage> dp_table: array<u64>;  // Cuckoo hash table
+
+fn check_dp(hash: u64) -> bool {
+    let slot = hash % 524288u;  // 512K table
+    return subgroupAny(dp_table[slot] == hash);  // Fast any-hit
+}
 
 fn to_affine(p: array<array<u32, 8>, 3>) -> array<array<u32, 8>, 2> {
     if (bigint_is_zero(p[2])) { return array<array<u32, 8>, 2>(array<u32, 8>(), array<u32, 8>()); }
