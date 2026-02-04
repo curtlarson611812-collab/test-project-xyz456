@@ -7,6 +7,9 @@ use crate::math::secp::Secp256k1;
 use crate::math::bigint::BigInt256;
 use crate::types::Point;
 use std::error::Error;
+use std::fs::read_to_string;
+use std::collections::HashMap;
+use anyhow::{Result, bail};
 use num_bigint::BigInt;
 
 /// Entry for a single Bitcoin puzzle
@@ -24,6 +27,41 @@ pub struct PuzzleEntry {
     pub pub_hex: Option<&'static str>,
     /// Private key hex if solved (None for unsolved puzzles)
     pub priv_hex: Option<&'static str>,
+}
+
+/// Load puzzles from flat file
+pub fn load_puzzles_txt(path: &str) -> Result<HashMap<u32, (String, Option<String>, BigInt256, BigInt256)>> {
+    let data = read_to_string(path)?;
+    let mut puzzles = HashMap::new();
+
+    for (line_num, line) in data.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("//") {
+            continue; // Skip empty lines and comments
+        }
+        if line.contains("n,pubkey_hex") {
+            continue; // Skip header
+        }
+
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() != 5 {
+            bail!("Invalid line {}: expected 5 comma-separated fields, got {}", line_num + 1, parts.len());
+        }
+
+        let n = parts[0].parse::<u32>()
+            .map_err(|e| anyhow::anyhow!("Invalid puzzle number '{}' on line {}: {}", parts[0], line_num + 1, e))?;
+        let pubkey = parts[1].to_string();
+        let priv_hex = if parts[2].is_empty() { None } else { Some(parts[2].to_string()) };
+        let priv_debug = priv_hex.as_ref().map(|s| s.as_str()).unwrap_or("None");
+        let priv_len = priv_hex.as_ref().map(|s| s.len()).unwrap_or(0);
+        println!("DEBUG: Line {}: n={}, priv_hex='{}' (len={})", line_num + 1, n, priv_debug, priv_len);
+        let low = BigInt256::from_hex(parts[3]);
+        let high = BigInt256::from_hex(parts[4]);
+
+        puzzles.insert(n, (pubkey, priv_hex, low, high));
+    }
+
+    Ok(puzzles)
 }
 
 /// Complete database of all 160 Bitcoin puzzles
@@ -801,49 +839,69 @@ pub fn load_solved(n: u32) -> (BigInt, BigInt, BigInt) {  // low, high, known_ke
 }
 
 // Chunk: Solved Puzzles for Testing (puzzles.rs)
-pub fn load_solved_32() -> (Point, BigInt256) {
-    // Puzzle #32: privkey = 0xb862a62e = 3094327534
-    let privkey = "00000000000000000000000000000000000000000000000000000000b862a62e";
-    let curve = Secp256k1::new();
-    let private_key = BigInt256::from_hex(privkey);
+pub fn load_solved_32() -> Result<(Point, BigInt256)> {
+    let puzzles = load_puzzles_txt("src/puzzles.txt")?;
+    if let Some((pubkey_hex, Some(priv_hex), _, _)) = puzzles.get(&32) {
+        let curve = Secp256k1::new();
+        println!("DEBUG: priv_hex = '{}' (length: {})", priv_hex, priv_hex.len());
+        let private_key = BigInt256::from_hex(priv_hex);
 
-    // Generate pubkey from private key: P = privkey * G
-    let pubkey_point = curve.mul_constant_time(&private_key, &curve.g).expect("Pubkey generation failed");
+        // For solved puzzles, generate pubkey from private key to ensure correctness
+        let pubkey_point = curve.mul_constant_time(&private_key, &curve.g)
+            .map_err(|e| anyhow::anyhow!("Failed to generate pubkey from private key: {}", e))?;
 
-    (pubkey_point, private_key)
+        Ok((pubkey_point, private_key))
+    } else {
+        bail!("Puzzle #32 not found or not solved in puzzles.txt")
+    }
 }
 
-pub fn load_solved_64() -> (Point, BigInt256) {
-    let pubkey = "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db";
-    let privkey = "8000000000000000000000000000000000000000000000000000000000000000";
-    let curve = Secp256k1::new();
-    let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
-    let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
-    let private_key = BigInt256::from_hex(privkey);
-    (point, private_key)
+pub fn load_solved_64() -> Result<(Point, BigInt256)> {
+    let puzzles = load_puzzles_txt("src/puzzles.txt")?;
+    if let Some((pubkey_hex, Some(priv_hex), _, _)) = puzzles.get(&64) {
+        let curve = Secp256k1::new();
+        println!("DEBUG: priv_hex = '{}' (length: {})", priv_hex, priv_hex.len());
+        let private_key = BigInt256::from_hex(priv_hex);
+
+        // For solved puzzles, generate pubkey from private key to ensure correctness
+        let pubkey_point = curve.mul_constant_time(&private_key, &curve.g)
+            .map_err(|e| anyhow::anyhow!("Failed to generate pubkey from private key: {}", e))?;
+
+        Ok((pubkey_point, private_key))
+    } else {
+        bail!("Puzzle #64 not found or not solved in puzzles.txt")
+    }
 }
 
-pub fn load_solved_66() -> (Point, BigInt256) {
-    // Puzzle #66: Actual solved private key = 0x000000000000000000000000000000000000000000000002832ed74f2b5e35ee
-    let privkey = "000000000000000000000000000000000000000000000002832ed74f2b5e35ee";
-    let curve = Secp256k1::new();
-    let private_key = BigInt256::from_hex(privkey);
+pub fn load_solved_66() -> Result<(Point, BigInt256)> {
+    let puzzles = load_puzzles_txt("src/puzzles.txt")?;
+    if let Some((pubkey_hex, Some(priv_hex), _, _)) = puzzles.get(&66) {
+        let curve = Secp256k1::new();
+        println!("DEBUG: priv_hex = '{}' (length: {})", priv_hex, priv_hex.len());
+        let private_key = BigInt256::from_hex(priv_hex);
 
-    // Generate pubkey from private key: P = privkey * G
-    let pubkey_point = curve.mul_constant_time(&private_key, &curve.g).expect("Pubkey generation failed");
+        // For solved puzzles, generate pubkey from private key to ensure correctness
+        let pubkey_point = curve.mul_constant_time(&private_key, &curve.g)
+            .map_err(|e| anyhow::anyhow!("Failed to generate pubkey from private key: {}", e))?;
 
-    (pubkey_point, private_key)
+        Ok((pubkey_point, private_key))
+    } else {
+        bail!("Puzzle #66 not found or not solved in puzzles.txt")
+    }
 }
 
 // Chunk: Unspent #67 Target (puzzles.rs)
-pub fn load_unspent_67() -> (Point, (BigInt256, BigInt256)) {
-    let pubkey = "0212209f5ec514a1580a2937bd833979d933199fc230e204c6cdc58872b7d46f75";
-    let curve = Secp256k1::new();
-    let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
-    let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
-    let low = BigInt256::from_hex("40000000000000000");  // 2^66
-    let high = BigInt256::from_hex("7ffffffffffffffff");  // 2^67 - 1
-    (point, (low, high))
+pub fn load_unspent_67() -> Result<(Point, (BigInt256, BigInt256))> {
+    let puzzles = load_puzzles_txt("src/puzzles.txt")?;
+    if let Some((pubkey_hex, _, low, high)) = puzzles.get(&67) {
+        let curve = Secp256k1::new();
+        let pubkey_bytes = hex::decode(pubkey_hex)?;
+        let point = curve.decompress_point(pubkey_bytes.as_slice().try_into()?)
+            .ok_or_else(|| anyhow::anyhow!("Failed to decompress pubkey for puzzle #67"))?;
+        Ok((point, (low.clone(), high.clone())))
+    } else {
+        bail!("Puzzle #67 not found in puzzles.txt")
+    }
 }
 
 // Chunk: Unspent #150 Target (puzzles.rs)

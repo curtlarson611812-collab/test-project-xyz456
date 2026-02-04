@@ -272,7 +272,7 @@ fn main() -> Result<()> {
     // Handle specific puzzle cracking
     if let Some(puzzle_num) = args.puzzle {
         if puzzle_num == 67 {
-            let (_target, range) = speedbitcrack::puzzles::load_unspent_67();
+            let (_target, range) = speedbitcrack::puzzles::load_unspent_67()?;
             let mut gpu_config = if args.laptop {
                 let mut config = speedbitcrack::config::laptop_3070_config();
                 config.max_kangaroos = args.num_kangaroos;
@@ -535,9 +535,9 @@ fn test_solved_puzzle(puzzle_num: u32) -> Result<()> {
     println!("🧪 Testing solved puzzle #{}", puzzle_num);
 
     let (expected_point, private_key) = match puzzle_num {
-        32 => speedbitcrack::puzzles::load_solved_32(),
-        64 => speedbitcrack::puzzles::load_solved_64(),
-        66 => speedbitcrack::puzzles::load_solved_66(),
+        32 => speedbitcrack::puzzles::load_solved_32()?,
+        64 => speedbitcrack::puzzles::load_solved_64()?,
+        66 => speedbitcrack::puzzles::load_solved_66()?,
         _ => {
             println!("❌ Puzzle #{} is not solved or not supported for testing", puzzle_num);
             return Ok(());
@@ -716,10 +716,10 @@ fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
 
     // For solved puzzles, use the known point directly instead of decompressing
     let point = if n == 32 {
-        let (point, _) = speedbitcrack::puzzles::load_solved_32();
+        let (point, _) = speedbitcrack::puzzles::load_solved_32()?;
         point
     } else if n == 66 {
-        let (point, _) = speedbitcrack::puzzles::load_solved_66();
+        let (point, _) = speedbitcrack::puzzles::load_solved_66()?;
         point
     } else {
         let mut comp = [0u8; 33];
