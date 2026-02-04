@@ -11,6 +11,7 @@ use speedbitcrack::config::Config;
 use speedbitcrack::kangaroo::KangarooGenerator;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::pubkey_loader;
+use speedbitcrack::utils::output::{start_real_time_output, DisplayArgs, DisplayConfig};
 use speedbitcrack::test_basic::run_basic_test;
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
@@ -858,9 +859,60 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
     let bias_mod = if args.bias_mod > 0 { args.bias_mod } else { bias_mod };
     let b_pos = if pos_proxy < 0.1 { 1.23 } else { 1.0 }; // Positional bias proxy
 
+    // Setup real-time boxed output
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let start_time = std::time::Instant::now();
+    let version = env!("CARGO_PKG_VERSION");
+
+    // Format address for display (compressed hex)
+    let address = format!("02{:064x}", BigInt256::from_u64_array(point.x).to_u64_array()[0]);
+
+    // Create display structs for real-time output
+    let display_args = DisplayArgs {
+        puzzle: Some(n),
+        valuable: args.valuable,
+        test_puzzles: args.test_puzzles,
+        gpu: args.gpu,
+        laptop: args.laptop,
+        verbose: args.verbose,
+        max_cycles: args.max_cycles,
+        num_kangaroos: args.num_kangaroos,
+        bias_mod: args.bias_mod,
+    };
+
+    let display_config = DisplayConfig {
+        dp_bits: Config::default().dp_bits,
+        herd_size: Config::default().herd_size,
+        jump_mean: Config::default().jump_mean,
+        near_threshold: Config::default().near_threshold,
+    };
+
+    // Start real-time output thread
+    start_real_time_output(
+        version.to_string(),
+        start_time,
+        display_args,
+        display_config,
+        address,
+        bias_score,
+        effective_biases.clone(),
+        stop_flag.clone(),
+    );
+
     // Call the multi-kangaroo parallel algorithm with conditional bias
     let range = (a, w);
-    match gen.pollard_lambda_parallel(point, range, num_kangaroos, &effective_biases) {
+    let result = gen.pollard_lambda_parallel(point, range, num_kangaroos, &effective_biases);
+
+    // Stop real-time output
+    stop_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // Give the output thread a moment to finish
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    match result {
         Some(solution) => {
             info!("🎉 SUCCESS! Puzzle #{} CRACKED!", n);
             info!("🔑 Private key: {}", solution.to_hex());

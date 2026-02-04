@@ -1,10 +1,11 @@
 //! Utility functions and helpers
 //!
-//! Logging, hashing, and pubkey loading utilities
+//! Logging, hashing, pubkey loading, and output utilities
 
 pub mod logging;
 pub mod hash;
 pub mod pubkey_loader;
+pub mod output;
 
 // Re-export commonly used utilities
 pub use logging::setup_logging;

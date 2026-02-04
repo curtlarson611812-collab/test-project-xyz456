@@ -20,6 +20,7 @@ anyhow = "1.0"                    # Error handling
 hex = "0.4"                       # Pubkey/hex parsing
 serde = { version = "1", features = ["derive"] }  # Config serialization if needed
 serde_json = "1.0"  # JSON parsing for metrics
+crossterm = "0.27"  # Terminal control for real-time output
 bytemuck = "1.0"                  # Safe casting between byte slices and POD types
 ndarray = { version = "0.15", features = ["blas"] }  # ML linear regression for predictive optimization
 num-traits = "0.2"                # Numeric traits for BigInt parsing
