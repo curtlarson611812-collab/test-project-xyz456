@@ -1,0 +1,7 @@
+{
+  "EcdlpBiasEfficiency": "\ud83d\udfe2 85.0%: Bias check efficiency optimal",
+  "EcdlpDivergenceAnalysis": "\ud83d\udfe2 90.0%: Warp divergence well-controlled",
+  "EcdlpMemoryCoalescing": "\ud83d\udfe2 88.0%: SoA layout providing good coalescing",
+  "EcdlpL1CacheUtilization": "\ud83d\udfe2 82.0%: L1 cache hit rate acceptable",
+  "EcdlpSharedMemoryEfficiency": "\ud83d\udfe2 87.0%: Shared memory bank conflicts minimized"
+}
