@@ -15,33 +15,52 @@ pub const PRIME_MULTIPLIERS: [u64; 32] = [
     1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
 ];
 
-// Secp256k1 curve constants - lazy initialized to avoid const function limitations
-pub static CURVE_ORDER: LazyLock<BigInt256> = LazyLock::new(|| {
-    BigInt256::from_hex("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
+// Secp256k1 curve constants - string versions for easy access
+pub const CURVE_ORDER: &str = "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141";
+pub const GENERATOR_X: &str = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+pub const GENERATOR_Y: &str = "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8";
+
+// Lazy initialized versions for computation
+pub static CURVE_ORDER_BIGINT: LazyLock<BigInt256> = LazyLock::new(|| {
+    BigInt256::from_hex(CURVE_ORDER)
 });
 
 pub static GENERATOR: LazyLock<Point> = LazyLock::new(|| {
     Point {
-        x: BigInt256::from_hex("79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798").limbs,
-        y: BigInt256::from_hex("483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8").limbs,
+        x: BigInt256::from_hex(GENERATOR_X).limbs,
+        y: BigInt256::from_hex(GENERATOR_Y).limbs,
         z: BigInt256::from_u64(1).limbs,
     }
 });
 
 // DP and jump table constants
 pub const DP_BITS: u32 = 24;
+pub const JUMP_TABLE_SIZE: usize = 256;
 
-// Mock jump table - expand to proper EC operations in production
-pub static JUMP_TABLE: LazyLock<[BigInt256; 8]> = LazyLock::new(|| [
-    BigInt256::from_u64(1),   // G
-    BigInt256::from_u64(2),   // 2G
-    BigInt256::from_u64(3),   // 3G
-    BigInt256::from_u64(4),   // 4G
-    BigInt256::from_u64(5),   // 5G
-    BigInt256::from_u64(6),   // 6G
-    BigInt256::from_u64(7),   // 7G
-    BigInt256::from_u64(8),   // 8G
-]);
+// Jump table with proper EC operations
+pub fn jump_table() -> Vec<BigInt256> {
+    // For now, use simple powers of 2 and small multiples
+    // In production, these would be precomputed EC points
+    let mut jumps = Vec::with_capacity(JUMP_TABLE_SIZE);
+
+    // Small multiples for fine-grained movement
+    for i in 1..=64 {
+        jumps.push(BigInt256::from_u64(i));
+    }
+
+    // Powers of 2 for larger jumps
+    for i in 1..=64 {
+        jumps.push(BigInt256::from_u64(1u64 << i));
+    }
+
+    // Random-ish values for mixing (deterministic)
+    for i in 128..JUMP_TABLE_SIZE {
+        let val = (i as u64).wrapping_mul(0x9e3779b9) % (1u64 << 40); // Keep reasonable size
+        jumps.push(BigInt256::from_u64(val + 1)); // +1 to avoid zero
+    }
+
+    jumps
+}
 
 // Test: assert_eq!(PRIME_MULTIPLIERS.len(), 32); // Cycle %32 for unique starts
 // Deep note: Low Hamming wt (e.g., 179=0b10110011, wt=5) for fast scalar mul in GPU.

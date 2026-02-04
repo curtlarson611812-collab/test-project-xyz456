@@ -1,7 +1,7 @@
 // tests/math.rs - Unit tests for cryptographic mathematical operations
 // Tests modular arithmetic, elliptic curve operations, and GPU acceleration
 
-use speedbitcrack::math::{BigInt256, secp::Secp256k1};
+use speedbitcrack::math::{BigInt256, secp::Secp256k1, constants::*};
 use speedbitcrack::types::Point;
 #[cfg(feature = "rustacuda")]
 use speedbitcrack::gpu::backend::HybridBackend;
@@ -82,6 +82,37 @@ mod tests {
 
         // Result should be less than modulus
         assert!(reduced < curve.p);
+    }
+
+    // Chunk: Test Constants (tests/math.rs)
+    #[test]
+    fn test_constants() {
+        // Test PRIME_MULTIPLIERS
+        assert_eq!(PRIME_MULTIPLIERS.len(), 32);
+        assert_eq!(PRIME_MULTIPLIERS[0], 179);
+        assert_eq!(PRIME_MULTIPLIERS[31], 1583);
+
+        // Test CURVE_ORDER
+        let order = BigInt256::from_hex(CURVE_ORDER);
+        assert_eq!(order.bits(), 256);
+
+        // Test GENERATOR coordinates
+        let gx = BigInt256::from_hex(GENERATOR_X);
+        let gy = BigInt256::from_hex(GENERATOR_Y);
+        assert!(gx.bits() > 0);
+        assert!(gy.bits() > 0);
+
+        // Test DP_BITS
+        assert_eq!(DP_BITS, 24);
+
+        // Test JUMP_TABLE_SIZE
+        assert_eq!(JUMP_TABLE_SIZE, 256);
+
+        // Test jump_table function
+        let jumps = jump_table();
+        assert_eq!(jumps.len(), JUMP_TABLE_SIZE);
+        assert_eq!(jumps[0], BigInt256::from_u64(1));
+        assert_eq!(jumps[1], BigInt256::from_u64(2));
     }
 
     // Chunk: BigInt Add/Shl Test (tests/math.rs)
