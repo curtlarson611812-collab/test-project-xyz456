@@ -357,49 +357,49 @@ fn is_vanity_biased(x_hex: &str, prefix_pattern: &str, suffix_mod: u64) -> bool 
 }
 
 /// Concise Block: Detect Exposed Pub Bias for Quantum Threat Target
-fn is_quantum_vulnerable(_point: &Point) -> bool {
-    // Sim: If pub exposed (always in P2PK), bias true—target for pre-quantum crack
-    true // For P2PK list
-}
+// fn is_quantum_vulnerable(_point: &Point) -> bool {
+//     // Sim: If pub exposed (always in P2PK), bias true—target for pre-quantum crack
+//     true // For P2PK list
+// }
 
 /// Concise Block: Entropy-Based Quantum Detect
-fn is_quantum_vulnerable_entropy(point: &Point) -> bool {
-    let x_bigint = point.x_bigint();
-    let x_hex = x_bigint.to_hex();
-    let entropy = shannon_entropy(&x_hex); // Calc -sum p log p
-    entropy < 3.0 // Low entropy exposed vulnerable
-}
+// fn is_quantum_vulnerable_entropy(point: &Point) -> bool {
+//     let x_bigint = point.x_bigint();
+//     let x_hex = x_bigint.to_hex();
+//     let entropy = shannon_entropy(&x_hex); // Calc -sum p log p
+//     entropy < 3.0 // Low entropy exposed vulnerable
+// }
 
 /// Concise Block: Detect Low Entropy for Grover Threat Bias
-fn is_grover_threat_biased(x_hex: &str) -> bool {
-    // Low entropy: Shannon or simple count unique chars <10
-    let unique: std::collections::HashSet<char> = x_hex.chars().collect();
-    unique.len() < 10 // Low for vanity/threat
-}
+// fn is_grover_threat_biased(x_hex: &str) -> bool {
+//     // Low entropy: Shannon or simple count unique chars <10
+//     let unique: std::collections::HashSet<char> = x_hex.chars().collect();
+//     unique.len() < 10 // Low for vanity/threat
+// }
 
 /// Calculate Shannon entropy for hex string
-fn shannon_entropy(s: &str) -> f64 {
-    let mut freq = std::collections::HashMap::new();
-    for c in s.chars() {
-        *freq.entry(c).or_insert(0) += 1;
-    }
-    let len = s.len() as f64;
-    freq.values().map(|&count| {
-        let p = count as f64 / len;
-        -p * p.log2()
-    }).sum()
-}
+// fn shannon_entropy(s: &str) -> f64 {
+//     let mut freq = std::collections::HashMap::new();
+//     for c in s.chars() {
+//         *freq.entry(c).or_insert(0) += 1;
+//     }
+//     let len = s.len() as f64;
+//     freq.values().map(|&count| {
+//         let p = count as f64 / len;
+//         -p * p.log2()
+//     }).sum()
+// }
 
 /// Concise Block: Calc Bias Prob from Scan
-fn calc_bias_prob(points: &Vec<Point>, mod_n: u64) -> f64 {
-    let count = points.iter().filter(|p| p.x_bigint().mod_u64(mod_n) == 0).count();
-    count as f64 / points.len() as f64
-}
+// fn calc_bias_prob(points: &Vec<Point>, mod_n: u64) -> f64 {
+//     let count = points.iter().filter(|p| p.x_bigint().mod_u64(mod_n) == 0).count();
+//     count as f64 / points.len() as f64
+// }
 
 /// Concise Block: Combine Multi-Bias Prob
-fn combine_multi_bias(probs: Vec<f64>) -> f64 {
-    probs.iter().fold(1.0, |acc, &p| acc * p) // Product for layered
-}
+// fn combine_multi_bias(probs: Vec<f64>) -> f64 {
+//     probs.iter().fold(1.0, |acc, &p| acc * p) // Product for layered
+// }
 
 /// Detect bias for a single point (used for individual puzzle analysis)
 pub fn detect_bias_single(x: &BigInt256, n: u32) -> (u64, u64, u64, bool, bool, f64) {
@@ -906,43 +906,43 @@ pub fn analyze_mod9_subgroup_deeper(points: &[Point], parent_residue: u64) -> ([
 }
 
 /// Concise Block: Detect Biases with Prevalence b
-fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<String, f64> {
-    let mut prevalences = std::collections::HashMap::new();
-    let mod9_b = calc_bias_prob(points, 9); // From prior
-    prevalences.insert("mod9".to_string(), mod9_b);
-    let mod27_b = calc_bias_prob(points, 27);
-    prevalences.insert("mod27".to_string(), mod27_b);
-    let mod81_b = calc_bias_prob(points, 81);
-    prevalences.insert("mod81".to_string(), mod81_b);
-    let vanity_b = points.iter().filter(|p| is_vanity_biased(&p.x_bigint().to_hex(), "02", 16)).count() as f64 / points.len() as f64;
-    prevalences.insert("vanity".to_string(), vanity_b);
-    let dp_b = points.iter().filter(|p| detect_dp_bias(&p.x_bigint(), 20, 9)).count() as f64 / points.len() as f64;
-    prevalences.insert("dp_mod9".to_string(), dp_b);
+// fn detect_biases_prevalence(points: &Vec<Point>) -> std::collections::HashMap<String, f64> {
+//     let mut prevalences = std::collections::HashMap::new();
+//     let mod9_b = calc_bias_prob(points, 9); // From prior
+//     prevalences.insert("mod9".to_string(), mod9_b);
+//     let mod27_b = calc_bias_prob(points, 27);
+//     prevalences.insert("mod27".to_string(), mod27_b);
+//     let mod81_b = calc_bias_prob(points, 81);
+//     prevalences.insert("mod81".to_string(), mod81_b);
+//     let vanity_b = points.iter().filter(|p| is_vanity_biased(&p.x_bigint().to_hex(), "02", 16)).count() as f64 / points.len() as f64;
+//     prevalences.insert("vanity".to_string(), vanity_b);
+//     let dp_b = points.iter().filter(|p| detect_dp_bias(&p.x_bigint(), 20, 9)).count() as f64 / points.len() as f64;
+//     prevalences.insert("dp_mod9".to_string(), dp_b);
 
-    // Add deeper mod9 analysis
-    let (_, mod9_max_bias, _, _, _) = analyze_mod9_bias_deeper(points);
-    prevalences.insert("mod9_deeper".to_string(), mod9_max_bias);
+//     // Add deeper mod9 analysis
+//     let (_, mod9_max_bias, _, _, _) = analyze_mod9_bias_deeper(points);
+//     prevalences.insert("mod9_deeper".to_string(), mod9_max_bias);
 
-    prevalences
-}
+//     prevalences
+// }
 
 
 
 /// Helper function for DP bias detection
-fn detect_dp_bias(x: &BigInt256, dp_bits: u32, mod_n: u64) -> bool {
-    // Simple DP check: low bits == 0
-    x.mod_u64(1u64 << dp_bits) == 0 && x.mod_u64(mod_n) == 0
-}
+// fn detect_dp_bias(x: &BigInt256, dp_bits: u32, mod_n: u64) -> bool {
+//     // Simple DP check: low bits == 0
+//     x.mod_u64(1u64 << dp_bits) == 0 && x.mod_u64(mod_n) == 0
+// }
 
 /// Concise Block: Layered Bias Proxy with Coarse-to-Fine Order
-fn is_layered_bias_proxy(x: &BigInt256, biases: &std::collections::HashMap<String, f64>) -> bool {
-    if biases["mod81"] > 0.012 && !is_mod81_attractor_candidate(x) { return false; } // Coarse first
-    if biases["mod27"] > 0.037 && !is_mod27_attractor_candidate(x) { return false; }
-    if biases["mod9"] > 0.111 && !is_mod9_attractor_candidate(x) { return false; }
-    if biases["vanity"] > 0.0625 && !is_vanity_biased(&x.to_hex(), "02", 16) { return false; }
-    if biases["dp_mod9"] > 0.111 && !detect_dp_bias(x, 20, 9) { return false; } // Fine last
-    true
-}
+// fn is_layered_bias_proxy(x: &BigInt256, biases: &std::collections::HashMap<String, f64>) -> bool {
+//     if biases["mod81"] > 0.012 && !is_mod81_attractor_candidate(x) { return false; } // Coarse first
+//     if biases["mod27"] > 0.037 && !is_mod27_attractor_candidate(x) { return false; }
+//     if biases["mod9"] > 0.111 && !is_mod9_attractor_candidate(x) { return false; }
+//     if biases["vanity"] > 0.0625 && !is_vanity_biased(&x.to_hex(), "02", 16) { return false; }
+//     if biases["dp_mod9"] > 0.111 && !detect_dp_bias(x, 20, 9) { return false; } // Fine last
+//     true
+// }
 
 /// Concise Block: Layer Mod81 and Vanity in Attractor Proxy
 pub fn is_attractor_proxy(x: &BigInt256) -> bool {

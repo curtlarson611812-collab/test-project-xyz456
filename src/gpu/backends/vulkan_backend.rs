@@ -5,6 +5,7 @@
 use super::backend_trait::GpuBackend;
 use crate::kangaroo::collision::Trap;
 use anyhow::{Result, anyhow};
+use std::path::Path;
 
 #[cfg(feature = "wgpu")]
 use wgpu;
@@ -20,6 +21,17 @@ pub struct WgpuBackend {
 
 #[cfg(feature = "wgpu")]
 impl WgpuBackend {
+    // Chunk: Vulkan Shader Load (src/gpu/backends/vulkan_backend.rs)
+    // Dependencies: wgpu::*, std::path::Path
+    pub fn load_shader_module(device: &wgpu::Device, spv_path: &Path) -> Result<wgpu::ShaderModule, wgpu::Error> {
+        let spv_data = std::fs::read(spv_path)?;
+        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("SpeedBitCrack Shader"),
+            source: wgpu::ShaderSource::SpirV(std::borrow::Cow::Borrowed(bytemuck::cast_slice(&spv_data))),
+        });
+        Ok(shader_module)
+    }
+    // Test: Load "rho.comp.spv", check module valid
     /// Create new Vulkan backend with WGPU
     pub async fn new() -> Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -54,6 +66,20 @@ impl WgpuBackend {
             queue,
         })
     }
+
+    // Chunk: Vulkan Pipeline Create (src/gpu/backends/vulkan_backend.rs)
+    // Dependencies: wgpu::*, load_shader_module
+    pub fn create_compute_pipeline(device: &wgpu::Device, layout: &wgpu::PipelineLayout, shader_path: &Path) -> Result<wgpu::ComputePipeline, wgpu::Error> {
+        let shader_module = Self::load_shader_module(device, shader_path)?;
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("SpeedBitCrack Compute Pipeline"),
+            layout: Some(layout),
+            module: &shader_module,
+            entry_point: "main",
+        });
+        Ok(pipeline)
+    }
+    // Test: Mock layout, create, check pipeline valid
 }
 
 #[cfg(feature = "wgpu")]

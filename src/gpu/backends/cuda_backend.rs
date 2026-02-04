@@ -100,6 +100,18 @@ pub struct CudaBackend {
 
 #[cfg(feature = "rustacuda")]
 impl CudaBackend {
+    // Chunk: CUDA PTX Load with Bias Param (src/gpu/backends/cuda_backend.rs)
+    // Dependencies: cudarc::driver::*, std::path::Path
+    pub fn load_rho_kernel(device: &CudaDevice, ptx_path: &Path, bias_weights: &[f32]) -> Result<CudaFunction, DriverError> {
+        let ptx = Ptx::from_file(ptx_path)?;
+        let module = device.load_ptx(ptx, "rho", &["rho_kernel"])?;
+        let func = module.get_func("rho_kernel")?.ok_or(DriverError::InvalidSymbol)?;
+        let bias_dev = device.htod_copy(bias_weights.to_vec())?;  // Copy bias to device
+        // Bias as global or param in launch
+        Ok(func)
+    }
+    // Test: Mock device/ptx, check func valid
+
     /// Compute n' for Montgomery reduction where n' * n ≡ -1 mod 2^32
     /// Using algorithm from HAC 14.94
     fn compute_n_prime(modulus: &[u32; 8]) -> u32 {
@@ -130,6 +142,19 @@ impl CudaBackend {
         y
     }
 
+    // Chunk: CUDA Pinned Alloc with Retry (src/gpu/backends/cuda_backend.rs)
+    // Dependencies: cudarc::driver::*, types::RhoState
+    pub fn alloc_rho_states(device: &CudaDevice, mut count: usize) -> Result<CudaSlice<RhoState>, DriverError> {
+        loop {
+            match device.alloc_zeroed::<RhoState>(count) {
+                Ok(buf) => return Ok(buf),
+                Err(DriverError::Cuda(CUresult::CU_ERROR_OUT_OF_MEMORY)) if count > 512 => count /= 2,  // Halve on OOM
+                Err(e) => return Err(e),
+            }
+        }
+    }
+    // Test: Alloc 1024, if OOM simulate halve to 512
+
     // Chunk: Occupancy Tune (cuda_backend.rs)
     pub fn get_optimal_block_size(kernel: &CudaModule) -> u32 {
         // Assume kernel has a function, get registers from it
@@ -138,9 +163,36 @@ impl CudaBackend {
         if regs > 64 { 128 } else { 256 }
     }
 
+    // Chunk: CUDA Launch and Update (src/gpu/backends/cuda_backend.rs)
+    // Dependencies: cudarc::driver::*, load_rho_kernel, alloc_rho_states
+    pub fn dispatch_and_update(device: &CudaDevice, kernel: &CudaFunction, mut states: CudaSlice<RhoState>, jumps: CudaSlice<BigInt256>, bias: CudaSlice<f32>, steps: u32) -> Result<Vec<RhoState>, DriverError> {
+        let grid = (states.len() as u32 / 128 + 1, 1, 1);
+        let block = (128, 1, 1);
+        kernel.launch(grid, block, &[&mut states, &jumps, &bias, &steps])?;
+        let host_states = states.copy_to_vec()?;
+        Ok(host_states)
+    }
+    // Test: Mock launch, check host_states updated
+
     // Chunk: Multi-Stream Refine (cuda_backend.rs)
     pub async fn gpu_batch_refine(slices: &mut [PosSlice], biases: &[f64]) -> Result<(), CudaError> {
         let stream_count = 4;
+        // Chunk: CUDA Collision Resolve (src/gpu/backends/cuda_backend.rs)
+        // Dependencies: cudarc::driver::*, dp::table::DpTable, math::secp::mod_inverse
+        pub fn check_and_resolve_collisions(dp_table: &DpTable, host_states: &[RhoState]) -> Option<BigInt256> {
+            for state in host_states {
+                if state.is_dp {
+                    if let Some((tame_dist, wild_dist, jump_diff)) = dp_table.lookup(&state.point_hash) {
+                        let diff = tame_dist - wild_dist;
+                        let inv_jump = mod_inverse(&jump_diff, &CURVE_ORDER);
+                        return Some(diff * inv_jump % &CURVE_ORDER);
+                    }
+                }
+            }
+            None
+        }
+        // Test: Mock DP match, compute dlog, check key = diff * inv mod n
+
         let chunk_size = slices.len() / stream_count;
         let mut futures = vec![];
         for i in 0..stream_count {
@@ -846,6 +898,15 @@ impl GpuBackend for CudaBackend {
         Err(anyhow!("CUDA backend not available"))
     }
 }
+
+    // Chunk: CUDA Resource Cleanup (src/gpu/backends/cuda_backend.rs)
+    // Dependencies: cudarc::driver::*
+    impl Drop for CudaBackend {
+        fn drop(&mut self) {
+            // Cleanup CUDA resources
+            // Note: cudarc handles most cleanup automatically
+        }
+    }
 
 #[cfg(test)]
 mod tests {

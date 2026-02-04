@@ -22,7 +22,7 @@ impl ParityChecker {
         // TODO: Initialize with proper config
         let _config = crate::config::Config::default();
         let cpu_stepper = KangarooStepper::new(false); // Use standard jump table
-        let gpu_backend: Box<dyn GpuBackend> = Box::new(CpuBackend);
+        let _gpu_backend: Box<dyn GpuBackend> = Box::new(CpuBackend);
 
         ParityChecker {
             cpu_stepper,

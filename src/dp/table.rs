@@ -24,7 +24,7 @@ pub struct DpTable {
     max_size: usize,
     value_scores: HashMap<u64, f64>,
     clusters: HashMap<u32, Vec<u64>>, // cluster_id -> entry hashes
-    sled_path: Option<PathBuf>,
+    // sled_path: Option<PathBuf>, // TODO: Use for disk path tracking
     disk_enabled: bool,
     sled_db: Option<Arc<sled::Db>>,
 }
@@ -70,7 +70,7 @@ impl DpTable {
     }
 
     /// Create new DP table with optional disk support
-    pub fn with_disk_support(dp_bits: usize, enable_disk: bool, db_path: Option<PathBuf>) -> Self {
+    pub fn with_disk_support(_dp_bits: usize, enable_disk: bool, db_path: Option<PathBuf>) -> Self {
         let max_size = 1 << 24; // ~16M entries
         let cuckoo_filter = CuckooFilter::with_capacity(max_size * 2);
 
@@ -87,7 +87,7 @@ impl DpTable {
             max_size,
             value_scores: HashMap::new(),
             clusters: HashMap::new(),
-            sled_path: db_path,
+            // sled_path: db_path, // TODO: Track disk path
             disk_enabled: enable_disk,
             sled_db: sled_db,
         }

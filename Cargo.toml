@@ -26,6 +26,7 @@ rand = "0.8"                      # Random number generation for entropy
 sha2 = "0.10"                     # SHA256 for attractor proxy
 blake3 = "1.5.0"                  # Fast hash for DP table
 statrs = "0.16.0"                 # Stats for bias tests (KS, Chi2)
+crossbeam-deque = "0.8"           # Lock-free work-stealing deques
 
 # Optional / Future
 sled = "0.34"                    # Fast embedded database for DP overflow

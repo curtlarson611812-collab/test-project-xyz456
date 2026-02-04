@@ -3,7 +3,10 @@
 //! Software fallback for cryptographic operations when GPU acceleration is unavailable
 
 use super::backend_trait::GpuBackend;
+use crate::types::RhoState;
 use crate::kangaroo::collision::Trap;
+use crate::math::bigint::BigInt256;
+use crate::dp::DpTable;
 use anyhow::Result;
 
 /// CPU backend for software fallback implementation
@@ -19,6 +22,39 @@ impl CpuBackend {
     // fn alloc_buffer(&self, size: usize) -> Result<Vec<u64>, anyhow::Error> {
     //     Ok(vec![0; size]) // Real vector allocation for CPU operations
     // }
+
+    // Chunk: CPU Batch Steps (src/gpu/backends/cpu_backend.rs)
+    // Dependencies: rayon::prelude::*, math::secp::ec_add, types::RhoState
+    pub fn cpu_batch_step(states: &mut [RhoState], steps: usize, jumps: &[BigInt256]) {
+        use rayon::prelude::*;
+        states.par_iter_mut().for_each(|state| {
+            for _ in 0..steps {
+                let jump = &jumps[(state.steps.low_u32() % jumps.len() as u32) as usize];  // Bucket select
+                // TODO: Implement actual EC addition for point updates
+                state.steps += &jump;
+                if state.steps.trailing_zeros() >= 24 {  // DP check
+                    state.is_dp = true;
+                    break;
+                }
+            }
+        });
+    }
+    // Test: 10 states, 100 steps, check dist = sum jumps
+
+    // Chunk: CPU Full Solve (src/gpu/backends/cpu_backend.rs)
+    // Dependencies: collision::check_and_resolve_collisions, cpu_batch_step
+    pub fn cpu_kangaroo(target: &BigInt256, range: (BigInt256, BigInt256), count: usize, dp_table: &DpTable) -> Option<BigInt256> {
+        let mut states = (0..count).map(|_| RhoState::random_in_range(&range)).collect::<Vec<_>>();
+        let jumps = vec![BigInt256::from_u64(1)]; // TODO: Initialize proper jump table
+        loop {
+            Self::cpu_batch_step(&mut states, 10000, &jumps);
+            // TODO: Check for collisions and return if found
+            // if let Some(key) = check_and_resolve_collisions(dp_table, &states) {
+            //     return Some(key);
+            // }
+        }
+    }
+    // Test: Small range 1-1000, target hash of known key, expect find
 
     // Batch modular inverse using Montgomery reduction
     // fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {

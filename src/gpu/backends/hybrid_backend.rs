@@ -4,8 +4,12 @@
 
 use super::backend_trait::GpuBackend;
 use super::cpu_backend::CpuBackend;
+use crate::types::RhoState;
 use crate::kangaroo::collision::Trap;
 use anyhow::Result;
+use crossbeam_deque::Worker;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 /// Hybrid backend that dispatches operations to appropriate GPUs
 /// Uses Vulkan for bulk operations (step_batch) and CUDA for precision math
@@ -39,6 +43,26 @@ impl HybridBackend {
 }
 
 impl HybridBackend {
+    // Chunk: Hybrid Shared Init (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: crossbeam_deque::Worker, std::sync::Arc, types::RhoState
+    pub fn init_shared_buffer(_capacity: usize) -> Arc<Worker<RhoState>> {
+        Arc::new(Worker::new_fifo())  // Lock-free deque
+    }
+    // Test: Init, push RhoState, pop check
+
+    // Chunk: Hybrid Await Sync (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: tokio::sync::Notify, init_shared_buffer
+    pub async fn hybrid_sync(gpu_notify: Notify, shared: Arc<Worker<RhoState>>) -> Vec<RhoState> {
+        gpu_notify.notified().await;
+        let stealer = shared.stealer();
+        let mut collected = Vec::new();
+        while let crossbeam_deque::Steal::Success(state) = stealer.steal() {  // Lock-free pop
+            collected.push(state);
+        }
+        collected
+    }
+    // Test: Notify after mock GPU push, await collect
+
     /// Profile device performance for dynamic load balancing
     async fn profile_device_performance(&self) -> (f32, f32) {
         // Profile small batch performance to determine relative speeds

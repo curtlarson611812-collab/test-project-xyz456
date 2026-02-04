@@ -527,6 +527,24 @@ impl std::ops::Shr<usize> for BigInt256 {
     }
 }
 
+impl std::ops::AddAssign<&BigInt256> for BigInt256 {
+    fn add_assign(&mut self, rhs: &BigInt256) {
+        *self = self.clone() + rhs.clone();
+    }
+}
+
+impl BigInt256 {
+    /// Count trailing zeros in the binary representation
+    pub fn trailing_zeros(&self) -> u32 {
+        for i in 0..4 {
+            if self.limbs[i] != 0 {
+                return self.limbs[i].trailing_zeros() + (i as u32 * 64);
+            }
+        }
+        256 // All zeros
+    }
+}
+
 impl fmt::Display for BigInt256 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "0x")?;
