@@ -329,61 +329,16 @@ impl KangarooGenerator {
     /// Verbatim from preset: Multiplicative offset, known for inversion in solving.
     /// Verbatim from preset: Multiplicative offset, known for inversion in solving.
     /// Use our EC scalar mul (montgomery for speed).
-    /// Initialize wild kangaroo start with SmallOddPrime multiplier using k256
+    /// Initialize wild kangaroo start with SmallOddPrime multiplier
     pub fn initialize_wild_start(&self, target: &Point, kangaroo_index: usize) -> Point {
         use crate::math::constants::PRIME_MULTIPLIERS;
-        use k256::{ProjectivePoint, Scalar};
 
         let prime_idx = kangaroo_index % PRIME_MULTIPLIERS.len();
-        let prime_u64 = PRIME_MULTIPLIERS[prime_idx];
-
-        // Convert target Point to k256 ProjectivePoint
-        let target_x = BigInt256::from_u64_array(target.x);
-        let target_y = BigInt256::from_u64_array(target.y);
-
-        // Convert to k256 format (big-endian bytes)
-        let mut x_bytes = [0u8; 32];
-        let mut y_bytes = [0u8; 32];
-        for i in 0..8 {
-            for j in 0..4 {
-                x_bytes[i*4 + j] = ((target_x.limbs[7-i] >> (24 - j*8)) & 0xFF) as u8;
-                y_bytes[i*4 + j] = ((target_y.limbs[7-i] >> (24 - j*8)) & 0xFF) as u8;
-            }
-        }
-
-        let target_k256 = ProjectivePoint::from_encoded_point(
-            &k256::EncodedPoint::from_affine_coordinates(&x_bytes.into(), &y_bytes.into(), false)
-        ).unwrap_or(ProjectivePoint::GENERATOR); // Fallback
-
-        let prime_scalar = Scalar::from(prime_u64);
+        let prime = PRIME_MULTIPLIERS[prime_idx];
 
         // wild_start = prime * target_pubkey
-        let result_k256 = target_k256 * prime_scalar;
-
-        // Convert back to our Point format
-        let result_affine = result_k256.to_affine();
-        let result_x_bytes = result_affine.x().to_bytes();
-        let result_y_bytes = result_affine.y().to_bytes();
-
-        // Convert from big-endian bytes back to little-endian limbs
-        let mut result_x_limbs = [0u64; 4];
-        let mut result_y_limbs = [0u64; 4];
-
-        for i in 0..8 {
-            for j in 0..4 {
-                let byte_idx = i*4 + j;
-                if byte_idx < 32 {
-                    result_x_limbs[i] |= (result_x_bytes[31 - byte_idx] as u64) << (24 - j*8);
-                    result_y_limbs[i] |= (result_y_bytes[31 - byte_idx] as u64) << (24 - j*8);
-                }
-            }
-        }
-
-        Point {
-            x: result_x_limbs,
-            y: result_y_limbs,
-            z: [1, 0, 0, 0], // Affine point
-        }
+        let prime_bigint = BigInt256::from_u64(prime);
+        self.curve.mul(&prime_bigint, target)
     }
 
     /// Initialize tame kangaroo start (deterministic from generator)
@@ -405,11 +360,6 @@ impl KangarooGenerator {
     }
 
     /// Tame Start from G (Clean, No Multiplier)
-    /// Verbatim preset: No prime, clean from G (or low scalar*G for intervals).
-    pub fn initialize_tame_start(&self) -> Point {
-        self.curve.g.clone() // Our base Point::from_affine(Gx, Gy)
-        // For bounded: Add low_scalar * G if config.range_start >0, but preset clean.
-    }
 
     /// Concise Block: Tame Start = range_start * G + G (Additive Base)
     pub fn initialize_tame_start_bounded(&self, config: &SearchConfig) -> Point {
