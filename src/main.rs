@@ -1108,8 +1108,8 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
     let b_pos = if pos_proxy < 0.1 { 1.23 } else { 1.0 }; // Positional bias proxy
 
     // Call the multi-kangaroo parallel algorithm with bias chain
-    let biases_ref = if bias_score > 1.2 { Some(&biases) } else { None };
-    match gen.pollard_lambda_parallel(&curve, &curve.g, point, a, w, num_kangaroos, max_cycles, args.gpu, bias_mod, b_pos, pos_proxy, biases_ref) {
+    let range = (a, w);
+    match gen.pollard_lambda_parallel(point, range, num_kangaroos, &biases) {
         Some(solution) => {
             info!("🎉 SUCCESS! Puzzle #{} CRACKED!", n);
             info!("🔑 Private key: {}", solution.to_hex());

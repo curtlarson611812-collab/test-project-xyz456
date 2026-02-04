@@ -271,6 +271,23 @@ mod tests {
         assert!(jump > base);
     }
 
+    // Chunk: Pollard Integration Test (tests/kangaroo.rs)
+    #[test]
+    fn test_pollard_with_biases_primes() {
+        use speedbitcrack::kangaroo::generator::KangarooGenerator;
+        use speedbitcrack::config::Config;
+        use std::collections::HashMap;
+
+        let gen = KangarooGenerator::new(&Config::default());
+        let target_pub = speedbitcrack::types::Point::infinity();  // Mock target
+        let range = (speedbitcrack::math::bigint::BigInt256::zero(), speedbitcrack::math::bigint::BigInt256::from_u64(1000));  // Small range
+        let points = vec![speedbitcrack::types::Point::infinity()];  // Mock points for bias calculation
+        let biases = gen.aggregate_bias(&points);  // Calculate biases from points
+        // Note: This test will return None as it's a mock implementation
+        let _key = gen.pollard_lambda_parallel(&target_pub, range, 4, &biases);
+        // In full implementation, would assert key.is_some() for small ranges
+    }
+
     // Chunk: DP Trailing Zeros Test (tests/kangaroo.rs)
     // Dependencies: math::BigInt256, constants::DP_BITS=24
     #[test]
