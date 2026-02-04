@@ -787,14 +787,14 @@ pub fn get_puzzle_range(n: u32) -> Result<(BigInt256, BigInt256), Box<dyn Error>
 pub fn load_solved(n: u32) -> (BigInt, BigInt, BigInt) {  // low, high, known_key
     match n {
         64 => (
-            BigInt::from(1u64 << 63),
-            (BigInt::from(1u64 << 64) - 1),
-            BigInt::from_str_radix("8f1bbcdcbfa07c0a", 16).unwrap(),
+            BigInt::from(2u64).pow(63),
+            (BigInt::from(2u64).pow(64) - 1),
+            BigInt::parse_bytes(b"8f1bbcdcbfa07c0a", 16).unwrap(),
         ),
         65 => (
-            BigInt::from(1u64 << 64),
-            (BigInt::from(1u64 << 65) - 1),
-            BigInt::from_str_radix("2c8bf2ddc4c05fb2a", 16).unwrap(),
+            BigInt::from(2u64).pow(64),
+            (BigInt::from(2u64).pow(65) - 1),
+            BigInt::parse_bytes(b"2c8bf2ddc4c05fb2a", 16).unwrap(),
         ),
         _ => panic!("Unknown puzzle"),
     }
@@ -804,8 +804,9 @@ pub fn load_solved(n: u32) -> (BigInt, BigInt, BigInt) {  // low, high, known_ke
 pub fn load_unspent_67() -> (Point, (BigInt256, BigInt256)) {
     let pubkey = "03633cbe3ec02b9401c5effa144c5b4d22f87940259634858fc7e59b1c09937852";
     let curve = Secp256k1::new();
-    let point = curve.decompress_point(pubkey).expect("Invalid pubkey");
-    let low = BigInt256::one().shl(66);  // 2^66
-    let high = low.clone().shl(1) - BigInt256::one();  // 2^67 - 1
+    let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
+    let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
+    let low = BigInt256::one() << 66;  // 2^66
+    let high = (low.clone() << 1) - BigInt256::one();  // 2^67 - 1
     (point, (low, high))
 }

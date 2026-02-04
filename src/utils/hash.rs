@@ -6,9 +6,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 // Blake3 for cryptographic strength in DP table (collision-resistant)
-use blake3::Hasher;
 // Assume blake3 is added to Cargo.toml
-use blake3::Hasher;
+use blake3::Hasher as Blake3Hasher;
 
 /// Fast hash function for jump selection and DP checking
 pub fn fast_hash(data: &[u8]) -> u64 {
@@ -142,8 +141,8 @@ pub fn attractor_hash(point_x: &[u64; 4], point_y: &[u64; 4]) -> u64 {
 
 // Chunk: DP Hash (utils/hash.rs)
 pub fn hash_point(x: &crate::math::bigint::BigInt256, y: &crate::math::bigint::BigInt256) -> u64 {
-    let mut hasher = blake3::Hasher::new();
+    let mut hasher = Blake3Hasher::new();
     hasher.update(&x.to_bytes_be());
     hasher.update(&y.to_bytes_be());
-    u64::from_le_bytes(hasher.finalize()[0..8].try_into().unwrap())
+    u64::from_le_bytes(hasher.finalize().as_bytes()[0..8].try_into().unwrap())
 }

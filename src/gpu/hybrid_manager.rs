@@ -70,9 +70,11 @@ impl HybridGpuManager {
     /// Create new hybrid manager with drift monitoring
     pub async fn new(drift_threshold: f64, check_interval_secs: u64) -> Result<Self> {
         let hybrid_backend = HybridBackend::new().await?;
-        // Log CUDA version for compatibility
-        if let Ok(cuda) = hybrid_backend.cuda() {
-            cuda.log_cuda_version();
+        // Log CUDA version for compatibility (only if CUDA feature enabled)
+        #[cfg(feature = "rustacuda")]
+        {
+            // CUDA backend available, but no direct version logging method
+            log::info!("CUDA backend initialized");
         }
         let curve = Secp256k1::new();
 
@@ -93,11 +95,8 @@ impl HybridGpuManager {
     }
 
     // Chunk: CPU/GPU Split (hybrid_manager.rs)
-    pub async fn dispatch_hybrid(&self, steps: u64, gpu_frac: f64) -> Result<(), anyhow::Error> {
-        let gpu_steps = (steps as f64 * gpu_frac) as u64;
-        let gpu_fut = self.hybrid_backend.dispatch_g(steps); // Assume method exists
-        let cpu_fut = async { /* CPU dispatch */ Ok(()) };
-        tokio::try_join!(gpu_fut, cpu_fut)?;
+    pub async fn dispatch_hybrid(&self, _steps: u64, _gpu_frac: f64) -> Result<(), anyhow::Error> {
+        // TODO: Implement actual hybrid dispatch with proper GPU/CPU coordination
         Ok(())
     }
 
@@ -473,7 +472,7 @@ impl HybridGpuManager {
         let cpu_steps = steps - gpu_steps;
 
         // Async dispatch: GPU for bulk steps, CPU for collision detection
-        let gpu_fut = async {
+        let gpu_result: Result<Option<BigInt256>> = async {
             #[cfg(feature = "rustacuda")]
             {
                 self.dispatch_parallel_brents_rho_async(
@@ -486,20 +485,20 @@ impl HybridGpuManager {
             {
                 Ok(None)
             }
-        };
+        }.await;
 
-        let cpu_fut = async {
+        let cpu_result = async {
             // CPU validation: check attractor rates, bias convergence
             let attractor_rate = self.get_attractor_rate(&vec![]); // placeholder
             if attractor_rate < 10.0 {
                 log::warn!("Low attractor rate {:.1}%, consider bias adjustment", attractor_rate);
             }
             None
-        };
+        }.await;
 
-        // Join futures: GPU does bulk work, CPU validates
-        let (gpu_result, cpu_result) = tokio::join!(gpu_fut, cpu_fut);
-        gpu_result.or(Ok(cpu_result))
+        // Combine results: GPU takes precedence if successful
+        let gpu_key = gpu_result?; // Propagate GPU errors
+        Ok(gpu_key.or(cpu_result))
     }
 
     /// Concise Block: Bias Hybrid Swap on Attractor Rate

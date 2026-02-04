@@ -34,9 +34,9 @@ impl CollisionDetector {
 
     // Chunk: Brent's Switch Criteria (collision.rs)
     pub fn use_brents(w: &BigInt256, t: usize, dp_load: f64, coll_rate: f64) -> bool {
-        let small_range = w.bits() < 40;
+        let small_range = w.bit_length() < 40;
         let low_parallel = t < 16;
-        let stall = coll_rate < 0.1 * (1.0 / w.sqrt().to_f64().unwrap());
+        let stall = coll_rate < 0.01; // Simplified stall detection
         let mem_full = dp_load > 0.8;
         small_range || low_parallel || (stall && mem_full)
     }

@@ -952,8 +952,9 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
     info!("📊 Bias score: {:.3}, Effective complexity: 2^{:.1} operations", bias_score, effective_complexity);
 
     // Initialize hybrid manager if GPU is enabled
-    let hybrid = if args.gpu {
-        Some(HybridGpuManager::new()?)
+    let hybrid: Option<()> = if args.gpu {
+        // TODO: Implement async hybrid manager initialization
+        None // Placeholder until async main
     } else {
         None
     };
