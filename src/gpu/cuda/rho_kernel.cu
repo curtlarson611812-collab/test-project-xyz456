@@ -315,17 +315,20 @@ __device__ void insert_dp(uint64_t* table, uint64_t hash1, uint64_t hash2, uint6
 }
 
 // Chunk: SoA Brent's States (rho_kernel.cu)
-struct BrentState {
-    uint256_t* tortoise_x;  // SoA arrays
-    uint256_t* hare_x;
-    int* power_lam;         // Shared [power, lam] per block
-};
-__global__ void brents_gpu(BrentState* states, int count) {
+// BrentState struct removed, using direct params
+__global__ void brents_gpu(uint256_t* tortoise_x, uint256_t* hare_x, int count) {
     __shared__ int shared_pl[2];  // power[0], lam[1]
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (threadIdx.x == 0) { shared_pl[0] = 1; shared_pl[1] = 1; }
     __syncthreads();
-    // Loop with shared_pl updates
+    uint256_t tx = __ldg(&tortoise_x[idx]);
+    uint256_t hx = __ldg(&hare_x[idx]);
+    // Loop...
+    if (shared_pl[0] == shared_pl[1]) {
+        atomicExch(&shared_pl[0], shared_pl[0] * 2);  // Atomic double
+        // Reset lam...
+    }
+    // Stores...
 }
 
 // Concise Block: Add DP Collect in Parallel Rho Kernel

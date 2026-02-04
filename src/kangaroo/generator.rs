@@ -754,6 +754,24 @@ pub fn bayesian_posterior(hits: u32, misses: u32, prior_alpha: f64, prior_beta: 
 }
 // Usage: If bayesian_posterior(bias_hits, bias_misses, 1.0, 1.0) < 0.6 { stop refine }
 
+// Chunk: AVX BigInt Random (generator.rs)
+use std::arch::x86_64::*;
+pub fn simd_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt256> {
+    let range = slice.high - slice.low;  // Assume BigInt256 impl -
+    let mut rands = vec![BigInt256::zero(); count];
+    unsafe {
+        for i in (0..count).step_by(4) {
+            // Gen 4 rands (simplified: full via _mm512_mul_epu32 on limbs)
+            let rand_limbs = _mm512_set_epi64(rand::random(), rand::random(), /* 4x */);
+            let mu = _mm512_set1_epi64(1u64 << 64 / range.limbs[0]);  // Approx Barrett mu
+            let q = _mm512_mul_epu32(rand_limbs, mu);  // q = rand / range approx
+            let rem = _mm512_sub_epi64(rand_limbs, _mm512_mul_epu32(q, range.limbs_vec()));  // rem = rand - q*range
+            // Store to rands[i..i+4]
+        }
+    }
+    rands
+}
+
 // Chunk: SIMD Random in Slice (generator.rs)
 use std::simd::{u64x4, Simd};
 pub fn vec_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
