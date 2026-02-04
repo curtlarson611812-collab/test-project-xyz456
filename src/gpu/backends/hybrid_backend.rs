@@ -13,6 +13,37 @@ use anyhow::Result;
 use crossbeam_deque::Worker;
 use std::sync::Arc;
 use tokio::sync::Notify;
+use std::collections::HashMap;
+use std::fs::read_to_string;
+use anyhow::anyhow;
+
+/// Nsight rule scoring and color coding for dynamic optimization
+#[derive(Debug, Clone)]
+pub struct NsightRuleResult {
+    pub rule_name: String,
+    pub score: f64,
+    pub color: String,
+    pub suggestion: String,
+}
+
+impl NsightRuleResult {
+    pub fn new(rule_name: &str, score: f64, suggestion: &str) -> Self {
+        let color = if score > 80.0 {
+            "\u{1F7E2}" // Green circle
+        } else if score > 60.0 {
+            "\u{1F7E1}" // Yellow circle
+        } else {
+            "\u{1F534}" // Red circle
+        };
+
+        Self {
+            rule_name: rule_name.to_string(),
+            score,
+            color: color.to_string(),
+            suggestion: suggestion.to_string(),
+        }
+    }
+}
 
 /// Hybrid backend that dispatches operations to appropriate GPUs
 /// Uses Vulkan for bulk operations (step_batch) and CUDA for precision math
@@ -299,7 +330,7 @@ impl HybridBackend {
                 }
 
                 // Log applied adjustments
-                for adjustment in adjustments_made {
+                for adjustment in &adjustments_made {
                     log::info!("Rule-based adjustment: {}", adjustment);
                 }
 
@@ -508,5 +539,131 @@ impl GpuBackend for HybridBackend {
         {
             self.cpu.batch_to_affine(positions, modulus)
         }
+    }
+}
+
+impl HybridBackend {
+    /// Parse Nsight Compute suggestions and apply dynamic tuning
+    pub fn apply_nsight_rules(&self, config: &mut GpuConfig) -> Result<Vec<NsightRuleResult>> {
+        let suggestions_path = "suggestions.json";
+
+        // Read suggestions from Nsight analysis
+        let json_str = read_to_string(suggestions_path)
+            .map_err(|e| anyhow!("Failed to read suggestions.json: {}", e))?;
+
+        let sugg_map: HashMap<String, String> = serde_json::from_str(&json_str)
+            .map_err(|e| anyhow!("Failed to parse suggestions JSON: {}", e))?;
+
+        let mut results = Vec::new();
+
+        // Apply rules based on Nsight suggestions
+        for (rule_name, suggestion) in sugg_map.iter() {
+            let (score, suggestion_text) = self.parse_rule_suggestion(rule_name, suggestion);
+            let result = NsightRuleResult::new(rule_name, score, &suggestion_text);
+
+            // Apply dynamic adjustments based on rule results
+            self.apply_rule_adjustment(config, &result)?;
+
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Parse individual rule suggestion and extract score
+    fn parse_rule_suggestion(&self, _rule_name: &str, suggestion: &str) -> (f64, String) {
+        // Extract score from suggestion text (assumes format like "85.2% efficient")
+        let score = if let Some(pct_pos) = suggestion.find('%') {
+            if let Some(start) = suggestion[..pct_pos].rfind(|c: char| !c.is_ascii_digit() && c != '.') {
+                suggestion[start + 1..pct_pos].parse::<f64>().unwrap_or(0.0)
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+
+        (score, suggestion.to_string())
+    }
+
+    /// Apply configuration adjustments based on rule results
+    fn apply_rule_adjustment(&self, config: &mut GpuConfig, rule: &NsightRuleResult) -> Result<()> {
+        match rule.rule_name.as_str() {
+            "Low Coalescing" => {
+                if rule.score < 80.0 {
+                    // Reduce kangaroo count to improve coalescing
+                    config.max_kangaroos = (config.max_kangaroos / 2).max(512);
+                    log::info!("Reduced kangaroo count to {} for better coalescing", config.max_kangaroos);
+                }
+            }
+            "High Registers" => {
+                if rule.score < 70.0 {
+                    // Reduce register pressure
+                    config.max_regs = 48;
+                    log::info!("Limited registers to {} for better occupancy", config.max_regs);
+                }
+            }
+            "DRAM Utilization" => {
+                if rule.score > 80.0 {
+                    // High DRAM usage - reduce memory pressure
+                    config.max_kangaroos = (config.max_kangaroos * 3 / 4).max(512);
+                    log::info!("Reduced kangaroo count to {} due to high DRAM utilization", config.max_kangaroos);
+                }
+            }
+            _ => {
+                // Unknown rule - log for analysis
+                log::debug!("Unknown Nsight rule '{}': {}", rule.rule_name, rule.suggestion);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Enhanced custom ECDLP rule for bias efficiency analysis
+    pub fn analyze_ecdlp_bias_efficiency(&self, metrics: &HashMap<String, f64>) -> NsightRuleResult {
+        let alu_pct = metrics.get("sm__pipe_alu_cycles_active.average.pct_of_peak_sustained_active")
+            .copied().unwrap_or(0.0);
+        let ipc = metrics.get("sm__inst_executed.avg.pct_of_peak_sustained_active")
+            .copied().unwrap_or(1.0);
+
+        let score = if alu_pct > 80.0 && ipc < 70.0 {
+            60.0 // Needs optimization
+        } else if alu_pct > 60.0 && ipc < 80.0 {
+            75.0 // Moderate
+        } else {
+            90.0 // Good
+        };
+
+        let suggestion = if score < 80.0 {
+            "Fuse Barrett reduction in bias_check_kernel.cu for ALU efficiency"
+        } else {
+            "Bias efficiency is optimal"
+        };
+
+        NsightRuleResult::new("EcdlpBiasEfficiency", score, suggestion)
+    }
+
+    /// Custom rule for analyzing DP divergence patterns
+    pub fn analyze_ecdlp_divergence(&self, metrics: &HashMap<String, f64>) -> NsightRuleResult {
+        let warp_eff = metrics.get("sm__warps_active.avg.pct_of_peak_sustained_active")
+            .copied().unwrap_or(100.0);
+        let branch_eff = metrics.get("sm__inst_executed.avg.pct_of_peak_sustained_elapsed")
+            .copied().unwrap_or(1.0);
+
+        let score = if warp_eff < 90.0 || branch_eff < 0.8 {
+            65.0 // High divergence
+        } else if warp_eff < 95.0 || branch_eff < 0.9 {
+            80.0 // Moderate divergence
+        } else {
+            95.0 // Low divergence
+        };
+
+        let suggestion = if score < 80.0 {
+            "Consider subgroupAny for DP trailing_zeros check to reduce divergence"
+        } else {
+            "Divergence is well-controlled"
+        };
+
+        NsightRuleResult::new("EcdlpDivergenceAnalysis", score, suggestion)
     }
 }

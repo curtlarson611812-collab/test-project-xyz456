@@ -72,7 +72,7 @@ pub fn start_thermal_log() {
 // Dependencies: std::fs::read_to_string, regex::Regex, logging::NsightMetrics
 fn auto_tune_kangaroos(config: &mut speedbitcrack::config::GpuConfig) {
     // First try metrics-based optimization
-    if let Some(metrics) = logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
+    if let Some(metrics) = speedbitcrack::utils::logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
         log::info!("Applying Nsight metrics-based optimization...");
         speedbitcrack::gpu::backends::hybrid_backend::HybridBackend::optimize_based_on_metrics_placeholder(config, &metrics);
     }
@@ -269,7 +269,7 @@ fn main() -> Result<()> {
             let mut gpu_config = if args.laptop { speedbitcrack::config::laptop_3070_config() } else { speedbitcrack::config::GpuConfig { arch: "sm_120".to_string(), max_kangaroos: 4096, dp_size: 1<<20, dp_bits: 24, max_regs: 64, gpu_frac: 0.8 } };
 
             // Load Nsight metrics and apply comprehensive optimization
-            if let Some(metrics) = logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
+            if let Some(metrics) = speedbitcrack::utils::logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
                 info!("🎯 Loaded comprehensive Nsight metrics - applying full optimization...");
 
                 // Apply rule-based adjustments first

@@ -1203,4 +1203,142 @@ impl SoaLayout {
         log::info!("Created optimized SoA layout for {} kangaroos", num_kangaroos);
         Ok(layout)
     }
+
+    /// Advanced pinned memory allocation with async copy and prefetching
+    #[cfg(feature = "rustacuda")]
+    pub fn alloc_and_copy_pinned_async(
+        &self,
+        host_data: &[RhoState],
+        use_pinned_memory: bool,
+        enable_prefetch: bool,
+    ) -> Result<CudaSlice<RhoState>, DriverError> {
+        let device = self.device()?;
+
+        // Allocate device memory
+        let mut device_states = unsafe {
+            device.alloc_zeros_async::<RhoState>(host_data.len())?
+        };
+
+        if use_pinned_memory {
+            // Use pinned host memory for faster transfers (4GB/s vs 1GB/s)
+            let pinned_host = device.host_alloc::<RhoState>(host_data.len(), Flag::Pinned)?;
+            pinned_host.copy_from(host_data)?;
+
+            // Async copy with pinned memory
+            device_states.copy_from_async(&pinned_host)?;
+        } else {
+            // Standard async copy
+            device_states.copy_from_async(host_data)?;
+        }
+
+        if enable_prefetch {
+            // Prefetch to GPU to hide PCIe latency
+            device_states.prefetch_to_device_async(
+                0, // device ordinal
+                None, // Default stream
+            )?;
+        }
+
+        Ok(device_states)
+    }
+
+    /// Memory prefetch optimization for unified memory access patterns
+    #[cfg(feature = "rustacuda")]
+    pub fn prefetch_unified_memory(
+        &self,
+        ptr: *mut RhoState,
+        size_bytes: usize,
+        to_gpu: bool,
+        advice: cudarc::driver::sys::cudaMemoryAdvise,
+    ) -> Result<(), DriverError> {
+        let device = self.device()?;
+
+        // Set memory advice for optimal access pattern
+        device.mem_advise(ptr as *mut std::ffi::c_void, size_bytes, advice, 0)?;
+
+        // Prefetch to target location
+        if to_gpu {
+            device.mem_prefetch_async(
+                ptr as *const std::ffi::c_void,
+                size_bytes,
+                0, // device ordinal
+                None, // Default stream
+            )?;
+        } else {
+            // Prefetch to host (for CPU fallback or data export)
+            device.mem_prefetch_async(
+                ptr as *const std::ffi::c_void,
+                size_bytes,
+                cudarc::driver::sys::cudaCpuDeviceId,
+                None,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Configure L1/DLCM cache preferences for optimal memory access
+    #[cfg(feature = "rustacuda")]
+    pub fn configure_l1_dlcm_cache(
+        &self,
+        l1_enabled: bool,
+        dlcm_mode: &str,  // "ca" (cache all), "cg" (cache global)
+    ) -> Result<(), DriverError> {
+        use cudarc::driver::CudaCacheConfig;
+
+        let device = self.device()?;
+        let context = device.context();
+
+        // Configure L1 cache
+        if l1_enabled {
+            context.set_cache_config(CudaCacheConfig::PreferL1)?;
+            log::info!("L1 cache enabled for improved local memory access");
+        } else {
+            context.set_cache_config(CudaCacheConfig::PreferShared)?;
+            log::info!("Shared memory preferred over L1 cache");
+        }
+
+        // Configure Data L1 Cache Mode (DLCM)
+        match dlcm_mode {
+            "ca" => {
+                // Cache all loads and stores
+                context.set_cache_config(CudaCacheConfig::PreferL1)?;
+            }
+            "cg" => {
+                // Cache global loads only
+                context.set_cache_config(CudaCacheConfig::PreferShared)?;
+            }
+            _ => {
+                log::warn!("Unknown DLCM mode: {}, using default", dlcm_mode);
+            }
+        }
+
+        log::info!("Configured DLCM mode: {}", dlcm_mode);
+        Ok(())
+    }
+
+    /// Set up L2 cache persistence for frequently accessed data
+    #[cfg(feature = "rustacuda")]
+    pub fn configure_l2_persistence(
+        &self,
+        ptr: *mut std::ffi::c_void,
+        size: usize,
+        persistent: bool,
+    ) -> Result<(), DriverError> {
+        use cudarc::driver::sys::{cudaMemAdvise, cudaMemAdviseSetPreferredLocation, cudaMemAdviseUnsetPreferredLocation};
+
+        let device = self.device()?;
+
+        if persistent {
+            // Make data persistent in L2 cache
+            device.mem_advise(ptr, size, cudaMemAdvise::cudaMemAdviseSetPersisting, 0)?;
+            log::info!("L2 persistence enabled for {} bytes", size);
+        } else {
+            // Remove L2 persistence
+            device.mem_advise(ptr, size, cudaMemAdvise::cudaMemAdviseUnsetPersisting, 0)?;
+            log::info!("L2 persistence disabled");
+        }
+
+        Ok(())
+    }
 }

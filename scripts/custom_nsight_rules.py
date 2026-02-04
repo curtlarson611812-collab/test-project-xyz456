@@ -1,183 +1,196 @@
 #!/usr/bin/env python3
 """
-Custom Nsight Compute Rules for SpeedBitCrackV3 ECDLP Optimizations
+Custom Nsight Compute Rules for SpeedBitCrackV3 ECDLP Solver
 
-These rules provide domain-specific analysis for elliptic curve discrete logarithm
-problems, focusing on kangaroo algorithm optimizations and bias exploitation.
+Implements domain-specific rules for elliptic curve discrete logarithm
+problem solving workloads, integrating with GROK Coder's optimization framework.
 """
 
-import nsight
+import re
+from nsight import *
 
-
-class EcdlpBiasEfficiencyRule(nsight.Rule):
+class EcdlpBiasEfficiency(Rule):
     """
-    Custom rule for analyzing bias exploitation efficiency in ECDLP kangaroo algorithms.
+    ECDLP-specific rule for analyzing bias check kernel efficiency.
 
-    Checks if Barrett reduction operations for bias calculations are optimally fused
-    and if modular arithmetic is efficiently implemented.
+    Monitors ALU utilization in Barrett reduction operations and suggests
+    fusion optimizations for bias checking workloads.
     """
-    id = "EcdlpBiasEfficiency"
-    name = "ECDLP Bias Exploitation Efficiency"
-    description = "Analyzes efficiency of bias-based optimizations in kangaroo algorithm"
+    id = "EcdlpBiasEff"
+    name = "ECDLP Bias Efficiency"
+    description = "Analyzes bias check kernel efficiency for ECDLP workloads"
+    category = "ECDLP"
+    severity = Severity.WARNING
 
-    def compute(self, metrics):
-        # Check if ALU utilization is high but IPC is low (indicates memory stalls in bias calc)
-        alu_util = metrics.get('sm__pipe_alu_cycles_active.average.pct_of_peak_sustained_active', 0)
-        ipc = metrics.get('sm__inst_executed.avg.pct_of_peak_sustained_active', 0)
+    def get_implementation(self):
+        return """
+        // Check for high ALU utilization in bias operations
+        alu_pct = metrics["sm__pipe_alu_cycles_active.average.pct_of_peak_sustained_active"].value()
+        ipc = metrics["sm__inst_executed.avg.pct_of_peak_sustained_active"].value()
 
-        if alu_util > 80 and ipc < 70:
-            return nsight.Suggestion(
-                "High ALU but low IPC in bias calculations",
-                "Fuse Barrett reduction operations in bias_check_kernel.cu to reduce memory stalls"
+        if alu_pct > 80 and ipc < 70:
+            return Suggestion(
+                "Fuse Barrett reduction in bias_check_kernel.cu",
+                "High ALU utilization with low IPC indicates bias check inefficiency. " +
+                "Consider fusing Barrett reduction operations to improve throughput.",
+                Severity.WARNING
             )
+        """
 
-        return nsight.Pass()
-
-
-class EcdlpMemoryCoalescingRule(nsight.Rule):
+class EcdlpDivergenceAnalysis(Rule):
     """
-    Custom rule for analyzing memory coalescing in kangaroo state management.
+    Analyzes warp divergence in DP (Distinguished Point) checking operations.
 
-    Detects if BigInt256 operations are causing uncoalesced memory access patterns
-    and suggests Struct-of-Arrays (SoA) layout optimizations.
+    ECDLP workloads often have divergent paths when checking trailing zeros
+    for distinguished points, leading to poor SIMD efficiency.
     """
-    id = "EcdlpMemoryCoalescing"
-    name = "ECDLP Memory Coalescing Analysis"
-    description = "Checks memory access patterns for BigInt256 operations"
+    id = "EcdlpDivergence"
+    name = "ECDLP Divergence Analysis"
+    description = "Detects warp divergence in distinguished point checking"
+    category = "ECDLP"
+    severity = Severity.WARNING
 
-    def compute(self, metrics):
-        # Check global memory sector efficiency
-        sector_efficiency = metrics.get('sm__sass_average_data_bytes_per_sector_mem_global_op_ld', 0)
+    def get_implementation(self):
+        return """
+        // Monitor warp efficiency and branch divergence
+        warp_eff = metrics["sm__warps_active.avg.pct_of_peak_sustained_active"].value()
+        branch_eff = metrics["sm__inst_executed.avg.pct_of_peak_sustained_elapsed"].value()
 
-        if sector_efficiency < 4.0:  # Less than 4 bytes per sector indicates poor coalescing
-            return nsight.Suggestion(
-                "Poor memory coalescing detected in BigInt256 operations",
-                "Convert Array-of-Structs (AoS) to Struct-of-Arrays (SoA) layout: separate x_limbs[], y_limbs[], dist_limbs[] arrays in rho_kernel.cu"
+        if warp_eff < 90 or branch_eff < 0.8:
+            return Suggestion(
+                "Reduce divergence in DP checking",
+                "High warp divergence detected in distinguished point operations. " +
+                "Consider using subgroup operations or reorganizing DP checks.",
+                Severity.WARNING
             )
+        """
 
-        return nsight.Pass()
-
-
-class EcdlpSharedMemoryUtilizationRule(nsight.Rule):
+class EcdlpMemoryCoalescing(Rule):
     """
-    Custom rule for analyzing shared memory utilization in bias table operations.
+    Analyzes memory coalescing efficiency for BigInt256 operations.
 
-    Ensures bias tables are efficiently cached in shared memory to avoid
-    redundant global memory accesses.
+    ECDLP requires frequent access to large integer arrays (256-bit numbers).
+    Poor coalescing can severely impact performance.
     """
-    id = "EcdlpSharedMemoryUtilization"
-    name = "ECDLP Shared Memory Bias Table Analysis"
-    description = "Analyzes shared memory usage for bias table operations"
+    id = "EcdlpMemoryCoalesce"
+    name = "ECDLP Memory Coalescing"
+    description = "Analyzes memory access patterns for BigInt operations"
+    category = "ECDLP"
+    severity = Severity.ERROR
 
-    def compute(self, metrics):
-        # Check for bank conflicts in shared memory operations
-        bank_conflicts = metrics.get('sm__sass_average_bank_conflicts_pipe_lsu_mem_shared_op_ld', 0)
+    def get_implementation(self):
+        return """
+        // Check global memory coalescing
+        gld_eff = metrics["sm__inst_executed.avg.pct_of_peak_sustained_active"].value()
+        mem_throughput = metrics["dram__bytes.avg.pct_of_peak_sustained_active"].value()
 
-        if bank_conflicts > 0:
-            return nsight.Suggestion(
-                "Shared memory bank conflicts detected",
-                "Optimize bias_table access pattern in bias_check_kernel.cu - ensure stride-1 access and avoid conflicts"
+        if gld_eff < 70:
+            return Suggestion(
+                "Improve memory coalescing",
+                f"Low global load efficiency ({gld_eff:.1f}%). " +
+                "Consider SoA layout for BigInt256 arrays or adjust access patterns.",
+                Severity.ERROR
             )
+        """
 
-        # Check if shared memory is underutilized
-        shared_util = metrics.get('sm__sass_average_data_bytes_per_sector_mem_shared_op_ld', 0)
-        if shared_util < 2.0:  # Less than 64-bit words per access
-            return nsight.Suggestion(
-                "Underutilized shared memory",
-                "Load bias_table into shared memory in bias_check_kernel.cu to reduce global memory pressure"
-            )
-
-        return nsight.Pass()
-
-
-class EcdlpDivergenceAnalysisRule(nsight.Rule):
+class EcdlpL1CacheUtilization(Rule):
     """
-    Custom rule for analyzing control flow divergence in modular arithmetic operations.
+    Monitors L1 cache utilization for ECDLP constant data.
 
-    Detects if conditional branches in bias residue calculations are causing
-    significant warp divergence.
+    Jump tables, curve parameters, and modulus values should be cached
+    effectively in L1 for optimal performance.
     """
-    id = "EcdlpDivergenceAnalysis"
-    name = "ECDLP Control Flow Divergence Analysis"
-    description = "Analyzes warp divergence in bias and modular operations"
+    id = "EcdlpL1Cache"
+    name = "ECDLP L1 Cache Utilization"
+    description = "Analyzes L1 cache efficiency for ECDLP constants"
+    category = "ECDLP"
+    severity = Severity.INFO
 
-    def compute(self, metrics):
-        # Check warp execution efficiency
-        warp_eff = metrics.get('warp_nonpred_execution_efficiency', 100)
-
-        if warp_eff < 90:
-            return nsight.Suggestion(
-                "High control flow divergence in modular operations",
-                "Use subgroup operations (__shfl_sync) for bias residue calculations to reduce warp divergence"
-            )
-
-        return nsight.Pass()
-
-
-class EcdlpL1CacheOptimizationRule(nsight.Rule):
-    """
-    Custom rule for analyzing L1 cache utilization in elliptic curve operations.
-
-    Suggests optimal L1 cache configuration for BigInt256 arithmetic operations.
-    """
-    id = "EcdlpL1CacheOptimization"
-    name = "ECDLP L1 Cache Optimization"
-    description = "Analyzes L1 cache utilization for EC arithmetic"
-
-    def compute(self, metrics):
-        # Check L1 hit rate
-        l1_hit_rate = metrics.get('l1tex__t_bytes_hit_rate', 0)
+    def get_implementation(self):
+        return """
+        // Monitor L1 cache hit rates
+        l1_hit_rate = metrics["l1tex__t_bytes_hit_rate.pct"].value()
 
         if l1_hit_rate < 80:
-            return nsight.Suggestion(
-                "Low L1 cache utilization",
-                "Set CUDA cache config to PreferL1 for local variables in BigInt256 operations"
+            return Suggestion(
+                "Optimize L1 cache usage",
+                f"L1 cache hit rate is {l1_hit_rate:.1f}%. " +
+                "Consider using texture memory for jump tables or adjusting data layout.",
+                Severity.INFO
             )
+        """
 
-        return nsight.Pass()
-
-
-class EcdlpOccupancyOptimizationRule(nsight.Rule):
+class EcdlpSharedMemoryEfficiency(Rule):
     """
-    Custom rule for analyzing GPU occupancy in relation to ECDLP workload characteristics.
+    Analyzes shared memory bank conflicts in ECDLP kernels.
 
-    Considers the memory-intensive nature of BigInt256 operations and suggests
-    optimal occupancy targets.
+    Bias tables and temporary BigInt storage should minimize bank conflicts
+    for optimal shared memory throughput.
     """
-    id = "EcdlpOccupancyOptimization"
+    id = "EcdlpSharedMem"
+    name = "ECDLP Shared Memory Efficiency"
+    description = "Detects bank conflicts in shared memory usage"
+    category = "ECDLP"
+    severity = Severity.WARNING
+
+    def get_implementation(self):
+        return """
+        // Monitor shared memory bank conflicts
+        bank_conflicts = metrics["l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum"].value()
+
+        if bank_conflicts > 1000:  # Threshold for significant conflicts
+            return Suggestion(
+                "Resolve shared memory bank conflicts",
+                f"High bank conflicts detected ({bank_conflicts} total). " +
+                "Consider padding shared arrays or using different access patterns.",
+                Severity.WARNING
+            )
+        """
+
+class EcdlpOccupancyOptimization(Rule):
+    """
+    Analyzes GPU occupancy for ECDLP workloads.
+
+    Optimal occupancy is crucial for hiding latency in compute-bound
+    elliptic curve operations.
+    """
+    id = "EcdlpOccupancy"
     name = "ECDLP Occupancy Optimization"
-    description = "Analyzes occupancy considering ECDLP memory patterns"
+    description = "Analyzes GPU occupancy for ECDLP kernels"
+    category = "ECDLP"
+    severity = Severity.INFO
 
-    def compute(self, metrics):
-        occupancy = metrics.get('achieved_occupancy', 0)
-        register_usage = metrics.get('register_usage', 0)
+    def get_implementation(self):
+        return """
+        // Check achieved occupancy
+        achieved_occ = metrics["sm__warps_active.avg.pct_of_peak_sustained_active"].value()
+        theoretical_max = metrics["sm__maximum_warps_per_active_cycle_pct"].value()
 
-        if occupancy < 60 and register_usage > 64:
-            return nsight.Suggestion(
-                "Low occupancy due to high register pressure",
-                "Reduce register usage in BigInt256 operations by using shared memory for constants and minimizing local variables"
+        if achieved_occ < 0.7 * theoretical_max:
+            return Suggestion(
+                "Increase GPU occupancy",
+                f"Achieved occupancy ({achieved_occ:.1f}%) is below optimal. " +
+                f"Consider reducing register usage or increasing block size.",
+                Severity.INFO
             )
+        """
 
-        if occupancy > 80:
-            return nsight.Suggestion(
-                "Very high occupancy may indicate memory-bound workload",
-                "Consider reducing block size to improve L2 cache utilization for BigInt256 operations"
-            )
+# Register all custom ECDLP rules
+def register_ecdlp_rules():
+    """Register all ECDLP-specific rules with Nsight Compute."""
+    rules = [
+        EcdlpBiasEfficiency(),
+        EcdlpDivergenceAnalysis(),
+        EcdlpMemoryCoalescing(),
+        EcdlpL1CacheUtilization(),
+        EcdlpSharedMemoryEfficiency(),
+        EcdlpOccupancyOptimization(),
+    ]
 
-        return nsight.Pass()
+    for rule in rules:
+        register_rule(rule)
 
+    print(f"Registered {len(rules)} ECDLP-specific Nsight rules")
 
-# Register custom rules
-nsight.register_rule(EcdlpBiasEfficiencyRule)
-nsight.register_rule(EcdlpMemoryCoalescingRule)
-nsight.register_rule(EcdlpSharedMemoryUtilizationRule)
-nsight.register_rule(EcdlpDivergenceAnalysisRule)
-nsight.register_rule(EcdlpL1CacheOptimizationRule)
-nsight.register_rule(EcdlpOccupancyOptimizationRule)
-
-if __name__ == "__main__":
-    print("SpeedBitCrackV3 Custom Nsight Rules Loaded")
-    print("Available custom rules:")
-    for rule in [EcdlpBiasEfficiencyRule, EcdlpMemoryCoalescingRule, EcdlpSharedMemoryUtilizationRule,
-                 EcdlpDivergenceAnalysisRule, EcdlpL1CacheOptimizationRule, EcdlpOccupancyOptimizationRule]:
-        print(f"  - {rule.id}: {rule.name}")
+# Initialize rules on import
+register_ecdlp_rules()
