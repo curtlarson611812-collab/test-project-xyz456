@@ -616,7 +616,7 @@ impl KangarooGenerator {
                 let tame_dist_bigint = BigInt256::from_u64_array([
                     tame_steps.limbs[0], tame_steps.limbs[1], tame_steps.limbs[2], tame_steps.limbs[3]
                 ]);
-                let biased_jump = self.biased_jump(&tame_dist_bigint, biases, [9, 27, 81]);
+                let biased_jump = self.biased_jump(&tame_dist_bigint, biases);
                 // Convert back to jump index
                 (biased_jump.low_u32() % curve.g_multiples.len() as u32) as usize
             } else {
@@ -715,23 +715,38 @@ impl KangarooGenerator {
 
     /// Select bias-aware jump operation with hierarchical modulus preferences (mod9 -> mod27 -> mod81 -> pos)
     /// Bias-aware jump with chain: mod9 -> mod27 -> mod81 + pos_proxy scaling
-    pub fn biased_jump(&self, current: &BigInt256, biases: &std::collections::HashMap<u32, f64>, mod_levels: [u32; 3]) -> BigInt256 {
-        let res9 = current.mod_u64(mod_levels[0] as u64);
-        let res27 = current.mod_u64(mod_levels[1] as u64);
-        let res81 = current.mod_u64(mod_levels[2] as u64);
-        let weight9 = biases.get(&(res9 as u32)).unwrap_or(&1.0);
-        let weight27 = biases.get(&(res27 as u32)).unwrap_or(&1.0);
-        let weight81 = biases.get(&(res81 as u32)).unwrap_or(&1.0);
+    pub fn biased_jump(&self, current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
+        use crate::utils::pubkey_loader::detect_bias_single;
+        use crate::math::constants::CURVE_ORDER_BIGINT;
+        let mod_levels = [9u32, 27u32, 81u32];
+        let mut chain_bias = 1.0;
+        for &mod_level in &mod_levels {
+            let mod_val = BigInt256::from_u64(mod_level as u64);
+            let res = (current.clone() % mod_val).low_u32();
+            chain_bias *= *biases.get(&res).unwrap_or(&1.0);
+        }
+        let (_, _, pos_factor) = detect_bias_single(current, 0);  // pos_proxy
+        chain_bias *= pos_factor;
+        let rand_scale = rand::random::<f64>() * chain_bias;
+        let base_jump = BigInt256::from_u64(rand::random::<u32>() as u64);  // Mock base, replace with bucket
+        let jump = base_jump + BigInt256::from_u64(rand_scale as u64);
+        jump % CURVE_ORDER_BIGINT.clone()  // Clamp mod order
+    }
 
-        // Positional proxy from pubkey analysis
-        let pos_factor = if current.trailing_zeros() > 8 { 1.23 } else { 1.0 }; // Simple proxy
-
-        let chain_bias = *weight9 * *weight27 * *weight81 * pos_factor;
-        let scale = rand::random::<f64>() * chain_bias;
-
-        // Apply bias to jump size (clamped to reasonable range)
-        let jump_size = (scale as u64).min(1000).max(1);
-        current.clone() + BigInt256::from_u64(jump_size)
+    fn pollard_run_biased(&self, states: &mut [KangarooState], steps: usize, biases: &std::collections::HashMap<u32, f64>) {
+        for state in states.iter_mut() {
+            for _ in 0..steps {
+                let dist_bigint = BigInt256::from_u64(state.distance);
+                let jump_size = self.biased_jump(&dist_bigint, biases);
+                let jump_point = self.curve.mul(&jump_size, &self.curve.g);
+                state.position = self.curve.point_add(&state.position, &jump_point);
+                state.distance = state.distance.wrapping_add(jump_size.low_u64());
+                if state.distance.trailing_zeros() >= crate::math::constants::DP_BITS {
+                    // Mark as DP candidate - would need to add this field to KangarooState
+                    break;
+                }
+            }
+        }
     }
 
     pub fn select_bias_aware_jump(&self, point: &Point, _bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {

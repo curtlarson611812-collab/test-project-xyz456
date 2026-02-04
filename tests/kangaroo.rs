@@ -225,22 +225,19 @@ mod tests {
         }
     }
 
-    // Chunk: Bias Jump Test (tests/kangaroo.rs)
-    // Dependencies: kangaroo::generator::select_bias_aware_jump, std::collections::HashMap
+    // Chunk: Biased Jump Test (tests/kangaroo.rs)
     #[test]
-    fn test_bias_jump() {
+    fn test_biased_jump() {
         use speedbitcrack::kangaroo::generator::KangarooGenerator;
         use speedbitcrack::config::Config;
         use std::collections::HashMap;
 
         let gen = KangarooGenerator::new(&Config::default());
-        let current = speedbitcrack::math::bigint::BigInt256::from_u64(81);
-        let biases = HashMap::from([(0, 1.2), (9, 1.3), (27, 1.4), (81, 1.5)]);
-
-        // Test that bias-aware jump selection works
-        // This is a simplified test - the real implementation would use the biases
-        let jump_idx = gen.select_bias_aware_jump(&current, &biases);
-        assert!(jump_idx < 256); // Valid jump table index
+        let current = speedbitcrack::math::bigint::BigInt256::zero();  // res=0 all mods
+        let biases = HashMap::from([(0, 1.2), (9, 1.3), (27, 1.4)]);
+        let jump = gen.biased_jump(&current, &biases);
+        let base = speedbitcrack::math::bigint::BigInt256::from_u64(rand::random::<u32>() as u64);
+        assert!(jump > base);
     }
 
     // Chunk: Bias Jump Scaling (tests/kangaroo.rs)
@@ -257,6 +254,21 @@ mod tests {
         let jump = gen.select_bias_aware_jump(&current, &biases);
         let base_jump = speedbitcrack::math::bigint::BigInt256::from(rand::random::<u32>());
         assert!(jump > base_jump, "Bias not applied: {} <= {}", jump, base_jump);  // Scaled > base
+    }
+
+    // Chunk: Biased Jump Test (tests/kangaroo.rs)
+    #[test]
+    fn test_biased_jump() {
+        use speedbitcrack::kangaroo::generator::KangarooGenerator;
+        use speedbitcrack::config::Config;
+        use std::collections::HashMap;
+
+        let gen = KangarooGenerator::new(&Config::default());
+        let current = speedbitcrack::math::bigint::BigInt256::zero();  // res=0 all mods
+        let biases = HashMap::from([(0, 1.2), (9, 1.3), (27, 1.4)]);
+        let jump = gen.biased_jump(&current, &biases);
+        let base = speedbitcrack::math::bigint::BigInt256::from(rand::random::<u32>() as u64);
+        assert!(jump > base);
     }
 
     // Chunk: DP Trailing Zeros Test (tests/kangaroo.rs)
