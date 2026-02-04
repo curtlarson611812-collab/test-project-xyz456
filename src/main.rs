@@ -12,6 +12,7 @@ use speedbitcrack::kangaroo::{KangarooController, SearchConfig, KangarooGenerato
 use speedbitcrack::types::SearchMode;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::pubkey_loader;
+use speedbitcrack::gpu::hybrid_manager::HybridGpuManager;
 use speedbitcrack::test_basic::run_basic_test;
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
@@ -175,14 +176,14 @@ fn check_puzzle_pubkeys() -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    // Parse command line arguments first
+    let args = Args::parse();
+
     // Initialize logging
     let _ = setup_logging();
     if args.verbose {
         log::set_max_level(log::LevelFilter::Debug);
     }
-
-    // Parse command line arguments
-    let args = Args::parse();
 
     println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, verbose={}",
              args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.verbose);
@@ -259,7 +260,7 @@ fn run_bias_analysis() -> Result<()> {
                 Ok(point) => {
                     // Run bias analysis
                     let x_bigint = BigInt256::from_u64_array(point.x);
-                    let (mod9, mod27, mod81, _, _) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint);
+                    let (mod9, mod27, mod81, _, _, _) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, entry.n);
                     let pos_proxy = speedbitcrack::utils::pubkey_loader::detect_pos_bias_proxy_single(entry.n);
 
                     // Calculate range size for complexity estimate
@@ -566,7 +567,7 @@ fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
     let mut x_bytes = [0u8; 32];
     x_bytes.copy_from_slice(&x_bytes_vec);
     let x_bigint = BigInt256::from_bytes_be(&x_bytes);
-    let (mod9, mod27, mod81, vanity_last_0, dp_mod9) = pubkey_loader::detect_bias_single(&x_bigint);
+    let (mod9, mod27, mod81, vanity_last_0, dp_mod9, pos_proxy) = pubkey_loader::detect_bias_single(&x_bigint, n);
 
     info!("🎯 Puzzle #{} Bias Discovery Results:", n);
     info!("  📊 mod9: {} (uniform prevalence = 1/9 ≈ 0.111)", mod9);
@@ -894,7 +895,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
 
     // Add bias analysis from public key if available
     let x_bigint = BigInt256::from_u64_array(point.x);
-    let (mod9, mod27, mod81, vanity_last_0, dp_mod9) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint);
+    let (mod9, mod27, mod81, vanity_last_0, dp_mod9, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, n);
     info!("🎯 Puzzle #{} Bias Discovery Results:", n);
     info!("  📊 mod9: {} (uniform prevalence = 1/9 ≈ 0.111)", mod9);
     info!("  📊 mod27: {} (uniform prevalence = 1/27 ≈ 0.037)", mod27);
@@ -917,14 +918,29 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
 
     info!("📊 Bias score: {:.3}, Effective complexity: 2^{:.1} operations", bias_score, effective_complexity);
 
-    // Execute Pollard's lambda
+    // Initialize hybrid manager if GPU is enabled
+    let hybrid = if args.gpu {
+        Some(HybridGpuManager::new()?)
+    } else {
+        None
+    };
+
+    if let Some(h) = &hybrid {
+        info!("GPU hybrid acceleration enabled - using parallel multi-kangaroo dispatch");
+    }
+
+    // Execute Pollard's lambda with multi-kangaroo parallel
     let max_cycles = if args.max_cycles > 0 { args.max_cycles } else { 10_000_000_000 }; // Default 10B cycles for testing
+    let num_kangaroos = if args.gpu { 4096 } else { 8 }; // GPU: 4096 parallel kangaroos, CPU: 8 threads
 
-    info!("🎯 Executing Pollard's lambda with max_cycles: {}", max_cycles);
+    info!("🎯 Executing multi-kangaroo parallel with {} kangaroos, max_cycles: {}", num_kangaroos, max_cycles);
 
-    // Call the actual kangaroo algorithm
-    let bias_mod = if args.bias_mod > 0 { args.bias_mod } else if mod9 == 0 { 9 } else { 0 }; // Use provided bias_mod or auto-detect mod9
-    match gen.pollard_lambda(&curve, &curve.g, point, a, w, max_cycles, args.gpu, bias_mod) {
+    // Determine bias parameters
+    let bias_mod = if args.bias_mod > 0 { args.bias_mod } else if mod9 == 0 { 9 } else { 0 };
+    let b_pos = if pos_proxy < 0.1 { 1.23 } else { 1.0 }; // Positional bias proxy
+
+    // Call the multi-kangaroo parallel algorithm
+    match gen.pollard_lambda_parallel(&curve, &curve.g, point, a, w, num_kangaroos, max_cycles, args.gpu, bias_mod, b_pos, pos_proxy) {
         Some(solution) => {
             info!("🎉 SUCCESS! Puzzle #{} CRACKED!", n);
             info!("🔑 Private key: {}", solution.to_hex());

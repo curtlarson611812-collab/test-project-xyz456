@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use log::{info, warn, debug};
 use std::thread;
 use std::time::{Duration, Instant};
+use tokio;
 
 /// Metrics for drift monitoring
 #[derive(Debug, Clone)]
@@ -35,6 +36,13 @@ pub struct HybridGpuManager {
 }
 
 impl HybridGpuManager {
+    /// Get CUDA backend for direct access
+    #[cfg(feature = "rustacuda")]
+    fn cuda_backend(&self) -> &crate::gpu::backends::cuda_backend::CudaBackend {
+        // This assumes HybridBackend has a cuda field - may need adjustment
+        unimplemented!("Access to CUDA backend from hybrid manager")
+    }
+
     /// Concise Block: Use Scan Rate in Hybrid Drift for Swap
     pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> Result<f64, Box<dyn std::error::Error>> {
         let sample_points = buffer.as_slice().iter().take(sample_size).cloned().collect();
@@ -269,39 +277,75 @@ impl HybridGpuManager {
     }
 
     /// Concise Block: Parallel Brent's Rho in Hybrid
-    pub fn dispatch_parallel_brents_rho(&self, _g: Point, _p: Point, _num_walks: usize, _bias_mod: u64) -> Option<BigInt256> {
+    pub fn dispatch_parallel_brents_rho(&self, g: Point, p: Point, num_walks: usize, bias_mod: u64) -> Option<BigInt256> {
         // Integration: Use CUDA rho kernel for parallel Brent's cycle detection
         // Launch CUDA kernel with rho states, collect distinguished points
         // On cycle detection, solve using existing collision solver
 
         #[cfg(feature = "rustacuda")]
         {
-            use crate::gpu::backends::cuda_backend::RhoState;
+            use crate::gpu::backends::cuda_backend::{RhoState, CudaBackend};
 
-            // Initialize rho states with random starts near target
+            // Create CUDA backend instance
+            let cuda_backend = match CudaBackend::new() {
+                Ok(backend) => backend,
+                Err(e) => {
+                    warn!("Failed to create CUDA backend: {}", e);
+                    return None;
+                }
+            };
+
+            // Initialize rho states with bias-aware starts
             let mut rho_states = Vec::with_capacity(num_walks);
-            for _ in 0..num_walks {
+            for i in 0..num_walks {
                 rho_states.push(RhoState {
-                    current: p,  // Start from target point
+                    current: p.clone(),  // Start from target point
                     steps: BigInt256::zero(),
+                    bias_mod,
                 });
             }
 
-            // TODO: Create CUDA backend and launch kernel
-            // let cuda_backend = self.hybrid_backend.cuda_backend();
-            // let d_states = cuda_backend.create_state_buffer(&rho_states)?;
-            // cuda_backend.launch_rho_kernel(&d_states, num_walks as u32, BigInt256::from(bias_mod))?;
-
-            // TODO: Read back DP buffer and check for collisions
-            // let dp_points = cuda_backend.read_dp_buffer()?;
-            // for dp in dp_points {
-            //     if let Some(solution) = self.check_collision(&dp) {
-            //         return Some(solution);
-            //     }
-            // }
+            // Create device buffer and launch kernel
+            match cuda_backend.create_state_buffer(&rho_states) {
+                Ok(d_states) => {
+                    if cuda_backend.launch_rho_kernel(&d_states, num_walks as u32, BigInt256::from_u64(bias_mod)).is_ok() {
+                        // Read back DP buffer and check for collisions
+                        if let Ok(dp_points) = cuda_backend.read_dp_buffer() {
+                            for dp in dp_points {
+                                if let Some(solution) = self.check_collision(&dp) {
+                                    return Some(solution);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to create CUDA state buffer: {}", e);
+                }
+            }
         }
 
-        None // Return None if no collision found or CUDA not available
+        // Fallback message
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            warn!("CUDA not available, falling back to CPU for parallel Brent's rho");
+        }
+
+        None
+    }
+
+    /// Check for collision using DP point
+    #[cfg(feature = "rustacuda")]
+    fn check_collision(&self, dp: &crate::gpu::backends::cuda_backend::DpPoint) -> Option<BigInt256> {
+        // This would integrate with the collision detection system
+        // For now, return None as collision detection needs to be implemented
+        warn!("DP collision check not yet implemented");
+        None
+    }
+
+    #[cfg(not(feature = "rustacuda"))]
+    fn check_collision(&self, _dp: &std::marker::PhantomData<()>) -> Option<BigInt256> {
+        None
     }
 
     /// Concise Block: Switch Kangaroo/Rho in Hybrid

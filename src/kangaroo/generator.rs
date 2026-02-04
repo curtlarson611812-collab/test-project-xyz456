@@ -517,7 +517,7 @@ impl KangarooGenerator {
     /// Pollard's lambda algorithm for discrete logarithm in intervals
     /// Searches for k in [a, a+w] such that [k]G = Q
     /// Expected time O(√w) with tame/wild kangaroos
-    pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, max_cycles: u64, gpu: bool, bias_mod: u64) -> Option<BigInt256> {
+    pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, max_cycles: u64, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> Option<BigInt256> {
         use std::collections::HashMap;
         use crate::math::bigint::{BigInt256, BigInt512};
         use crate::types::Point;
@@ -542,15 +542,17 @@ impl KangarooGenerator {
 
         let max_steps = if max_cycles == 0 { 10000000 } else { max_cycles }; // 0 = unlimited for demo
         for step in 0..max_steps {
-            // Move tame
-            tame = curve.add(&tame, &curve.g_multiples[hash_point(&tame) as usize % curve.g_multiples.len()]);
+            // Move tame with bias-aware jumping
+            let tame_jump_idx = self.select_bias_aware_jump(&tame, bias_mod, b_pos, pos_proxy);
+            tame = curve.add(&tame, &curve.g_multiples[tame_jump_idx % curve.g_multiples.len()]);
             tame_steps = curve.barrett_n.add(&tame_steps, &BigInt256::one());
             if is_dp(&tame) {
                 tame_dp.insert(tame.x, tame_steps.clone());
             }
 
-            // Move wild
-            wild = curve.add(&wild, &curve.g_multiples[hash_point(&wild) as usize % curve.g_multiples.len()]);
+            // Move wild with bias-aware jumping
+            let wild_jump_idx = self.select_bias_aware_jump(&wild, bias_mod, b_pos, pos_proxy);
+            wild = curve.add(&wild, &curve.g_multiples[wild_jump_idx % curve.g_multiples.len()]);
             wild_steps = curve.barrett_n.add(&wild_steps, &BigInt256::one());
 
             // Check collision
@@ -567,10 +569,14 @@ impl KangarooGenerator {
     /// Multi-kangaroo parallel Pollard's lambda algorithm
     /// Uses multiple independent kangaroo pairs for O(√w / t) expected time
     /// where t is the number of kangaroo pairs
-    pub fn pollard_lambda_parallel(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize, max_cycles: u64, gpu: bool, bias_mod: u64) -> Option<BigInt256> {
+    /// Multi-kangaroo parallel Pollard's lambda algorithm
+    /// Uses multiple independent kangaroo pairs for O(√w / t) expected time
+    /// where t is the number of kangaroo pairs
+    pub fn pollard_lambda_parallel(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize, max_cycles: u64, gpu: bool, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> Option<BigInt256> {
         if gpu {
-            // TODO: GPU implementation - dispatch to hybrid manager
-            warn!("GPU multi-kangaroo not yet implemented, falling back to CPU");
+            // GPU implementation - dispatch to hybrid manager
+            // Note: HybridGpuManager::new() is async, so for now we create a simple instance
+            warn!("GPU multi-kangaroo dispatch not yet fully implemented - using CPU fallback");
             // For now, fall back to CPU implementation
         }
 
@@ -578,18 +584,52 @@ impl KangarooGenerator {
         let curve_ref = &curve;
         let g_arc = Arc::new(g.clone());
         let q_arc = Arc::new(q.clone());
-        (0..num_kangaroos).into_par_iter().map(|_i| {
+        let a_clone = a.clone();
+        let w_clone = w.clone();
+        (0..num_kangaroos).into_par_iter().map(move |_| {
             // Generate random offset for this kangaroo pair
-            // Use a simple approach to get a u64 from the range size
-            let w_array = w.to_u64_array();
+            let w_array = w_clone.to_u64_array();
             let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
             let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
             let offset = BigInt256::from_u64(offset_u64);
 
-            let adjusted_a = curve_ref.barrett_n.add(&a, &offset);
-            let adjusted_w = w.right_shift((num_kangaroos as f64).log2() as usize); // Split range
+            let adjusted_a = curve_ref.barrett_n.add(&a_clone, &offset);
+            let adjusted_w = w_clone.right_shift((num_kangaroos as f64).log2() as usize); // Split range
 
-            self.pollard_lambda(curve_ref, &g_arc, &q_arc, adjusted_a, adjusted_w, max_cycles / num_kangaroos as u64, false, bias_mod)
+            self.pollard_lambda(curve_ref, &g_arc, &q_arc, adjusted_a, adjusted_w, max_cycles / num_kangaroos as u64, bias_mod, b_pos, pos_proxy)
         }).find_any(|sol: &Option<BigInt256>| sol.is_some()).flatten()
+    }
+
+
+    /// Select bias-aware jump operation with configurable modulus and positional preferences
+    fn select_bias_aware_jump(&self, point: &Point, bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+
+        let hash = self.hash_position(point);
+        let g_multiples_len = self.curve.g_multiples.len();
+
+        // Apply modulus bias if specified
+        if bias_mod > 0 && (hash as u64 % bias_mod) == 0 {
+            // Favor biased jumps - stay in the biased residue class
+            (hash % (g_multiples_len / 4)) as usize
+        } else if pos_proxy < 0.1 && rng.gen::<f64>() < b_pos {
+            // Apply positional bias for low proxy values
+            // Favor jumps toward lower indices (assuming lower indices = lower positions)
+            (hash % (g_multiples_len / 10)) as usize
+        } else {
+            // Standard random selection
+            (hash % g_multiples_len) as usize
+        }
+    }
+
+    /// Simple hash function for point-based jump selection
+    fn hash_position(&self, point: &Point) -> usize {
+        // Simple hash using point coordinates
+        let mut hash = point.x[0] as usize;
+        hash = hash.wrapping_mul(31).wrapping_add(point.x[1] as usize);
+        hash = hash.wrapping_mul(31).wrapping_add(point.x[2] as usize);
+        hash = hash.wrapping_mul(31).wrapping_add(point.x[3] as usize);
+        hash.wrapping_mul(31).wrapping_add(point.y[0] as usize)
     }
 }

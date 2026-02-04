@@ -23,3 +23,11 @@ pub mod carry_cu {
     // Custom PTX kernels for optimal carry propagation
     // carry_propagate_warp_shuffle: PTX kernel using warp shuffle for fast carries
 }
+
+pub mod bias_cu {
+    // Bias-based attractor filtering kernels
+    // mod9_attractor_check: CUDA kernel for mod9 bias detection
+    // mod27_attractor_check: CUDA kernel for mod27 bias detection
+    // mod81_attractor_check: CUDA kernel for mod81 bias detection
+    // common_bias_attractor_check: Combined kernel for mod9/mod27/mod81
+}

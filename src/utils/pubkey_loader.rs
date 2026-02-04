@@ -403,7 +403,7 @@ fn combine_multi_bias(probs: Vec<f64>) -> f64 {
 }
 
 /// Detect bias for a single point (used for individual puzzle analysis)
-pub fn detect_bias_single(x: &BigInt256) -> (u64, u64, u64, bool, bool) {
+pub fn detect_bias_single(x: &BigInt256, n: u32) -> (u64, u64, u64, bool, bool, f64) {
     let mod9 = x.mod_u64(9);
     let mod27 = x.mod_u64(27);
     let mod81 = x.mod_u64(81);
@@ -415,7 +415,10 @@ pub fn detect_bias_single(x: &BigInt256) -> (u64, u64, u64, bool, bool) {
     // DP mod9: trivial check if mod9 matches (for DP framework)
     let dp_mod9 = true; // Always true for single point - would be used in DP collection
 
-    (mod9, mod27, mod81, vanity_last_0, dp_mod9)
+    // Positional proxy bias for unsolved puzzles
+    let pos_proxy = detect_pos_bias_proxy_single(n);
+
+    (mod9, mod27, mod81, vanity_last_0, dp_mod9, pos_proxy)
 }
 
 /// Detect dimensionless position bias for a single puzzle

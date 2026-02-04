@@ -35,6 +35,16 @@ use std::ffi::CStr;
 pub struct RhoState {
     pub current: Point,
     pub steps: BigInt256,
+    pub bias_mod: u64,
+}
+
+/// Distinguished point for collision detection
+#[cfg(feature = "rustacuda")]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DpPoint {
+    pub x: [u64; 4],
+    pub steps: BigInt256,
 }
 
 /// Workgroup size for CUDA kernels - tuned for occupancy on RTX 5090
@@ -75,6 +85,8 @@ pub struct CudaBackend {
     step_module: CudaModule,
     barrett_module: CudaModule,
     rho_module: CudaModule,
+    dp_buffer: DeviceBuffer<DpPoint>,
+    dp_count: DeviceBuffer<u32>,
 }
 
 #[cfg(feature = "rustacuda")]
@@ -142,6 +154,11 @@ impl CudaBackend {
         let barrett_module = CudaModule::load_from_file(&std::ffi::CString::new(barrett_path)?)?;
         let rho_module = CudaModule::load_from_file(&std::ffi::CString::new(rho_path)?)?;
 
+        // Initialize DP buffers (1M entries should be sufficient)
+        const MAX_DP: usize = 1_000_000;
+        let dp_buffer = unsafe { DeviceBuffer::uninitialized(MAX_DP)? };
+        let dp_count = DeviceBuffer::from_slice(&[0u32])?;
+
         Ok(Self {
             device,
             context,
@@ -155,6 +172,8 @@ impl CudaBackend {
             step_module,
             barrett_module,
             rho_module,
+            dp_buffer,
+            dp_count,
         })
     }
 }
@@ -548,12 +567,58 @@ impl GpuBackend for CudaBackend {
     // Block 4: Launch Wrapper (Add in rust cuda_backend.rs)
     // Deep Explanation: Enqueue kernel with grid/blocks (grid = num_states / WORKGROUP_SIZE +1); sync/check err. Math: Parallel scales to GPU cores (e.g., 4096 threads RTX, 100x rho speed).
 
-    pub fn launch_rho_kernel(&self, states: &DeviceBuffer<RhoState>, num_states: u32, bias_mod: BigInt256) -> Result<(), CudaError> {
+    /// Launch rho kernel for parallel kangaroo walks
+    pub fn launch_rho_kernel(&self, d_states: &DeviceBuffer<RhoState>, num_states: u32, bias_mod: BigInt256) -> Result<(), CudaError> {
         let blocks = (num_states + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-        // TODO: Need dp_buffer and dp_count buffers - add as parameters or create internally
-        // rho_kernel<<<blocks, WORKGROUP_SIZE>>>(states.ptr, num_states, bias_mod, self.dp_buffer.ptr, self.dp_count.ptr);
+        let rho_fn = self.rho_module.get_function(CStr::from_bytes_with_nul(b"rho_kernel\0")?)?;
+
+        // Convert bias_mod to array for kernel
+        let bias_array = bias_mod.to_u64_array();
+
+        unsafe {
+            cuda_check!(launch!(rho_fn<<<(blocks, 1, 1), (WORKGROUP_SIZE, 1, 1), 0, self.stream>>>(
+                d_states.as_device_ptr(),
+                num_states,
+                bias_array,
+                self.dp_buffer.as_device_ptr(),
+                self.dp_count.as_device_ptr()
+            )), "rho_kernel launch");
+        }
+
         cuda_check!(self.stream.synchronize(), "rho_kernel sync");
         Ok(())
+    }
+
+    /// Create device buffer for rho states
+    pub fn create_state_buffer(&self, states: &[RhoState]) -> Result<DeviceBuffer<RhoState>> {
+        Ok(DeviceBuffer::from_slice(states)?)
+    }
+
+    /// Read DP buffer from device
+    pub fn read_dp_buffer(&self) -> Result<Vec<DpPoint>> {
+        const MAX_DP: usize = 1_000_000; // Reasonable limit
+        let mut host_dp = vec![DpPoint::default(); MAX_DP];
+
+        // Read count first
+        let mut count = 0u32;
+        self.read_u32(self.dp_count)?.copy_to(&mut count)?;
+
+        if count > 0 {
+            // Read actual DP points
+            let actual_count = count.min(MAX_DP as u32) as usize;
+            let mut host_dp_slice = &mut host_dp[0..actual_count];
+            self.dp_buffer.copy_to(host_dp_slice)?;
+            Ok(host_dp[0..actual_count].to_vec())
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Read a single u32 from device
+    pub fn read_u32(&self, buffer: &DeviceBuffer<u32>) -> Result<u32> {
+        let mut host_val = 0u32;
+        buffer.copy_to(&mut host_val)?;
+        Ok(host_val)
     }
 }
 
