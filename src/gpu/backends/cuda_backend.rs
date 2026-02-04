@@ -154,6 +154,16 @@ impl CudaBackend {
         join_all(futures).await
     }
 
+    // Chunk: L2 Persist for Blackwell (cuda_backend.rs)
+    // Dependencies: cudarc::driver::*
+    pub fn launch_with_l2_hint(kernel: &CudaModule, grid: LaunchDim, block: LaunchDim, params: &[CudaSlice]) {
+        unsafe {
+            cudaFuncSetAttribute(kernel.ptr, cudaFuncAttribute::PREFERRED_SHARED_MEMORY_CARVEOUT, 50);  // 50% L2 for shared
+            cudaFuncSetCacheConfig(kernel.ptr, cudaFuncCache::PREFER_L1);  // L1 for locals
+        }
+        kernel.launch(grid, block, params);
+    }
+
     /// Create new CUDA backend with modules loaded
     pub fn new() -> anyhow::Result<Self> {
         rustacuda::init(rustacuda::CudaFlags::empty())?;

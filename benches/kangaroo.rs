@@ -4,7 +4,7 @@ use speedbitcrack::types::{KangarooState, Point};
 use speedbitcrack::kangaroo::collision::Trap;
 #[cfg(feature = "cudarc")]
 use std::process::Command;
-use num_bigint::BigInt;
+use num_bigint::{BigInt, BigUint};
 use std::collections::HashMap;
 
 fn bench_step_batch(c: &mut Criterion) {
@@ -137,13 +137,18 @@ fn bench_pos_slicing(c: &mut Criterion) {
     group.finish();
 }
 
-// Chunk: Puzzle #66 Bench (benches/kangaroo.rs)
+// Chunk: #66 Range and Key Validation (benches/kangaroo.rs)
 fn bench_puzzle66(c: &mut Criterion) {
-    let puzzle66 = speedbitcrack::targets::loader::load_puzzle_keys().get(65).unwrap().clone(); // 0-indexed
+    let low = BigInt::from(1u64 << 65);
+    let high = (BigInt::from(1u64 << 66) - 1);
+    let known_key = BigInt::from_str_radix("2832ed74f2b5e35ee", 16).unwrap();
+    let target = speedbitcrack::targets::loader::load_puzzle_keys().get(65).unwrap().0;  // Pubkey
     let mut group = c.benchmark_group("puzzle66_crack");
     group.bench_function(BenchmarkId::new("full_crack", 4096), |b| {
         b.iter(|| {
-            let _ = speedbitcrack::kangaroo::pollard_lambda_parallel_pos(puzzle66.0, (BigInt::from(0u64), BigInt::from(1u64) << 66));
+            if let Some(key) = speedbitcrack::kangaroo::pollard_lambda_parallel_pos(target, (low.clone(), high.clone())) {
+                assert_eq!(key, known_key);  // Validation
+            }
         });
     });
     group.finish();
