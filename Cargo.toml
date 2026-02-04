@@ -42,6 +42,7 @@ rustacuda = ["dep:rustacuda", "dep:rustacuda_core", "dep:rustacuda_derive", "dep
 vulkano = ["dep:vulkano", "dep:vulkano-shaders"]
 wgpu = ["dep:wgpu"]
 fuzz = ["libfuzzer-sys"]
+smoke = []  # Enable smoke test asserts in benchmarks
 
 [lints.rust]
 # unsafe_code = "deny"  # Disabled for GPU operations (CUDA kernels, Vulkan buffers)

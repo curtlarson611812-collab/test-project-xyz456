@@ -761,6 +761,14 @@ pub fn barrett_mu(range: &BigInt256) -> BigInt256 {
     (&b / range).into()  // floor div
 }
 
+// Chunk: Safe Barrett Rem (generator.rs)
+// In SIMD function (after q calc):
+// let mut rem = rand - q * range;  // BigInt256 ops
+// while rem >= range {  // At most 2 iters
+//     rem -= range;
+// }
+// if rem < BigInt256::zero() { rem += range; }  // Rare underflow
+
 // Chunk: AVX512 Gate for BigInt Random (generator.rs)
 // Dependencies: std::arch::x86_64::*, num_bigint::BigInt (for range)
 #[cfg(target_feature = "avx512f")]

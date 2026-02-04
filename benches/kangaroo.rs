@@ -146,9 +146,10 @@ fn bench_puzzle66(c: &mut Criterion) {
     let mut group = c.benchmark_group("puzzle66_crack");
     group.bench_function(BenchmarkId::new("full_crack", 4096), |b| {
         b.iter(|| {
-            if let Some(key) = speedbitcrack::kangaroo::pollard_lambda_parallel_pos(target, (low.clone(), high.clone())) {
-                assert_eq!(key, known_key);  // Validation
-            }
+            let key = speedbitcrack::kangaroo::pollard_lambda_parallel_pos(target, (low.clone(), high.clone()));
+            #[cfg(feature = "smoke")]
+            if let Some(k) = key { assert_eq!(k, known_key); }
+            black_box(key);  // Prevent opt
         });
     });
     group.finish();

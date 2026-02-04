@@ -287,6 +287,15 @@ impl BigInt256 {
         assert_eq!(bytes.len(), 32, "Hex string too long after padding");
 
         let mut limbs = [0u64; 4];
+
+    // Chunk: Limbs Accessor (math/bigint.rs)
+    // Assume struct BigInt256 { limbs: [u64; 4], }  // Little-endian
+    pub fn limbs(&self) -> &[u64; 4] {
+        &self.limbs
+    }
+    pub fn limbs_vec(&self) -> Vec<u64> {  // If vec needed for SIMD pack
+        self.limbs.to_vec()
+    }
         // Convert big-endian bytes to little-endian limbs
         for i in 0..4 {
             limbs[i] = u64::from_le_bytes([

@@ -24,12 +24,24 @@ renderdoccmd --version
 
 echo "GPU profiling tools setup complete!"
 echo ""
-# Chunk: Nsight Auto Profile (setup_profiling.sh)
-# Dependencies: ncu installed, CUDA_HOME set
+# Chunk: Python Nsight Parse (setup_profiling.sh)
 if [ "$NVIDIA_COMPUTE" = "1" ]; then
     ncu --set full --csv -o profile_$(date +%s).csv --target-processes all cargo criterion "$@"
-    # Parse CSV: grep sm_efficiency profile*.csv > metrics.log
-    python -c "import csv; with open('profile.csv') as f: r=csv.reader(f); print({row[0]:row[1] for row in r if 'sm_efficiency' in row[0]})" >> ci_metrics.json
+    python3 - <<EOF
+import csv
+import json
+metrics = {}
+try:
+    with open('profile.csv', 'r') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if 'sm_efficiency' in row[0]:
+                metrics[row[0]] = row[1]
+except Exception as e:
+    print(f"Error: {e}")
+with open('ci_metrics.json', 'w') as j:
+    json.dump(metrics, j)
+EOF
 else
     cargo criterion "$@"
 fi

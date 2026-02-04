@@ -27,6 +27,9 @@ use rustacuda::launch;
 use rustacuda::error::CudaError;
 #[cfg(feature = "rustacuda")]
 use std::ffi::CStr;
+// For cudarc L2 hint
+#[cfg(feature = "rustacuda")]
+use cudarc::driver::{CudaFunctionAttribute, CudaCacheConfig, DriverError};
 
 /// Rho algorithm state for GPU kernel execution
 #[cfg(feature = "rustacuda")]
@@ -154,14 +157,12 @@ impl CudaBackend {
         join_all(futures).await
     }
 
-    // Chunk: L2 Persist for Blackwell (cuda_backend.rs)
-    // Dependencies: cudarc::driver::*
-    pub fn launch_with_l2_hint(kernel: &CudaModule, grid: LaunchDim, block: LaunchDim, params: &[CudaSlice]) {
-        unsafe {
-            cudaFuncSetAttribute(kernel.ptr, cudaFuncAttribute::PREFERRED_SHARED_MEMORY_CARVEOUT, 50);  // 50% L2 for shared
-            cudaFuncSetCacheConfig(kernel.ptr, cudaFuncCache::PREFER_L1);  // L1 for locals
-        }
-        kernel.launch(grid, block, params);
+    // Chunk: Cudarc L2 Hint (cuda_backend.rs)
+    // Dependencies: cudarc::driver::{CudaFunctionAttribute, CudaCacheConfig}
+    pub fn launch_with_l2_hint(kernel: &CudaFunction, grid: LaunchDim, block: LaunchDim, params: &[CudaSlice]) -> Result<(), DriverError> {
+        kernel.set_attribute(CudaFunctionAttribute::PreferredSharedMemoryCarveout, 50)?;  // 50% L2
+        kernel.set_cache_config(CudaCacheConfig::PreferL1)?;  // L1 for locals
+        kernel.launch(grid, block, params)
     }
 
     /// Create new CUDA backend with modules loaded
