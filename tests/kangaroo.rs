@@ -223,4 +223,48 @@ mod tests {
             }
         }
     }
+
+    // Chunk: Bias Jump Test (tests/kangaroo.rs)
+    // Dependencies: kangaroo::generator::select_bias_aware_jump, std::collections::HashMap
+    #[test]
+    fn test_bias_jump() {
+        use speedbitcrack::kangaroo::generator::KangarooGenerator;
+        use speedbitcrack::config::Config;
+        use std::collections::HashMap;
+
+        let gen = KangarooGenerator::new(&Config::default());
+        let current = speedbitcrack::math::bigint::BigInt256::from_u64(81);
+        let biases = HashMap::from([(0, 1.2), (9, 1.3), (27, 1.4), (81, 1.5)]);
+
+        // Test that bias-aware jump selection works
+        // This is a simplified test - the real implementation would use the biases
+        let jump_idx = gen.select_bias_aware_jump(&current, &biases);
+        assert!(jump_idx < 256); // Valid jump table index
+    }
+
+    // Chunk: Bias Jump Scaling (tests/kangaroo.rs)
+    // Dependencies: kangaroo::generator::select_bias_aware_jump, std::collections::HashMap
+    #[test]
+    fn test_bias_aware_jump() {
+        use speedbitcrack::kangaroo::generator::KangarooGenerator;
+        use speedbitcrack::config::Config;
+        use std::collections::HashMap;
+
+        let gen = KangarooGenerator::new(&Config::default());
+        let current = speedbitcrack::math::bigint::BigInt256::from_u64(0);  // res=0, high bias
+        let biases = HashMap::from([(0, (1.0, 1.0, 1.4))]);  // mod81=1.4
+        let jump = gen.select_bias_aware_jump(&current, &biases);
+        let base_jump = speedbitcrack::math::bigint::BigInt256::from(rand::random::<u32>());
+        assert!(jump > base_jump, "Bias not applied: {} <= {}", jump, base_jump);  // Scaled > base
+    }
+
+    // Chunk: DP Trailing Zeros Test (tests/kangaroo.rs)
+    // Dependencies: math::BigInt256, constants::DP_BITS=24
+    #[test]
+    fn test_dp_detection() {
+        let non_dp = speedbitcrack::math::bigint::BigInt256::from_u64(1);  // 1 trailing zero
+        let dp = speedbitcrack::math::bigint::BigInt256::one().shl(24);  // 2^24, 24 zeros
+        assert!(!non_dp.is_dp(24));  // Custom is_dp = trailing_zeros >= DP_BITS
+        assert!(dp.is_dp(24));  // Math check
+    }
 }

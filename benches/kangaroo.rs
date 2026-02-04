@@ -185,5 +185,35 @@ fn bench_solved_puzzles(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66, bench_puzzle66_laptop, bench_solved_puzzles);
+// Chunk: Full #66 Bench with Validation (benches/kangaroo.rs)
+// Dependencies: criterion::{Criterion, black_box}, puzzles::load_solved
+fn bench_puzzle66_full(c: &mut Criterion) {
+    let (low, high, known) = speedbitcrack::puzzles::load_solved(66);
+    let target = speedbitcrack::targets::loader::load_puzzle_keys().get(65).unwrap().0;  // Pubkey
+    c.bench_function("puzzle66_full", |b| b.iter(|| {
+        let key = speedbitcrack::kangaroo::pollard_lambda_parallel(&target, (low.clone(), high.clone()), 2048);
+        black_box(key);
+    }));
+}
+
+// Chunk: Partial Steps Bench (benches/kangaroo.rs)
+fn bench_partial_steps(c: &mut Criterion) {
+    let states = vec![speedbitcrack::types::RhoState::default(); 2048];
+    let jumps = vec![speedbitcrack::math::bigint::BigInt256::one(); 256];
+    c.bench_function("cpu_batch_1e5", |b| b.iter(|| {
+        let mut states_clone = states.clone();
+        speedbitcrack::gpu::backends::cpu_backend::cpu_batch_step(&mut states_clone, 100000, &jumps);
+        black_box(states_clone);
+    }));
+}
+
+// Chunk: Nsight Multi-Kernel Parse Update (Shell/Python) - Update setup_profiling.sh.
+// Dependencies: python3, csv, json modules
+// Updated in setup_profiling.sh
+
+// Chunk: Thermal Auto-Tune (Rust) - Add to src/main.rs.
+// Dependencies: std::fs::read_to_string, regex::Regex (add cargo add regex)
+// Updated in main.rs
+
+criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66, bench_puzzle66_laptop, bench_solved_puzzles, bench_puzzle66_full, bench_partial_steps);
 criterion_main!(benches);

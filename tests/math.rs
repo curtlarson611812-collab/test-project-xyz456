@@ -84,6 +84,29 @@ mod tests {
         assert!(reduced < curve.p);
     }
 
+    // Chunk: BigInt Add/Shl Test (tests/math.rs)
+    // Dependencies: math::BigInt256
+    #[test]
+    fn test_bigint_add_shl() {
+        let a = BigInt256::from_u64(1);
+        let b = a.shl(65);  // 2^65
+        let c = b + a;  // 2^65 +1
+        assert_eq!(c.to_u64(), None);  // Overflow u64
+        assert_eq!(c.shl(1), b.shl(1) + BigInt256::from_u64(2));  // Math check
+    }
+
+    // Chunk: Mod Inverse Test (tests/math.rs)
+    // Dependencies: math::secp::mod_inverse, constants::CURVE_ORDER
+    #[test]
+    fn test_mod_inverse() {
+        let curve = Secp256k1::new();
+        let a = BigInt256::from_u64(5);
+        let inv = curve.mod_inverse(&a, &curve.p).unwrap();
+        let product = curve.montgomery.mul(&a, &inv);
+        let one = BigInt256::from_u64(1);
+        assert_eq!(product, one);
+    }
+
     // Test Montgomery multiplication
     #[test]
     fn test_montgomery_multiplication() {
@@ -99,6 +122,18 @@ mod tests {
         let result_normal = curve.montgomery.reduce(&result, &curve.p);
 
         assert_eq!(result_normal, expected);
+    }
+
+    // Chunk: Mod Inverse Test (tests/math.rs)
+    // Dependencies: math::secp::mod_inverse, constants::CURVE_ORDER
+    #[test]
+    fn test_mod_inverse() {
+        let curve = Secp256k1::new();
+        let a = BigInt256::from_u64(5);
+        let inv = curve.mod_inverse(&a, &curve.p).unwrap();
+        let product = curve.montgomery.mul(&a, &inv);
+        let one = BigInt256::from_u64(1);
+        assert_eq!(product, one);
     }
 
     // Test Jacobian to affine conversion

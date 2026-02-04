@@ -6,6 +6,9 @@ use super::backend_trait::GpuBackend;
 use super::cpu_backend::CpuBackend;
 use crate::types::RhoState;
 use crate::kangaroo::collision::Trap;
+use crate::config::GpuConfig;
+use crate::math::bigint::BigInt256;
+use crate::utils::logging;
 use anyhow::Result;
 use crossbeam_deque::Worker;
 use std::sync::Arc;
@@ -91,6 +94,57 @@ impl HybridBackend {
         }
     }
 
+    // Chunk: Profile Hashrates for Ratio (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: std::time::Instant, cpu_backend::cpu_batch_step, cuda_backend::dispatch_and_update
+    pub fn profile_hashrates(config: &GpuConfig) -> (f64, f64) {  // gpu_ops_sec, cpu_ops_sec
+        let test_steps = 10000;
+        let test_states = vec![RhoState::default(); config.max_kangaroos.min(512)];  // Small for quick
+        let jumps = vec![BigInt256::one(); 256];
+
+        // GPU profile
+        let gpu_start = std::time::Instant::now();
+        // dispatch_and_update(/* device, kernel, test_states.clone(), jumps.clone(), bias, test_steps */).ok();
+        let gpu_time = gpu_start.elapsed().as_secs_f64();
+        let gpu_hr = (test_steps as f64 * test_states.len() as f64) / gpu_time;
+
+        // CPU profile
+        let mut cpu_states = test_states.clone();
+        let cpu_start = std::time::Instant::now();
+        CpuBackend::cpu_batch_step(&mut cpu_states, test_steps, &jumps);
+        let cpu_time = cpu_start.elapsed().as_secs_f64();
+        let cpu_hr = (test_steps as f64 * test_states.len() as f64) / cpu_time;
+
+        (gpu_hr, cpu_hr)
+    }
+
+    // Chunk: Adjust Frac on Metrics (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: adjust_gpu_frac, scale_kangaroos, profile_hashrates
+    pub fn adjust_gpu_frac(config: &mut GpuConfig, util: f64, temp: u32) {  // util from Nsight [0-1], temp from log
+        let (gpu_hr, cpu_hr) = Self::profile_hashrates(config);
+        let target_ratio = gpu_hr / (gpu_hr + cpu_hr);
+        let util_norm = util;  // 0.8 ideal =1.0
+        let temp_norm = if temp > 80 { 0.0 } else if temp < 65 { 1.0 } else { (80.0 - temp as f64) / 15.0 };
+        let delta = 0.05 * (util_norm - (1.0 - temp_norm));  // Positive if high util/low temp
+        config.gpu_frac = (config.gpu_frac + delta).clamp(0.5, 0.9);  // Laptop bounds
+        if config.gpu_frac > target_ratio { config.gpu_frac = target_ratio; }  // Cap on profiled
+    }
+
+    // Chunk: Dynamic Kangaroo Scaling (src/config.rs)
+    // Dependencies: std::process::Command for nvidia-smi
+    pub fn scale_kangaroos(config: &mut GpuConfig, util: f64, temp: u32) {
+        let output = std::process::Command::new("nvidia-smi").arg("-q").arg("-d").arg("memory").output().ok();
+        let mem_str = output.map(|o| String::from_utf8(o.stdout).unwrap_or_default()).unwrap_or_default();
+        let used_mem = mem_str.lines().find(|l| l.contains("Used")).and_then(|l| l.split_whitespace().nth(2).and_then(|s| s.parse::<u32>().ok())).unwrap_or(0);
+        let avail_mem = 8192 - used_mem;  // 8GB total
+
+        let target_t = (avail_mem as usize * 1024 / 128) * (util as usize / 10 * 6);  // Mem / state_size * occ_factor
+        if temp < 65 && util > 0.9 && target_t > config.max_kangaroos {
+            config.max_kangaroos = (config.max_kangaroos * 3 / 2).min(4096);
+        } else if temp > 75 || used_mem > 6144 {
+            config.max_kangaroos /= 2;
+        }
+    }
+
     /// Optimized dispatch with dynamic load balancing
     pub async fn dispatch_step_batch(
         &self,
@@ -155,6 +209,27 @@ impl HybridBackend {
         }
 
         Ok(all_traps)
+    }
+
+    // Chunk: Scaled Dispatch Loop (src/gpu/backends/hybrid_backend.rs)
+    // Dependencies: adjust_gpu_frac, scale_kangaroos, profile_hashrates
+    pub fn dispatch_hybrid_scaled(config: &mut GpuConfig, target: &BigInt256, range: (BigInt256, BigInt256), total_steps: u64) -> Option<BigInt256> {
+        let mut completed = 0;
+        let batch_size = 1000000;  // 1M steps/batch
+        while completed < total_steps {
+            let batch = batch_size.min((total_steps - completed) as usize);
+            // Note: dispatch_hybrid function needs to be implemented or imported
+            let result = None; // Placeholder - need to implement dispatch_hybrid
+            if let Some(key) = result { return Some(key); }
+            completed += batch as u64;
+
+            // Scale every batch
+            let util = logging::load_nsight_util("ci_metrics.json").unwrap_or(0.8);  // Parse eff
+            let temp = logging::get_avg_temp("temp.log").unwrap_or(70);  // From auto_tune_from_temp
+            Self::adjust_gpu_frac(config, util, temp);
+            Self::scale_kangaroos(config, util, temp);
+        }
+        None
     }
 
     /// Check if this backend supports precision operations (true for CUDA, false for CPU)

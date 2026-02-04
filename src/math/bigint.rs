@@ -6,9 +6,10 @@ use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
 use std::error::Error;
 use rand::{thread_rng, Rng};
+use serde::{Deserialize, Serialize};
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct BigInt256 {
     /// Limbs in little-endian order (limb[0] is least significant)
     pub limbs: [u64; 4],

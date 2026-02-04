@@ -4,6 +4,10 @@
 
 use log::{info, error, debug};
 use std::time::Instant;
+use std::collections::HashMap;
+use std::fs::read_to_string;
+use regex::Regex;
+use serde_json;
 
 /// Setup structured logging
 pub fn setup_logging() -> Result<(), Box<dyn std::error::Error>> {
@@ -139,4 +143,19 @@ impl ProgressTracker {
         info!("Completed: {} items in {:.2}s ({:.0} items/sec)",
               self.current, elapsed, rate);
     }
+}
+
+// Chunk: Parse Metrics (src/utils/logging.rs)
+// Dependencies: serde_json::from_str, regex::Regex, std::fs::read_to_string
+pub fn load_nsight_util(path: &str) -> Option<f64> {
+    let json_str = read_to_string(path).ok()?;
+    let metrics: HashMap<String, HashMap<String, String>> = serde_json::from_str(&json_str).ok()?;
+    metrics.get("rho_kernel").and_then(|m: &HashMap<String, String>| m.get("efficiency").and_then(|s: &String| s.parse().ok())).map(|e: f64| e / 100.0)
+}
+
+pub fn get_avg_temp(log_path: &str) -> Option<u32> {
+    let data = read_to_string(log_path).ok()?;
+    let re = Regex::new(r"(\d+)C").ok()?;
+    let temps: Vec<u32> = re.find_iter(&data).filter_map(|m| m.as_str().trim_end_matches('C').parse().ok()).collect();
+    if temps.len() > 10 { Some(temps.iter().sum::<u32>() / temps.len() as u32) } else { None }
 }

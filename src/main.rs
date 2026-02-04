@@ -15,8 +15,10 @@ use speedbitcrack::test_basic::run_basic_test;
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::math::bigint::BigInt256;
-use speedbitcrack::types::Point;
+use speedbitcrack::types::{Point, RhoState};
 use std::process::Command;
+use std::fs::read_to_string;
+use regex::Regex;
 
 // Chunk: Laptop Flag Parse (main.rs)
 /// Command line arguments
@@ -63,6 +65,16 @@ pub fn start_thermal_log() {
         .arg("-f").arg("temp.log")
         .spawn()
         .expect("Thermal log failed");
+}
+
+// Chunk: Thermal Auto-Tune (src/main.rs)
+// Dependencies: std::fs::read_to_string, regex::Regex for parse temp.log
+fn auto_tune_kangaroos(config: &mut speedbitcrack::config::GpuConfig) {
+    let temp_str = read_to_string("temp.log").unwrap_or(String::new());
+    let re = Regex::new(r"(\d+)C").unwrap();
+    let temps: Vec<u32> = re.captures_iter(&temp_str).map(|c| c[1].parse().unwrap()).collect();
+    let avg_temp = temps.iter().sum::<u32>() / temps.len() as u32;
+    if avg_temp > 80 { config.max_kangaroos /= 2; } else if avg_temp < 65 { config.max_kangaroos *= 2; }
 }
 
 /// Bitcoin Puzzle Database Structure
@@ -188,6 +200,32 @@ fn check_puzzle_pubkeys() -> Result<()> {
 
     println!("\n🎯 Total puzzles: {}", speedbitcrack::puzzles::PUZZLE_MAP.len());
     Ok(())
+}
+
+// Chunk: State Checkpoint (src/kangaroo/manager.rs)
+// Dependencies: bincode::serialize_into, std::fs::File
+pub fn save_checkpoint(states: &[speedbitcrack::types::RhoState], path: &std::path::Path) -> Result<(), bincode::Error> {
+    let file = std::fs::File::create(path)?;
+    bincode::serialize_into(file, states)
+}
+
+// Chunk: Checkpoint Save (Rust) - Add to kangaroo/manager.rs.
+// Dependencies: bincode::{serialize_into, deserialize_from}, std::fs::File, kangaroo::manager::save_checkpoint
+fn crack_loop(target: &BigInt256, range: (BigInt256, BigInt256), config: &mut speedbitcrack::config::GpuConfig) -> Option<BigInt256> {
+    let mut states = if let Ok(file) = std::fs::File::open("checkpoint.bin") {
+        bincode::deserialize_from(file).unwrap_or(vec![RhoState::default(); config.max_kangaroos])
+    } else { vec![RhoState::default(); config.max_kangaroos] };
+    let mut total_steps = 0;
+    loop {
+        // Placeholder - dispatch_hybrid needs implementation
+        let batch_result = None; // speedbitcrack::gpu::backends::hybrid_backend::dispatch_hybrid(config, target, range.clone(), 1000000);  // 1M batch
+        if let Some(key) = batch_result { return Some(key); }
+        total_steps += 1000000;
+        auto_tune_kangaroos(config);  // Adjust on temp
+        save_checkpoint(&states, std::path::Path::new("checkpoint.bin")).ok();
+        if total_steps > 100000000 { break; }  // Safety cap
+    }
+    None
 }
 
 fn main() -> Result<()> {

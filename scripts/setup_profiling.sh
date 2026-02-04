@@ -24,7 +24,7 @@ renderdoccmd --version
 
 echo "GPU profiling tools setup complete!"
 echo ""
-# Chunk: Python Nsight Parse (setup_profiling.sh)
+# Chunk: Multi-Metric Nsight Parse (setup_profiling.sh)
 if [ "$NVIDIA_COMPUTE" = "1" ]; then
     ncu --set full --csv -o profile_$(date +%s).csv --target-processes all cargo criterion "$@"
     python3 - <<EOF
@@ -38,8 +38,11 @@ try:
             if row and 'Kernel Name' in row[0]:
                 current_kernel = row[1]
                 metrics[current_kernel] = {}
-            elif current_kernel and 'sm_efficiency' in row[0]:
-                metrics[current_kernel][row[0]] = row[1]
+            elif current_kernel:
+                if 'sm_efficiency' in row[0]:
+                    metrics[current_kernel]['efficiency'] = row[1]
+                if 'dram__bytes_read.sum' in row[0]:
+                    metrics[current_kernel]['mem_bw'] = row[1]
 except Exception as e:
     print(f"Error: {e}")
 with open('ci_metrics.json', 'w') as j:

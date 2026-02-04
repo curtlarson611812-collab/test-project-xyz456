@@ -7,7 +7,7 @@ use std::fmt;
 use crate::math::bigint::BigInt256;
 
 /// Rho algorithm state for GPU kernel execution (common definition)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct RhoState {
     pub current: Point,
@@ -17,8 +17,18 @@ pub struct RhoState {
 
 impl RhoState {
     /// Create random state within range
-    pub fn random_in_range(range: &(BigInt256, BigInt256)) -> Self {
+    pub fn random_in_range(_range: &(BigInt256, BigInt256)) -> Self {
         // TODO: Implement proper random generation
+        Self {
+            current: Point::infinity(),
+            steps: BigInt256::zero(),
+            is_dp: false,
+        }
+    }
+}
+
+impl Default for RhoState {
+    fn default() -> Self {
         Self {
             current: Point::infinity(),
             steps: BigInt256::zero(),

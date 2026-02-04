@@ -214,15 +214,15 @@ fn test_positional_proxy_integration() {
     }
 }
 
-// Chunk: KS Test for Bias Significance (bias_validation.rs)
+// Chunk: KS Bias Validation (tests/bias_validation.rs)
 // Dependencies: statrs::distribution::{KolmogorovSmirnov, Uniform}
-// Tests bias effectiveness beyond chi-square (p<0.05 = significant deviation from uniform)
 #[test]
 fn test_bias_ks() {
-    let observed: Vec<f64> = vec![0.15, 0.12, 0.18];  // Residue frequencies from solved puzzles
-    let expected = Uniform::new(0.0, 1.0);  // Null hypothesis: uniform distribution
-    let ks = KolmogorovSmirnov::two_sample(&observed, &expected.sample(1000));
-    assert!(ks.p_value < 0.05, "Bias not significant: KS p={}", ks.p_value);  // Significant = effective bias
+    let observed = vec![0.2, 0.15, 0.25, 0.1, 0.3];  // Biased mod5 freq
+    let uniform = Uniform::new(0.0, 1.0);
+    let samples: Vec<f64> = (0..1000).map(|_| uniform.sample(&mut rand::thread_rng())).collect();
+    let ks = KolmogorovSmirnov::two_sample(&observed, &samples);
+    assert!(ks.p_value < 0.05);  // Significant bias
 }
 
 // Bootstrap resampling for confidence intervals on speedup

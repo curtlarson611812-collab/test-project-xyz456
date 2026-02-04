@@ -310,6 +310,32 @@ fn test_puzzle_private_key_verification() {
     }
 }
 
+// Chunk: #64 Validation Test (tests/puzzle.rs)
+// Dependencies: kangaroo::pollard_lambda_parallel, puzzles::load_solved, math::secp::point_mul
+#[test]
+#[cfg(feature = "smoke")]
+fn test_puzzle64_solve() {
+    let (low, high, known) = speedbitcrack::puzzles::load_solved(64);
+    let target_pub = speedbitcrack::targets::loader::load_puzzle_keys().get(63).unwrap().pubkey_point();
+    let found = speedbitcrack::kangaroo::pollard_lambda_parallel(&target_pub.hash(), (low, high), 1024, 81, 2).unwrap();
+    let computed_pub = speedbitcrack::math::secp::point_mul(&known, &speedbitcrack::math::constants::GENERATOR);
+    assert_eq!(found, known);
+    assert_eq!(computed_pub, target_pub);  // Verify key * G == pub
+}
+
+// Chunk: #65 Validation Test (tests/puzzle.rs)
+// Dependencies: same as above
+#[test]
+#[cfg(feature = "smoke")]
+fn test_puzzle65_solve() {
+    let (low, high, known) = speedbitcrack::puzzles::load_solved(65);
+    let target_pub = speedbitcrack::targets::loader::load_puzzle_keys().get(64).unwrap().pubkey_point();
+    let found = speedbitcrack::kangaroo::pollard_lambda_parallel(&target_pub.hash(), (low, high), 1024, 81, 2).unwrap();
+    let computed_pub = speedbitcrack::math::secp::point_mul(&known, &speedbitcrack::math::constants::GENERATOR);
+    assert_eq!(found, known);
+    assert_eq!(computed_pub, target_pub);
+}
+
 /// Test all unsolved puzzles (67-160) for bias patterns
 #[test]
 #[test]
