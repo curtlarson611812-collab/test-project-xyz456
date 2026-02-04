@@ -774,6 +774,12 @@ impl KangarooGenerator {
         }
         let (_, _, pos_factor) = detect_bias_single(current, 0);  // pos_proxy
         chain_bias *= pos_factor;
+
+        // Log bias application for monitoring
+        if chain_bias > 1.0 {
+            info!("🎯 Bias applied: chain_bias={:.3} for residue={}", chain_bias, current.low_u32() % 81);
+        }
+
         let rand_scale = rand::random::<f64>() * chain_bias;
         let base_jump = BigInt256::from_u64(rand::random::<u32>() as u64);  // Mock base, replace with bucket
         let jump = base_jump + BigInt256::from_u64(rand_scale as u64);

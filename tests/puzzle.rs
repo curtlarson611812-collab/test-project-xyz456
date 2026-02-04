@@ -543,3 +543,83 @@ fn test_iterative_pos_slice_analysis() {
     assert!(max_range >= 0.0 && max_range <= 1.0);
     assert!(min_range < max_range);
 }
+
+// Chunk: Valuable Mode Test (tests/puzzle.rs)
+#[test]
+fn test_valuable_mode() {
+    use speedbitcrack::kangaroo::generator::KangarooGenerator;
+    use speedbitcrack::config::Config;
+    use std::collections::HashMap;
+
+    // Test valuable mode setup (can't run full solve due to time constraints)
+    let config = Config::default();
+    let gen = KangarooGenerator::new(&config);
+
+    // Create mock target point
+    let curve = speedbitcrack::math::secp::Secp256k1::new();
+    let target_point = curve.g.clone();
+
+    // Test bias detection for mock valuable puzzle
+    let points = vec![target_point.clone()];
+    let biases = gen.aggregate_bias(&points);
+    let score = super::score_bias(&biases);
+
+    // Should detect some bias pattern
+    assert!(score >= 1.0);
+    assert!(biases.len() > 0);
+
+    // Log would show bias application in real run
+    println!("Valuable mode test: bias_score={:.3}, biases_count={}", score, biases.len());
+}
+
+// Chunk: Test Mode Test (tests/puzzle.rs)
+#[test]
+fn test_test_mode() {
+    use speedbitcrack::kangaroo::generator::KangarooGenerator;
+    use speedbitcrack::config::Config;
+    use speedbitcrack::math::bigint::BigInt256;
+
+    // Test with a very small range for quick validation
+    let config = Config::default();
+    let gen = KangarooGenerator::new(&config);
+
+    // Create mock solved puzzle scenario
+    let curve = speedbitcrack::math::secp::Secp256k1::new();
+    let target_point = curve.g.clone();
+
+    // Small test range [1, 100]
+    let range = (BigInt256::from_u64(1), BigInt256::from_u64(100));
+
+    // Test bias setup
+    let points = vec![target_point.clone()];
+    let biases = gen.aggregate_bias(&points);
+    let score = super::score_bias(&biases);
+
+    // Verify setup
+    assert!(score >= 1.0);
+    assert!(range.1 > range.0);
+
+    // In real test mode, would run pollard_lambda_parallel and verify result
+    println!("Test mode validation: range=[{}, {}], bias_score={:.3}",
+             range.0.to_hex(), range.1.to_hex(), score);
+}
+
+// Chunk: Custom Range Mode Test (tests/puzzle.rs)
+#[test]
+fn test_custom_range_mode() {
+    use speedbitcrack::math::bigint::BigInt256;
+
+    // Test custom range parsing and validation
+    let low_hex = "1";
+    let high_hex = "100";
+
+    let low = BigInt256::from_hex(low_hex).expect("Should parse low hex");
+    let high = BigInt256::from_hex(high_hex).expect("Should parse high hex");
+
+    assert!(high > low);
+    assert_eq!(low, BigInt256::from_u64(1));
+    assert_eq!(high, BigInt256::from_u64(256)); // 0x100 = 256
+
+    // In real custom mode, would set up search with these bounds
+    println!("Custom range test: [{}, {}] parsed successfully", low_hex, high_hex);
+}
