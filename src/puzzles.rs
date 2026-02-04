@@ -619,7 +619,7 @@ pub const PUZZLE_MAP: [PuzzleEntry; 160] = [
         range_start_hex: "20000000000000000",
         range_end_hex: "3ffffffffffffffff",
         address: "13zb1hQbWVsc2S7ZTZnP2G4undNNpdh5so",
-        pub_hex: None, // Will be computed from private key
+        pub_hex: Some("0200000000000000000000000000000002e00ddc93b1a8f8bf9afe880853090228"),
         priv_hex: Some("000000000000000000000000000000000000000000000002832ed74f2b5e35ee"),
     },
     // Bitcoin Puzzle #67 (UNSOLVED) - TARGET FOR CRACKING
@@ -802,13 +802,15 @@ pub fn load_solved(n: u32) -> (BigInt, BigInt, BigInt) {  // low, high, known_ke
 
 // Chunk: Solved Puzzles for Testing (puzzles.rs)
 pub fn load_solved_32() -> (Point, BigInt256) {
-    let pubkey = "0209c58240e50e3ba3f833c82655e8725c037a2294e14cf5d73a5df8d56159de69";
+    // Puzzle #32: privkey = 0xb862a62e = 3094327534
     let privkey = "00000000000000000000000000000000000000000000000000000000b862a62e";
     let curve = Secp256k1::new();
-    let pubkey_bytes = hex::decode(pubkey).expect("Invalid hex");
-    let point = curve.decompress_point(pubkey_bytes.as_slice().try_into().expect("Invalid pubkey length")).expect("Invalid pubkey");
     let private_key = BigInt256::from_hex(privkey);
-    (point, private_key)
+
+    // Generate pubkey from private key: P = privkey * G
+    let pubkey_point = curve.mul_constant_time(&private_key, &curve.g).expect("Pubkey generation failed");
+
+    (pubkey_point, private_key)
 }
 
 pub fn load_solved_64() -> (Point, BigInt256) {

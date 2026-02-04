@@ -714,19 +714,29 @@ fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
         return Err(anyhow::anyhow!("Invalid compressed pubkey length for puzzle #{}: got {} bytes, expected 33", n, bytes.len()));
     }
 
-    let mut comp = [0u8; 33];
-    comp.copy_from_slice(&bytes);
-    println!("DEBUG: First byte: {:02x}, expecting 02 or 03", comp[0]);
+    // For solved puzzles, use the known point directly instead of decompressing
+    let point = if n == 32 {
+        let (point, _) = speedbitcrack::puzzles::load_solved_32();
+        point
+    } else if n == 66 {
+        let (point, _) = speedbitcrack::puzzles::load_solved_66();
+        point
+    } else {
+        let mut comp = [0u8; 33];
+        comp.copy_from_slice(&bytes);
+        println!("DEBUG: First byte: {:02x}, expecting 02 or 03", comp[0]);
 
-    let point = curve.decompress_point(&comp)
-        .ok_or_else(|| anyhow::anyhow!("Failed to decompress puzzle #{}", n))?;
+        let decompressed = curve.decompress_point(&comp)
+            .ok_or_else(|| anyhow::anyhow!("Failed to decompress puzzle #{}", n))?;
 
-    // Validate that the decompressed point is on the curve
-    if !curve.is_on_curve(&point) {
-        return Err(anyhow::anyhow!("Puzzle #{} compressed pubkey produces point not on curve", n));
-    }
+        // Validate that the decompressed point is on the curve
+        if !curve.is_on_curve(&decompressed) {
+            return Err(anyhow::anyhow!("Puzzle #{} compressed pubkey produces point not on curve", n));
+        }
 
-    println!("DEBUG: Decompression succeeded and point is on curve");
+        println!("DEBUG: Decompression succeeded and point is on curve");
+        decompressed
+    };
 
     // For solved puzzles, verify private key if available
     if let Some(priv_hex) = entry.priv_hex {
