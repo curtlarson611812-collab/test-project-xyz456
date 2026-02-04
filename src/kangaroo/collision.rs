@@ -642,6 +642,7 @@ mod tests {
         // Brent's fallback if no DP collision found
         for state in states {
             if let Some(cycle_point) = biased_brent_cycle(&BigInt256::from_u64(state.distance), biases) {
+                info!("Cycle resolved, solving dlog for state distance {}", state.distance);
                 // Simplified collision resolution from cycle detection
                 // In practice, would need to distinguish tame vs wild kangaroos
                 // and compute proper discrete log

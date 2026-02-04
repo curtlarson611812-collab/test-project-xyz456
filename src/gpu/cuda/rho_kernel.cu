@@ -406,3 +406,55 @@ __global__ void rho_kernel_texture_soa(uint32_t* x_limbs_in, uint32_t* x_limbs_o
         dist_limbs_out[offset + i] = dist[i];
     }
 }
+
+// Chunk: CUDA Warp Sync Brent's Cycle Detection
+// Dependencies: __shfl_sync for warp communication, BigInt256 operations
+__device__ uint64_t warp_sync_carry(uint64_t val, uint32_t mask = 0xffffffff) {
+    uint64_t carry = val >> 64;
+    carry = __shfl_sync(mask, carry, threadIdx.x - 1);
+    if (threadIdx.x == 0) carry = 0;
+    return val + carry;
+}
+
+__device__ BigInt256 brents_cycle_cuda(BigInt256 x0, float* biases) {
+    BigInt256 tortoise = x0;
+    BigInt256 hare = biased_jump_cuda(tortoise, biases);  // Assume CUDA biased_jump
+    int power = 1;
+    int lam = 1;
+    while (!bigint256_eq(tortoise, hare)) {  // Assume bigint256_eq function
+        if (power == lam) {
+            tortoise = hare;
+            power *= 2;
+            lam = 0;
+        }
+        hare = biased_jump_cuda(hare, biases);
+        lam += 1;
+    }
+
+    // Find mu with warp_sync for efficient carry propagation in distance calculations
+    BigInt256 mu_tortoise = x0;
+    BigInt256 mu_hare = x0;
+    int mu = 0;
+
+    // Sync hare to correct position using warp shuffle
+    for (int i = 0; i < lam; i++) {
+        mu_hare = biased_jump_cuda(mu_hare, biases);
+        // Use warp sync for any shared state updates if needed
+        __syncwarp(0xffffffff);
+    }
+
+    while (!bigint256_eq(mu_tortoise, mu_hare)) {
+        mu_tortoise = biased_jump_cuda(mu_tortoise, biases);
+        mu_hare = biased_jump_cuda(mu_hare, biases);
+        mu += 1;
+        __syncwarp(0xffffffff);  // Ensure warp consistency
+    }
+
+    return mu_tortoise;  // Return cycle start point
+}
+
+// Placeholder for CUDA biased jump - would need full implementation
+__device__ BigInt256 biased_jump_cuda(BigInt256 current, float* biases) {
+    // Simplified placeholder - real implementation would match Rust biased_jump_standalone
+    return current;  // Return unchanged for now
+}

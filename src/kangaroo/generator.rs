@@ -37,8 +37,11 @@ pub fn biased_jump_standalone(current: &BigInt256, biases: &std::collections::Ha
     jump % CURVE_ORDER_BIGINT.clone()  // Clamp mod order
 }
 
-/// Chunk: Biased Brent's Cycle Detection
+/// Chunk: Improved Brent's Cycle Detection with Pos Bias and Logging
 pub fn biased_brent_cycle(current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+    use crate::utils::pubkey_loader::detect_bias_single;
+    use crate::math::constants::CURVE_ORDER_BIGINT;
+
     let mut tortoise = current.clone();
     let mut hare = biased_jump_standalone(&tortoise, biases);  // f(tortoise)
     let mut power = 1usize;
@@ -49,7 +52,11 @@ pub fn biased_brent_cycle(current: &BigInt256, biases: &std::collections::HashMa
             power *= 2;
             lam = 0;
         }
-        hare = biased_jump_standalone(&hare, biases);  // f(hare)
+        // Improve with pos_factor for finer cycle detection in clusters
+        let (_, _, pos_factor) = detect_bias_single(&hare, 0);
+        let scale = if pos_factor > 1.0 { pos_factor } else { 1.0 };
+        let scaled_jump = biased_jump_standalone(&hare, biases);
+        hare = (scaled_jump * BigInt256::from_u64(scale as u64)) % CURVE_ORDER_BIGINT.clone();
         lam += 1;
     }
     // Find mu (start of cycle)
@@ -63,6 +70,7 @@ pub fn biased_brent_cycle(current: &BigInt256, biases: &std::collections::HashMa
         hare = biased_jump_standalone(&hare, biases);
         mu += 1;
     }
+    info!("Brent's cycle detected: lam={}, mu={}", lam, mu);
     Some(hare)  // Cycle point
 }
 // Concise Block: Brent's Cycle Detection for Rho Walks
