@@ -618,9 +618,9 @@ pub const PUZZLE_MAP: [PuzzleEntry; 160] = [
         n: 66,
         range_start_hex: "20000000000000000",
         range_end_hex: "3ffffffffffffffff",
-        address: "1JPSB92a7V1eZ4dAKGEmW9S3J3B3rrm3y3",
+        address: "13zb1hQbWVsc2S7ZTZnP2G4undNNpdh5so",
         pub_hex: None, // Will be computed from private key
-        priv_hex: Some("2000000000000000000000000000000000000000000000000000000000000000"),
+        priv_hex: Some("000000000000000000000000000000000000000000000002832ed74f2b5e35ee"),
     },
     // Bitcoin Puzzle #67 (UNSOLVED) - TARGET FOR CRACKING
     PuzzleEntry {
@@ -822,8 +822,8 @@ pub fn load_solved_64() -> (Point, BigInt256) {
 }
 
 pub fn load_solved_66() -> (Point, BigInt256) {
-    // Puzzle #66: private key = 2^65 = 0x2000000000000000000000000000000000000000000000000000000000000000
-    let privkey = "2000000000000000000000000000000000000000000000000000000000000000";
+    // Puzzle #66: Actual solved private key = 0x000000000000000000000000000000000000000000000002832ed74f2b5e35ee
+    let privkey = "000000000000000000000000000000000000000000000002832ed74f2b5e35ee";
     let curve = Secp256k1::new();
     let private_key = BigInt256::from_hex(privkey);
 
