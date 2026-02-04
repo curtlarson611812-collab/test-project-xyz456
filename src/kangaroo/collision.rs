@@ -562,11 +562,37 @@ mod tests {
         use crate::kangaroo::generator::biased_brent_cycle;
 
         // Use the biased Brent's cycle detection from generator.rs
-        biased_brent_cycle(start_dist, |x| {
-            // Simple hash-based jump for cycle detection
-            let hash = (x.low_u32() as u64).wrapping_mul(0x9e3779b9) % 1000;
-            x + BigInt256::from_u64(hash + 1)
-        }, biases)
+        biased_brent_cycle(start_dist, biases)
+    }
+
+    /// Check and resolve collisions with Brent's fallback
+    pub fn check_and_resolve_collisions(dp_table: &DpTable, states: &[KangarooState], biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+        use crate::kangaroo::generator::biased_brent_cycle;
+        use crate::math::constants::CURVE_ORDER_BIGINT;
+
+        // Existing DP check
+        for state in states {
+            // Check if this state would be a DP candidate
+            if state.distance.trailing_zeros() >= crate::math::constants::DP_BITS {
+                // In full implementation, would check dp_table for collisions
+                // For now, skip DP table lookup
+            }
+        }
+
+        // Brent's fallback if no DP collision found
+        for state in states {
+            if let Some(cycle_point) = biased_brent_cycle(&BigInt256::from_u64(state.distance), biases) {
+                // Simplified collision resolution from cycle detection
+                // In practice, would need to distinguish tame vs wild kangaroos
+                // and compute proper discrete log
+                let diff = BigInt256::from_u64(state.distance) - cycle_point;
+                // Mock inverse for demonstration - would use proper modular inverse
+                let inv_jump = BigInt256::from_u64(1);
+                let result = (diff * inv_jump) % CURVE_ORDER_BIGINT.clone();
+                return Some(result);
+            }
+        }
+        None
     }
 
     /// Solve collision using SmallOddPrime inversion

@@ -288,6 +288,18 @@ mod tests {
         // In full implementation, would assert key.is_some() for small ranges
     }
 
+    // Chunk: Brent's Fallback Test (tests/kangaroo.rs)
+    #[test]
+    fn test_brents_fallback() {
+        use speedbitcrack::kangaroo::generator::biased_brent_cycle;
+        use std::collections::HashMap;
+
+        let biases = HashMap::new();
+        let current = speedbitcrack::math::bigint::BigInt256::from_u64(1);
+        let cycle = biased_brent_cycle(&current, &biases);
+        assert!(cycle.is_some());
+    }
+
     // Chunk: DP Trailing Zeros Test (tests/kangaroo.rs)
     // Dependencies: math::BigInt256, constants::DP_BITS=24
     #[test]

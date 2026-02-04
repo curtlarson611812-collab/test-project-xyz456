@@ -18,30 +18,53 @@ use rand::Rng;
 use std::sync::Arc;
 // SIMD removed for stability - using regular loops instead
 
-/// Chunk: Bias-Aware Brent's (collision.rs)
-pub fn biased_brent_cycle<F>(start: &BigInt256, _f: F, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256>
-where F: FnMut(&BigInt256) -> BigInt256 {
-    let mut tortoise = start.clone();
-    let mut hare = f_biased(&tortoise, biases);  // Bias wrap
-    let mut power = 1;
-    let mut lam = 1;
+/// Standalone biased jump function for cycle detection
+pub fn biased_jump_standalone(current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
+    use crate::utils::pubkey_loader::detect_bias_single;
+    use crate::math::constants::CURVE_ORDER_BIGINT;
+    let mod_levels = [9u32, 27u32, 81u32];
+    let mut chain_bias = 1.0;
+    for &mod_level in &mod_levels {
+        let mod_val = BigInt256::from_u64(mod_level as u64);
+        let res = (current.clone() % mod_val).low_u32();
+        chain_bias *= *biases.get(&res).unwrap_or(&1.0);
+    }
+    let (_, _, pos_factor) = detect_bias_single(current, 0);  // pos_proxy
+    chain_bias *= pos_factor;
+    let rand_scale = rand::random::<f64>() * chain_bias;
+    let base_jump = BigInt256::from_u64(rand::random::<u32>() as u64);  // Mock base, replace with bucket
+    let jump = base_jump + BigInt256::from_u64(rand_scale as u64);
+    jump % CURVE_ORDER_BIGINT.clone()  // Clamp mod order
+}
+
+/// Chunk: Biased Brent's Cycle Detection
+pub fn biased_brent_cycle(current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+    let mut tortoise = current.clone();
+    let mut hare = biased_jump_standalone(&tortoise, biases);  // f(tortoise)
+    let mut power = 1usize;
+    let mut lam = 1usize;
     while tortoise != hare {
         if power == lam {
             tortoise = hare.clone();
             power *= 2;
             lam = 0;
         }
-        hare = f_biased(&hare, biases);
+        hare = biased_jump_standalone(&hare, biases);  // f(hare)
         lam += 1;
     }
-    Some(hare)
+    // Find mu (start of cycle)
+    tortoise = current.clone();
+    for _ in 0..lam {
+        hare = biased_jump_standalone(&hare, biases);
+    }
+    let mut mu = 0;
+    while tortoise != hare {
+        tortoise = biased_jump_standalone(&tortoise, biases);
+        hare = biased_jump_standalone(&hare, biases);
+        mu += 1;
+    }
+    Some(hare)  // Cycle point
 }
-fn f_biased(x: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
-    let res = x.clone() % BigInt256::from_u64(81u64);
-    let b = biases.get(&res.low_u32()).unwrap_or(&1.0);
-    x.clone() + BigInt256::from_u64((rand::random::<f64>() * *b) as u64)
-}
-
 // Concise Block: Brent's Cycle Detection for Rho Walks
 fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where F: Fn(&BigInt256) -> BigInt256 { // (start point, μ, λ)
     let mut tortoise = x0.clone();
