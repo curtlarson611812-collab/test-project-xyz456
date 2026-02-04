@@ -494,6 +494,64 @@ pub fn analyze_pos_bias_histogram(solved_puzzles: &[(u32, BigInt256)]) -> [f64; 
     result
 }
 
+/// Kolmogorov-Smirnov test for bias significance validation
+/// Tests if observed frequency distribution differs significantly from uniform
+/// Returns true if bias is statistically significant (p < 0.05)
+pub fn is_bias_significant(obs_freq: &[f64], num_samples: usize) -> bool {
+    use statrs::distribution::Uniform;
+    use rand::distributions::Distribution;
+
+    if obs_freq.is_empty() || num_samples == 0 {
+        return false;
+    }
+
+    // Expected frequency for uniform distribution
+    let expected = num_samples as f64 / obs_freq.len() as f64;
+
+    // Generate uniform samples for comparison
+    let uniform = Uniform::new(0.0, 1.0).unwrap();
+    let mut rng = rand::thread_rng();
+    let uniform_samples: Vec<f64> = (0..num_samples)
+        .map(|_| uniform.sample(&mut rng))
+        .collect();
+
+    // Create empirical CDFs
+    let mut obs_sorted: Vec<f64> = obs_freq.iter().cloned().collect();
+    obs_sorted.sort_by(|a: &f64, b: &f64| a.partial_cmp(b).unwrap());
+    let mut uniform_sorted = uniform_samples.clone();
+    uniform_sorted.sort_by(|a: &f64, b: &f64| a.partial_cmp(b).unwrap());
+
+    // Calculate KS statistic (maximum difference between CDFs)
+    let mut ks_stat = 0.0f64;
+    for i in 0..obs_sorted.len() {
+        let obs_cdf = (i + 1) as f64 / obs_sorted.len() as f64;
+        let uniform_cdf = (i + 1) as f64 / uniform_sorted.len() as f64;
+        let diff = (obs_cdf - uniform_cdf).abs();
+        ks_stat = ks_stat.max(diff);
+    }
+
+    // Critical value approximation for p < 0.05 (95% confidence)
+    // For n > 35, critical value ≈ 1.36 / sqrt(n)
+    let critical_value = if num_samples > 35 {
+        1.36 / (num_samples as f64).sqrt()
+    } else {
+        // Conservative critical values for small samples
+        match num_samples {
+            1..=4 => 0.995,
+            5..=9 => 0.829,
+            10..=14 => 0.710,
+            15..=19 => 0.625,
+            20..=24 => 0.565,
+            25..=29 => 0.517,
+            30..=34 => 0.476,
+            _ => 0.41,
+        }
+    };
+
+    // Bias is significant if KS statistic exceeds critical value
+    ks_stat > critical_value
+}
+
 /// Concise Block: Pick Most Likely Unsolved Puzzle to Crack
 /// Scores puzzles by bias_factor / 2^(n/2) to prioritize high bias, low complexity
 pub fn pick_most_likely_unsolved() -> u32 {

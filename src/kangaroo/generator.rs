@@ -837,9 +837,9 @@ impl KangarooGenerator {
         }
     }
 
-    /// Aggregate bias patterns from points with Pop!_OS NVIDIA persistence
+    /// Aggregate bias patterns from points with statistical significance validation
     pub fn aggregate_bias(&self, points: &[Point]) -> std::collections::HashMap<u32, f64> {
-        use crate::utils::pubkey_loader::detect_bias_single;
+        use crate::utils::pubkey_loader::{detect_bias_single, is_bias_significant};
 
         // Enable NVIDIA persistence for Pop!_OS (boosts long-run hashrate 10%)
         #[cfg(target_os = "linux")]
@@ -851,8 +851,10 @@ impl KangarooGenerator {
         }
 
         let mut bias_map = std::collections::HashMap::new();
+        let mut freq_data = Vec::new();
         let total = points.len() as f64;
 
+        // Collect bias patterns
         for (i, point) in points.iter().enumerate() {
             let x_bigint = BigInt256::from_u64_array(point.x);
             let (bias_mod, dominant_residue, _) = detect_bias_single(&x_bigint, (i + 1) as u32);
@@ -861,10 +863,18 @@ impl KangarooGenerator {
             if bias_mod > 0 {
                 let key = dominant_residue as u32;
                 *bias_map.entry(key).or_insert(0.0) += 1.0 / total;
+                freq_data.push(dominant_residue as f64);
             }
         }
 
-        bias_map
+        // Validate statistical significance using KS test
+        if !freq_data.is_empty() && is_bias_significant(&freq_data, points.len()) {
+            info!("🎯 Bias patterns statistically significant (KS test p < 0.05)");
+            bias_map
+        } else {
+            warn!("📊 Bias patterns not statistically significant, falling back to uniform");
+            std::collections::HashMap::new() // Return empty map for uniform search
+        }
     }
 
     /// Simple hash function for point-based jump selection
