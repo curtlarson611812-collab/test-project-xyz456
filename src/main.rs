@@ -5,7 +5,7 @@
 
 use anyhow::{Result, anyhow};
 use clap::Parser;
-use log::info;
+use log::{info, warn, error};
 
 use speedbitcrack::config::Config;
 use speedbitcrack::kangaroo::KangarooGenerator;
@@ -258,9 +258,16 @@ fn main() -> Result<()> {
     println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, verbose={}, laptop={}, puzzle={:?}, test_solved={:?}",
              args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.verbose, args.laptop, args.puzzle, args.test_solved);
 
-    // Enable thermal logging for laptop mode
+    // Enable thermal logging and NVIDIA persistence for laptop mode
     if args.laptop {
         start_thermal_log();
+
+        // Enable NVIDIA persistence mode for stable GPU performance
+        match speedbitcrack::config::enable_nvidia_persistence() {
+            Ok(true) => info!("NVIDIA persistence mode enabled successfully"),
+            Ok(false) => warn!("NVIDIA persistence mode not enabled - GPU may experience performance drops"),
+            Err(e) => error!("Failed to enable NVIDIA persistence mode: {}", e),
+        }
     }
 
     // Handle solved puzzle testing

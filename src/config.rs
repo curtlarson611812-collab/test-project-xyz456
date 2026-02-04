@@ -236,3 +236,46 @@ impl std::fmt::Display for SearchMode {
         }
     }
 }
+
+/// Enable NVIDIA persistence mode for stable GPU performance
+/// Only effective on Linux systems with NVIDIA GPUs
+pub fn enable_nvidia_persistence() -> Result<bool> {
+    use std::process::{Command, Output};
+
+    // Only attempt on Linux systems
+    if !cfg!(target_os = "linux") {
+        return Ok(false);
+    }
+
+    // Enable persistence mode
+    let set_output: Output = Command::new("nvidia-smi")
+        .arg("-pm")
+        .arg("1")
+        .output()
+        .map_err(|e| anyhow!("Failed to run nvidia-smi: {}", e))?;
+
+    if !set_output.status.success() {
+        return Err(anyhow!(
+            "Failed to enable persistence: {}",
+            String::from_utf8_lossy(&set_output.stderr)
+        ));
+    }
+
+    // Query persistence status to verify
+    let query_output: Output = Command::new("nvidia-smi")
+        .arg("-q")
+        .arg("-d")
+        .arg("PERSISTENCE")
+        .output()
+        .map_err(|e| anyhow!("Failed to query persistence: {}", e))?;
+
+    if !query_output.status.success() {
+        return Err(anyhow!(
+            "Failed to query persistence: {}",
+            String::from_utf8_lossy(&query_output.stderr)
+        ));
+    }
+
+    let status = String::from_utf8_lossy(&query_output.stdout);
+    Ok(status.contains("Enabled"))
+}
