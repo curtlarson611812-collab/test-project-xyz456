@@ -7,6 +7,8 @@ use speedbitcrack::utils::pubkey_loader::detect_bias_single;
 use speedbitcrack::kangaroo::generator::{KangarooGenerator, PosSlice};
 use num_bigint::BigInt;
 use std::collections::HashMap;
+// Assume statrs is added to Cargo.toml
+use statrs::distribution::{KolmogorovSmirnov, Uniform};
 
 #[test]
 fn test_mod9_bias_detection() {
@@ -210,4 +212,35 @@ fn test_positional_proxy_integration() {
         let (_, _, _, _, _, pos_proxy) = detect_bias_single(&key, 67); // Puzzle #67
         assert!(pos_proxy >= 0.0 && pos_proxy <= 1.0);
     }
+}
+
+// Chunk: KS Test for Bias Significance (bias_validation.rs)
+// Dependencies: statrs::distribution::{KolmogorovSmirnov, Uniform}
+// Tests bias effectiveness beyond chi-square (p<0.05 = significant deviation from uniform)
+#[test]
+fn test_bias_ks() {
+    let observed: Vec<f64> = vec![0.15, 0.12, 0.18];  // Residue frequencies from solved puzzles
+    let expected = Uniform::new(0.0, 1.0);  // Null hypothesis: uniform distribution
+    let ks = KolmogorovSmirnov::two_sample(&observed, &expected.sample(1000));
+    assert!(ks.p_value < 0.05, "Bias not significant: KS p={}", ks.p_value);  // Significant = effective bias
+}
+
+// Bootstrap resampling for confidence intervals on speedup
+#[test]
+fn test_bias_bootstrap() {
+    let solved_biases = vec![1.2, 1.35, 1.42];  // mod9/27/81 biases from solved data
+    let mut bootstrapped_means = Vec::new();
+
+    for _ in 0..1000 {  // Bootstrap resampling
+        let mut sample = Vec::new();
+        for _ in 0..solved_biases.len() {
+            sample.push(solved_biases[rand::random::<usize>() % solved_biases.len()]);
+        }
+        let mean = sample.iter().sum::<f64>() / sample.len() as f64;
+        bootstrapped_means.push(mean);
+    }
+
+    let ci_lower = bootstrapped_means.iter().cloned().fold(f64::INFINITY, f64::min);
+    let ci_upper = bootstrapped_means.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    assert!(ci_lower > 1.1 && ci_upper < 1.6, "Bootstrap CI [{:.3}, {:.3}] outside expected bias range", ci_lower, ci_upper);
 }

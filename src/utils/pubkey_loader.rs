@@ -1112,6 +1112,18 @@ pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<d
     Ok(points)
 }
 
+// Chunk: AVX Bias Check (pubkey_loader.rs)
+use std::simd::{u32x8, SimdPartialEq};
+pub fn simd_bias_check(res: u32, high_residues: &[u32]) -> bool {
+    let padded: [u32; 128] = /* pad high_residues to multiple of 8 */;
+    for i in (0..padded.len()).step_by(8) {
+        let vec_res = u32x8::splat(res);
+        let vec_high = u32x8::from_slice(&padded[i..]);
+        if vec_res.simd_eq(vec_high).any() { return true; }
+    }
+    false
+}
+
     #[test]
     fn test_puzzle_pubkeys_loading() {
         let puzzles = load_all_puzzles_pubkeys();

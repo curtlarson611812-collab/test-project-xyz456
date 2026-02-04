@@ -676,6 +676,13 @@ impl KangarooManager {
     }
 }
 
+// Chunk: Bias Stabilize (manager.rs)
+pub fn check_bias_convergence(rate_history: &Vec<f64>, target: f64) -> bool {
+    if rate_history.len() < 10 { return false; }
+    let ema = rate_history.iter().rev().take(5).fold(0.0, |acc, &r| 0.1 * r + 0.9 * acc);
+    (ema - target).abs() < target * 0.05  // Within 5%
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -1,9 +1,14 @@
 //! Fast, deterministic hashes for jumps & DP keys
 //!
-//! Fast, deterministic hashes for jumps & DP keys (murmur3 variant)
+//! Fast, deterministic hashes for jumps & DP keys (Blake3 for collision resistance, murmur3 fallback)
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+
+// Blake3 for cryptographic strength in DP table (collision-resistant)
+use blake3::Hasher as Blake3Hasher;
+// Assume blake3 is added to Cargo.toml
+use blake3::Hasher;
 
 /// Fast hash function for jump selection and DP checking
 pub fn fast_hash(data: &[u8]) -> u64 {
@@ -97,10 +102,48 @@ pub fn jump_table_hash(position_hash: u64, table_size: usize) -> usize {
     (position_hash as usize) % table_size
 }
 
-/// Hash for attractor detection
+/// Blake3 hash for DP table (collision-resistant, fast for 256-bit inputs)
+pub fn blake3_hash_point(x: &[u64; 4], y: &[u64; 4]) -> u64 {
+    let mut hasher = Blake3Hasher::new();
+    for &limb in x {
+        hasher.update(&limb.to_le_bytes());
+    }
+    for &limb in y {
+        hasher.update(&limb.to_le_bytes());
+    }
+    let hash_bytes = hasher.finalize();
+    u64::from_le_bytes(hash_bytes.as_bytes()[0..8].try_into().unwrap())
+}
+
+/// Blake3 hash for kangaroo state (used for duplicate detection in DP table)
+pub fn blake3_hash_kangaroo_state(position_x: &[u64; 4], distance: u64) -> u64 {
+    let mut hasher = Blake3Hasher::new();
+    for &limb in position_x {
+        hasher.update(&limb.to_le_bytes());
+    }
+    hasher.update(&distance.to_le_bytes());
+    let hash_bytes = hasher.finalize();
+    u64::from_le_bytes(hash_bytes.as_bytes()[0..8].try_into().unwrap())
+}
+
+/// Blake3 hash for DP cluster identification (better distribution than murmur)
+pub fn blake3_hash_dp_cluster(x_high_bits: u64, y_high_bits: u64) -> u32 {
+    let mut hasher = Blake3Hasher::new();
+    hasher.update(&x_high_bits.to_le_bytes());
+    hasher.update(&y_high_bits.to_le_bytes());
+    let hash_bytes = hasher.finalize();
+    u32::from_le_bytes(hash_bytes.as_bytes()[0..4].try_into().unwrap())
+}
+
+/// Hash for attractor detection (Blake3 for consistency)
 pub fn attractor_hash(point_x: &[u64; 4], point_y: &[u64; 4]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    point_x.hash(&mut hasher);
-    point_y.hash(&mut hasher);
-    hasher.finish()
+    blake3_hash_point(point_x, point_y)  // Use Blake3 for consistency
+}
+
+// Chunk: DP Hash (utils/hash.rs)
+pub fn hash_point(x: &crate::math::bigint::BigInt256, y: &crate::math::bigint::BigInt256) -> u64 {
+    let mut hasher = Hasher::new();
+    hasher.update(&x.to_bytes());
+    hasher.update(&y.to_bytes());
+    u64::from_le_bytes(hasher.finalize()[0..8].try_into().unwrap())
 }

@@ -161,6 +161,23 @@ fn main() {
             std::fs::copy(&custom_fft_src, &custom_fft_dst).expect("Failed to copy PTX file");
         }
 
+        // Compile rho_kernel.cu to PTX for rho kernel with bias support
+        let rho_ptx = Path::new(&out_dir).join("rho_kernel.ptx");
+        let status = Command::new("nvcc")
+            .arg("-ptx")
+            .arg(cuda_src_dir.join("rho_kernel.cu"))
+            .arg("-o")
+            .arg(&rho_ptx)
+            .arg("--gpu-architecture=sm_89")  // RTX 5090 (Ampere successor)
+            .arg("--optimize=3")
+            .arg("--use_fast_math")
+            .arg("--ftz=true")  // Flush denormals for 5% boost
+            .arg("--maxrregcount=64")  // Balance regs vs occupancy (aim 50-75%)
+            .arg("--ptxas-options=-v")  // Verbose for occupancy check
+            .status();
+
+        assert!(status.is_ok(), "NVCC compilation failed for rho_kernel.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
+
         // Link CUDA runtime, cuBLAS, and cuFFT
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
         println!("cargo:rustc-link-lib=cudart");

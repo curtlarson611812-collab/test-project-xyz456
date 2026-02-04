@@ -18,7 +18,31 @@ use rand::rngs::OsRng;
 use rand::Rng;
 use std::sync::Arc;
 
-/// Concise Block: Brent's Cycle Detection for Rho Walks
+/// Chunk: Bias-Aware Brent's (collision.rs)
+pub fn biased_brent_cycle<F>(start: &BigInt256, mut f: F, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256>
+where F: FnMut(&BigInt256) -> BigInt256 {
+    let mut tortoise = start.clone();
+    let mut hare = f_biased(&tortoise, biases);  // Bias wrap
+    let mut power = 1;
+    let mut lam = 1;
+    while tortoise != hare {
+        if power == lam {
+            tortoise = hare.clone();
+            power *= 2;
+            lam = 0;
+        }
+        hare = f_biased(&hare, biases);
+        lam += 1;
+    }
+    Some(hare)
+}
+fn f_biased(x: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
+    let res = x % BigInt256::from(81u32);
+    let b = biases.get(&res.to_u32()).unwrap_or(&1.0);
+    x + BigInt256::from((rand::random::<u64>() as f64 * *b) as u64)
+}
+
+// Concise Block: Brent's Cycle Detection for Rho Walks
 fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where F: Fn(&BigInt256) -> BigInt256 { // (start point, μ, λ)
     let mut tortoise = x0.clone();
     let mut hare = f(&tortoise);
@@ -55,15 +79,18 @@ const MAGIC9_PRIMES: [u64; 32] = [
     1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
 ];
 
-/// Concise Positional Proxy Slice State
-#[derive(Clone, Debug)]
+// Chunk: Cache-Aligned PosSlice (generator.rs)
+// Dependencies: num_bigint::BigInt, std::mem::align_of
+#[repr(align(64))]  // Cache line align
+#[derive(Clone, Copy)]  // Copy for batch efficiency
 pub struct PosSlice {
-    pub low: BigInt,
-    pub high: BigInt,
-    pub proxy: u32,
-    pub bias: f64,
-    pub iter: u8,
+    pub low: BigInt,    // 32B est
+    pub high: BigInt,   // 32B
+    pub proxy: u32,     // 4B
+    pub bias: f64,      // 8B
+    pub iter: u8,       // 1B + padding
 }
+// Static assert: assert_eq!(align_of::<PosSlice>(), 64);
 
 /// Create new POS slice from range and proxy
 pub fn new_slice(range: (BigInt, BigInt), proxy: u32) -> PosSlice {
@@ -670,15 +697,74 @@ impl KangarooGenerator {
         hash.wrapping_mul(31).wrapping_add(point.y[0] as usize)
     }
 
-/// Concise POS slice refiner - prevents over-iteration
-pub fn refine_slice(s: &mut PosSlice, biases: &std::collections::HashMap<u32, f64>) {
-    if s.iter >= 3 { return; }
-    let r = &s.high - &s.low;
-    let b = *biases.get(&s.proxy).unwrap_or(&1.0);
-    s.low += &r / BigInt::from(12u32);  // ~8% offset
-    s.high = &s.low + &r * BigInt::from((b * 1.1) as u64);
-    s.bias *= b;
-    s.iter += 1;
+// Chunk: Anti-Overfit in POS Refine with Proper Bounds (generator.rs)
+pub fn refine_pos_slice(slice: &mut PosSlice, biases: &std::collections::HashMap<u32, f64>, max_iterations: u8) {
+    if slice.iter >= max_iterations || (&slice.high - &slice.low) < BigInt::from(1u64 << 20) {
+        return;  // Size guard (min 1M range), iteration limit (3 optimal)
+    }
+
+    let r = &slice.high - &slice.low;
+    let b = *biases.get(&slice.proxy).unwrap_or(&1.0);
+    slice.low += &r / BigInt::from(12u32); // ~8% offset for exploration
+    slice.high = &slice.low + &r * BigInt::from((b * 1.1) as u64);
+    slice.bias *= b;
+    slice.iter += 1;
+
+    // Overfit prevention: inject entropy if variance too high (σ > 0.5 = overfit risk)
+    let bias_values: Vec<f64> = biases.values().cloned().collect();
+    if bias_values.len() > 2 {
+        let mean = bias_values.iter().sum::<f64>() / bias_values.len() as f64;
+        let variance = bias_values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / bias_values.len() as f64;
+        let std_dev = variance.sqrt();
+        if std_dev > 0.5 {  // High variance = overfit risk (prevent infinite loops on small data)
+            slice.low += BigInt::from(rand::random::<u64>() % (1u64 << 10));  // Inject entropy
+        }
+    }
+}
+
+// Chunk: Batch Refine for Cache (generator.rs)
+pub fn batch_refine_slices(slices: &mut [PosSlice], biases: &std::collections::HashMap<u32, f64>) {
+    for s in slices.iter_mut() {  // Sequential but cache-hot
+        if s.iter >= 3 { continue; }
+        let r = &s.high - &s.low;
+        let b = *biases.get(&s.proxy).unwrap_or(&1.0);
+        s.low += &r / BigInt::from(12u32);
+        s.high = &s.low + &r * BigInt::from((b * 1.1) as u64);
+        s.bias *= b;
+        s.iter += 1;
+    }
+}
+// Usage: In init, let mut slices = vec![new_slice(); 4096]; batch_refine_slices(&mut slices, &biases);
+
+// Chunk: χ² Convergence Check (generator.rs)
+// Dependencies: statrs::distribution::ChiSquared, InverseCdf
+use statrs::distribution::{ChiSquared, InverseCdf};
+pub fn should_refine(slice: &PosSlice, obs_freq: &[f64], exp_uniform: f64) -> bool {
+    let df = obs_freq.len() as f64 - 1.0;
+    let chi2: f64 = obs_freq.iter().map(|&o| (o - exp_uniform).powi(2) / exp_uniform).sum();
+    let crit = ChiSquared::new(df).unwrap().inverse_cdf(0.95);  // 5% sig
+    chi2 > crit && slice.iter < 5  // χ² high = non-uniform → refine
+}
+
+// Chunk: Bayesian Posterior Update (generator.rs)
+pub fn bayesian_posterior(hits: u32, misses: u32, prior_alpha: f64, prior_beta: f64) -> f64 {
+    let post_alpha = prior_alpha + hits as f64;
+    let post_beta = prior_beta + misses as f64;
+    post_alpha / (post_alpha + post_beta)  // Mean of beta dist
+}
+// Usage: If bayesian_posterior(bias_hits, bias_misses, 1.0, 1.0) < 0.6 { stop refine }
+
+// Chunk: SIMD Random in Slice (generator.rs)
+use std::simd::{u64x4, Simd};
+pub fn vec_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
+    let range = &slice.high - &slice.low;
+    let mut rands = vec![BigInt::zero(); count];
+    for i in (0..count).step_by(4) {
+        let vec_rand = u64x4::from_fn(|_| rand::random::<u64>());
+        let vec_mod = vec_rand % u64x4::splat(range.to_u64().unwrap());  // Assume small range
+        for j in 0..4 { rands[i+j] = BigInt::from(vec_mod[j]); }
+    }
+    rands
 }
 
 /// Generate random BigInt within POS slice bounds
@@ -703,7 +789,7 @@ pub fn random_in_slice(slice: &PosSlice) -> BigInt {
         for _ in 0..3 {
             let starts: Vec<BigInt> = (0..4096).map(|_| random_in_slice(&slice)).collect();
             if let Some(key) = run_batch_mock(&starts, target) { return Some(key); }
-            refine_slice(&mut slice, &biases);
+            refine_pos_slice(&mut slice, &biases);
         }
         None
     }

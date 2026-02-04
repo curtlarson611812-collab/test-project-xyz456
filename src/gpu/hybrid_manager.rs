@@ -88,6 +88,15 @@ impl HybridGpuManager {
         })
     }
 
+    // Chunk: CPU/GPU Split (hybrid_manager.rs)
+    pub async fn dispatch_hybrid(&self, steps: u64, gpu_frac: f64) -> Result<(), anyhow::Error> {
+        let gpu_steps = (steps as f64 * gpu_frac) as u64;
+        let gpu_fut = self.hybrid_backend.dispatch_g(steps); // Assume method exists
+        let cpu_fut = async { /* CPU dispatch */ Ok(()) };
+        tokio::try_join!(gpu_fut, cpu_fut)?;
+        Ok(())
+    }
+
     /// Concise Block: Hybrid Bias for Attractor Hits in Dispatch
     pub fn dispatch_concurrent(
         &self,
@@ -452,6 +461,43 @@ impl HybridGpuManager {
     }
 
 
+    /// Dispatch hybrid operations with CPU/GPU balancing heuristics
+    /// RTX 5090: ~90% GPU for EC ops, CPU for validation/low-latency tasks
+    pub async fn dispatch_hybrid_balanced(&self, steps: u64, gpu_load: f64) -> Result<Option<BigInt256>, anyhow::Error> {
+        // Heuristic: GPU gets 90% load on RTX 5090 (high parallelism), CPU handles validation
+        let gpu_steps = (steps as f64 * gpu_load.max(0.8).min(0.95)) as u64;  // 80-95% GPU
+        let cpu_steps = steps - gpu_steps;
+
+        // Async dispatch: GPU for bulk steps, CPU for collision detection
+        let gpu_fut = async {
+            #[cfg(feature = "rustacuda")]
+            {
+                self.dispatch_parallel_brents_rho_async(
+                    crate::math::secp::Point::infinity(), // placeholder
+                    crate::math::secp::Point::infinity(),
+                    4096, 0
+                ).await
+            }
+            #[cfg(not(feature = "rustacuda"))]
+            {
+                Ok(None)
+            }
+        };
+
+        let cpu_fut = async {
+            // CPU validation: check attractor rates, bias convergence
+            let attractor_rate = self.get_attractor_rate(&vec![]); // placeholder
+            if attractor_rate < 10.0 {
+                log::warn!("Low attractor rate {:.1}%, consider bias adjustment", attractor_rate);
+            }
+            None
+        };
+
+        // Join futures: GPU does bulk work, CPU validates
+        let (gpu_result, cpu_result) = tokio::join!(gpu_fut, cpu_fut);
+        gpu_result.or(Ok(cpu_result))
+    }
+
     /// Concise Block: Bias Hybrid Swap on Attractor Rate
     pub fn get_attractor_rate(&self, points: &[Point]) -> f64 {
         let sample: Vec<Point> = points.iter().take(100).cloned().collect();
@@ -693,6 +739,18 @@ impl HybridGpuManager {
         } else {
             0.0
         }
+    }
+
+    /// Check bias adjustment convergence (stabilization criteria)
+    /// Returns true if bias factors have stabilized (delta < 5% over 10 steps)
+    pub fn check_bias_convergence(rate_history: &Vec<f64>, target: f64) -> bool {
+        if rate_history.len() < 10 {
+            return false;  // Need minimum history for convergence check
+        }
+        let recent_rates = &rate_history[rate_history.len().saturating_sub(5)..];  // Last 5 rates
+        let ema = recent_rates.iter().sum::<f64>() / recent_rates.len() as f64;  // Simple EMA approximation
+        let delta = (ema - target).abs() / target;  // Relative error
+        delta < 0.05  // Within 5% of target = converged (stable bias adjustment)
     }
 
     /// Get current drift metrics

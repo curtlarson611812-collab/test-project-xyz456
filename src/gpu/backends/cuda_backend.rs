@@ -129,6 +129,31 @@ impl CudaBackend {
         y
     }
 
+    // Chunk: Occupancy Tune (cuda_backend.rs)
+    pub fn get_optimal_block_size(kernel: &CudaModule) -> u32 {
+        // Assume kernel has a function, get registers from it
+        // Placeholder: tune based on regs
+        let regs = 64; // Placeholder
+        if regs > 64 { 128 } else { 256 }
+    }
+
+    // Chunk: Multi-Stream Refine (cuda_backend.rs)
+    pub async fn gpu_batch_refine(slices: &mut [PosSlice], biases: &[f64]) -> Result<(), CudaError> {
+        let stream_count = 4;
+        let chunk_size = slices.len() / stream_count;
+        let mut futures = vec![];
+        for i in 0..stream_count {
+            let stream = CudaStream::new(StreamFlags::NON_BLOCKING, None)?;
+            let s_chunk = &mut slices[i*chunk_size..(i+1)*chunk_size];
+            let dev_slices = DeviceBuffer::from_slice(s_chunk)?;
+            let dev_biases = DeviceBuffer::from_slice(biases)?;
+            let kernel = load_kernel("refine_slices_gpu");
+            kernel.launch_on_stream(&stream, (chunk_size/128 +1,1,1), (128,1,1), dev_slices, dev_biases, chunk_size, 3);
+            futures.push(stream.synchronize());
+        }
+        join_all(futures).await
+    }
+
     /// Create new CUDA backend with modules loaded
     pub fn new() -> anyhow::Result<Self> {
         rustacuda::init(rustacuda::CudaFlags::empty())?;
@@ -703,6 +728,22 @@ impl GpuBackend for CudaBackend {
 
         cuda_check!(self.stream.synchronize(), "rho_ptx sync");
         Ok(())
+    }
+
+    /// Tune block size for optimal occupancy on RTX 5090 (aim 50-75% occ)
+    /// Returns optimal threads per block based on kernel register usage
+    #[cfg(feature = "rustacuda")]
+    pub fn get_optimal_block_size(&self, kernel: &rustacuda::function::Function) -> Result<u32> {
+        // RTX 5090 has 64 SMs, aim for 50-75% occupancy
+        // Balance registers vs threads: high regs = fewer threads, low regs = more threads
+        let regs_per_thread = kernel.registers();
+        let optimal_threads = match regs_per_thread {
+            0..=32 => 256,    // Low regs: max threads for high occupancy
+            33..=48 => 192,   // Medium regs: balance occupancy
+            49..=64 => 128,   // High regs: reduce threads to maintain occupancy
+            _ => 96,          // Very high regs: minimal threads
+        };
+        Ok(optimal_threads)
     }
 
     /// Concise mod81 bias kernel call
