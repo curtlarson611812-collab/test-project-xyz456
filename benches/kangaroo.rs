@@ -170,5 +170,20 @@ fn bench_puzzle66_laptop(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66, bench_puzzle66_laptop);
+// Chunk: #64/#65 Benches (benches/kangaroo.rs)
+fn bench_solved_puzzles(c: &mut Criterion) {
+    for n in [64, 65] {
+        let (low, high, known) = speedbitcrack::puzzles::load_solved(n);
+        let target = speedbitcrack::targets::loader::load_puzzle_keys().get((n - 1) as usize).unwrap().0;
+        let mut group = c.benchmark_group(format!("puzzle{}_crack", n));
+        group.bench_function("full_crack", |b| b.iter(|| {
+            let key = speedbitcrack::kangaroo::pollard_lambda_parallel_pos(target, (low.clone(), high.clone()), 4096);
+            #[cfg(feature = "smoke")]
+            if let Some(k) = key { assert_eq!(k, known); }
+            black_box(key);
+        }));
+    }
+}
+
+criterion_group!(benches, bench_step_batch, bench_occupancy_check, bench_pos_slicing, bench_puzzle66, bench_puzzle66_laptop, bench_solved_puzzles);
 criterion_main!(benches);

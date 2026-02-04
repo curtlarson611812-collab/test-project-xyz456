@@ -70,6 +70,10 @@ impl HybridGpuManager {
     /// Create new hybrid manager with drift monitoring
     pub async fn new(drift_threshold: f64, check_interval_secs: u64) -> Result<Self> {
         let hybrid_backend = HybridBackend::new().await?;
+        // Log CUDA version for compatibility
+        if let Ok(cuda) = hybrid_backend.cuda() {
+            cuda.log_cuda_version();
+        }
         let curve = Secp256k1::new();
 
         Ok(Self {

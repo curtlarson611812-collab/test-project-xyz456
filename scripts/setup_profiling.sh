@@ -28,15 +28,18 @@ echo ""
 if [ "$NVIDIA_COMPUTE" = "1" ]; then
     ncu --set full --csv -o profile_$(date +%s).csv --target-processes all cargo criterion "$@"
     python3 - <<EOF
-import csv
-import json
+import csv, json
 metrics = {}
+current_kernel = None
 try:
     with open('profile.csv', 'r') as f:
         reader = csv.reader(f)
         for row in reader:
-            if 'sm_efficiency' in row[0]:
-                metrics[row[0]] = row[1]
+            if row and 'Kernel Name' in row[0]:
+                current_kernel = row[1]
+                metrics[current_kernel] = {}
+            elif current_kernel and 'sm_efficiency' in row[0]:
+                metrics[current_kernel][row[0]] = row[1]
 except Exception as e:
     print(f"Error: {e}")
 with open('ci_metrics.json', 'w') as j:

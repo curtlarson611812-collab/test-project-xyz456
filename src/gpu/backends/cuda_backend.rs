@@ -165,6 +165,14 @@ impl CudaBackend {
         kernel.launch(grid, block, params)
     }
 
+    // Chunk: CUDA Version Log (cuda_backend.rs)
+    // Dependencies: cudarc::driver::driver_version
+    pub fn log_cuda_version() {
+        let version = cudarc::driver::driver_version().unwrap_or(0);
+        println!("CUDA Driver: {}.{}", version / 1000, (version % 1000) / 10);
+        if version < 12040 { panic!("Requires CUDA 12.4+"); }  // Enforce
+    }
+
     /// Create new CUDA backend with modules loaded
     pub fn new() -> anyhow::Result<Self> {
         rustacuda::init(rustacuda::CudaFlags::empty())?;
