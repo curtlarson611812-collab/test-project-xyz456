@@ -5,6 +5,8 @@
 use log::{info, error, debug};
 use std::time::Instant;
 use std::collections::HashMap;
+use std::fs::File;
+use serde_json::{to_writer, from_reader};
 use std::fs::read_to_string;
 use regex::Regex;
 use serde_json;
@@ -337,4 +339,48 @@ pub fn generate_metric_based_recommendations(metrics: &NsightMetrics) -> Vec<Str
     }
 
     recommendations
+}
+
+/// ML-based optimization history management functions
+/// Append profiling history for ML training data
+pub fn append_history(path: &str, eff: f64, mem: f64, alu: f64, frac: f64) -> Result<(), Box<dyn std::error::Error>> {
+    let mut hist: Vec<(f64, f64, f64, f64)> = load_history(path);
+    hist.push((eff, mem, alu, frac));
+
+    // Keep only last 100 entries to prevent file from growing too large
+    let max_entries = 100;
+    if hist.len() > max_entries {
+        let start_idx = hist.len() - max_entries;
+        hist = hist[start_idx..].to_vec();
+    }
+
+    let file = File::create(path)?;
+    to_writer(file, &hist)?;
+    Ok(())
+}
+
+/// Load historical profiling data for ML prediction
+pub fn load_history(path: &str) -> Vec<(f64, f64, f64, f64)> {
+    File::open(path)
+        .and_then(|file| from_reader(file).map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "JSON parse error")))
+        .unwrap_or_default()
+}
+
+/// Integrate ML prediction into GPU config tuning
+pub fn tune_ml_predict(config: &mut crate::config::GpuConfig) {
+    use crate::gpu::backends::hybrid_backend::HybridBackend;
+
+    // This would need to be called from the hybrid backend context
+    // For now, just ensure the functions are available
+    let _hist = load_history("history.json");
+    // Prediction would be done in HybridBackend::predict_frac
+}
+
+/// Suggest stream usage based on Nsight metrics for low IPC scenarios
+pub fn suggest_streams(metrics: &HashMap<String, f64>) {
+    if let Some(ipc) = metrics.get("sm__inst_executed.avg.pct_of_peak_sustained_active") {
+        if *ipc < 0.7 {
+            log::info!("Nsight Suggestion: IPC {:.1}% < 70% - enable CUDA streams for compute/memory overlap", ipc * 100.0);
+        }
+    }
 }

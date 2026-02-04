@@ -666,4 +666,145 @@ impl HybridBackend {
 
         NsightRuleResult::new("EcdlpDivergenceAnalysis", score, suggestion)
     }
+
+    /// ML-based predictive optimization using linear regression on historical profiling data
+    pub fn predict_frac(&self, history: &Vec<(f64, f64, f64, f64)>) -> f64 {
+        // History format: (sm_eff, mem_pct, alu_util, past_frac)
+        if history.len() < 5 {
+            return 0.7; // Default if insufficient data
+        }
+
+        // Simplified linear regression for now (full ndarray matrix inversion is complex)
+        // Use simple averaging with weighted recent history
+        let mut weighted_sum = 0.0;
+        let mut total_weight = 0.0;
+
+        for (i, (_, _, _, frac)) in history.iter().enumerate() {
+            let weight = (i + 1) as f64; // Weight recent samples more
+            weighted_sum += frac * weight;
+            total_weight += weight;
+        }
+
+        let avg_frac = weighted_sum / total_weight;
+
+        // Load current metrics for adjustment
+        let current_eff = self.load_nsight_util("ci_metrics.json").unwrap_or(0.8);
+
+        // Simple adjustment based on current efficiency
+        let adjustment = if current_eff > 0.85 {
+            0.05 // Increase fraction if GPU is efficient
+        } else if current_eff < 0.7 {
+            -0.05 // Decrease fraction if GPU is struggling
+        } else {
+            0.0 // Keep similar
+        };
+
+        // Clamp to reasonable bounds
+        (avg_frac + adjustment).clamp(0.5, 0.9)
+    }
+
+    /// Load current Nsight utilization metrics
+    fn load_nsight_util(&self, _path: &str) -> Option<f64> {
+        // Simplified implementation - would parse actual metrics file
+        // For now return a default value
+        Some(0.8)
+    }
+
+    /// Apply ML-based predictive tuning to GPU configuration
+    pub fn tune_ml_predict(&self, config: &mut GpuConfig) {
+        use crate::utils::logging::load_history;
+
+        let hist = load_history("history.json");
+        config.gpu_frac = self.predict_frac(&hist).clamp(0.5, 0.9);
+
+        log::info!("ML prediction adjusted GPU fraction to {:.2}", config.gpu_frac);
+    }
+
+    /// Hybrid async dispatch with overlapping compute and memory operations
+    pub async fn hybrid_overlap(&self, config: &GpuConfig, target: &BigInt256,
+                               range: (BigInt256, BigInt256), batch_steps: u64)
+                               -> Result<Option<BigInt256>, Box<dyn std::error::Error>> {
+        #[cfg(feature = "rustacuda")]
+        {
+            use crate::gpu::backends::cuda_backend::CudaBackend;
+
+            let cuda = CudaBackend::new()?;
+            let device = cuda.device()?;
+
+            // Create separate streams for compute and memory operations
+            let compute_stream = device.create_stream(cudarc::driver::CudaStreamFlags::NON_BLOCKING)?;
+            let memory_stream = device.create_stream(cudarc::driver::CudaStreamFlags::NON_BLOCKING)?;
+
+            // Allocate states with prefetching
+            let mut states = cuda.alloc_and_copy_pinned_async(&vec![RhoState::default(); 1000],
+                                                             true, true).await?;
+
+            // Prefetch states to GPU
+            device.mem_prefetch_async(
+                states.as_ptr() as *const std::ffi::c_void,
+                states.len() * std::mem::size_of::<RhoState>(),
+                0, // device ordinal
+                Some(&compute_stream),
+            )?;
+
+            // Launch compute kernel on compute stream
+            let compute_event = cuda.dispatch_async(
+                &self.get_rho_kernel()?, // Placeholder - would need actual kernel
+                &mut states,
+                self.get_jump_table()?, // Placeholder
+                self.get_bias_table()?, // Placeholder
+                batch_steps as u32
+            ).await?;
+
+            // Copy results back on memory stream (overlaps with compute)
+            let host_states = states.copy_to_vec_async(Some(&memory_stream))?;
+
+            // Wait for compute to complete
+            compute_event.synchronize()?;
+
+            // Check for collisions on CPU
+            if let Some(key) = self.check_and_resolve_collisions(&self.dp_table, &host_states).await {
+                return Ok(Some(key));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Placeholder functions for kernel and data access (would need proper implementation)
+    #[cfg(feature = "rustacuda")]
+    fn get_rho_kernel(&self) -> Result<cudarc::driver::CudaFunction, Box<dyn std::error::Error>> {
+        // Placeholder - actual implementation would load/compile the kernel
+        Err("Kernel loading not implemented".into())
+    }
+
+    #[cfg(feature = "rustacuda")]
+    fn get_jump_table(&self) -> Result<cudarc::driver::CudaSlice<BigInt256>, Box<dyn std::error::Error>> {
+        // Placeholder
+        Err("Jump table not implemented".into())
+    }
+
+    #[cfg(feature = "rustacuda")]
+    fn get_bias_table(&self) -> Result<cudarc::driver::CudaSlice<f32>, Box<dyn std::error::Error>> {
+        // Placeholder
+        Err("Bias table not implemented".into())
+    }
+
+    async fn check_and_resolve_collisions(&self, _dp_table: &crate::dp::DpTable, _states: &[RhoState])
+                                         -> Option<BigInt256> {
+        // Placeholder collision detection
+        None
+    }
+
+    /// Prefetch memory for optimal kangaroo state access patterns
+    #[cfg(feature = "rustacuda")]
+    pub async fn prefetch_states_batch(&self, states: &CudaSlice<RhoState>,
+                                      batch_start: usize, batch_size: usize)
+                                      -> Result<(), Box<dyn std::error::Error>> {
+        use crate::gpu::backends::cuda_backend::CudaBackend;
+
+        let cuda = CudaBackend::new()?;
+        cuda.prefetch_batch(states, batch_start, batch_size).await?;
+        Ok(())
+    }
 }

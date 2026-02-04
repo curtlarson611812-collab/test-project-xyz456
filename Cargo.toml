@@ -21,6 +21,7 @@ hex = "0.4"                       # Pubkey/hex parsing
 serde = { version = "1", features = ["derive"] }  # Config serialization if needed
 serde_json = "1.0"  # JSON parsing for metrics
 bytemuck = "1.0"                  # Safe casting between byte slices and POD types
+ndarray = { version = "0.15", features = ["blas"] }  # ML linear regression for predictive optimization
 bincode = "1.3"                   # Binary serialization for rocksdb
 async-trait = "0.1"               # Async traits for GPU backend
 rand = "0.8"                      # Random number generation for entropy

@@ -190,7 +190,163 @@ def register_ecdlp_rules():
     for rule in rules:
         register_rule(rule)
 
-    print(f"Registered {len(rules)} ECDLP-specific Nsight rules")
+class EcdlpModularArithmeticEff(Rule):
+    """
+    Analyzes modular arithmetic efficiency in ECDLP operations.
+
+    Barrett reduction and Montgomery multiplication should dominate ALU time.
+    Poor efficiency indicates optimization opportunities.
+    """
+    id = "EcdlpModularArithmeticEff"
+    name = "ECDLP Modular Arithmetic Efficiency"
+    description = "Analyzes Barrett/Montgomery multiplication efficiency"
+    category = "ECDLP"
+    severity = Severity.WARNING
+
+    def get_implementation(self):
+        return """
+        // Monitor ALU utilization in modular arithmetic
+        alu_pct = metrics["sm__pipe_alu_cycles_active.average.pct_of_peak_sustained_active"].value()
+
+        if alu_pct > 10:  # High ALU usage suggests modular arithmetic bottleneck
+            return Suggestion(
+                "Optimize modular arithmetic",
+                f"ALU utilization {alu_pct:.1f}% indicates modular arithmetic bottleneck. " +
+                "Consider shared memory for Barrett mu constants or fused operations.",
+                Severity.WARNING
+            )
+        """
+
+class EcdlpEcPointMulBalance(Rule):
+    """
+    Analyzes elliptic curve point multiplication balance.
+
+    Optimal EC point multiplication requires balanced mul/square operations.
+    Imbalanced operations indicate inefficient Jacobian coordinate usage.
+    """
+    id = "EcdlpEcMulBalance"
+    name = "ECDLP EC Point Multiplication Balance"
+    description = "Analyzes mul/square operation balance in EC arithmetic"
+    category = "ECDLP"
+    severity = Severity.INFO
+
+    def get_implementation(self):
+        return """
+        // Check mul/square ratio for optimal EC arithmetic (target: 12m/4sq ≈ 3:1)
+        muls = metrics["sm__inst_executed_pipe_alu_op_mul.count"].value()
+        sqs = metrics["sm__inst_executed_pipe_alu_op_sqr.count"].value()
+
+        if sqs > 0:
+            ratio = muls / sqs
+            if ratio < 2.5 or ratio > 3.5:
+                return Suggestion(
+                    "Balance EC point operations",
+                    f"Mul/square ratio {ratio:.2f} deviates from optimal 3:1. " +
+                    "Consider fusing add/double operations in Jacobian coordinates.",
+                    Severity.INFO
+                )
+        """
+
+class EcdlpDpDetectionDivergence(Rule):
+    """
+    Analyzes warp divergence in distinguished point detection.
+
+    DP checking often involves conditional trailing zero checks that cause divergence.
+    High divergence reduces SIMD efficiency.
+    """
+    id = "EcdlpDpDetectionDivergence"
+    name = "ECDLP DP Detection Divergence"
+    description = "Analyzes warp divergence in distinguished point checking"
+    category = "ECDLP"
+    severity = Severity.WARNING
+
+    def get_implementation(self):
+        return """
+        // Monitor branch efficiency in DP detection
+        branch_eff = metrics["sm__inst_executed.avg.pct_of_peak_sustained_elapsed"].value()
+
+        if branch_eff < 0.8:  # Low branch efficiency indicates divergence
+            return Suggestion(
+                "Reduce DP detection divergence",
+                f"Branch efficiency {branch_eff:.2f} indicates warp divergence in DP checking. " +
+                "Consider subgroupBallot for warp-wide vote operations.",
+                Severity.WARNING
+            )
+        """
+
+class EcdlpBiasTableAccess(Rule):
+    """
+    Analyzes bias table access patterns for bank conflicts.
+
+    Bias table lookups should minimize shared memory bank conflicts
+    for optimal SIMD broadcast performance.
+    """
+    id = "EcdlpBiasTableAccess"
+    name = "ECDLP Bias Table Access"
+    description = "Analyzes shared memory access patterns for bias tables"
+    category = "ECDLP"
+    severity = Severity.WARNING
+
+    def get_implementation(self):
+        return """
+        // Monitor shared memory bank conflicts
+        bank_conflicts = metrics["l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum"].value()
+
+        if bank_conflicts > 100:  # Significant bank conflicts
+            return Suggestion(
+                "Optimize bias table access",
+                f"Shared memory bank conflicts ({bank_conflicts}) detected. " +
+                "Consider padding bias table arrays or using broadcast patterns.",
+                Severity.WARNING
+            )
+        """
+
+class EcdlpConstantTimeRule(Rule):
+    """
+    Ensures constant-time execution to prevent timing-based side channels.
+
+    Variable-time operations in cryptographic code can leak information.
+    """
+    id = "EcdlpConstantTime"
+    name = "ECDLP Constant-Time Verification"
+    description = "Verifies constant-time execution in cryptographic operations"
+    category = "ECDLP"
+    severity = Severity.ERROR
+
+    def get_implementation(self):
+        return """
+        // Monitor for variable-time operations
+        branch_variance = metrics.get("warp_nonpred_execution_efficiency.variance", 0).value()
+
+        if branch_variance > 5:  # High variance indicates timing leaks
+            return Suggestion(
+                "Ensure constant-time execution",
+                f"Branch efficiency variance {branch_variance:.1f} suggests variable-time operations. " +
+                "Remove data-dependent branches in mod_inverse and EC operations.",
+                Severity.ERROR
+            )
+        """
+
+# Register all additional ECDLP rules
+def register_additional_rules():
+    """Register additional ECDLP-specific rules."""
+    additional_rules = [
+        EcdlpModularArithmeticEff(),
+        EcdlpEcPointMulBalance(),
+        EcdlpDpDetectionDivergence(),
+        EcdlpBiasTableAccess(),
+        EcdlpConstantTimeRule(),
+    ]
+
+    for rule in additional_rules:
+        register_rule(rule)
+
+    print(f"Registered {len(additional_rules)} additional ECDLP-specific Nsight rules")
+
+# Initialize additional rules on import
+register_additional_rules()
+
+print(f"Registered {len(rules)} ECDLP-specific Nsight rules")
 
 # Initialize rules on import
 register_ecdlp_rules()

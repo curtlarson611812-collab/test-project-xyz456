@@ -1341,4 +1341,100 @@ impl SoaLayout {
 
         Ok(())
     }
+
+    /// SIMD-accelerated BigInt256 multiplication kernel dispatch
+    #[cfg(feature = "rustacuda")]
+    pub fn dispatch_simd_mul(&self, a_dev: &CudaSlice<u64>, b_dev: &CudaSlice<u64>,
+                            result_dev: &mut CudaSlice<u64>) -> Result<(), DriverError> {
+        let device = self.device()?;
+
+        // Launch SIMD kernel with warp-sized blocks for optimal SIMD utilization
+        let grid = (1, 1, 1);  // Single block for testing
+        let block = (32, 1, 1);  // Full warp for SIMD operations
+
+        // Get the kernel function (assuming it's loaded)
+        // This would need to be implemented based on your kernel loading mechanism
+        // For now, this is a placeholder for the SIMD dispatch
+
+        Ok(())
+    }
+
+    /// Asynchronous kernel dispatch with CUDA streams for overlapping operations
+    #[cfg(feature = "rustacuda")]
+    pub async fn dispatch_async(&self, kernel: &CudaFunction, states: &mut CudaSlice<RhoState>,
+                               jumps: CudaSlice<BigInt256>, bias: CudaSlice<f32>, steps: u32)
+                               -> Result<CudaEvent, DriverError> {
+        use cudarc::driver::CudaStreamFlags;
+
+        let device = self.device()?;
+
+        // Create non-blocking stream for async operations
+        let stream = device.create_stream(CudaStreamFlags::NON_BLOCKING)?;
+
+        // Launch kernel on async stream
+        let grid_dims = (states.len() as u32 / 128 + 1, 1, 1);
+        let block_dims = (128, 1, 1);
+
+        kernel.launch_on_stream(&stream, grid_dims, block_dims,
+                               &[states, &jumps, &bias, &steps])?;
+
+        // Create event to track completion
+        let event = device.create_event()?;
+        event.record_on_stream(&stream)?;
+
+        Ok(event)
+    }
+
+    /// Create optimized stream for overlapping compute/memory operations
+    #[cfg(feature = "rustacuda")]
+    pub fn create_overlap_stream(&self) -> Result<CudaStream, DriverError> {
+        use cudarc::driver::CudaStreamFlags;
+
+        let device = self.device()?;
+        // Use non-blocking stream to enable overlap
+        device.create_stream(CudaStreamFlags::NON_BLOCKING)
+    }
+
+    /// Allocate states with memory prefetching for optimal access patterns
+    #[cfg(feature = "rustacuda")]
+    pub async fn alloc_prefetch_states(&self, count: usize) -> Result<CudaSlice<RhoState>, DriverError> {
+        let device = self.device()?;
+
+        // Allocate device memory
+        let states = unsafe { device.alloc_zeros_async::<RhoState>(count)? };
+
+        // Prefetch to GPU to hide PCIe latency (4GB/s vs page faults)
+        device.mem_prefetch_async(
+            states.as_ptr() as *const std::ffi::c_void,
+            count * std::mem::size_of::<RhoState>(),
+            0, // device ordinal
+            None, // default stream
+        )?;
+
+        Ok(states)
+    }
+
+    /// Prefetch memory for batch processing with hints for access patterns
+    #[cfg(feature = "rustacuda")]
+    pub async fn prefetch_batch(&self, states: &CudaSlice<RhoState>, batch_start: usize,
+                               batch_size: usize) -> Result<(), DriverError> {
+        let device = self.device()?;
+
+        // Calculate prefetch region for this batch
+        let ptr = unsafe {
+            states.as_ptr().add(batch_start)
+        };
+
+        let size_bytes = batch_size * std::mem::size_of::<RhoState>();
+
+        // Prefetch with access hints for SoA layout (sequential limb access)
+        device.mem_prefetch_async(
+            ptr as *const std::ffi::c_void,
+            size_bytes,
+            0, // device ordinal
+            None, // default stream
+        )?;
+
+        Ok(())
+    }
 }

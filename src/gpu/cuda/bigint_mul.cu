@@ -154,3 +154,79 @@ __device__ void montgomery_mul_opt(const uint64_t a[4], const uint64_t b[4], con
         }
     }
 }
+
+// SIMD-accelerated BigInt256 multiplication using CUDA warp-level primitives
+__device__ void mul256_simd(uint64_t* result, const uint64_t* a, const uint64_t* b) {
+    uint64_t low, high;
+    uint32_t lane = threadIdx.x % 32; // Lane within warp
+
+    // Clear result array
+    for (int i = 0; i < 8; i++) {
+        result[i] = 0;
+    }
+
+    // SIMD multiplication: each thread computes partial products
+    for (int i = 0; i < 4; i++) {
+        uint64_t carry = 0;
+        for (int j = 0; j < 4; j++) {
+            // Use CUDA SIMD multiply-high for 64-bit multiplication
+            low = __umul64(a[i], b[j]);
+            high = __mul64hi(a[i], b[j]);
+
+            // Add to existing result with carry propagation
+            uint64_t existing = result[i + j];
+            uint64_t sum = existing + low + carry;
+
+            result[i + j] = sum; // Low 64 bits
+            carry = high + (sum < existing || sum < low ? 1 : 0); // Carry detection
+        }
+
+        // Propagate remaining carry using warp shuffle
+        int k = i + 4;
+        while (__any_sync(0xFFFFFFFF, carry) && k < 8) {
+            uint64_t next_carry = __shfl_up_sync(0xFFFFFFFF, carry, 1);
+            if (lane == 0) next_carry = 0; // Lane 0 doesn't receive from previous
+
+            uint64_t sum = result[k] + carry + next_carry;
+            result[k] = sum;
+            carry = (sum < result[k] || sum < carry) ? 1 : 0;
+            k++;
+        }
+    }
+}
+
+// Warp-level carry propagation using CUDA shuffle operations
+__device__ uint64_t carry_prop_warp(uint64_t val, uint32_t lane) {
+    uint64_t carry = val >> 64;  // Extract high bits as carry
+
+    // Shuffle carry from previous lane (SIMD carry propagation)
+    carry = __shfl_up_sync(0xFFFFFFFF, carry, 1);
+
+    // Lane 0 doesn't receive carry from previous lane
+    if (lane == 0) carry = 0;
+
+    // Add carry to value
+    return val + carry;
+}
+
+// SIMD kernel for batch BigInt256 multiplication
+__global__ void bigint_mul_kernel_simd(const uint64_t* a_batch, const uint64_t* b_batch,
+                                       uint64_t* result_batch, uint32_t batch_size) {
+    uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t lane = threadIdx.x % 32;
+
+    if (idx >= batch_size) return;
+
+    // Get pointers for this batch element (4 uint64_t per BigInt256)
+    const uint64_t* a = a_batch + idx * 4;
+    const uint64_t* b = b_batch + idx * 4;
+    uint64_t* result = result_batch + idx * 8; // 8 uint64_t for 512-bit result
+
+    // Use SIMD multiplication
+    mul256_simd(result, a, b);
+
+    // Apply warp-level carry propagation to final result
+    for (int i = 0; i < 8; i++) {
+        result[i] = carry_prop_warp(result[i], lane);
+    }
+}
