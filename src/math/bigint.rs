@@ -617,11 +617,10 @@ impl BarrettReducer {
             return Err("Modulus cannot be zero".into());
         }
         let k = 4; // 256 bits / 64 bits per limb
-        // Compute mu = floor(2^512 / modulus)
-        let m_512 = BigInt512::from_bigint256(modulus);
-        // Since BigInt512 represents 0-511 bits, we use (2^512 - 1) / m + 1 if remainder > 0
+        // Simplified mu calculation for now - will fix properly later
+        let mod_512 = BigInt512::from_bigint256(modulus);
         let max_512 = BigInt512 { limbs: [u64::MAX; 8] }; // 2^512 - 1
-        let (mu_256, rem) = max_512.div_rem(&m_512);
+        let (mu_256, rem) = max_512.div_rem(&mod_512);
         let mut mu = BigInt512::from_bigint256(&mu_256);
         if !rem.is_zero() {
             mu = mu.add(BigInt512::one()); // Ceiling adjustment
@@ -666,8 +665,10 @@ impl BarrettReducer {
 
     /// Barrett modular multiplication: (a * b) mod modulus
     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
-        self.reduce(&prod).expect("Mul reduce fail")
+        let a_512 = BigInt512::from_bigint256(a);
+        let b_512 = BigInt512::from_bigint256(b);
+        let prod = a_512.mul(b_512); // 512-bit product
+        self.reduce(&prod).unwrap()
     }
 }
 

@@ -663,21 +663,6 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             return None; // Invalid format
         }
 
-        // TEMPORARY: For puzzle #135, return hardcoded known valid point
-        // x = 145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16
-        // y = ? (need to compute correct y)
-        // For now, use a dummy point to test the rest of the system
-        if compressed[0] == 0x02 && compressed[1] == 0x14 && compressed[2] == 0x5d {
-            println!("DEBUG: Recognized puzzle #135, using hardcoded point");
-            // This is a placeholder - need correct y coordinate
-            let x = BigInt256::from_hex("145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16");
-            let y = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffebaaedce6"); // Placeholder
-            return Some(Point {
-                x: x.to_u64_array(),
-                y: y.to_u64_array(),
-                z: [1, 0, 0, 0],
-            });
-        }
 
         // Extract x coordinate from bytes 1-32 (big-endian)
         let mut x_bytes = [0u8; 32];
