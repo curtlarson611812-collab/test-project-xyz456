@@ -1160,12 +1160,12 @@ pub fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::e
 /// Load a specific real unsolved puzzle
 pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point, Box<dyn std::error::Error>> {
     let hex = match n {
-        135 => "03f3c760dfe4b0a0b8efb3d0ab84be2dd8618d44b41d7c14c0a6c7a4e556cb53b0",
-        140 => "03e209f4e67c6376a65d0233d7607820e7e6d03542c3b6c822c43c8f1c0430b2e7",
-        145 => "02d5d993fd68b425a5677086a4fa67a7f72d9c496afb0a6c87b62c9104d9ced1f4",
-        150 => "034ffca650ce4f8a82c9afff88d5d8f7ff85e7d8c5f0ffd59f1c7a48bb7a87d6a0",
-        155 => "03c5b2747c6c09f13c8b5d4a847807b74e8b1b2b2a4f01d9a7d6d6e7e8f9a0b1c2",
-        160 => "02f1543e5f9852b5259b4683f3f9c6a0c5b3d0d5f2a6c2e4f5b7d8e9f0a1b2c3d4",
+        135 => "02145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16",
+        140 => "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+        145 => "03afdda497369e219a2c1c369954a930e4d3740968e5e4352475bcffce3140dae5",
+        150 => "03137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49",
+        155 => "035cd1854cae45391ca4ec428cc7e6c7d9984424b954209a8eea197b9e364c05f6",
+        160 => "02e0a8b039282faf6fe0fd769cfbc4b6b4cf8758ba68220eac420e32b91ddfa673",
         _ => return Err(format!("Unknown puzzle #{}", n).into()),
     };
 

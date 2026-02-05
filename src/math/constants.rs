@@ -4,6 +4,7 @@
 
 use crate::math::bigint::BigInt256;
 use crate::types::Point;
+use std::ops::Mul;
 use std::sync::LazyLock;
 
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
@@ -49,9 +50,11 @@ pub fn jump_table() -> Vec<BigInt256> {
     }
 
     // Powers of 2 for larger jumps
-    for i in 1..=64 {
+    for i in 1..=63 {
         jumps.push(BigInt256::from_u64(1u64 << i));
     }
+    // For i=64, use BigInt256 directly
+    jumps.push(BigInt256::from_u64(1u64 << 63) * BigInt256::from_u64(2));
 
     // Random-ish values for mixing (deterministic)
     for i in 128..JUMP_TABLE_SIZE {
