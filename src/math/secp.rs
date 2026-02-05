@@ -72,11 +72,14 @@ impl Secp256k1 {
         // Precompute G multiples for kangaroo jump table synergy
         // Temporarily create curve instance to compute multiples
         info!("DEBUG: Creating BarrettReducer for p");
-        let temp_barrett_p = BarrettReducer::new(&p);
+        let temp_barrett_p = BarrettReducer::new(&p).expect("Failed to create BarrettReducer for p");
+        info!("DEBUG: BarrettReducer for p created");
         info!("DEBUG: Creating BarrettReducer for n");
-        let temp_barrett_n = BarrettReducer::new(&n);
+        let temp_barrett_n = BarrettReducer::new(&n).expect("Failed to create BarrettReducer for n");
+        info!("DEBUG: BarrettReducer for n created");
         info!("DEBUG: Creating MontgomeryReducer for p");
         let temp_montgomery_p = MontgomeryReducer::new(&p);
+        info!("DEBUG: MontgomeryReducer created");
 
         let temp_curve = Secp256k1 {
             p: p.clone(),
@@ -90,28 +93,9 @@ impl Secp256k1 {
             montgomery_p: temp_montgomery_p,
         };
 
-        // Precompute G multiples for kangaroo jump table optimization
-        // [G, 2G, 3G, 4G, 8G, 16G, -G, -2G, -3G, -4G, -8G, -16G]
-        // Provides 10-20x speedup for kangaroo jumps via O(1) point additions
-        let mut g_multiples = Vec::with_capacity(12);
-        let _two = BigInt256::from_u64(2);
-        let three = BigInt256::from_u64(3);
-        let _four = BigInt256::from_u64(4);
-        let _eight = BigInt256::from_u64(8);
-        let _sixteen = BigInt256::from_u64(16);
-
-        // Positive multiples
-        g_multiples.push(g.clone()); // 1G
-        g_multiples.push(temp_curve.double(&g)); // 2G
-        g_multiples.push(temp_curve.mul_constant_time(&three, &g).expect("3G computation")); // 3G
-        g_multiples.push(temp_curve.double(&g_multiples[1])); // 4G
-        g_multiples.push(temp_curve.double(&g_multiples[3])); // 8G
-        g_multiples.push(temp_curve.double(&g_multiples[4])); // 16G
-
-        // Negative multiples
-        for i in 0..6 {
-            g_multiples.push(g_multiples[i].negate(&temp_curve));
-        }
+        // Temporarily disable G multiples precomputation to test basic functionality
+        // TODO: Re-enable once arithmetic is fully working
+        let g_multiples = Vec::new();
 
         let barrett_p = BarrettReducer::new(&p).expect("Valid secp256k1 prime p");
         let barrett_n = BarrettReducer::new(&n).expect("Valid secp256k1 order n");
