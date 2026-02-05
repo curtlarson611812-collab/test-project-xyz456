@@ -44,6 +44,10 @@ pub struct Config {
     #[arg(long, default_value = "1000")]
     pub jump_mean: u64,
 
+    /// Near collision threshold (distance units, default 1000)
+    #[arg(long, default_value = "1000")]
+    pub near_threshold: u64,
+
     /// Maximum operations before giving up
     #[arg(long, default_value = "1000000000000")] // 10^12
     pub max_ops: u64,
@@ -244,6 +248,11 @@ pub fn enable_nvidia_persistence() -> Result<bool> {
 
     // Only attempt on Linux systems
     if !cfg!(target_os = "linux") {
+        return Ok(false);
+    }
+
+    // Check if nvidia-smi exists before attempting
+    if std::process::Command::new("which").arg("nvidia-smi").output().is_err() {
         return Ok(false);
     }
 

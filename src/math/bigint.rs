@@ -276,7 +276,15 @@ impl BigInt256 {
     /// Create from hex string (pads with leading zeros if shorter than 256 bits)
     pub fn from_hex(hex: &str) -> Self {
         let hex = hex.trim_start_matches("0x");
-        let mut bytes = hex::decode(hex).expect("Invalid hex string");
+
+        // Ensure even length by padding with leading zero if necessary
+        let hex = if hex.len() % 2 != 0 {
+            format!("0{}", hex)
+        } else {
+            hex.to_string()
+        };
+
+        let mut bytes = hex::decode(&hex).expect("Invalid hex string");
 
         // Pad with leading zeros to make exactly 32 bytes (256 bits)
         while bytes.len() < 32 {

@@ -78,6 +78,7 @@ impl ParityChecker {
                 [i as u64; 4],   // Deterministic alpha
                 [i as u64; 4],   // Deterministic beta
                 i % 2 == 0,      // Alternate tame/wild
+                false,           // is_dp
                 i as u64,
             );
             kangaroos.push(state);

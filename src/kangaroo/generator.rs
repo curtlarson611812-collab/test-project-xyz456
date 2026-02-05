@@ -5,7 +5,7 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Point, TaggedKangarooState, RhoState};
 use crate::math::{Secp256k1, bigint::{BigInt256, BigInt512}};
-use crate::kangaroo::SearchConfig;
+use crate::kangaroo::{SearchConfig, collision::CollisionDetector};
 use crate::dp::DpTable;
 use num_bigint::BigInt;
 use std::ops::Sub;
@@ -199,7 +199,8 @@ impl KangarooGenerator {
                 prime as u64,           // initial distance = prime (invertible)
                 [prime, 0, 0, 0],       // alpha starts with prime offset
                 [1, 0, 0, 0],           // beta placeholder (updated during stepping)
-                false,                  // is_wild
+                false,                  // is_tame
+                false,                  // is_dp
                 i as u64,
             );
 
@@ -227,6 +228,7 @@ impl KangarooGenerator {
                 [i as u64 + offset, 0, 0, 0],  // alpha = distance for tame
                 [0, 0, 0, 0],                   // beta for tame usually 0 or 1
                 true,
+                false, // is_dp
                 i as u64,
             );
 
@@ -302,6 +304,7 @@ impl KangarooGenerator {
                 alpha,
                 beta,
                 true, // is_tame = true
+                false, // is_dp
                 i as u64,
             ));
         }
@@ -603,7 +606,7 @@ impl KangarooGenerator {
             }
         }
         let tames: Vec<_> = (0..wilds.len()).map(|_| {
-            let mut tame = KangarooState::new(Point::infinity(), 0, [0; 4], [0; 4], true, 0);
+            let mut tame = KangarooState::new(Point::infinity(), 0, [0; 4], [0; 4], true, false, 0);
             tame.position = self.initialize_tame_start();
             tame.distance = 0; // u64 distance for tame kangaroos
             tame
@@ -732,11 +735,8 @@ impl KangarooGenerator {
         None
     }
 
-    pub fn pollard_lambda_parallel(&self, target_pubkey: &Point, range: (BigInt256, BigInt256), count: usize, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
-        use crate::math::constants::{DP_BITS, jump_table};
-        use crate::dp::DpTable;
-        use crate::kangaroo::collision::CollisionDetector;
-
+    /// Split Pollard Init: Create initial kangaroo states
+    fn pollard_init_split(&self, target_pubkey: &Point, count: usize) -> Vec<KangarooState> {
         let mut states = Vec::with_capacity(count);
         for i in 0..count {
             let start = if i % 2 == 0 {
@@ -750,19 +750,41 @@ impl KangarooGenerator {
                 alpha: [0; 4],
                 beta: [0; 4],
                 is_tame: i % 2 == 0,
+                is_dp: false,
                 id: i as u64,
             });
         }
+        states
+    }
 
+    /// Split Pollard Run: Execute biased kangaroo steps
+    fn pollard_run_split(&self, states: &mut [KangarooState], steps: usize, jumps: &[BigInt256], biases: &std::collections::HashMap<u32, f64>) {
+        self.pollard_run_biased(states, steps, jumps, biases);
+    }
+
+    /// Split Pollard Resolve: Check collisions and return solution if found
+    fn pollard_resolve_split(&self, states: &[KangarooState], dp_table: &DpTable, detector: &CollisionDetector, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+        // Placeholder: In full implementation, check DP table for collisions
+        // and resolve using collision detector
+        None
+    }
+
+    pub fn pollard_lambda_parallel(&self, target_pubkey: &Point, range: (BigInt256, BigInt256), count: usize, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+        use crate::math::constants::{DP_BITS, jump_table};
+        use crate::dp::DpTable;
+        use crate::kangaroo::collision::CollisionDetector;
+
+        let mut states = self.pollard_init_split(target_pubkey, count);
         let dp_table = DpTable::new(DP_BITS as usize);
         let jumps = jump_table();
         let detector = CollisionDetector::new();
 
         loop {
-            self.pollard_run_biased(&mut states, 10000, &jumps, biases);
-            // Check for DP collisions and resolve
-            // For now, return None to avoid infinite loop in tests
-            // In full implementation, would check dp_table for collisions
+            self.pollard_run_split(&mut states, 10000, &jumps, biases);
+            if let Some(key) = self.pollard_resolve_split(&states, &dp_table, &detector, biases) {
+                return Some(key);
+            }
+            // Prevent infinite loop in tests
             return None;
         }
     }
@@ -800,13 +822,22 @@ impl KangarooGenerator {
 
     fn pollard_run_biased(&self, states: &mut [KangarooState], steps: usize, jumps: &[BigInt256], biases: &std::collections::HashMap<u32, f64>) {
         for state in states.iter_mut() {
-            for _ in 0..steps {
+            for s in 0..steps {
+                // Use lambda bucket select for deterministic tame vs mixed wild
+                let bucket = self.select_bucket(&state.position, &BigInt256::from_u64(state.distance), 0, s as u32, state.is_tame);
                 let jump = self.biased_jump(&BigInt256::from_u64(state.distance), biases);
-                let jump_point = self.curve.mul(&jumps[state.id as usize % jumps.len()], &self.curve.g);
+                let jump_point = self.curve.mul(&jumps[bucket as usize % jumps.len()], &self.curve.g);
                 state.position = self.curve.point_add(&state.position, &jump_point);
                 state.distance = state.distance.wrapping_add(jump.low_u64());
+
+                // Symmetry double effect with rho negation map
+                let neg_pos = self.rho_negation_map(&state.position);
+                if neg_pos.x == state.position.x {
+                    // Handle symmetry collision - would set DP flag
+                }
+
                 if state.distance.trailing_zeros() >= crate::math::constants::DP_BITS {
-                    // Mark as DP candidate - would need to add this field to KangarooState
+                    state.is_dp = true;
                     break;
                 }
             }

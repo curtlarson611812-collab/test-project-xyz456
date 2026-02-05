@@ -4,7 +4,7 @@
 
 use crate::types::Target;
 use crate::config::Config;
-use crate::math::{Secp256k1, BigInt256};
+use crate::math::Secp256k1;
 use anyhow::{anyhow, Result};
 use log::{info, warn};
 use std::fs;
@@ -145,125 +145,80 @@ impl TargetLoader {
         })
     }
 
-    /// Load puzzle targets from puzzles.txt
-    fn load_puzzle_targets(&self, file_path: &Path) -> Result<Vec<Target>> {
-        use std::fs::File;
-        use std::io::{BufRead, BufReader};
+    /// Load puzzle targets from puzzles.txt using the puzzle module
+    pub fn load_puzzle_targets(&self, file_path: &Path) -> Result<Vec<Target>> {
+        use crate::puzzles;
 
         info!("Loading puzzle targets from {}", file_path.display());
-        let file = File::open(file_path)?;
-        let reader = BufReader::new(file);
-        let mut targets = Vec::new();
-        let mut invalid_count = 0;
 
-        for (line_num, line_result) in reader.lines().enumerate() {
-            let line = line_result?;
-            let line = line.trim();
-            info!("DEBUG: Parsing line {}: {}", line_num + 1, line);
-            if line.is_empty() || line.starts_with('#') {
+        // Load puzzles from file
+        let puzzles = puzzles::load_puzzles_from_file()?;
+        let mut targets = Vec::new();
+
+        for puzzle in &puzzles {
+            // Skip puzzles without public keys (unsolved sequential puzzles)
+            if puzzle.pub_key_hex.is_empty() {
+                info!("Skipping puzzle {}: no public key available (unsolved sequential)", puzzle.n);
                 continue;
             }
 
-            match self.parse_puzzle_line(line, line_num + 1) {
-                Ok(target) => {
-                    info!("DEBUG: Parsed target: puzzle {}", target.id);
-                    targets.push(target);
-                }
-                Err(e) => {
-                    warn!("Skipping invalid puzzle line {}: {}", line_num + 1, e);
-                    invalid_count += 1;
-                }
+            // Validate compressed public key format
+            let pubkey_hex = puzzle.pub_key_hex.trim();
+            if pubkey_hex.len() != 66 || (!pubkey_hex.starts_with("02") && !pubkey_hex.starts_with("03")) {
+                warn!("Invalid compressed pubkey format for puzzle {}: expected 66 hex chars starting with 02 or 03", puzzle.n);
+                continue;
             }
+
+            // Parse compressed public key (33 bytes)
+            let pubkey_bytes = hex::decode(pubkey_hex)
+                .map_err(|e| anyhow!("Invalid hex pubkey for puzzle {} '{}': {}", puzzle.n, pubkey_hex, e))?;
+
+            if pubkey_bytes.len() != 33 {
+                warn!("Invalid compressed pubkey length for puzzle {}: {} (expected 33)", puzzle.n, pubkey_bytes.len());
+                continue;
+            }
+
+            // Convert to fixed-size array
+            let pubkey_array: [u8; 33] = pubkey_bytes.as_slice().try_into()
+                .map_err(|_| anyhow!("Invalid pubkey length for puzzle {}: expected 33 bytes, got {}", puzzle.n, pubkey_bytes.len()))?;
+
+            // Decompress to validate and get affine point
+            let point = self.curve.decompress_point(&pubkey_array)
+                .ok_or_else(|| anyhow!("Failed to decompress pubkey for puzzle {} (not on curve)", puzzle.n))?;
+
+            // Additional validation - ensure point is on curve
+            if !self.curve.is_on_curve(&point) {
+                warn!("Decompressed point for puzzle {} is not on secp256k1 curve", puzzle.n);
+                continue;
+            }
+
+            // Validate key range
+            if puzzle.range_min >= puzzle.range_max {
+                warn!("Invalid key range for puzzle {}: min ({}) >= max ({})", puzzle.n, puzzle.range_min.to_hex(), puzzle.range_max.to_hex());
+                continue;
+            }
+
+            // For now, we'll use None for key_range since Target expects (u64, u64) but we have BigInt256
+            // TODO: Update Target struct to support BigInt256 ranges for large puzzles
+            let key_range = None;
+
+            // Calculate priority: BTC value + bonus for lower puzzle numbers
+            let priority = puzzle.btc_reward + (1000.0 / puzzle.n as f64);
+
+            targets.push(Target {
+                point,
+                key_range,
+                id: puzzle.n as u64,
+                priority,
+                address: Some(puzzle.target_address.clone()),
+                value_btc: Some(puzzle.btc_reward),
+            });
         }
 
-        info!("Loaded {} valid puzzle targets from {} (skipped {} invalid)",
-              targets.len(), file_path.display(), invalid_count);
+        info!("Loaded {} valid puzzle targets from {} (total puzzles: {})",
+              targets.len(), file_path.display(), puzzles.len());
+
         Ok(targets)
-    }
-
-    /// Parse puzzle target line: puzzle_num,pubkey_hex,key_range_low,key_range_high[,btc_value]
-    fn parse_puzzle_line(&self, line: &str, _line_num: usize) -> Result<Target> {
-        println!("DEBUG: Parsing puzzle line: {}", line);
-        let parts: Vec<&str> = line.split(',').collect();
-        println!("DEBUG: Split into {} parts", parts.len());
-        if parts.len() < 4 {
-            return Err(anyhow!("Invalid puzzle line format (expected puzzle_num,pubkey_hex,low,high[,btc]): {}", line));
-        }
-
-        let puzzle_num: u32 = parts[0].trim().parse()
-            .map_err(|e| anyhow!("Invalid puzzle number '{}': {}", parts[0], e))?;
-        println!("DEBUG: Puzzle number: {}", puzzle_num);
-
-        let pubkey_hex = parts[1].trim();
-        info!("DEBUG: Validating pubkey hex: {}", pubkey_hex);
-
-        // Early validation of compressed pubkey format
-        let pubkey_hex = if pubkey_hex.starts_with("0x") {
-            &pubkey_hex[2..]
-        } else {
-            pubkey_hex
-        };
-
-        if pubkey_hex.len() != 66 || (!pubkey_hex.starts_with("02") && !pubkey_hex.starts_with("03")) {
-            return Err(anyhow!("Invalid compressed pubkey format: expected 66 hex chars starting with 02 or 03"));
-        }
-
-        // Validate x coordinate is in valid range
-        let x_hex = &pubkey_hex[2..]; // Skip the 02/03 prefix
-        let x = BigInt256::from_hex(x_hex);
-        if x >= self.curve.p {
-            return Err(anyhow!("Invalid pubkey: x coordinate >= p"));
-        }
-
-        let key_range_low: u64 = parts[2].trim().parse()
-            .map_err(|e| anyhow!("Invalid key range low '{}': {}", parts[2], e))?;
-        let key_range_high: u64 = parts[3].trim().parse()
-            .map_err(|e| anyhow!("Invalid key range high '{}': {}", parts[3], e))?;
-        info!("DEBUG: Key range: {} to {}", key_range_low, key_range_high);
-
-        let btc_value = if parts.len() >= 5 {
-            Some(parts[4].trim().parse::<f64>()
-                .map_err(|e| anyhow!("Invalid BTC value '{}': {}", parts[4], e))?)
-        } else {
-            None
-        };
-
-        // Parse compressed public key (33 bytes)
-        let pubkey_bytes = hex::decode(pubkey_hex)
-            .map_err(|e| anyhow!("Invalid hex pubkey '{}': {}", pubkey_hex, e))?;
-
-        if pubkey_bytes.len() != 33 {
-            return Err(anyhow!("Invalid compressed pubkey length: {} (expected 33)", pubkey_bytes.len()));
-        }
-
-        // Convert to fixed-size array
-        let pubkey_array: [u8; 33] = pubkey_bytes.as_slice().try_into()
-            .map_err(|_| anyhow!("Invalid pubkey length: expected 33 bytes, got {}", pubkey_bytes.len()))?;
-
-        // Decompress to validate and get affine point
-        let point = self.curve.decompress_point(&pubkey_array)
-            .ok_or_else(|| anyhow!("Failed to decompress pubkey (not on curve)"))?;
-
-        // Additional validation - ensure point is on curve
-        if !self.curve.is_on_curve(&point) {
-            return Err(anyhow!("Decompressed point is not on secp256k1 curve"));
-        }
-
-        // Validate key range
-        if key_range_low >= key_range_high {
-            return Err(anyhow!("Invalid key range: low ({}) >= high ({})", key_range_low, key_range_high));
-        }
-
-        let priority = btc_value.unwrap_or(0.0) + (1000.0 / puzzle_num as f64); // Lower puzzle numbers = higher priority
-
-        Ok(Target {
-            point,
-            key_range: Some((key_range_low, key_range_high)),
-            id: puzzle_num as u64,
-            priority,
-            address: Some(format!("Puzzle #{}", puzzle_num)),
-            value_btc: btc_value,
-        })
     }
 
     /// Validate all target points are on curve

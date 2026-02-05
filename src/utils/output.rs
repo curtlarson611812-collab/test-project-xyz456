@@ -33,8 +33,9 @@ pub fn init_log_capture() {
     static INIT: Once = Once::new();
 
     INIT.call_once(|| {
-        // Set up custom logger that captures messages
-        log::set_logger(&Logger).unwrap();
+        // Try to set up custom logger that captures messages
+        // If it fails (already initialized), that's ok
+        let _ = log::set_logger(&Logger);
         log::set_max_level(LevelFilter::Info);
     });
 }

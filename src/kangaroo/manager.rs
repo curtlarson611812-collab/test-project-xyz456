@@ -471,6 +471,7 @@ impl KangarooManager {
                     kangaroos[i].alpha,
                     kangaroos[i].beta,
                     kangaroos[i].is_tame,
+                    kangaroos[i].is_dp,
                     kangaroos[i].id,
                 )
             })
@@ -511,6 +512,7 @@ impl KangarooManager {
                 [0; 4], // alpha not provided
                 [0; 4], // beta not provided
                 trap.is_tame,
+                true, // is_dp - this is a distinguished point
                 0, // id not provided
             );
 
@@ -575,6 +577,7 @@ impl KangarooManager {
                         [0; 4], // alpha (would be tracked)
                         [0; 4], // beta (would be tracked)
                         true,   // is_tame (simplified)
+                        true,   // is_dp - this is a distinguished point
                         i as u64, // id
                     );
 

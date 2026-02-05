@@ -197,6 +197,8 @@ pub struct KangarooState {
     pub beta: [u64; 4],
     /// Whether this is a tame kangaroo (starts from G) or wild (starts from target)
     pub is_tame: bool,
+    /// Whether this kangaroo has reached a distinguished point
+    pub is_dp: bool,
     /// Kangaroo ID for tracking
     pub id: u64,
 }
@@ -216,13 +218,14 @@ pub struct TaggedKangarooState {
 
 impl KangarooState {
     /// Create new kangaroo state
-    pub fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, id: u64) -> Self {
+    pub fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, id: u64) -> Self {
         KangarooState {
             position,
             distance,
             alpha,
             beta,
             is_tame,
+            is_dp,
             id,
         }
     }

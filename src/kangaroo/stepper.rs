@@ -69,6 +69,7 @@ impl KangarooStepper {
             alpha: new_alpha,
             beta: new_beta,
             is_tame: kangaroo.is_tame,
+            is_dp: kangaroo.is_dp,
             id: kangaroo.id,
         };
         // Apply negation map symmetry check if flagged (rule #6)

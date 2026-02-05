@@ -1,0 +1,31 @@
+# Bitcoin Puzzle Sequential Ranges - February 2026
+# Range boundaries for unsolved sequential puzzles (#71-#74)
+# These puzzles have no revealed public keys, so they require brute force
+# Format: puzzle_num|btc_reward|range_min_hex|range_max_hex|estimated_ops_log2|difficulty
+
+71|7.1|000000000000000000000000000000002000000000000000|FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF|35.5|Very Hard - Current community target
+72|7.2|000000000000000000000000000000004000000000000000|FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF|36.0|Extremely Hard
+73|7.3|000000000000000000000000000000008000000000000000|FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF|36.5|Nearly Impossible
+74|7.4|000000000000000000000000000000001000000000000000|FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF|37.0|Effectively Impossible without breakthrough
+
+# Additional sequential puzzles (if solved up to higher numbers)
+# 75|7.5|000000000000000000000000000000002000000000000000|... (would be multiples of 5, but sequential)
+# Note: Puzzles 75,80,85,90,95,100,105,110,115,120,125,130 are SOLVED (multiples of 5 with revealed keys)
+
+# Kangaroo Algorithm Feasibility
+# For puzzles with known public keys: Search space is sqrt(N) ≈ 2^(n/2) operations
+# For puzzles without known public keys: Search space is full N = 2^n operations
+# Current record: Puzzle #66 solved (2^66 operations effectively reduced to ~2^33)
+
+# Testing ranges for development (much smaller)
+# test_32|0.0032|00000000000000000000000000000000000000000000000080000000|000000000000000000000000000000000000000000000000FFFFFFFF|16.0|Test range for puzzle #32
+# test_64_small|0.0064|0000000000000000000000000000000000000000000000008000000000000000|000000000000000000000000000000000000000000000000FFFFFFFFFFFFFFFF|32.0|Small test range for puzzle #64
+
+# Bot Avoidance Strategy (2026)
+# 1. Use local Bitcoin node synced to current tip
+# 2. Pre-configure spending transaction with RBF enabled
+# 3. Monitor mempool for front-running attempts
+# 4. Submit to private mining pool or your own node
+# 5. Use maximum feasible transaction fee from start
+# 6. Document solve with timestamped proof
+# 7. Consider legal protection for novel solving techniques

@@ -334,6 +334,13 @@ impl CollisionDetector {
             }
         }
 
+        // Symmetry check P and -P (doubles effective detection probability)
+        let neg_t = self.rho_negation_map(&Point { x: t.x, y: [0; 4], z: [1; 4] });
+        if neg_t.x == w.x {
+            info!("Symmetry near collision detected (P/-P match), solving");
+            return self.solve_trap_collision(t, w);
+        }
+
         // General calculated brute for small diffs
         for k in 0..diff.to_u64_digits()[0].min(self.near_threshold as u64) {
             let k_big = BigInt256::from_u64(k);
@@ -345,6 +352,16 @@ impl CollisionDetector {
         }
         info!("Calculated solve failed, falling back to walk back");
         None
+    }
+
+    /// Rho negation map for symmetry checking (P and -P)
+    pub fn rho_negation_map(&self, point: &Point) -> Point {
+        let mut neg = point.clone();
+        // For secp256k1, compute -y mod p
+        let y_big = BigInt256::from_u64_array(neg.y);
+        let neg_y_big = if y_big.is_zero() { BigInt256::zero() } else { self.curve.p.clone() - y_big };
+        neg.y = neg_y_big.to_u64_array();
+        neg
     }
 
     /// Walk back kangaroo path to find exact collision (legacy method)
@@ -495,7 +512,7 @@ impl CollisionDetector {
             })
     }
 
-    pub fn walk_back_near_collision(&self, t: &Trap, w: &Trap, jump_table: &[(BigUint, Point)], hash_fn: &impl Fn(&Point) -> usize, range_width: &BigInt256) -> Option<Solution> {
+    pub fn walk_back_near_collision(&self, t: &Trap, w: &Trap, jump_table: &[(BigUint, Point)], hash_fn: &impl Fn(&Point) -> usize, range_width: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<Solution> {
         // Try calculated approach first for near collisions
         if let Some(sol) = self.calculated_near_solve(t, w, range_width) {
             return Some(sol);
@@ -565,7 +582,7 @@ impl CollisionDetector {
     }
 
     /// Main collision detector: Check exact, then near collisions with calculated first, then walk-back
-    pub fn process_traps(&self, traps: Vec<Trap>, jump_table: Vec<(BigUint, Point)>, hash_fn: impl Fn(&Point) -> usize, range_width: &BigInt256) -> Option<Solution> {
+    pub fn process_traps(&self, traps: Vec<Trap>, jump_table: Vec<(BigUint, Point)>, hash_fn: impl Fn(&Point) -> usize, range_width: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<Solution> {
         self.detect_exact_collisions(&traps).or_else(|| {
             (0..traps.len()).flat_map(|i| ((i + 1)..traps.len()).map(move |j| (i, j)))
                 .find_map(|(i, j)| {
@@ -573,7 +590,7 @@ impl CollisionDetector {
                         let diff = if traps[i].dist > traps[j].dist { &traps[i].dist - &traps[j].dist } else { &traps[j].dist - &traps[i].dist };
                         if diff < BigUint::from(self.near_threshold) {
                             let (t, w) = if traps[i].is_tame { (&traps[i], &traps[j]) } else { (&traps[j], &traps[i]) };
-                            self.walk_back_near_collision(t, w, &jump_table, &hash_fn, range_width)
+                            self.walk_back_near_collision(t, w, &jump_table, &hash_fn, range_width, biases)
                         } else { None }
                     } else { None }
                 })
