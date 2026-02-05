@@ -198,6 +198,9 @@ fn main() -> Result<()> {
 
     // Initialize logging
     let _ = setup_logging();
+
+    // Initialize real-time output log capture
+    speedbitcrack::utils::output::init_log_capture();
     if args.verbose {
         log::set_max_level(log::LevelFilter::Debug);
     }

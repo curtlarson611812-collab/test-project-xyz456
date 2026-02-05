@@ -105,8 +105,86 @@ pub fn bench_thermal_safety(c: &mut Criterion) {
     group.finish();
 }
 
+pub fn bench_checkpoint_recovery(c: &mut Criterion) {
+    let mut group = c.benchmark_group("checkpoint_recovery");
+    group.measurement_time(Duration::from_secs(15));
+
+    group.bench_function("checkpoint_save_load", |b| {
+        b.iter(|| {
+            let checkpoint_file = "test_checkpoint.bin";
+            let mut steps: u64 = 0;
+
+            // Simulate checkpoint save
+            for i in 0..100 {
+                steps += 10000;
+                if steps % 50000 == 0 {
+                    // Save checkpoint
+                    let checkpoint_data = format!("steps: {}, iteration: {}", steps, i);
+                    std::fs::write(checkpoint_file, checkpoint_data).unwrap();
+                }
+            }
+
+            // Simulate checkpoint load
+            if let Ok(data) = std::fs::read_to_string(checkpoint_file) {
+                black_box(data.contains("steps"));
+            }
+
+            // Cleanup
+            std::fs::remove_file(checkpoint_file).ok();
+        });
+    });
+
+    group.finish();
+}
+
+pub fn bench_multi_valuable(c: &mut Criterion) {
+    let mut group = c.benchmark_group("multi_valuable");
+    group.measurement_time(Duration::from_secs(20)); // Longer for multi-puzzle
+    group.sample_size(20);
+
+    let puzzles = vec![32, 64, 65, 66]; // Test multiple valuable puzzles
+    let gen = KangarooGenerator::new(&Config::default());
+
+    group.bench_function("multi_puzzle_biased", |b| {
+        b.iter(|| {
+            let mut total_time = Duration::new(0, 0);
+            let mut total_ops: u64 = 0;
+
+            for &puzzle_num in &puzzles {
+                let (low, high, _) = load_solved(puzzle_num);
+                let target = load_puzzle(puzzle_num).target_point();
+                let biases = auto_bias_chain(&gen, puzzle_num, &target);
+
+                let start = Instant::now();
+                let result = gen.pollard_lambda_parallel(
+                    &target,
+                    (low.clone(), high.clone()),
+                    256, // Smaller count per puzzle for multi-bench
+                    &biases
+                );
+                let elapsed = start.elapsed();
+                total_time += elapsed;
+
+                // Estimate ops (simplified - would need actual kangaroo state)
+                let estimated_ops = (elapsed.as_secs_f64() * 150_000_000.0) as u64;
+                total_ops += estimated_ops;
+
+                black_box(result);
+            }
+
+            // Calculate aggregate hashrate
+            let hashrate = calculate_hashrate(total_ops, total_time);
+            println!("Multi-puzzle aggregate hashrate: {:.0} M ops/sec", hashrate);
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(benches,
     bench_puzzle66,
-    bench_thermal_safety
+    bench_thermal_safety,
+    bench_checkpoint_recovery,
+    bench_multi_valuable
 );
 criterion_main!(benches);
