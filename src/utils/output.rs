@@ -337,6 +337,31 @@ fn print_boxed_verbose() {
     println!("└─────────────────────────────────────┘");
 }
 
+/// Print Cracker Curt mission patch ASCII art
+pub fn print_mission_patch() {
+    println!("
+   ╔══════════════════════════════════════╗
+   ║                                      ║
+   ║             MISSION PATCH            ║
+   ║                                      ║
+   ║              \\   /                   ║
+   ║               \\ /                    ║
+   ║                X                     ║
+   ║               / \\                    ║
+   ║              /   \\                   ║
+   ║                                      ║
+   ║          CRACKER CURT                ║
+   ║                                      ║
+   ║         ECDLP KING                   ║
+   ║                                      ║
+   ║      SPEEDBITCRACK V3               ║
+   ║                                      ║
+   ║       GÖDEL'S GHOST                 ║
+   ║                                      ║
+   ╚══════════════════════════════════════╝
+    ");
+}
+
 /// Format duration as HH:MM:SS
 fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.as_secs();

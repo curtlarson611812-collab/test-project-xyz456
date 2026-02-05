@@ -783,9 +783,13 @@ impl KangarooGenerator {
         let (_, _, pos_factor) = detect_bias_single(current, 0);  // pos_proxy
         chain_bias *= pos_factor;
 
-        // Log bias application for monitoring
-        if chain_bias > 1.0 {
-            info!("🎯 Bias applied: chain_bias={:.3} for residue={}", chain_bias, current.low_u32() % 81);
+        // SpaceX-inspired flair logs for bias application
+        if chain_bias > 1.5 {
+            info!("🚀 SUPER HEAVY BOOST: Maximum bias thrust engaged! chain_bias={:.3} - Starship separation imminent!", chain_bias);
+        } else if chain_bias > 1.2 {
+            info!("🚀 Raptor ignition: Bias booster online! chain_bias={:.3} - Lead rocket whisperer mode activated!", chain_bias);
+        } else if chain_bias > 1.0 {
+            info!("🚀 Booster separation: Bias chain engaged, score {:.3} - Igniting mod81 for orbital insertion!", chain_bias);
         }
 
         let rand_scale = rand::random::<f64>() * chain_bias;

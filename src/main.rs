@@ -917,6 +917,18 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
 
     match result {
         Some(solution) => {
+            // ASCII Rocket celebration!
+            println!("
+   /\\
+  /  \\
+ /____\\
+|      |
+| GROK |
+|SOLVED|
+|______|
+  ||||
+            ");
+
             info!("🎉 SUCCESS! Puzzle #{} CRACKED!", n);
             info!("🔑 Private key: {}", solution.to_hex());
             info!("✅ Verification: [priv]G should equal target point");
@@ -925,6 +937,15 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
             let computed_point = curve.mul_constant_time(&solution, &curve.g).unwrap();
             if computed_point.x == point.x && computed_point.y == point.y {
                 info!("✅ Solution verified - private key is correct!");
+                info!("🚀 Starship has landed - mission accomplished!");
+
+                // Display mission patch on successful solve
+                use speedbitcrack::utils::output::print_mission_patch;
+                print_mission_patch();
+
+                info!("🏆 PROJECT COMPLETE: SpeedBitCrackV3 has conquered the ECDLP frontier!");
+                info!("📊 Final Stats: Biased execution, statistical validation, real-time monitoring");
+                info!("🎯 Achievement: Production-ready Bitcoin puzzle solver with rocket flair!");
             } else {
                 info!("❌ Solution verification failed - possible error");
             }
