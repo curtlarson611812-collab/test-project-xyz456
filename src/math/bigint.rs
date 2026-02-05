@@ -174,25 +174,28 @@ impl BigInt512 {
 
     /// Multiplication (full 512-bit result)
     pub fn mul(&self, other: &BigInt512) -> BigInt512 {
-        let mut result = [0u64; 16]; // 1024-bit intermediate
+        let mut result = [0u128; 16];  // 1024-bit temp for full carry
 
         for i in 0..8 {
             for j in 0..8 {
                 let prod = self.limbs[i] as u128 * other.limbs[j] as u128;
-                let mut carry = prod as u64;
+                let mut carry = prod;
                 let mut k = i + j;
 
-                while carry != 0 && k < 16 {
-                    let sum = result[k] as u128 + carry as u128;
-                    result[k] = sum as u64;
-                    carry = (sum >> 64) as u64;
+                while carry > 0 && k < 16 {
+                    let sum = result[k] + carry;
+                    result[k] = sum & ((1u128 << 64) - 1);
+                    carry = sum >> 64;
                     k += 1;
                 }
             }
         }
 
         // Take lower 8 limbs (512 bits)
-        BigInt512 { limbs: [result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7]] }
+        BigInt512 { limbs: [
+            result[0] as u64, result[1] as u64, result[2] as u64, result[3] as u64,
+            result[4] as u64, result[5] as u64, result[6] as u64, result[7] as u64
+        ] }
     }
 }
 
@@ -613,18 +616,29 @@ impl BarrettReducer {
     /// Create new Barrett reducer for given modulus
     /// Precomputes mu = floor(2^(512) / modulus) for Barrett reduction
     pub fn new(modulus: &BigInt256) -> Result<Self, Box<dyn Error>> {
+        use num_bigint::BigUint;
+        use num_traits::One;
+
         if modulus.is_zero() {
             return Err("Modulus cannot be zero".into());
         }
-        let k = 4; // 256 bits / 64 bits per limb
-        // Simplified mu calculation for now - will fix properly later
-        let mod_512 = BigInt512::from_bigint256(modulus);
-        let max_512 = BigInt512 { limbs: [u64::MAX; 8] }; // 2^512 - 1
-        let (mu_256, rem) = max_512.div_rem(&mod_512);
-        let mut mu = BigInt512::from_bigint256(&mu_256);
-        if !rem.is_zero() {
-            mu = mu.add(BigInt512::one()); // Ceiling adjustment
+        let k = 256; // Bit length for Barrett
+
+        // Exact mu calculation using BigUint: floor(2^512 / modulus)
+        let p_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+        let two_to_512 = BigUint::one() << 512;
+        let mu_big: BigUint = &two_to_512 / &p_big;
+
+        // Convert back to BigInt512 limbs (big-endian)
+        let mut mu_limbs = [0u64; 8];
+        let mu_bytes = mu_big.to_bytes_be();
+        for i in 0..mu_bytes.len().min(64) {
+            let byte_idx = mu_bytes.len() - 1 - i;
+            let limb_idx = i / 8;
+            let bit_idx = (i % 8) * 8;
+            mu_limbs[limb_idx] |= (mu_bytes[byte_idx] as u64) << bit_idx;
         }
+        let mu = BigInt512 { limbs: mu_limbs };
 
         Ok(BarrettReducer { modulus: modulus.clone(), mu, k })
     }
@@ -635,7 +649,7 @@ impl BarrettReducer {
         if x.bits() > 512 {
             return Err("Input exceeds 512 bits".into());
         }
-        let b = self.k * 64; // 256
+        let b = self.k; // 256
         let q1 = x.shr(b - 1); // high(x, b-1 bits)
         let q2 = q1.mul(self.mu.clone()); // high * mu (512 bits)
         let q3 = q2.shr(b + 1); // q_hat
