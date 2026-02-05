@@ -5,6 +5,8 @@
 pub mod secp;
 pub mod bigint;
 pub mod constants;
+#[cfg(test)]
+pub mod tests;
 
 // Re-export commonly used types
 pub use secp::Secp256k1;

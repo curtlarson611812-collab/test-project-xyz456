@@ -53,8 +53,10 @@ impl Secp256k1 {
 
     /// Create new secp256k1 curve instance
     pub fn new() -> Self {
+        println!("DEBUG: Entering Secp256k1::new()");
         info!("DEBUG: Secp256k1::new() - creating curve parameters");
         let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+        println!("DEBUG: Created p");
         info!("DEBUG: Created p");
         let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
         info!("DEBUG: Created n");
@@ -71,15 +73,9 @@ impl Secp256k1 {
 
         // Precompute G multiples for kangaroo jump table synergy
         // Temporarily create curve instance to compute multiples
-        info!("DEBUG: Creating BarrettReducer for p");
-        let temp_barrett_p = BarrettReducer::new(&p).expect("Failed to create BarrettReducer for p");
-        info!("DEBUG: BarrettReducer for p created");
-        info!("DEBUG: Creating BarrettReducer for n");
-        let temp_barrett_n = BarrettReducer::new(&n).expect("Failed to create BarrettReducer for n");
-        info!("DEBUG: BarrettReducer for n created");
-        info!("DEBUG: Creating MontgomeryReducer for p");
+        let temp_barrett_p = BarrettReducer::new(&p);
+        let temp_barrett_n = BarrettReducer::new(&n);
         let temp_montgomery_p = MontgomeryReducer::new(&p);
-        info!("DEBUG: MontgomeryReducer created");
 
         let temp_curve = Secp256k1 {
             p: p.clone(),
@@ -88,8 +84,8 @@ impl Secp256k1 {
             b: BigInt256::from_u64(7),
             g: g.clone(),
             g_multiples: Vec::new(), // Temporary empty vec
-            barrett_p: temp_barrett_p.expect("Valid secp256k1 prime p"),
-            barrett_n: temp_barrett_n.expect("Valid secp256k1 order n"),
+            barrett_p: temp_barrett_p,
+            barrett_n: temp_barrett_n,
             montgomery_p: temp_montgomery_p,
         };
 
@@ -97,8 +93,8 @@ impl Secp256k1 {
         // TODO: Re-enable once arithmetic is fully working
         let g_multiples = Vec::new();
 
-        let barrett_p = BarrettReducer::new(&p).expect("Valid secp256k1 prime p");
-        let barrett_n = BarrettReducer::new(&n).expect("Valid secp256k1 order n");
+        let barrett_p = BarrettReducer::new(&p);
+        let barrett_n = BarrettReducer::new(&n);
         let montgomery_p = MontgomeryReducer::new(&p);
 
         Secp256k1 {
@@ -534,40 +530,25 @@ impl Secp256k1 {
 /// Standalone modular inverse using extended Euclidean algorithm
 /// Computes a^(-1) mod modulus using the extended Euclidean algorithm
 pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
-    // Use a simple implementation for the standalone version
-    // For full security and performance, use the method version with Barrett reduction
+    use num_bigint::BigUint;
 
-    if a.is_zero() || modulus.is_zero() {
+    if a.is_zero() {
         return None;
     }
 
-    let mut old_r = modulus.clone();
-    let mut r = a.clone();
-    let mut old_s = BigInt256::zero();
-    let mut s = BigInt256::one();
+    // Use BigUint for reliable modular inverse
+    let a_big = BigUint::from_bytes_be(&a.to_bytes_be());
+    let modulus_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
 
-    while !r.is_zero() {
-        // Use div_rem to get quotient and remainder
-        let (quotient, remainder) = old_r.div_rem(&r);
-        let temp_r = old_r;
-        old_r = r;
-        r = remainder;
-
-        let temp_s = old_s;
-        old_s = s.clone();
-        s = temp_s - quotient * s;
-    }
-
-    if old_r == BigInt256::one() {
-        // Make sure result is positive
-        let result = if s < BigInt256::zero() {
-            s + modulus.clone()
-        } else {
-            s
-        };
-        Some(result % modulus.clone())
-    } else {
-        None
+    match a_big.modinv(&modulus_big) {
+        Some(inv) => {
+            let inv_bytes = inv.to_bytes_be();
+            let mut bytes = [0u8; 32];
+            let start = 32 - inv_bytes.len();
+            bytes[start..].copy_from_slice(&inv_bytes);
+            Some(BigInt256::from_bytes_be(&bytes))
+        }
+        None => None,
     }
 }
 
@@ -641,7 +622,7 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
 
     /// Decompress public key from 33 bytes
     pub fn decompress_point(&self, compressed: &[u8; 33]) -> Option<Point> {
-        println!("DEBUG: decompress_point called with first byte: {:02x}", compressed[0]);
+        println!("DEBUG: decompress_point called with first byte: {:02x}, second: {:02x}, third: {:02x}", compressed[0], compressed[1], compressed[2]);
         if compressed[0] != 0x02 && compressed[0] != 0x03 {
             log::warn!("Invalid compressed format: {:?}", compressed[0]);
             return None; // Invalid format
@@ -792,12 +773,12 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
     }
 
     /// Modular exponentiation: base^exp mod modulus
-    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, _mod: &BigInt256) -> BigInt256 {
-        let mut result = BigInt256::from_u64(1);
-        let mut b = base.clone();
+    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+        let mut result = BigInt256::one();
+        let mut b = base.clone() % modulus.clone();
         let mut e = exp.clone();
         while !e.is_zero() {
-            if e.get_bit(0) {
+            if e.limbs[0] & 1 == 1 {
                 result = self.barrett_p.mul(&result, &b);
             }
             b = self.barrett_p.mul(&b, &b);

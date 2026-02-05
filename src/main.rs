@@ -349,11 +349,13 @@ fn main() -> Result<()> {
     } else if args.test_puzzles {
         Box::new(TestMode)
     } else if let Some(n) = args.real_puzzle {
+        println!("DEBUG: About to create RealMode");
         Box::new(RealMode { n })
     } else {
         eprintln!("Error: Must specify a mode (--basic-test, --valuable, --test-puzzles, --real-puzzle, or --custom-low/--custom-high)");
         std::process::exit(1);
     };
+    println!("DEBUG: Mode created successfully");
 
     println!("DEBUG: Creating curve and generator");
     let curve = Secp256k1::new();
@@ -873,9 +875,6 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
     // Add bias analysis from public key if available
     let x_bigint = BigInt256::from_u64_array(point.x);
     let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, n);
-    info!("🎯 Puzzle #{} Bias Discovery Results:", n);
-    info!("  📊 bias_mod: {} (0=none, 9=mod9, 27=mod27, 81=mod81)", bias_mod);
-    info!("  🎯 dominant_residue: {} (primary bias residue)", dominant_residue);
     info!("  📍 pos_proxy: {:.6} (positional proxy [0,1])", pos_proxy);
 
     // Check for bias hits
@@ -1015,54 +1014,115 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
 /// Analyze bias patterns for unsolved Bitcoin puzzles 135-160
 fn analyze_puzzle_biases() -> Result<()> {
     println!("🎯 Analyzing bias patterns for unsolved Bitcoin puzzles 135-160");
-    println!("📊 Based on revealed public keys from bitcointalk.org thread #521771");
+    println!("📊 Based on revealed public keys from puzzles.txt");
     println!("🔬 Using detect_bias_single function for mod9/27/81 + pos_proxy analysis");
     println!();
 
     let curve = Secp256k1::new();
-    let gen = KangarooGenerator::new(&Config::default());
-
-    let puzzles = vec![135, 140, 145, 150, 155, 160];
 
     println!("┌───────┬────────────────────────────────────────────────┬───────┬───────┬───────┬──────────┬───────┬─────────────────┐");
     println!("│ Puzzle│ Public Key                                     │ Res9  │ Res27 │ Res81 │ Pos Proxy│ Score │ Opportunity      │");
     println!("├───────┼────────────────────────────────────────────────┼───────┼───────┼───────┼──────────┼───────┼─────────────────┤");
 
-    // Actually analyze the real pubkeys from HomelessPhD repository
-    let bias_data = vec![
-        (135, "02145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16", 0u64, 0u64, 0u64, 0.12, 2.402), // Real key analysis
-        (140, "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640", 3u64, 3u64, 3u64, 0.18, 1.452), // Real key analysis
-        (145, "03afdda497369e219a2c1c369954a930e4d3740968e5e4352475bcffce3140dae5", 4u64, 13u64, 22u64, 0.25, 1.0), // Real key analysis
-        (150, "03137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49", 0u64, 0u64, 9u64, 0.05, 2.199), // Real key analysis
-        (155, "035cd1854cae45391ca4ec428cc7e6c7d9984424b954209a8eea197b9e364c05f6", 5u64, 5u64, 5u64, 0.31, 1.0), // Real key analysis
-        (160, "02e0a8b039282faf6fe0fd769cfbc4b6b4cf8758ba68220eac420e32b91ddfa673", 4u64, 4u64, 4u64, 0.22, 1.0), // Real key analysis
-    ];
+    // Load and analyze actual puzzles from puzzles.txt
+    let mut recommendations = Vec::new();
+    let mut analyzed_puzzles = Vec::new();
 
-    for (puzzle_num, pubkey_hex, res9, res27, res81, pos_proxy, score) in bias_data {
-        let opportunity = if score > 2.0 { "EXCELLENT - Max bias!" }
-            else if score > 1.5 { "VERY GOOD - Strong chain" }
-            else if score > 1.2 { "GOOD - Moderate bias" }
-            else { "POOR - Uniform distribution" };
+    // Read puzzles.txt and parse revealed puzzles
+    let puzzles_content = std::fs::read_to_string("puzzles.txt")
+        .map_err(|e| anyhow::anyhow!("Failed to read puzzles.txt: {}", e))?;
 
-        let display_pubkey = if pubkey_hex.len() > 48 {
-            format!("{}...", &pubkey_hex[..45])
-        } else {
-            pubkey_hex.to_string()
-        };
+    for line in puzzles_content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
 
-        println!("│ {:5} │ {:46} │ {:5} │ {:5} │ {:5} │ {:8.3} │ {:5.2} │ {:15} │",
-                 puzzle_num, display_pubkey, res9, res27, res81, pos_proxy, score, opportunity);
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() >= 4 && parts[1] == "REVEALED" && !parts[3].is_empty() {
+            let puzzle_num: u32 = parts[0].parse().unwrap_or(0);
+            let pubkey_hex = parts[3];
+
+            if puzzle_num >= 135 && puzzle_num <= 160 {
+                // Decode the hex public key
+                if let Ok(pubkey_bytes) = hex::decode(pubkey_hex) {
+                    if pubkey_bytes.len() == 33 && (pubkey_bytes[0] == 0x02 || pubkey_bytes[0] == 0x03) {
+                        // Create compressed bytes for decompression
+                        let mut compressed = [0u8; 33];
+                        compressed.copy_from_slice(&pubkey_bytes);
+
+                        // Decompress to get the point
+                        if let Some(point) = curve.decompress_point(&compressed) {
+                            let x_bigint = BigInt256::from_u64_array(point.x);
+                            let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, puzzle_num);
+
+                            // Calculate score based on bias_mod
+                            let score = if bias_mod == 9 { 1.4 }
+                                       else if bias_mod == 27 { 1.25 }
+                                       else if bias_mod == 81 { 1.15 }
+                                       else { 1.0 };
+
+                            analyzed_puzzles.push((puzzle_num, pubkey_hex.to_string(), dominant_residue % 9, dominant_residue % 27, dominant_residue % 81, pos_proxy, score));
+
+                            // Get residues for display
+                            let res9 = x_bigint.mod_u64(9);
+                            let res27 = x_bigint.mod_u64(27);
+                            let res81 = x_bigint.mod_u64(81);
+
+                            let opportunity = if score > 2.0 { "EXCELLENT - Max bias!" }
+                                else if score > 1.5 { "VERY GOOD - Strong chain" }
+                                else if score > 1.2 { "GOOD - Moderate bias" }
+                                else { "POOR - Uniform distribution" };
+
+                            let display_pubkey = if pubkey_hex.len() > 48 {
+                                format!("{}...", &pubkey_hex[..45])
+                            } else {
+                                pubkey_hex.to_string()
+                            };
+
+                            println!("│ {:5} │ {:46} │ {:5} │ {:5} │ {:5} │ {:8.3} │ {:5.2} │ {:15} │",
+                                     puzzle_num, display_pubkey, res9, res27, res81, pos_proxy, score, opportunity);
+
+                            recommendations.push((puzzle_num, score, bias_mod));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     println!("└───────┴────────────────────────────────────────────────┴───────┴───────┴───────┴──────────┴───────┴─────────────────┘");
     println!();
-    println!("🎯 RECOMMENDATIONS:");
-    println!("  1. #135 - HIGHEST PRIORITY: Score 2.40, excellent chain bias (res=0 across all mods)");
-    println!("  2. #150 - SECOND PRIORITY: Score 2.20, very strong bias with low pos_proxy");
-    println!("  3. #140 - THIRD PRIORITY: Score 1.45, moderate chain bias");
-    println!("  4. #145, #155, #160 - LOW PRIORITY: Score ~1.0, uniform distribution");
+
+    // Sort recommendations by score (highest first)
+    recommendations.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    println!("🎯 RECOMMENDATIONS (sorted by bias score):");
+    for (i, (puzzle_num, score, bias_mod)) in recommendations.iter().enumerate() {
+        let priority = match i {
+            0 => "HIGHEST PRIORITY",
+            1 => "SECOND PRIORITY",
+            2 => "THIRD PRIORITY",
+            _ => "LOW PRIORITY"
+        };
+
+        let bias_desc = if *bias_mod == 81 {
+            "excellent chain bias (mod81)"
+        } else if *bias_mod == 27 {
+            "strong chain bias (mod27)"
+        } else if *bias_mod == 9 {
+            "moderate bias (mod9)"
+        } else {
+            "uniform distribution"
+        };
+
+        println!("  {}. #{} - {}: Score {:.2}, {}", i+1, puzzle_num, priority, score, bias_desc);
+    }
+
     println!();
-    println!("🚀 Cracker Curt Mission: #135 bias thrust 2.40 – full power to boosters, launch sequence initiated!");
+    if let Some((best_puzzle, best_score, _)) = recommendations.first() {
+        println!("🚀 Cracker Curt Mission: #{} bias score {:.2} – analyze for optimal cracking strategy!", best_puzzle, best_score);
+    }
 
     Ok(())
 }

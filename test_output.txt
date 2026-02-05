@@ -1,0 +1,3 @@
+SpeedBitCrackV3 starting with args: basic_test=false, valuable=false, test_puzzles=false, real_puzzle=Some(135), check_pubkeys=false, bias_analysis=false, crack_unsolved=false, gpu=false, max_cycles=1, unsolved=false, num_kangaroos=8, bias_mod=0, verbose=true, laptop=false, puzzle=None, test_solved=None
+DEBUG: Creating puzzle mode
+DEBUG: Creating curve and generator
