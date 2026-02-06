@@ -532,6 +532,81 @@ impl HybridGpuManager {
         Ok(results)
     }
 
+    /// GPU-accelerated bias check for Magic 9 sniper mode
+    /// Checks if scalars pass mod9, mod27, mod81, and pos filters
+    pub fn dispatch_magic9_bias_check(&self, scalars: &Vec<[u64;4]>, biases: (u8, u8, u8, bool)) -> Result<Vec<bool>> {
+        // For now, implement CPU version - would integrate CUDA common_bias_attractor_check kernel
+        let mut results = Vec::with_capacity(scalars.len());
+
+        for limbs in scalars {
+            // Convert limbs to BigInt256 for modular arithmetic
+            let scalar = BigInt256::from_u64_array(*limbs);
+
+            // Apply bias filters using the kangaroo generator functions
+            let passes = crate::kangaroo::generator::apply_biases(&scalar, biases.0, biases.1, biases.2, biases.3);
+            results.push(passes);
+        }
+
+        Ok(results)
+    }
+
+    /// GPU-accelerated biased kangaroo step for attractor finding
+    /// Performs point addition with bias-filtered scalar multiplication
+    pub fn dispatch_biased_kangaroo_step(
+        &self,
+        points: &mut Vec<[u64; 12]>, // [x,y,z] limbs
+        attractor_x: &[u64; 4],
+        biases: (u8, u8, u8, bool),
+        max_attempts_per_step: usize
+    ) -> Result<Vec<bool>> { // Returns whether each point reached attractor
+        // For now, implement CPU version - would use CUDA for point operations
+        let mut reached_attractor = Vec::with_capacity(points.len());
+
+        for point_limbs in points.iter_mut() {
+            let mut current_point = Point {
+                x: [point_limbs[0], point_limbs[1], point_limbs[2], point_limbs[3]],
+                y: [point_limbs[4], point_limbs[5], point_limbs[6], point_limbs[7]],
+                z: [point_limbs[8], point_limbs[9], point_limbs[10], point_limbs[11]],
+            };
+
+            let attractor_x_bigint = BigInt256::from_u64_array(*attractor_x);
+            let current_affine = Secp256k1::new().to_affine(&current_point);
+
+            if current_affine.x == attractor_x_bigint {
+                reached_attractor.push(true);
+                continue;
+            }
+
+            // Generate bias-filtered jump
+            let mut jump_found = false;
+            for _attempt in 0..max_attempts_per_step {
+                let random_scalar = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
+                if crate::kangaroo::generator::apply_biases(&random_scalar, biases.0, biases.1, biases.2, biases.3) {
+                    // Apply jump: current_point += random_scalar * G
+                    let jump_point = Secp256k1::new().mul_constant_time(&random_scalar, &Secp256k1::new().g).unwrap();
+                    current_point = Secp256k1::new().add(&current_point, &jump_point);
+                    jump_found = true;
+                    break;
+                }
+            }
+
+            if jump_found {
+                // Update point limbs
+                point_limbs[0..4].copy_from_slice(&current_point.x);
+                point_limbs[4..8].copy_from_slice(&current_point.y);
+                point_limbs[8..12].copy_from_slice(&current_point.z);
+
+                // Check if now at attractor
+                let new_affine = Secp256k1::new().to_affine(&current_point);
+                reached_attractor.push(new_affine.x == attractor_x_bigint);
+            } else {
+                reached_attractor.push(false); // No valid jump found
+            }
+        }
+
+        Ok(reached_attractor)
+    }
+
     /// Execute computation with drift monitoring (single-threaded)
     pub fn execute_with_drift_monitoring(
         &self,
