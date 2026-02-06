@@ -619,7 +619,7 @@ impl BarrettReducer {
         use num_bigint::BigUint;
 
         // Skip zero check for now
-        let k = 256; // Bit length for Barrett
+        let k = 256; // modulus size in bits // Bit length for Barrett
 
         // Exact mu calculation using BigUint: floor(2^512 / modulus)
         let p_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
@@ -653,7 +653,7 @@ impl BarrettReducer {
         if x.bits() > 512 {
             return Err("Input exceeds 512 bits".into());
         }
-        let b = self.k * 64; // 256
+        let b = self.k; // 256 bits
         let q1 = x.shr(b - 1); // high(x, b-1 bits)
         let q2 = q1.mul(self.mu.clone()); // high * mu (512 bits)
         let q3 = q2.shr(b + 1); // q_hat

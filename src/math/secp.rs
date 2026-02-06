@@ -648,11 +648,27 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         let generator_y = BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8");
 
         // For unknown points, compute y^2 = x^3 + ax + b mod p
-        let x_squared = self.barrett_p.mul(&x, &x);
-        let x_cubed = self.barrett_p.mul(&x_squared, &x);
-        let ax = self.barrett_p.mul(&self.a, &x);
-        let ax_plus_b = self.barrett_p.add(&ax, &self.b);
-        let rhs = self.barrett_p.add(&x_cubed, &ax_plus_b);
+        // Use BigUint for accurate calculation to avoid Barrett bugs
+        use num_bigint::BigUint;
+
+        let x_big = BigUint::from_bytes_be(&x.to_bytes_be());
+        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
+        let a_big = BigUint::from_bytes_be(&self.a.to_bytes_be());
+        let b_big = BigUint::from_bytes_be(&self.b.to_bytes_be());
+
+        let x_squared_big = (&x_big * &x_big) % &p_big;
+        let x_cubed_big = (&x_squared_big * &x_big) % &p_big;
+        let ax_big = (&a_big * &x_big) % &p_big;
+        let ax_plus_b_big = (&ax_big + &b_big) % &p_big;
+        let rhs_big = (&x_cubed_big + &ax_plus_b_big) % &p_big;
+
+
+        // Convert back to BigInt256
+        let rhs_bytes = rhs_big.to_bytes_be();
+        let mut rhs_bytes_array = [0u8; 32];
+        let start = 32 - rhs_bytes.len();
+        rhs_bytes_array[start..].copy_from_slice(&rhs_bytes);
+        let rhs = BigInt256::from_bytes_be(&rhs_bytes_array);
 
         println!("DEBUG: Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
 
@@ -675,7 +691,7 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             println!("DEBUG: Invalid x >= p: {}", x.to_hex());
             return None;
         }
-        let legendre_exp = self.barrett_p.sub(&self.p, &BigInt256::one()).right_shift(1);
+        let (legendre_exp, _) = self.barrett_p.sub(&self.p, &BigInt256::one()).div_rem(&BigInt256::from_u64(2));
         let legendre = self.pow_mod(&rhs, &legendre_exp, &self.p);
         println!("DEBUG: Legendre symbol check - rhs: {}, exp: {}, legendre: {}", rhs.to_hex(), legendre_exp.to_hex(), legendre.to_hex());
         if legendre != BigInt256::one() {
@@ -780,11 +796,14 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         while !e.is_zero() {
             if e.limbs[0] & 1 == 1 {
                 result = self.barrett_p.mul(&result, &b);
+                result = self.barrett_p.reduce(&BigInt512::from_bigint256(&result)).unwrap_or(BigInt256::zero());
             }
             b = self.barrett_p.mul(&b, &b);
+            b = self.barrett_p.reduce(&BigInt512::from_bigint256(&b)).unwrap_or(BigInt256::zero());
             e = e.right_shift(1);
         }
-        result
+        // Final reduction
+        self.barrett_p.reduce(&BigInt512::from_bigint256(&result)).unwrap_or(BigInt256::zero())
     }
 
     /// Point addition: p1 + p2 on secp256k1 curve
