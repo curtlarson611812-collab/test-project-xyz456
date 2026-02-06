@@ -43,8 +43,8 @@ struct Args {
     unsolved: bool,  // Skip private key verification for unsolved puzzles
     #[arg(long)]
     bias_analysis: bool,  // Run complete bias analysis on unsolved puzzles
-    #[arg(long)]
-    analyze_biases: bool,  // Analyze bias patterns for puzzles 135-160
+    #[arg(long, value_name = "TARGET")]
+    analyze_biases: Vec<String>,  // Analyze bias patterns: puzzle numbers or file paths (can specify multiple times)
     #[arg(long)]
     crack_unsolved: bool,  // Auto pick and crack most likely unsolved puzzle
     #[arg(long, default_value_t = 8)]
@@ -302,8 +302,8 @@ fn main() -> Result<()> {
     }
 
     // Check if bias pattern analysis is requested
-    if args.analyze_biases {
-        analyze_puzzle_biases()?;
+    if !args.analyze_biases.is_empty() {
+        analyze_puzzle_biases(&args.analyze_biases)?;
         return Ok(());
     }
 
@@ -1012,23 +1012,50 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> 
 }
 
 /// Analyze bias patterns for unsolved Bitcoin puzzles 135-160
-fn analyze_puzzle_biases() -> Result<()> {
-    println!("🎯 Analyzing bias patterns for unsolved Bitcoin puzzles 135-160");
-    println!("📊 Based on revealed public keys from puzzles.txt");
+fn analyze_puzzle_biases(targets: &[String]) -> Result<()> {
+    if targets.is_empty() {
+        return Err(anyhow::anyhow!("No targets specified for bias analysis"));
+    }
+
+    println!("🎯 Analyzing bias patterns");
+    println!("📊 Targets: {:?}", targets);
     println!("🔬 Using detect_bias_single function for mod9/27/81 + pos_proxy analysis");
     println!();
 
     let curve = Secp256k1::new();
+    let mut all_analyses = Vec::new();
 
-    println!("┌───────┬────────────────────────────────────────────────┬───────┬───────┬───────┬──────────┬───────┬─────────────────┐");
-    println!("│ Puzzle│ Public Key                                     │ Res9  │ Res27 │ Res81 │ Pos Proxy│ Score │ Opportunity      │");
-    println!("├───────┼────────────────────────────────────────────────┼───────┼───────┼───────┼──────────┼───────┼─────────────────┤");
+    // Process each target
+    for target in targets {
+        if let Ok(puzzle_num) = target.parse::<u32>() {
+            // Single puzzle number
+            println!("🔍 Analyzing puzzle #{}", puzzle_num);
+            analyze_single_puzzle(&curve, puzzle_num, &mut all_analyses)?;
+        } else if target.contains('.') || target.contains('/') {
+            // File path
+            println!("📁 Analyzing file: {}", target);
+            analyze_puzzle_file(&curve, target, &mut all_analyses)?;
+        } else {
+            return Err(anyhow::anyhow!("Invalid target '{}': expected puzzle number or file path", target));
+        }
+    }
 
-    // Load and analyze actual puzzles from puzzles.txt
-    let mut recommendations = Vec::new();
-    let mut analyzed_puzzles = Vec::new();
+    if all_analyses.is_empty() {
+        println!("⚠️  No puzzles found to analyze");
+        return Ok(());
+    }
 
-    // Read puzzles.txt and parse revealed puzzles
+    // Display results table
+    display_bias_table(&all_analyses);
+
+    // Generate recommendations
+    generate_recommendations(&all_analyses);
+
+    Ok(())
+}
+
+fn analyze_single_puzzle(curve: &Secp256k1, puzzle_num: u32, analyses: &mut Vec<(u32, String, u64, u64, u64, f64, f64)>) -> Result<()> {
+    // Try to find puzzle in puzzles.txt
     let puzzles_content = std::fs::read_to_string("puzzles.txt")
         .map_err(|e| anyhow::anyhow!("Failed to read puzzles.txt: {}", e))?;
 
@@ -1039,66 +1066,135 @@ fn analyze_puzzle_biases() -> Result<()> {
         }
 
         let parts: Vec<&str> = line.split('|').collect();
-        if parts.len() >= 4 && parts[1] == "REVEALED" && !parts[3].is_empty() {
-            let puzzle_num: u32 = parts[0].parse().unwrap_or(0);
+        if parts.len() >= 4 && parts[0] == puzzle_num.to_string() && parts[1] == "REVEALED" && !parts[3].is_empty() {
             let pubkey_hex = parts[3];
 
-            if puzzle_num >= 135 && puzzle_num <= 160 {
-                // Decode the hex public key
-                if let Ok(pubkey_bytes) = hex::decode(pubkey_hex) {
-                    if pubkey_bytes.len() == 33 && (pubkey_bytes[0] == 0x02 || pubkey_bytes[0] == 0x03) {
-                        // Create compressed bytes for decompression
-                        let mut compressed = [0u8; 33];
-                        compressed.copy_from_slice(&pubkey_bytes);
+            // Decode and analyze the public key
+            if let Ok(pubkey_bytes) = hex::decode(pubkey_hex) {
+                if pubkey_bytes.len() == 33 && (pubkey_bytes[0] == 0x02 || pubkey_bytes[0] == 0x03) {
+                    let mut compressed = [0u8; 33];
+                    compressed.copy_from_slice(&pubkey_bytes);
 
-                        // Decompress to get the point
-                        if let Some(point) = curve.decompress_point(&compressed) {
-                            let x_bigint = BigInt256::from_u64_array(point.x);
-                            let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, puzzle_num);
+                    if let Some(point) = curve.decompress_point(&compressed) {
+                        let x_bigint = BigInt256::from_u64_array(point.x);
+                        let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, puzzle_num);
 
-                            // Calculate score based on bias_mod
-                            let score = if bias_mod == 9 { 1.4 }
-                                       else if bias_mod == 27 { 1.25 }
-                                       else if bias_mod == 81 { 1.15 }
-                                       else { 1.0 };
+                        let score = if bias_mod == 9 { 1.4 }
+                                   else if bias_mod == 27 { 1.25 }
+                                   else if bias_mod == 81 { 1.15 }
+                                   else { 1.0 };
 
-                            analyzed_puzzles.push((puzzle_num, pubkey_hex.to_string(), dominant_residue % 9, dominant_residue % 27, dominant_residue % 81, pos_proxy, score));
+                        let res9 = x_bigint.mod_u64(9);
+                        let res27 = x_bigint.mod_u64(27);
+                        let res81 = x_bigint.mod_u64(81);
 
-                            // Get residues for display
-                            let res9 = x_bigint.mod_u64(9);
-                            let res27 = x_bigint.mod_u64(27);
-                            let res81 = x_bigint.mod_u64(81);
-
-                            let opportunity = if score > 2.0 { "EXCELLENT - Max bias!" }
-                                else if score > 1.5 { "VERY GOOD - Strong chain" }
-                                else if score > 1.2 { "GOOD - Moderate bias" }
-                                else { "POOR - Uniform distribution" };
-
-                            let display_pubkey = if pubkey_hex.len() > 48 {
-                                format!("{}...", &pubkey_hex[..45])
-                            } else {
-                                pubkey_hex.to_string()
-                            };
-
-                            println!("│ {:5} │ {:46} │ {:5} │ {:5} │ {:5} │ {:8.3} │ {:5.2} │ {:15} │",
-                                     puzzle_num, display_pubkey, res9, res27, res81, pos_proxy, score, opportunity);
-
-                            recommendations.push((puzzle_num, score, bias_mod));
-                        }
+                        analyses.push((puzzle_num, pubkey_hex.to_string(), res9, res27, res81, pos_proxy, score));
+                        return Ok(());
                     }
                 }
             }
         }
     }
 
+    Err(anyhow::anyhow!("Puzzle #{} not found or has no revealed public key", puzzle_num))
+}
+
+fn analyze_puzzle_file(curve: &Secp256k1, file_path: &str, analyses: &mut Vec<(u32, String, u64, u64, u64, f64, f64)>) -> Result<()> {
+    let content = std::fs::read_to_string(file_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", file_path, e))?;
+
+    let mut puzzle_count = 0;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        // Try to parse different formats
+        let (puzzle_num, pubkey_hex) = if line.contains('|') {
+            // puzzles.txt format: "135|REVEALED|...|pubkey"
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 4 {
+                let num: u32 = parts[0].parse().unwrap_or(0);
+                (num, parts[3].to_string())
+            } else {
+                continue;
+            }
+        } else if line.len() > 64 && line.chars().all(|c| c.is_ascii_hexdigit()) {
+            // Just a hex public key - assign incremental puzzle numbers
+            puzzle_count += 1;
+            (puzzle_count + 1000, line.to_string()) // Use 1000+ for file-based puzzles
+        } else {
+            continue;
+        };
+
+        // Analyze the public key
+        if let Ok(pubkey_bytes) = hex::decode(&pubkey_hex) {
+            if pubkey_bytes.len() == 33 && (pubkey_bytes[0] == 0x02 || pubkey_bytes[0] == 0x03) {
+                let mut compressed = [0u8; 33];
+                compressed.copy_from_slice(&pubkey_bytes);
+
+                if let Some(point) = curve.decompress_point(&compressed) {
+                    let x_bigint = BigInt256::from_u64_array(point.x);
+                    let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, puzzle_num);
+
+                    let score = if bias_mod == 9 { 1.4 }
+                               else if bias_mod == 27 { 1.25 }
+                               else if bias_mod == 81 { 1.15 }
+                               else { 1.0 };
+
+                    let res9 = x_bigint.mod_u64(9);
+                    let res27 = x_bigint.mod_u64(27);
+                    let res81 = x_bigint.mod_u64(81);
+
+                    analyses.push((puzzle_num, pubkey_hex.clone(), res9, res27, res81, pos_proxy, score));
+                }
+            }
+        }
+    }
+
+    if puzzle_count == 0 {
+        return Err(anyhow::anyhow!("No valid public keys found in {}", file_path));
+    }
+
+    Ok(())
+}
+
+fn display_bias_table(analyses: &[(u32, String, u64, u64, u64, f64, f64)]) {
+    println!("┌───────┬────────────────────────────────────────────────┬───────┬───────┬───────┬──────────┬───────┬─────────────────┐");
+    println!("│ Puzzle│ Public Key                                     │ Res9  │ Res27 │ Res81 │ Pos Proxy│ Score │ Opportunity      │");
+    println!("├───────┼────────────────────────────────────────────────┼───────┼───────┼───────┼──────────┼───────┼─────────────────┤");
+
+    for (puzzle_num, pubkey_hex, res9, res27, res81, pos_proxy, score) in analyses {
+        let opportunity = if *score > 2.0 { "EXCELLENT - Max bias!" }
+            else if *score > 1.5 { "VERY GOOD - Strong chain" }
+            else if *score > 1.2 { "GOOD - Moderate bias" }
+            else { "POOR - Uniform distribution" };
+
+        let display_pubkey = if pubkey_hex.len() > 48 {
+            format!("{}...", &pubkey_hex[..45])
+        } else {
+            pubkey_hex.clone()
+        };
+
+        println!("│ {:5} │ {:46} │ {:5} │ {:5} │ {:5} │ {:8.3} │ {:5.2} │ {:15} │",
+                 puzzle_num, display_pubkey, res9, res27, res81, pos_proxy, score, opportunity);
+    }
+
     println!("└───────┴────────────────────────────────────────────────┴───────┴───────┴───────┴──────────┴───────┴─────────────────┘");
     println!();
+}
 
-    // Sort recommendations by score (highest first)
+fn generate_recommendations(analyses: &[(u32, String, u64, u64, u64, f64, f64)]) {
+    let mut recommendations: Vec<(u32, f64)> = analyses.iter()
+        .map(|(puzzle_num, _, _, _, _, _, score)| (*puzzle_num, *score))
+        .collect();
+
     recommendations.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
     println!("🎯 RECOMMENDATIONS (sorted by bias score):");
-    for (i, (puzzle_num, score, bias_mod)) in recommendations.iter().enumerate() {
+    for (i, (puzzle_num, score)) in recommendations.iter().enumerate() {
         let priority = match i {
             0 => "HIGHEST PRIORITY",
             1 => "SECOND PRIORITY",
@@ -1106,25 +1202,13 @@ fn analyze_puzzle_biases() -> Result<()> {
             _ => "LOW PRIORITY"
         };
 
-        let bias_desc = if *bias_mod == 81 {
-            "excellent chain bias (mod81)"
-        } else if *bias_mod == 27 {
-            "strong chain bias (mod27)"
-        } else if *bias_mod == 9 {
-            "moderate bias (mod9)"
-        } else {
-            "uniform distribution"
-        };
-
-        println!("  {}. #{} - {}: Score {:.2}, {}", i+1, puzzle_num, priority, score, bias_desc);
+        println!("  {}. #{} - {}: Score {:.2}", i+1, puzzle_num, priority, score);
     }
 
     println!();
-    if let Some((best_puzzle, best_score, _)) = recommendations.first() {
+    if let Some((best_puzzle, best_score)) = recommendations.first() {
         println!("🚀 Cracker Curt Mission: #{} bias score {:.2} – analyze for optimal cracking strategy!", best_puzzle, best_score);
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
