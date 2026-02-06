@@ -62,17 +62,36 @@ fn main() {
         }
     }
 
-    // Write the const array
+    // Write the const arrays
     let mut output = String::from("pub const MAGIC9_BIASES: [(u8, u8, u8, u8, u32); 9] = [\n");
     for (i, (mod3, mod9, mod27, mod81, hamming)) in biases.iter().enumerate() {
         output.push_str(&format!("    ({}, {}, {}, {}, {}),\n", mod3, mod9, mod27, mod81, hamming));
         println!("Magic9 key {} (index {}): mod3={}, mod9={}, mod27={}, mod81={}, hamming={}",
                 i, indices[i], mod3, mod9, mod27, mod81, hamming);
     }
-    output.push_str("];\n");
+    output.push_str("];\n\n");
+
+    // Add pre-computed prime sets for GOLD cluster
+    let primes: [u64; 32] = [
+        179, 257, 281, 349, 379, 419, 457, 499,
+        541, 599, 641, 709, 761, 809, 853, 911,
+        967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
+        1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
+    ];
+
+    // Generate GOLD cluster primes (mod81 == 0)
+    let gold_primes: Vec<u64> = primes.iter().filter(|&&p| p % 81 == 0).cloned().collect();
+    output.push_str(&format!("pub const GOLD_CLUSTER_PRIMES: [u64; {}] = {:?};\n\n", gold_primes.len(), gold_primes));
+
+    // Generate secondary primes (mod27 == 0) for fallback
+    let secondary_primes: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).cloned().collect();
+    output.push_str(&format!("pub const SECONDARY_PRIMES: [u64; {}] = {:?};\n", secondary_primes.len(), secondary_primes));
+
+    println!("Generated prime sets - GOLD: {} primes, Secondary: {} primes",
+             gold_primes.len(), secondary_primes.len());
 
     match std::fs::write(&dest_path, &output) {
-        Ok(_) => println!("Generated MAGIC9_BIASES at {:?}", dest_path),
+        Ok(_) => println!("Generated MAGIC9_BIASES and prime sets at {:?}", dest_path),
         Err(e) => eprintln!("Error writing to {:?}: {}", dest_path, e),
     }
 }

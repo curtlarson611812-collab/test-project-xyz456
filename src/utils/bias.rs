@@ -106,18 +106,22 @@ pub fn get_magic9_bias(index: usize) -> (u8, u8, u8, u8, u32) {
     MAGIC9_BIASES.get(index).copied().unwrap_or((0, 0, 0, 0, 128))
 }
 
-/// Pre-computed D_g cache for GOLD cluster mode (shared across all keys)
-static mut PRECOMPUTED_D_G: Option<BigInt256> = None;
+/// Pre-computed D_g cache for different bias patterns (GOLD cluster + future extensions)
+static mut D_G_CACHE: std::collections::HashMap<(u8, u8, u8, u8), BigInt256> = std::collections::HashMap::new();
 
-/// Get or compute pre-computed D_g for GOLD cluster (shared D_g optimization)
+/// Get or compute pre-computed D_g for bias pattern (GOLD cluster + future extensions)
 pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32)) -> BigInt256 {
+    let bias_key = (bias.0, bias.1, bias.2, bias.3); // mod3, mod9, mod27, mod81
+
     // Check cache first
-    if let Some(d_g) = unsafe { PRECOMPUTED_D_G.as_ref() } {
-        return d_g.clone();
+    unsafe {
+        if let Some(cached_d_g) = D_G_CACHE.get(&bias_key) {
+            return cached_d_g.clone();
+        }
     }
 
-    // Compute and cache for GOLD cluster
-    info!("🔍 Pre-computing shared D_g for GOLD cluster");
+    // Compute and cache for this bias pattern
+    info!("🔍 Pre-computing D_g for bias pattern {:?}", bias_key);
     let curve = crate::math::secp::Secp256k1::new();
     let generator = crate::types::Point::generator();
 
@@ -128,13 +132,13 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
     let d_g = crate::kangaroo::generator::biased_kangaroo_to_attractor(
         &generator, attractor_x, kangaroo_bias, &curve, 1_000_000
     ).unwrap_or_else(|_| {
-        warn!("Failed to pre-compute D_g, using fallback");
+        warn!("Failed to pre-compute D_g for pattern {:?}, using fallback", bias_key);
         BigInt256::zero()
     });
 
     // Cache the result
-    unsafe { PRECOMPUTED_D_G = Some(d_g.clone()) };
+    unsafe { D_G_CACHE.insert(bias_key, d_g.clone()) };
 
-    info!("✅ Shared D_g pre-computed: {}", d_g.to_hex());
+    info!("✅ D_g pre-computed for pattern {:?}: {}", bias_key, d_g.to_hex());
     d_g
 }
