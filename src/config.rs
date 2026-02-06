@@ -48,6 +48,22 @@ pub struct Config {
     #[arg(long, default_value = "1000")]
     pub near_threshold: u64,
 
+    /// Enable stagnant herd auto-restart booster (sacred rule)
+    #[arg(long)]
+    pub enable_stagnant_restart: bool,
+
+    /// Enable adaptive jump table booster (sacred rule)
+    #[arg(long)]
+    pub enable_adaptive_jumps: bool,
+
+    /// Enable multi-herd merging booster (sacred rule)
+    #[arg(long)]
+    pub enable_multi_herd_merge: bool,
+
+    /// Enable DP bit feedback booster (sacred rule)
+    #[arg(long)]
+    pub enable_dp_feedback: bool,
+
     /// Near G threshold for low-order point detection (x[0] < threshold, default 2^20)
     #[arg(long, default_value = "1048576")] // 2^20 = 1,048,576
     pub near_g_thresh: u64,

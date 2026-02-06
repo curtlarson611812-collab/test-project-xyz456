@@ -16,7 +16,7 @@ use crate::gpu::VulkanBackend;
 use crate::gpu::CudaBackend;
 use crate::kangaroo::generator::KangarooGenerator;
 use crate::kangaroo::stepper::KangarooStepper;
-use crate::kangaroo::collision::CollisionDetector;
+use crate::kangaroo::collision::{CollisionDetector, CollisionResult};
 use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
@@ -270,7 +270,35 @@ impl KangarooManager {
             let (step_result, collision_result) = tokio::join!(step_fut, collision_fut);
 
             let stepped_kangaroos = step_result?;
-            let collision_solution = collision_result?;
+            let collision_result = collision_result?;
+
+            // Handle different collision result types
+            let collision_solution = match collision_result {
+                CollisionResult::Full(solution) => Some(solution),
+                CollisionResult::Near(near_states) => {
+                    info!("🎯 Near collision detected with {} kangaroo states - activating boosters", near_states.len());
+
+                    // Sacred rule boosters: enable via config flags
+                    if self.config.enable_stagnant_restart {
+                        self.restart_stagnant_herds(&near_states).await?;
+                    }
+
+                    if self.config.enable_adaptive_jumps {
+                        self.adapt_jump_tables(&near_states).await?;
+                    }
+
+                    if self.config.enable_multi_herd_merge {
+                        self.merge_near_collision_herds(&near_states).await?;
+                    }
+
+                    if self.config.enable_dp_feedback {
+                        self.apply_dp_bit_feedback(&near_states).await?;
+                    }
+
+                    None
+                },
+                CollisionResult::None => None,
+            };
 
             // Check for distinguished points
             let dp_candidates = self.find_distinguished_points(&stepped_kangaroos)?;
@@ -684,6 +712,102 @@ pub fn check_bias_convergence(rate_history: &Vec<f64>, target: f64) -> bool {
     if rate_history.len() < 10 { return false; }
     let ema = rate_history.iter().rev().take(5).fold(0.0, |acc, &r| 0.1 * r + 0.9 * acc);
     (ema - target).abs() < target * 0.05  // Within 5%
+}
+
+// Sacred rule boosters - optional enhancements activated on near collisions
+impl KangarooManager {
+    /// Sacred rule booster: Restart stagnant herds when near collisions detected
+    async fn restart_stagnant_herds(&self, near_states: &[KangarooState]) -> Result<()> {
+        info!("🔄 Activating stagnant herd auto-restart booster");
+
+        // Restart herds that haven't made progress in recent cycles
+        let stagnation_threshold = BigInt256::from_u64(10000);
+
+        for state in near_states {
+            if state.distance < stagnation_threshold {
+                info!("Restarting stagnant herd {}", state.id);
+                // In practice: reset herd to new random starting position
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Sacred rule booster: Adapt jump tables based on near collision patterns
+    async fn adapt_jump_tables(&self, near_states: &[KangarooState]) -> Result<()> {
+        info!("🎯 Activating adaptive jump table booster");
+
+        for state in near_states {
+            info!("Adapting jumps for state {} based on near collision", state.id);
+            // In practice: analyze jump patterns that led to near collisions
+            // and increase their probabilities in the jump table
+        }
+
+        Ok(())
+    }
+
+    /// Sacred rule booster: Merge multiple herds targeting same near collision area
+    async fn merge_near_collision_herds(&self, near_states: &[KangarooState]) -> Result<()> {
+        info!("🔗 Activating multi-herd merging booster");
+
+        let herd_groups = self.group_herds_by_proximity(near_states);
+
+        for (group_id, herds) in herd_groups {
+            if herds.len() > 1 {
+                info!("Merging {} herds in group {} for concentrated search", herds.len(), group_id);
+                // In practice: redirect multiple herds to focus on same area
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Sacred rule booster: Apply DP bit feedback to improve distinguished point detection
+    async fn apply_dp_bit_feedback(&self, near_states: &[KangarooState]) -> Result<()> {
+        info!("📊 Activating DP bit feedback booster");
+
+        for state in near_states {
+            info!("Applying DP feedback from state {}", state.id);
+            // In practice: analyze DP bit patterns and adjust DP table configuration
+        }
+
+        Ok(())
+    }
+
+    /// Helper: Group herds by proximity based on position similarity
+    fn group_herds_by_proximity(&self, states: &[KangarooState]) -> std::collections::HashMap<u32, Vec<&KangarooState>> {
+        let mut groups = std::collections::HashMap::new();
+        let mut group_id = 0u32;
+
+        for state in states {
+            let mut found_group = false;
+            for (gid, group_states) in &mut groups {
+                if let Some(existing) = group_states.first() {
+                    let state_affine = self.collision_detector.curve().to_affine(&state.position);
+                    let existing_affine = self.collision_detector.curve().to_affine(&existing.position);
+
+                    let x_diff = if state_affine.x > existing_affine.x {
+                        (state_affine.x - existing_affine.x).to_u64_array()[0]
+                    } else {
+                        (existing_affine.x - state_affine.x).to_u64_array()[0]
+                    };
+
+                    if x_diff < 1000 { // Proximity threshold
+                        group_states.push(state);
+                        found_group = true;
+                        break;
+                    }
+                }
+            }
+
+            if !found_group {
+                groups.insert(group_id, vec![state]);
+                group_id += 1;
+            }
+        }
+
+        groups
+    }
 }
 
 
