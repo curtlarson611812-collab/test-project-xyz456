@@ -5,6 +5,7 @@
 
 use crate::math::bigint::BigInt256;
 use zerocopy::IntoBytes;
+use log::{info, warn};
 
 /// Compute target biases from pubkey x-coordinate with attractor cross-check
 /// Returns (mod9, mod27, mod81, pos) bias targets
@@ -107,15 +108,82 @@ pub fn get_magic9_bias(index: usize) -> (u8, u8, u8, u8, u32) {
 }
 
 /// Pre-computed D_g cache for different bias patterns (GOLD cluster + future extensions)
-static mut D_G_CACHE: std::collections::HashMap<(u8, u8, u8, u8), BigInt256> = std::collections::HashMap::new();
+use std::sync::Mutex;
+
+static D_G_CACHE: std::sync::OnceLock<Mutex<std::collections::HashMap<(u8, u8, u8, u8), BigInt256>>> =
+    std::sync::OnceLock::new();
 
 /// Get or compute pre-computed D_g for bias pattern (GOLD cluster + future extensions)
+/// Get hierarchical biased primes for kangaroo initialization
+/// Returns primes filtered by modulus, with fallback warnings
+pub fn get_biased_primes(target_mod: u8, modulus: u64, min_primes: usize) -> Vec<u64> {
+    // Use the pre-computed prime arrays from build.rs
+    let all_primes = if modulus == 81 {
+        // For GOLD cluster (mod81=0), use pre-computed GOLD_CLUSTER_PRIMES
+        GOLD_CLUSTER_PRIMES.to_vec()
+    } else if modulus == 27 {
+        // For secondary fallback (mod27=0), use SECONDARY_PRIMES
+        SECONDARY_PRIMES.to_vec()
+    } else {
+        // Fallback to all primes
+        crate::kangaroo::generator::PRIME_MULTIPLIERS.to_vec()
+    };
+
+    // Filter primes that match the target modulus
+    let matches: Vec<u64> = all_primes.into_iter()
+        .filter(|&p| (p % modulus) as u8 == target_mod)
+        .collect();
+
+    // Warn if too few primes match
+    if matches.len() < min_primes {
+        eprintln!("Warning: Only {} primes match mod{}={}, minimum {}. Using all available primes.",
+                 matches.len(), modulus, target_mod, min_primes);
+    }
+
+    if matches.is_empty() {
+        eprintln!("Warning: No primes match mod{}={}. Using full prime set.",
+                 modulus, target_mod);
+        // Return all primes as fallback
+        crate::kangaroo::generator::PRIME_MULTIPLIERS.to_vec()
+    } else {
+        matches
+    }
+}
+
+/// Validate nested modulus relationships (GOLD cluster consistency check)
+/// Ensures mod81=0 implies mod27=0 implies mod9=0 implies mod3=0
+pub fn validate_mod_chain(bias: (u8, u8, u8, u8)) -> Result<(), String> {
+    let (mod3, mod9, mod27, mod81) = bias;
+
+    // Check nested relationships
+    if mod81 != 0 && (mod27 != 0 || mod9 != 0 || mod3 != 0) {
+        return Err(format!("Invalid mod chain: mod81={} but lower mods non-zero", mod81));
+    }
+    if mod27 != 0 && (mod9 != 0 || mod3 != 0) {
+        return Err(format!("Invalid mod chain: mod27={} but lower mods non-zero", mod27));
+    }
+    if mod9 != 0 && mod3 != 0 {
+        return Err(format!("Invalid mod chain: mod9={} but mod3={}", mod9, mod3));
+    }
+
+    // For GOLD cluster (mod81=0), all should be 0
+    if mod81 == 0 && (mod27 != 0 || mod9 != 0 || mod3 != 0) {
+        return Err("GOLD cluster inconsistency: mod81=0 but lower mods non-zero".to_string());
+    }
+
+    Ok(())
+}
+
 pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32)) -> BigInt256 {
     let bias_key = (bias.0, bias.1, bias.2, bias.3); // mod3, mod9, mod27, mod81
 
+    // Initialize cache if needed
+    let cache_mutex = D_G_CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+
     // Check cache first
-    unsafe {
-        if let Some(cached_d_g) = D_G_CACHE.get(&bias_key) {
+    {
+        let cache = cache_mutex.lock().unwrap();
+        if let Some(cached_d_g) = cache.get(&bias_key) {
             return cached_d_g.clone();
         }
     }
@@ -123,7 +191,11 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
     // Compute and cache for this bias pattern
     info!("🔍 Pre-computing D_g for bias pattern {:?}", bias_key);
     let curve = crate::math::secp::Secp256k1::new();
-    let generator = crate::types::Point::generator();
+
+    // Generator point G in affine coordinates
+    let g_x = [0x79BE667EF9DCBBAC, 0x55A06295CE870B07, 0x029BFCDB2DCE28D9, 0x59F2815B16F81798];
+    let g_y = [0x483ADA7726A3C465, 0x5DA4FBFC0E1108A8, 0xFD17B448A6855419, 0x9C47D08FFB10D4B8];
+    let generator = crate::types::Point::from_affine(g_x, g_y);
 
     // Convert bias tuple to kangaroo format
     let kangaroo_bias = (bias.1, bias.2, bias.3, true); // mod9, mod27, mod81, pos
@@ -137,7 +209,11 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
     });
 
     // Cache the result
-    unsafe { D_G_CACHE.insert(bias_key, d_g.clone()) };
+    {
+        let cache_mutex = D_G_CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+        let mut cache = cache_mutex.lock().unwrap();
+        cache.insert(bias_key, d_g.clone());
+    }
 
     info!("✅ D_g pre-computed for pattern {:?}: {}", bias_key, d_g.to_hex());
     d_g

@@ -22,7 +22,7 @@ use zerocopy::IntoBytes;
 // Sacred 32 small odd primes (>128, odd, low hamming weight for fast mul).
 // Cycle via index % 32 — provides unique starts per kangaroo without bias.
 // EXACT from SmallOddPrime_Precise_code.rs - verified sacred and unmodified.
-const PRIME_MULTIPLIERS: [u64; 32] = [
+pub const PRIME_MULTIPLIERS: [u64; 32] = [
     179, 257, 281, 349, 379, 419, 457, 499,
     541, 599, 641, 709, 761, 809, 853, 911,
     967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,

@@ -79,13 +79,35 @@ fn main() {
         1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
     ];
 
-    // Generate GOLD cluster primes (mod81 == 0)
+    // Generate GOLD cluster primes (mod81 == 0) - fixed size fallback
     let gold_primes: Vec<u64> = primes.iter().filter(|&&p| p % 81 == 0).cloned().collect();
-    output.push_str(&format!("pub const GOLD_CLUSTER_PRIMES: [u64; {}] = {:?};\n\n", gold_primes.len(), gold_primes));
+    let gold_array = if gold_primes.len() >= 4 {
+        format!("[{}, {}, {}, {}]", gold_primes[0], gold_primes[1], gold_primes[2], gold_primes[3])
+    } else {
+        // Use primes that are at least mod27==0 as fallback
+        let fallback: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).take(4).cloned().collect();
+        if fallback.len() >= 4 {
+            format!("[{}, {}, {}, {}]", fallback[0], fallback[1], fallback[2], fallback[3])
+        } else {
+            // Ultimate fallback: first 4 primes
+            format!("[{}, {}, {}, {}]", primes[0], primes[1], primes[2], primes[3])
+        }
+    };
+    output.push_str(&format!("pub const GOLD_CLUSTER_PRIMES: [u64; 4] = {};\n\n", gold_array));
 
-    // Generate secondary primes (mod27 == 0) for fallback
+    // Generate secondary primes (mod27 == 0) for fallback - fixed 8 elements
     let secondary_primes: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).cloned().collect();
-    output.push_str(&format!("pub const SECONDARY_PRIMES: [u64; {}] = {:?};\n", secondary_primes.len(), secondary_primes));
+    let secondary_array = if secondary_primes.len() >= 8 {
+        format!("[{}, {}, {}, {}, {}, {}, {}, {}]",
+                secondary_primes[0], secondary_primes[1], secondary_primes[2], secondary_primes[3],
+                secondary_primes[4], secondary_primes[5], secondary_primes[6], secondary_primes[7])
+    } else {
+        // Fallback to first 8 primes
+        format!("[{}, {}, {}, {}, {}, {}, {}, {}]",
+                primes[0], primes[1], primes[2], primes[3],
+                primes[4], primes[5], primes[6], primes[7])
+    };
+    output.push_str(&format!("pub const SECONDARY_PRIMES: [u64; 8] = {};\n", secondary_array));
 
     println!("Generated prime sets - GOLD: {} primes, Secondary: {} primes",
              gold_primes.len(), secondary_primes.len());

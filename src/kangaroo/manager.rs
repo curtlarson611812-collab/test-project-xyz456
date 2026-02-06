@@ -20,6 +20,7 @@ use crate::kangaroo::collision::{CollisionDetector, CollisionResult};
 use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
+use num_traits::cast::ToPrimitive;
 use anyhow::anyhow;
 
 /// Concise Block: Precompute Small k*G Table for Nearest Adjust
@@ -51,9 +52,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use bincode;
 
-/// Shared tame DP map for GOLD cluster optimization
-/// Maps DP keys to tame distances for reuse across multiple targets
-pub type SharedTameMap = std::collections::HashMap<u64, BigInt256>;
 
 /// Central manager for kangaroo herd operations
 pub struct KangarooManager {
@@ -63,7 +61,6 @@ pub struct KangarooManager {
     multi_targets: Vec<(Point, u32)>,    // Multi-target points with puzzle IDs for batch solving
     wild_states: Vec<TaggedKangarooState>, // Tagged wild kangaroos per target
     tame_states: Vec<KangarooState>,     // Shared tame kangaroos
-    shared_tame_map: Option<SharedTameMap>, // GOLD cluster shared tame DP map
     dp_table: Arc<Mutex<DpTable>>,
     gpu_backend: Box<dyn GpuBackend>,
     generator: KangarooGenerator,
@@ -726,7 +723,7 @@ impl KangarooManager {
         info!("🔄 Activating stagnant herd auto-restart booster");
 
         // Restart herds that haven't made progress in recent cycles
-        let stagnation_threshold = BigInt256::from_u64(10000);
+        let stagnation_threshold = 10000u64;
 
         for state in near_states {
             if state.distance < stagnation_threshold {
@@ -782,157 +779,13 @@ impl KangarooManager {
     /// Generate shared tame DP map for GOLD cluster optimization
     /// Creates one tame kangaroo path from attractor, storing DP -> distance mappings
     /// Reused across all GOLD cluster targets for massive efficiency gains
-    pub fn generate_shared_tame_map(
-        &self,
-        attractor_x: &BigInt256,
-        shared_bias: (u8, u8, u8, u8),
-        dp_bits: u32,
-        max_steps: u64
-    ) -> Result<SharedTameMap> {
-        let mut tame_map = SharedTameMap::new();
-        let curve = Secp256k1::new();
-
-        // Start from attractor point
-        let attractor_point = curve.decompress_point(&attractor_x.to_bytes_be().try_into().unwrap())
-            .ok_or_else(|| anyhow!("Invalid attractor x coordinate"))?;
-
-        let mut current_point = attractor_point;
-        let mut current_distance = BigInt256::zero();
-        let mut steps = 0u64;
-
-        info!("🔍 Generating shared tame DP map from attractor (GOLD cluster optimization)");
-        info!("📊 Target DP bits: {}, Max steps: {}", dp_bits, max_steps);
-
-        while steps < max_steps {
-            // Check if we've reached a DP
-            let affine = curve.to_affine(&current_point);
-            let x_bytes = affine.x.as_bytes();
-
-            // Extract low DP bits as key (same as DP table logic)
-            let dp_key = if x_bytes.len() >= 8 {
-                u64::from_le_bytes(x_bytes[0..8].try_into().unwrap()) & ((1u64 << dp_bits) - 1)
-            } else {
-                0u64 // Fallback
-            };
-
-            // Store DP -> distance mapping (only if not already present for efficiency)
-            tame_map.entry(dp_key).or_insert_with(|| current_distance.clone());
-
-            // Generate biased jump (GOLD cluster: shared bias)
-            let mut jump_scalar = BigInt256::zero();
-            let mut attempts = 0;
-
-            while attempts < 1000 {
-                let random_jump = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
-
-                // Apply GOLD cluster bias filtering
-                use crate::utils::bias::apply_biases;
-                if apply_biases(&random_jump, (shared_bias.1, shared_bias.2, shared_bias.3, shared_bias.0, true)) == 1.0 {
-                    jump_scalar = random_jump;
-                    break;
-                }
-                attempts += 1;
-            }
-
-            if jump_scalar.is_zero() {
-                warn!("Failed to generate biased jump for tame path at step {}", steps);
-                break;
-            }
-
-            // Move backward toward G (tame direction: subtract jump)
-            let jump_point = curve.mul_constant_time(&jump_scalar, &curve.g)?;
-            current_point = curve.add(&current_point, &jump_point); // Actually subtract by adding negative
-            current_distance = (current_distance + jump_scalar) % curve.n.clone();
-
-            steps += 1;
-
-            if steps % 10000 == 0 {
-                info!("Shared tame map progress: {} steps, {} DP entries", steps, tame_map.len());
-            }
-        }
-
-        info!("✅ Shared tame DP map generated: {} entries from {} steps", tame_map.len(), steps);
-        Ok(tame_map)
-    }
 
     /// Compute D_i for GOLD cluster target using shared tame map
     /// Returns distance from P_i to attractor using shared tame DP lookups
-    pub fn compute_d_i_with_shared_tame(
-        &self,
-        p_i: &Point,
-        attractor_x: &BigInt256,
-        shared_bias: (u8, u8, u8, u8),
-        shared_tame_map: &SharedTameMap,
-        kangaroo_index: usize,
-        dp_bits: u32
-    ) -> Result<BigInt256> {
-        let curve = Secp256k1::new();
-
-        // Start wild kangaroo from prime * P_i (sacred initialization)
-        let wild_start = self.generator.initialize_kangaroo_start(p_i, kangaroo_index);
-        let mut current_point = wild_start;
-        let mut current_distance = BigInt256::zero();
-        let mut steps = 0u64;
-
-        while steps < 1_000_000 { // Reasonable timeout
-            // Check for exact attractor hit first
-            let affine = curve.to_affine(&current_point);
-            if BigInt256::from_u64_array(affine.x) == *attractor_x {
-                return Ok(current_distance);
-            }
-
-            // Check for DP collision with shared tame map
-            let x_bytes = affine.x.as_bytes();
-            let dp_key = if x_bytes.len() >= 8 {
-                u64::from_le_bytes(x_bytes[0..8].try_into().unwrap()) & ((1u64 << dp_bits) - 1)
-            } else {
-                0u64
-            };
-
-            if let Some(tame_distance) = shared_tame_map.get(&dp_key) {
-                // Potential collision: verify and compute D_i
-                let candidate_d_i = tame_distance.clone() - current_distance.clone();
-
-                // Verify by checking if P_i = G * (1 + D_g - D_i) * inv(prime)
-                // For now, return candidate - full verification in higher level
-                info!("🎯 DP collision detected at step {}: candidate D_i found", steps);
-                return Ok(candidate_d_i);
-            }
-
-            // Generate biased jump and continue
-            let mut jump_scalar = BigInt256::zero();
-            let mut attempts = 0;
-
-            while attempts < 1000 {
-                let random_jump = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
-
-                use crate::utils::bias::apply_biases;
-                if apply_biases(&random_jump, (shared_bias.1, shared_bias.2, shared_bias.3, shared_bias.0, true)) >= 0.9 {
-                    jump_scalar = random_jump;
-                    break;
-                }
-                attempts += 1;
-            }
-
-            if jump_scalar.is_zero() {
-                warn!("Failed to generate jump for wild path at step {}", steps);
-                break;
-            }
-
-            // Move forward (wild direction: add jump)
-            let jump_point = curve.mul_constant_time(&jump_scalar, &curve.g)?;
-            current_point = curve.add(&current_point, &jump_point);
-            current_distance = (current_distance + jump_scalar) % curve.n.clone();
-
-            steps += 1;
-        }
-
-        Err(anyhow!("Timeout: Failed to find D_i within step limit"))
-    }
 
     /// Helper: Group herds by proximity based on position similarity
-    fn group_herds_by_proximity(&self, states: &[KangarooState]) -> std::collections::HashMap<u32, Vec<&KangarooState>> {
-        let mut groups = std::collections::HashMap::new();
+    fn group_herds_by_proximity<'a>(&self, states: &'a [KangarooState]) -> std::collections::HashMap<u32, Vec<&'a KangarooState>> {
+        let mut groups: std::collections::HashMap<u32, Vec<&KangarooState>> = std::collections::HashMap::new();
         let mut group_id = 0u32;
 
         for state in states {
@@ -942,10 +795,12 @@ impl KangarooManager {
                     let state_affine = self.collision_detector.curve().to_affine(&state.position);
                     let existing_affine = self.collision_detector.curve().to_affine(&existing.position);
 
-                    let x_diff = if state_affine.x > existing_affine.x {
-                        (state_affine.x - existing_affine.x).to_u64_array()[0]
+                    let state_x = BigInt256::from_u64_array(state_affine.x);
+                    let existing_x = BigInt256::from_u64_array(existing_affine.x);
+                    let x_diff = if state_x > existing_x {
+                        (state_x - existing_x).low_u32() as u64
                     } else {
-                        (existing_affine.x - state_affine.x).to_u64_array()[0]
+                        (existing_x - state_x).low_u32() as u64
                     };
 
                     if x_diff < 1000 { // Proximity threshold

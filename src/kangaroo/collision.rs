@@ -168,7 +168,11 @@ impl CollisionDetector {
         }
 
         // Fall back to CPU implementation for any remaining checks
-        self.check_collisions(dp_table).await
+        match self.check_collisions(dp_table).await {
+            Ok(CollisionResult::Full(solution)) => Ok(Some(solution)),
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// Convert BigInt256 to [u32; 8] array for GPU operations
@@ -385,11 +389,15 @@ impl CollisionDetector {
             // In practice, this would need proper jump reversal or history tracking
             for test_jump in 1..=100 {  // Try small backward jumps
                 let jump_neg = BigInt256::from_u64(test_jump);
+                let jump_neg_u64 = test_jump;
                 if let Ok(back_point) = self.curve.mul_constant_time(&jump_neg, &tame_walk.position) {
                     let back_pos = KangarooState {
                         position: back_point,
-                        distance: tame_walk.distance.clone() - jump_neg,
+                        distance: tame_walk.distance.saturating_sub(jump_neg_u64),
+                        alpha: tame.alpha,
+                        beta: tame.beta,
                         is_tame: tame.is_tame,
+                        is_dp: tame.is_dp,
                         id: tame.id,
                     };
 
@@ -415,11 +423,15 @@ impl CollisionDetector {
             // Simplified: try various jump sizes
             for test_jump in 1..=100 {
                 let jump_fwd = BigInt256::from_u64(test_jump);
+                let jump_fwd_u64 = test_jump;
                 if let Ok(fwd_point) = self.curve.mul_constant_time(&jump_fwd, &wild_walk.position) {
                     let fwd_pos = KangarooState {
                         position: fwd_point,
-                        distance: wild_walk.distance.clone() + jump_fwd,
+                        distance: wild_walk.distance.saturating_add(jump_fwd_u64),
+                        alpha: wild.alpha,
+                        beta: wild.beta,
                         is_tame: wild.is_tame,
+                        is_dp: wild.is_dp,
                         id: wild.id,
                     };
 

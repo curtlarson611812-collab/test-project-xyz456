@@ -572,7 +572,7 @@ impl HybridGpuManager {
             let attractor_x_bigint = BigInt256::from_u64_array(*attractor_x);
             let current_affine = Secp256k1::new().to_affine(&current_point);
 
-            if current_affine.x == attractor_x_bigint {
+            if BigInt256::from_u64_array(current_affine.x) == attractor_x_bigint {
                 reached_attractor.push(true);
                 continue;
             }
@@ -598,7 +598,7 @@ impl HybridGpuManager {
 
                 // Check if now at attractor
                 let new_affine = Secp256k1::new().to_affine(&current_point);
-                reached_attractor.push(new_affine.x == attractor_x_bigint);
+                reached_attractor.push(BigInt256::from_u64_array(new_affine.x) == attractor_x_bigint);
             } else {
                 reached_attractor.push(false); // No valid jump found
             }
