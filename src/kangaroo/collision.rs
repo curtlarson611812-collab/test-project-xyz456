@@ -4,7 +4,7 @@ use crate::math::{Secp256k1, BigInt256};
 use crate::config::Config;
 use anyhow::Result;
 use num_bigint::BigUint;
-use log::info;
+use log::{info, debug};
 use std::ops::Add;
 
 #[derive(Clone)]
@@ -390,23 +390,29 @@ impl CollisionDetector {
             for test_jump in 1..=100 {  // Try small backward jumps
                 let jump_neg = BigInt256::from_u64(test_jump);
                 let jump_neg_u64 = test_jump;
-                if let Ok(back_point) = self.curve.mul_constant_time(&jump_neg, &tame_walk.position) {
-                    let back_pos = KangarooState {
-                        position: back_point,
-                        distance: tame_walk.distance.saturating_sub(jump_neg_u64),
-                        alpha: tame.alpha,
-                        beta: tame.beta,
-                        is_tame: tame.is_tame,
-                        is_dp: tame.is_dp,
-                        id: tame.id,
-                    };
+                match self.curve.mul_constant_time(&jump_neg, &tame_walk.position) {
+                    Ok(back_point) => {
+                        let back_pos = KangarooState {
+                            position: back_point,
+                            distance: tame_walk.distance.saturating_sub(jump_neg_u64),
+                            alpha: tame.alpha,
+                            beta: tame.beta,
+                            is_tame: tame.is_tame,
+                            is_dp: tame.is_dp,
+                            id: tame.id,
+                        };
 
-                    // Check if this backward position matches the wild kangaroo
-                    if self.positions_match(&back_pos.position, &wild.position) {
-                        info!("🎯 Walk back found collision at step {} with jump {}", step, test_jump);
-                        if let Some(solution) = self.find_collision(&back_pos, wild) {
-                            return Ok(Some(solution));
+                        // Check if this backward position matches the wild kangaroo
+                        if self.positions_match(&back_pos.position, &wild.position) {
+                            info!("🎯 Walk back found collision at step {} with jump {}", step, test_jump);
+                            if let Some(solution) = self.find_collision(&back_pos, wild) {
+                                return Ok(Some(solution));
+                            }
                         }
+                    }
+                    Err(e) => {
+                        debug!("Walk back mul failed for jump {}: {}", test_jump, e);
+                        // Continue with next jump - don't fail the entire walk
                     }
                 }
             }
@@ -424,23 +430,29 @@ impl CollisionDetector {
             for test_jump in 1..=100 {
                 let jump_fwd = BigInt256::from_u64(test_jump);
                 let jump_fwd_u64 = test_jump;
-                if let Ok(fwd_point) = self.curve.mul_constant_time(&jump_fwd, &wild_walk.position) {
-                    let fwd_pos = KangarooState {
-                        position: fwd_point,
-                        distance: wild_walk.distance.saturating_add(jump_fwd_u64),
-                        alpha: wild.alpha,
-                        beta: wild.beta,
-                        is_tame: wild.is_tame,
-                        is_dp: wild.is_dp,
-                        id: wild.id,
-                    };
+                match self.curve.mul_constant_time(&jump_fwd, &wild_walk.position) {
+                    Ok(fwd_point) => {
+                        let fwd_pos = KangarooState {
+                            position: fwd_point,
+                            distance: wild_walk.distance.saturating_add(jump_fwd_u64),
+                            alpha: wild.alpha,
+                            beta: wild.beta,
+                            is_tame: wild.is_tame,
+                            is_dp: wild.is_dp,
+                            id: wild.id,
+                        };
 
-                    // Check if this forward position matches the tame kangaroo
-                    if self.positions_match(&fwd_pos.position, &tame.position) {
-                        info!("🎯 Walk forward found collision at step {} with jump {}", step, test_jump);
-                        if let Some(solution) = self.find_collision(tame, &fwd_pos) {
-                            return Ok(Some(solution));
+                        // Check if this forward position matches the tame kangaroo
+                        if self.positions_match(&fwd_pos.position, &tame.position) {
+                            info!("🎯 Walk forward found collision at step {} with jump {}", step, test_jump);
+                            if let Some(solution) = self.find_collision(tame, &fwd_pos) {
+                                return Ok(Some(solution));
+                            }
                         }
+                    }
+                    Err(e) => {
+                        debug!("Walk forward mul failed for jump {}: {}", test_jump, e);
+                        // Continue with next jump - don't fail the entire walk
                     }
                 }
             }
