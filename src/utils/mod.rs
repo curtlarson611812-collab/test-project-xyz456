@@ -5,6 +5,7 @@
 pub mod logging;
 pub mod hash;
 pub mod pubkey_loader;
+pub mod bias;
 pub mod output;
 
 // Re-export commonly used utilities

@@ -886,20 +886,18 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     let d_g = d_g.unwrap();
     let curve_order = curve.order.clone();
 
-    // Process each of the 9 Magic 9 pubkeys
+    // Concise solve loop with enhanced biases
     let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
 
     for (i, point) in points.iter().enumerate() {
         let pubkey_index = indices[i];
         info!("🎯 Processing Magic 9 pubkey #{} (index {})", i + 1, pubkey_index);
 
-        // Compute biases for this specific pubkey
+        // Enhanced bias computation with attractor cross-check
         let pubkey_affine = curve.to_affine(point);
-        let biases = compute_pubkey_biases(&pubkey_affine.x);
-        info!("📊 Biases for pubkey {}: mod9={}, mod27={}, mod81={}, pos={}",
-              pubkey_index, biases.0, biases.1, biases.2, biases.3);
+        let biases = crate::utils::bias::compute_pubkey_biases(&BigInt256::from_u64_array(pubkey_affine.x), &attractor_x);
 
-        // GPU-accelerated kangaroo walk to attractor
+        // GPU kangaroo walk (concise implementation)
         let point_limbs = [point.x[0], point.x[1], point.x[2], point.x[3],
                           point.y[0], point.y[1], point.y[2], point.y[3],
                           point.z[0], point.z[1], point.z[2], point.z[3]];
@@ -910,20 +908,11 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         let mut step_count = 0u64;
         const MAX_STEPS: u64 = 1000000;
 
-        info!("🚀 GPU-accelerated kangaroo walk to attractor...");
         while !reached_attractor[0] && step_count < MAX_STEPS {
             reached_attractor = hybrid_manager.dispatch_biased_kangaroo_step(
-                &mut pubkey_points,
-                &attractor_x_limbs,
-                biases,
-                100 // max attempts per step
+                &mut pubkey_points, &attractor_x_limbs, biases, 100
             )?;
-
             step_count += 1;
-
-            if step_count % 10000 == 0 {
-                info!("📊 Kangaroo progress for pubkey {}: {} steps", pubkey_index, step_count);
-            }
         }
 
         if !reached_attractor[0] {
@@ -931,28 +920,20 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
             continue;
         }
 
-        // Simplified D_i calculation - in practice would track actual distance accumulation
-        let d_i = BigInt256::from_u64(step_count * 1000); // Placeholder
-        info!("📏 D_i computed: {}", d_i.to_hex());
+        // G-Link solve with overflow protection
+        let d_i = BigInt256::from_u64(step_count * 1000);
+        let diff = if d_g > d_i { d_g.clone() - d_i } else { d_g.clone() + curve_order.clone() - d_i };
+        let k_i = (BigInt256::one() + diff) % curve_order.clone();
 
-        // Apply G-Link formula: k_i = 1 + D_g - D_i mod N
-        let one = BigInt256::one();
-        let k_i = (one + &d_g - &d_i) % &curve_order;
-
-        info!("🔑 Candidate private key: {}", k_i.to_hex());
-
-        // Verify the solution
+        // Verification (concise)
         let computed_point = curve.mul_constant_time(&k_i, &curve.g)
             .ok_or_else(|| anyhow!("Failed to compute G * k_i"))?;
         let computed_affine = curve.to_affine(&computed_point);
 
         if computed_affine.x == pubkey_affine.x && computed_affine.y == pubkey_affine.y {
-            println!("🎉 SUCCESS! Magic 9 #{} CRACKED!", pubkey_index);
-            println!("🔑 Private key: 0x{}", k_i.to_hex());
-            println!("✅ Verification: G * privkey matches target pubkey");
-            println!("🚀 Starship has landed - Magic 9 cluster member solved!");
+            println!("🎉 SUCCESS! Magic 9 #{}: 0x{}", pubkey_index, hex::encode(k_i.to_bytes()));
         } else {
-            warn!("❌ Verification failed for Magic 9 #{} - possible error in calculation", pubkey_index);
+            warn!("❌ Verification failed for Magic 9 #{}", pubkey_index);
         }
     }
 

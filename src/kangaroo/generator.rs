@@ -19,7 +19,7 @@ use std::sync::Arc;
 // SIMD removed for stability - using regular loops instead
 
 /// Apply bias filters to scalar values for Magic 9 sniper mode
-/// Returns true if scalar passes all bias filters
+/// Returns true if scalar passes all bias filters (legacy strict version)
 pub fn apply_biases(scalar: &BigInt256, mod9: u8, mod27: u8, mod81: u8, pos: bool) -> bool {
     // Mod9 bias filter
     let s_mod9 = (scalar.clone() % BigInt256::from_u64(9)).low_u32() as u8;
@@ -76,20 +76,31 @@ pub fn biased_kangaroo_to_attractor(
     loop {
         // Check if we've reached the attractor
         let current_affine = curve.to_affine(&current_point);
-        if current_affine.x == *attractor_x {
+        if BigInt256::from_u64_array(current_affine.x) == *attractor_x {
             info!("🎯 Attractor reached! Distance: {}, Steps: {}", distance.to_hex(), step_count);
             return Ok(distance);
         }
 
-        // Generate biased jump scalar
+        // Generate biased jump scalar with adaptive scoring
         let mut jump_scalar = BigInt256::zero();
         let mut attempts = 0u32;
 
-        // Try to find a jump that passes bias filters
+        // Adaptive threshold: Start strict, relax if stalled
+        let mut threshold = 0.9;  // 90% match required initially
+        if step_count > 100_000 {
+            threshold = 0.6;  // Relax to 60% after 100k steps
+        } else if step_count > 10_000 {
+            threshold = 0.7;  // Relax to 70% after 10k steps
+        }
+
+        // Try to find a jump that passes bias scoring threshold
         while attempts < 1000 {  // Prevent infinite loops
             // Generate random jump (in practice, this would use deterministic jump table)
             let random_jump = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
-            if apply_biases(&random_jump, biases.0, biases.1, biases.2, biases.3) {
+
+            // Use enhanced bias scoring from utils::bias
+            let score = crate::utils::bias::apply_biases(&random_jump, biases);
+            if score >= threshold {
                 jump_scalar = random_jump;
                 break;
             }
@@ -97,7 +108,7 @@ pub fn biased_kangaroo_to_attractor(
         }
 
         if jump_scalar.is_zero() {
-            return Err(anyhow::anyhow!("Failed to generate biased jump after {} attempts", attempts));
+            return Err(anyhow::anyhow!("Failed to generate biased jump after {} attempts (threshold: {:.1})", attempts, threshold));
         }
 
         // Apply jump: current_point += jump_scalar * G
@@ -105,7 +116,7 @@ pub fn biased_kangaroo_to_attractor(
         current_point = curve.add(&current_point, &jump_point);
 
         // Update distance
-        distance = (distance + jump_scalar) % &curve.order;
+        distance = (distance + jump_scalar) % curve.n.clone();
 
         step_count += 1;
 

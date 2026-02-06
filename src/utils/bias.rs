@@ -1,0 +1,83 @@
+//! Bias Analysis and Optimization Utilities for Magic 9 Sniper
+//!
+//! Provides advanced bias detection, scoring, and filtering for mod9/mod27/mod81/pos
+//! optimizations in secp256k1 kangaroo attacks.
+
+use crate::math::bigint::BigInt256;
+
+/// Compute target biases from pubkey x-coordinate with attractor cross-check
+/// Returns (mod9, mod27, mod81, pos) bias targets
+pub fn compute_pubkey_biases(x: &BigInt256, attractor_x: &BigInt256) -> (u8, u8, u8, bool) {
+    let mod9 = (x.clone() % BigInt256::from_u64(9)).low_u32() as u8;
+    let mod27 = (x.clone() % BigInt256::from_u64(27)).low_u32() as u8;
+    let mod81 = (x.clone() % BigInt256::from_u64(81)).low_u32() as u8;
+    let pos = true;  // Always positive for distance scalars
+
+    // Optimization: Cross-check with attractor congruence for validation
+    let att_mod9 = (attractor_x.clone() % BigInt256::from_u64(9)).low_u32() as u8;
+    if mod9 != att_mod9 {
+        log::warn!("Pubkey mod9 bias {} differs from attractor mod9 {}", mod9, att_mod9);
+    }
+
+    (mod9, mod27, mod81, pos)
+}
+
+/// Enhanced apply biases with scoring for partial matches and adaptive thresholds
+/// Returns bias score (0.0 = no match, 1.0 = perfect match)
+pub fn apply_biases(scalar: &BigInt256, target: (u8, u8, u8, bool)) -> f64 {
+    if target.3 && scalar.is_zero() {
+        return 0.0;  // Pos bias: reject zero scalars
+    }
+
+    let mut score = 0.0;
+
+    // Weighted scoring: mod9 (30%), mod27 (30%), mod81 (40%)
+    if (scalar.clone() % BigInt256::from_u64(9)).low_u32() as u8 == target.0 {
+        score += 0.3;
+    }
+    if (scalar.clone() % BigInt256::from_u64(27)).low_u32() as u8 == target.1 {
+        score += 0.3;
+    }
+    if (scalar.clone() % BigInt256::from_u64(81)).low_u32() as u8 == target.2 {
+        score += 0.4;
+    }
+
+    score
+}
+
+/// Additional bias: mod3 check for finer granularity
+/// Returns true if scalar passes mod3 filter (basic 3-power subgroup)
+pub fn apply_mod3_bias(scalar: &BigInt256, target_mod3: u8) -> bool {
+    (scalar.clone() % BigInt256::from_u64(3)).low_u32() as u8 == target_mod3
+}
+
+/// Additional bias: Hamming weight check for low-weight scalars
+/// Returns true if scalar has low Hamming weight (optimization for EC operations)
+pub fn apply_hamming_bias(scalar: &BigInt256, max_weight: u32) -> bool {
+    let bytes = scalar.to_bytes_be();
+    let weight: u32 = bytes.iter().map(|b| b.count_ones()).sum();
+    weight <= max_weight
+}
+
+/// Compute combined bias score across multiple filters
+/// Used for adaptive threshold decisions in kangaroo walks
+pub fn compute_combined_bias_score(
+    scalar: &BigInt256,
+    mod9_target: u8,
+    mod27_target: u8,
+    mod81_target: u8,
+    mod3_target: u8,
+    max_hamming: u32
+) -> f64 {
+    let mut score = apply_biases(scalar, (mod9_target, mod27_target, mod81_target, true));
+
+    if apply_mod3_bias(scalar, mod3_target) {
+        score += 0.1;  // Additional mod3 bonus
+    }
+
+    if apply_hamming_bias(scalar, max_hamming) {
+        score += 0.1;  // Additional hamming bonus
+    }
+
+    score.min(1.0)  // Cap at perfect match
+}
