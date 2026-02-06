@@ -14,21 +14,20 @@ use log::info;
 use anyhow::{anyhow, Result};
 
 // Block 1: Montgomery Domain Management (fixed for proper arithmetic)
-impl MontgomeryReducer {
+impl Secp256k1 {
     // Enter Montgomery form: x * R mod p (R = 2^256 for 256-bit modulus)
-    pub fn convert_in(&self, x: &BigInt256) -> BigInt256 {
-        // x * R mod p where R = 2^256
-        // We need Barrett reduction for this conversion
-        // For simplicity, since Montgomery constants aren't fully set up, use identity for now
-        // TODO: Implement proper Montgomery conversion
-        x.clone()
+    pub fn montgomery_convert_in(&self, x: &BigInt256) -> BigInt256 {
+        // x * R mod p = x * 2^256 mod p
+        // Since R = 2^256 > p for secp256k1, this is just x * 2^256 mod p = (x << 256) mod p
+        let x_big = BigInt512::from_bigint256(x);
+        let shifted = x_big.left_shift(256); // x * 2^256
+        self.barrett_p.reduce(&shifted).unwrap_or(BigInt256::zero())
     }
 
     // Exit Montgomery form: x_r * R^-1 mod p = x
-    pub fn convert_out(&self, x_r: &BigInt256) -> BigInt256 {
-        // For simplicity, since Montgomery constants aren't fully set up, use identity for now
-        // TODO: Implement proper Montgomery conversion
-        x_r.clone()
+    pub fn montgomery_convert_out(&self, x_r: &BigInt256) -> BigInt256 {
+        // x_r * R^-1 mod p = x_r * r_inv mod p
+        self.montgomery_p.mul(x_r, &self.montgomery_p.get_r_inv())
     }
 }
 
@@ -109,28 +108,74 @@ impl Secp256k1 {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
         if p.is_infinity() { return *q; }
         if q.is_infinity() { return *p; }
-        let pz2 = self.barrett_p.mul(&BigInt256::from_u64_array(p.z), &BigInt256::from_u64_array(p.z));
-        let qz2 = self.barrett_p.mul(&BigInt256::from_u64_array(q.z), &BigInt256::from_u64_array(q.z));
-        let u1 = self.barrett_p.mul(&BigInt256::from_u64_array(p.x), &qz2);
-        let u2 = self.barrett_p.mul(&BigInt256::from_u64_array(q.x), &pz2);
-        let pz3 = self.barrett_p.mul(&pz2, &BigInt256::from_u64_array(p.z));
-        let qz3 = self.barrett_p.mul(&qz2, &BigInt256::from_u64_array(q.z));
-        let s1 = self.barrett_p.mul(&BigInt256::from_u64_array(p.y), &qz3);
-        let s2 = self.barrett_p.mul(&BigInt256::from_u64_array(q.y), &pz3);
+        let px = BigInt256::from_u64_array(p.x);
+        let py = BigInt256::from_u64_array(p.y);
+        let pz = BigInt256::from_u64_array(p.z);
+        let qx = BigInt256::from_u64_array(q.x);
+        let qy = BigInt256::from_u64_array(q.y);
+        let qz = BigInt256::from_u64_array(q.z);
+
+        // Convert to Montgomery domain
+        let pz_r = self.montgomery_convert_in(&pz);
+        let qz_r = self.montgomery_convert_in(&qz);
+        let px_r = self.montgomery_convert_in(&px);
+        let qx_r = self.montgomery_convert_in(&qx);
+
+        let pz2_r = self.montgomery_p.mul(&pz_r, &pz_r);
+        let qz2_r = self.montgomery_p.mul(&qz_r, &qz_r);
+        let u1_r = self.montgomery_p.mul(&px_r, &qz2_r);
+        let u2_r = self.montgomery_p.mul(&qx_r, &pz2_r);
+
+        // Convert back for Barrett operations
+        let pz2 = self.montgomery_convert_out(&pz2_r);
+        let qz2 = self.montgomery_convert_out(&qz2_r);
+        let u1 = self.montgomery_convert_out(&u1_r);
+        let u2 = self.montgomery_convert_out(&u2_r);
+
+        let pz3 = self.barrett_p.mul(&pz2, &pz);
+        let qz3 = self.barrett_p.mul(&qz2, &qz);
+        let py_r = self.montgomery_convert_in(&py);
+        let qy_r = self.montgomery_convert_in(&qy);
+        let pz3_r = self.montgomery_convert_in(&pz3);
+        let qz3_r = self.montgomery_convert_in(&qz3);
+        let s1_r = self.montgomery_p.mul(&py_r, &qz3_r);
+        let s2_r = self.montgomery_p.mul(&qy_r, &pz3_r);
+        let s1 = self.montgomery_convert_out(&s1_r);
+        let s2 = self.montgomery_convert_out(&s2_r);
+
         let h = self.barrett_p.sub(&u2, &u1);
         if h == BigInt256::zero() {
             if s1 == s2 { return self.double(p); }
             return Point { x: [0;4], y: [0;4], z: [0;4] };
         }
-        let hh = self.barrett_p.mul(&h, &h);
+
+        let h_r = self.montgomery_convert_in(&h);
+        let hh_r = self.montgomery_p.mul(&h_r, &h_r);
+        let hh = self.montgomery_convert_out(&hh_r);
         let i = self.barrett_p.add(&hh, &hh); // i = 2*hh
         let i = self.barrett_p.add(&i, &i); // i = 4*hh
-        let j = self.barrett_p.mul(&h, &i);
+        let j_r = self.montgomery_p.mul(&h_r, &self.montgomery_convert_in(&i));
+        let j = self.montgomery_convert_out(&j_r);
+
         let r = self.barrett_p.add(&self.barrett_p.sub(&s2, &s1), &self.barrett_p.sub(&s2, &s1)); // r = 2*(s2-s1)
-        let v = self.barrett_p.mul(&u1, &hh);
-        let x3 = self.barrett_p.sub(&self.barrett_p.sub(&self.barrett_p.mul(&r, &r), &j), &self.barrett_p.add(&v, &v));
-        let y3 = self.barrett_p.sub(&self.barrett_p.mul(&r, &self.barrett_p.sub(&v, &x3)), &self.barrett_p.add(&self.barrett_p.mul(&s1, &j), &self.barrett_p.mul(&s1, &j))); // Y3 = R*(V - X3) - 2*S1*J
-        let z3 = self.barrett_p.mul(&self.barrett_p.mul(&BigInt256::from_u64_array(p.z), &BigInt256::from_u64_array(q.z)), &h);
+
+        let v_r = self.montgomery_p.mul(&u1_r, &hh_r);
+        let v = self.montgomery_convert_out(&v_r);
+
+        let r_r = self.montgomery_convert_in(&r);
+        let rr_r = self.montgomery_p.mul(&r_r, &r_r);
+        let rr = self.montgomery_convert_out(&rr_r);
+        let x3 = self.barrett_p.sub(&self.barrett_p.sub(&rr, &j), &self.barrett_p.add(&v, &v));
+
+        let v_minus_x3 = self.barrett_p.sub(&v, &x3);
+        let rv_minus_x3_r = self.montgomery_p.mul(&r_r, &self.montgomery_convert_in(&v_minus_x3));
+        let sj_r = self.montgomery_p.mul(&s1_r, &j_r);
+        let sj2_r = self.montgomery_p.mul(&sj_r, &self.montgomery_convert_in(&BigInt256::from_u64(2)));
+        let y3 = self.barrett_p.sub(&self.montgomery_convert_out(&rv_minus_x3_r), &self.montgomery_convert_out(&sj2_r));
+
+        let pz_qz_r = self.montgomery_p.mul(&pz_r, &qz_r);
+        let z3_r = self.montgomery_p.mul(&pz_qz_r, &h_r);
+        let z3 = self.montgomery_convert_out(&z3_r);
         let result = Point { x: x3.to_u64_array(), y: y3.to_u64_array(), z: z3.to_u64_array() };
         // Temporarily disable assertion for debugging
         // assert!(self.is_on_curve(&result.to_affine(self))); // Rule requirement
@@ -222,30 +267,52 @@ impl Secp256k1 {
             return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
         }
 
-        // Jacobian doubling: use consistent Barrett reduction
-        let xx = self.barrett_p.mul(&px, &px); // XX = X1^2
-        let yy = self.barrett_p.mul(&py, &py); // YY = Y1^2
-        let yyyy = self.barrett_p.mul(&yy, &yy); // YYYY = YY^2
+        // Jacobian doubling: use Montgomery domain for multiplications
+        let px_r = self.montgomery_convert_in(&px);
+        let py_r = self.montgomery_convert_in(&py);
+        let pz_r = self.montgomery_convert_in(&pz);
 
-        // S = 2*((X1 + YY)^2 - XX - YYYY)
+        let xx_r = self.montgomery_p.mul(&px_r, &px_r); // XX = X1^2 in Mont
+        let yy_r = self.montgomery_p.mul(&py_r, &py_r); // YY = Y1^2 in Mont
+        let yyyy_r = self.montgomery_p.mul(&yy_r, &yy_r); // YYYY = YY^2 in Mont
+
+        // Convert back for Barrett operations
+        let xx = self.montgomery_convert_out(&xx_r);
+        let yy = self.montgomery_convert_out(&yy_r);
+        let yyyy = self.montgomery_convert_out(&yyyy_r);
+
+        // S = 2*((X1 + YY)^2 - XX - YYYY) using Barrett
         let x_plus_yy = self.barrett_p.add(&px, &yy); // X1 + YY
-        let x_plus_yy_sq = self.barrett_p.mul(&x_plus_yy, &x_plus_yy); // (X1 + YY)^2
+        let x_plus_yy_sq_r = self.montgomery_convert_in(&x_plus_yy);
+        let x_plus_yy_sq_r = self.montgomery_p.mul(&x_plus_yy_sq_r, &x_plus_yy_sq_r); // (X1 + YY)^2 in Mont
+        let x_plus_yy_sq = self.montgomery_convert_out(&x_plus_yy_sq_r);
+
         let xx_plus_yyyy = self.barrett_p.add(&xx, &yyyy); // XX + YYYY
         let inner = self.barrett_p.sub(&x_plus_yy_sq, &xx_plus_yyyy); // (X1 + YY)^2 - XX - YYYY
         let s = self.barrett_p.add(&inner, &inner); // S = 2*inner
 
         let m = self.barrett_p.mul(&BigInt256::from_u64(3), &xx); // M = 3*XX
-        let t = self.barrett_p.mul(&m, &m); // T = M^2
+
+        // Convert M to Mont for squaring
+        let m_r = self.montgomery_convert_in(&m);
+        let t_r = self.montgomery_p.mul(&m_r, &m_r); // T = M^2 in Mont
+        let t = self.montgomery_convert_out(&t_r);
+
         let two_s = self.barrett_p.add(&s, &s); // 2*S
         let x3 = self.barrett_p.sub(&t, &two_s); // X3 = T - 2*S
 
         let s_minus_x3 = self.barrett_p.sub(&s, &x3); // S - X3
-        let m_times_diff = self.barrett_p.mul(&m, &s_minus_x3); // M*(S - X3)
+        let s_minus_x3_r = self.montgomery_convert_in(&s_minus_x3);
+        let m_times_diff_r = self.montgomery_p.mul(&m_r, &s_minus_x3_r); // M*(S - X3) in Mont
+        let m_times_diff = self.montgomery_convert_out(&m_times_diff_r);
+
         let eight_yyyy = self.barrett_p.mul(&BigInt256::from_u64(8), &yyyy); // 8*YYYY
         let y3 = self.barrett_p.sub(&m_times_diff, &eight_yyyy); // Y3 = M*(S - X3) - 8*YYYY
 
-        let y_pz = self.barrett_p.mul(&py, &pz);
-        let z3 = self.barrett_p.mul(&y_pz, &BigInt256::from_u64(2)); // Z3 = 2*Y*Z
+        let two_r = self.montgomery_convert_in(&BigInt256::from_u64(2));
+        let py_pz_r = self.montgomery_p.mul(&py_r, &pz_r);
+        let z3_r = self.montgomery_p.mul(&py_pz_r, &two_r); // Z3 = 2*Y*Z in Mont
+        let z3 = self.montgomery_convert_out(&z3_r);
 
         let result = Point {
             x: x3.to_u64_array(),

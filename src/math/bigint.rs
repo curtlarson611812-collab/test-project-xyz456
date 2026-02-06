@@ -73,7 +73,7 @@ impl BigInt512 {
     }
 
     /// Left shift by n bits
-    fn left_shift(&self, n: usize) -> BigInt512 {
+    pub fn left_shift(&self, n: usize) -> BigInt512 {
         if n >= 512 {
             return BigInt512 { limbs: [0; 8] };
         }
@@ -613,27 +613,29 @@ impl BarrettReducer {
     pub fn new(modulus: &BigInt256) -> Self {
         use num_bigint::BigUint;
 
-        // Skip zero check for now
-        let k = 256; // modulus size in bits // Bit length for Barrett
+        // Calculate k = ceil(bit_length(modulus) / 64) + 1 for Barrett reduction
+        let k = (modulus.bit_length() / 64) + 2; // Add 1 for safety margin
 
         // Exact mu calculation using BigUint: floor(2^512 / modulus)
         let p_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
         let two_to_512 = BigUint::from(1u32) << 512;
         let mu_big: BigUint = two_to_512 / p_big;
 
-        // Convert back to BigInt512 limbs (big-endian)
+        // Convert back to BigInt512 limbs (big-endian to little-endian limb order)
         let mut mu_limbs = [0u64; 8];
         let mu_bytes = mu_big.to_bytes_be();
         let pad_len = 64usize.saturating_sub(mu_bytes.len());
         let mut padded_bytes = vec![0u8; pad_len];
         padded_bytes.extend_from_slice(&mu_bytes);
 
+        // Convert from big-endian bytes to little-endian limb order
+        // mu_bytes[0] is MSB, should go to limbs[7] (highest limb)
         for i in 0..8 {
             let start = i * 8;
             let end = start + 8;
             if end <= padded_bytes.len() {
                 let limb_bytes = &padded_bytes[start..end];
-                mu_limbs[i] = u64::from_be_bytes(limb_bytes.try_into().unwrap_or([0; 8]));
+                mu_limbs[7 - i] = u64::from_be_bytes(limb_bytes.try_into().unwrap_or([0; 8]));
             }
         }
 
@@ -701,21 +703,66 @@ impl MontgomeryReducer {
     /// Create new Montgomery reducer for given modulus
     /// Precomputes R=2^256, R_inv, and n_prime for REDC algorithm
     pub fn new(modulus: &BigInt256) -> Self {
-        // R = 2^256 (represented as 0 since it's beyond our 256-bit range)
+        use num_bigint::BigUint;
+
+        // R = 2^256
+        let r_big: BigUint = BigUint::from(1u32) << 256;
+        let modulus_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+
+        // R^(-1) mod modulus using extended Euclidean algorithm
+        let r_inv_big = r_big.modinv(&modulus_big).unwrap();
+        let r_inv_bytes = r_inv_big.to_bytes_be();
+        let mut r_inv_padded = [0u8; 32];
+        let start = 32usize.saturating_sub(r_inv_bytes.len());
+        r_inv_padded[start..].copy_from_slice(&r_inv_bytes);
+        let r_inv = BigInt256::from_bytes_be(&r_inv_padded);
+
+        // R = 2^256 (we represent it as 0 in 256-bit form)
         let r = BigInt256::zero();
 
-        // R^(-1) mod modulus - for Montgomery, R_inv = R^(-1) mod N
-        // Since R = 2^256 and 2^256 > modulus for secp256k1, R_inv = 2^256 mod modulus
-        let _r_mod = BigInt256::zero(); // 2^256 mod modulus = 0 since 2^256 > modulus
-        let r_inv = BigInt256::zero(); // R_inv would be computed properly in full implementation
-
-        // Simplified n_prime calculation for secp256k1
-        // For p mod 2^64, n' can be precomputed or approximated
-        let n_prime = 0xd838091dd2253531u64; // Precomputed n' for secp256k1
+        // n_prime = -modulus^(-1) mod 2^64 for REDC
+        let modulus_u64 = modulus.limbs[0]; // Lower 64 bits of modulus
+        let n_prime = Self::compute_n_prime(modulus_u64);
 
         MontgomeryReducer {
             modulus: modulus.clone(), r, r_inv, n_prime,
         }
+    }
+
+    /// Get R^(-1) mod modulus
+    pub fn get_r_inv(&self) -> &BigInt256 {
+        &self.r_inv
+    }
+
+    /// Compute n' = -modulus^(-1) mod 2^64 for REDC algorithm
+    fn compute_n_prime(modulus_low: u64) -> u64 {
+        // Find x such that modulus_low * x ≡ -1 mod 2^64
+        // Using extended Euclidean algorithm for 64-bit numbers
+        let mut a = modulus_low;
+        let mut m = 1u64 << 63; // 2^63, will be doubled to 2^64
+
+        // Extended Euclidean algorithm
+        let mut old_r = a;
+        let mut r = m;
+        let mut old_s: i128 = 1;
+        let mut s: i128 = 0;
+
+        while r != 0 {
+            let quotient = old_r / r;
+            let temp_r = old_r;
+            old_r = r;
+            r = temp_r - quotient * r;
+
+            let temp_s = old_s;
+            old_s = s;
+            s = temp_s - (quotient as i128) * s;
+        }
+
+        // old_s contains the inverse of a modulo m
+        let inv = if old_s < 0 { (old_s + (1i128 << 64)) as u64 } else { old_s as u64 };
+
+        // n' = -inv mod 2^64
+        0u64.wrapping_sub(inv)
     }
 
     /// Montgomery modular multiplication: REDC(a * b) = (a * b * R^(-1)) mod modulus
