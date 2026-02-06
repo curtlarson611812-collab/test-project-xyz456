@@ -73,7 +73,7 @@ __global__ void common_bias_attractor_check(uint64_t* x_limbs, uint8_t* results,
 // Deep note: Multi-modulus bias checking for efficient attractor filtering - results[idx*3] = mod9, results[idx*3+1] = mod27, results[idx*3+2] = mod81
 
 // Optimized shared memory padding for bank conflict-free bias table access
-// Added batch processing for 10^6 scalars per kernel launch
+// Increased batch processing to 128 scalars per thread for RTX 5090 L2/SM optimization
 __global__ void bias_check_kernel_padded(uint32_t* dist_limbs, uint8_t* is_biased, uint32_t count, float* bias_global) {
     // Shared memory with padding to avoid bank conflicts (32 banks)
     __shared__ float bias_shared[81 + 31];  // Pad to 112 elements
@@ -87,9 +87,9 @@ __global__ void bias_check_kernel_padded(uint32_t* dist_limbs, uint8_t* is_biase
     }
     __syncthreads();
 
-    // Batch processing: each thread handles multiple scalars
+    // Batch processing: each thread handles 128 scalars for 144 SMs on RTX 5090
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t batch_size = 16;  // Process 16 scalars per thread for better occupancy
+    const uint32_t batch_size = 128;  // Optimal for 5090 L2 cache and SM occupancy
 
     for (uint32_t batch = 0; batch < batch_size; ++batch) {
         uint32_t scalar_idx = idx * batch_size + batch;

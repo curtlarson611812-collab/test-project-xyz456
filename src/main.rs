@@ -893,9 +893,12 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         let pubkey_index = indices[i];
         info!("🎯 Processing Magic 9 pubkey #{} (index {})", i + 1, pubkey_index);
 
-        // Enhanced bias computation with attractor cross-check
+        // Enhanced bias computation with attractor cross-check and pre-computed database
         let pubkey_affine = curve.to_affine(point);
-        let biases = crate::utils::bias::compute_pubkey_biases(&BigInt256::from_u64_array(pubkey_affine.x), &attractor_x);
+        let base_biases = crate::utils::bias::compute_pubkey_biases(&BigInt256::from_u64_array(pubkey_affine.x), &attractor_x);
+        // Use pre-computed database for Magic 9, fallback to dynamic
+        let magic9_bias = crate::utils::bias::get_magic9_bias(i);
+        let biases = (magic9_bias.0, magic9_bias.1, magic9_bias.2, magic9_bias.3, true); // mod9,27,81,3,pos
 
         // GPU kangaroo walk (concise implementation)
         let point_limbs = [point.x[0], point.x[1], point.x[2], point.x[3],

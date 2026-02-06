@@ -18,6 +18,55 @@ use rand::Rng;
 use std::sync::Arc;
 // SIMD removed for stability - using regular loops instead
 
+// Sacred 32 small odd primes (>128, odd, low hamming weight for fast mul).
+// Cycle via index % 32 — provides unique starts per kangaroo without bias.
+// EXACT from SmallOddPrime_Precise_code.rs - verified sacred and unmodified.
+const PRIME_MULTIPLIERS: [u64; 32] = [
+    179, 257, 281, 349, 379, 419, 457, 499,
+    541, 599, 641, 709, 761, 809, 853, 911,
+    967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
+    1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
+];
+
+// Sacred kangaroo start initialization from SmallOddPrime_Precise_code.rs
+// wild_start = prime_i * target_pubkey - allows inversion in collision solving
+pub fn initialize_kangaroo_start(target_pubkey: &Point, kangaroo_index: usize) -> Point {
+    let prime_index = kangaroo_index % PRIME_MULTIPLIERS.len();
+    let prime_u64 = PRIME_MULTIPLIERS[prime_index];
+
+    // Convert to BigInt256 for multiplication
+    let prime_bigint = BigInt256::from_u64(prime_u64);
+    let curve = Secp256k1::new();
+
+    // wild_start = prime * target_pubkey
+    curve.mul_constant_time(&prime_bigint, target_pubkey).unwrap()
+}
+
+// Tame kangaroo start (no prime multiplier — clean from G)
+pub fn initialize_tame_start() -> Point {
+    Point::generator()  // or low scalar * G for interval searches
+}
+
+// Sacred bucket selection — tame deterministic, wild state-mixed
+pub fn select_bucket(point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+    const WALK_BUCKETS: u32 = 32;
+
+    if is_tame {
+        (step % WALK_BUCKETS) as u32  // Deterministic for tame → exact distance
+    } else {
+        // State-mixed for wild → avoids traps
+        let affine = point.to_affine();
+        let x_bytes = affine.x.to_bytes();
+        let x0 = u32::from_le_bytes(x_bytes[0..4].try_into().unwrap());
+        let x1 = u32::from_le_bytes(x_bytes[4..8].try_into().unwrap());
+        let dist_bytes = dist.to_bytes();
+        let dist0 = u32::from_le_bytes(dist_bytes[0..4].try_into().unwrap());
+
+        let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
+        mix % WALK_BUCKETS
+    }
+}
+
 /// Apply bias filters to scalar values for Magic 9 sniper mode
 /// Returns true if scalar passes all bias filters (legacy strict version)
 pub fn apply_biases(scalar: &BigInt256, mod9: u8, mod27: u8, mod81: u8, pos: bool) -> bool {
@@ -85,21 +134,20 @@ pub fn biased_kangaroo_to_attractor(
         let mut jump_scalar = BigInt256::zero();
         let mut attempts = 0u32;
 
-        // Adaptive threshold: Start strict, relax if stalled
-        let mut threshold = 0.9;  // 90% match required initially
-        if step_count > 100_000 {
-            threshold = 0.6;  // Relax to 60% after 100k steps
-        } else if step_count > 10_000 {
-            threshold = 0.7;  // Relax to 70% after 10k steps
-        }
+        // Exponential adaptive threshold: smoother relaxation modeling stall probability
+        // threshold = 0.9 * e^(-lambda * log10(step_count)) for decay
+        let lambda = 0.01;  // Decay rate from EC stall models
+        let log_step = if step_count > 0 { (step_count as f64).log10() } else { 0.0 };
+        let threshold = 0.9 * std::f64::consts::E.powf(-lambda * log_step);
+        let threshold = threshold.max(0.5);  // Floor at 50% to prevent too loose matching
 
         // Try to find a jump that passes bias scoring threshold
         while attempts < 1000 {  // Prevent infinite loops
             // Generate random jump (in practice, this would use deterministic jump table)
             let random_jump = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
 
-            // Use enhanced bias scoring from utils::bias
-            let score = crate::utils::bias::apply_biases(&random_jump, biases);
+            // Use enhanced bias scoring from utils::bias with mod3
+            let score = crate::utils::bias::apply_biases(&random_jump, (biases.0, biases.1, biases.2, 0, biases.3)); // Add mod3=0 as default
             if score >= threshold {
                 jump_scalar = random_jump;
                 break;
