@@ -67,6 +67,25 @@ pub fn select_bucket(point: &Point, dist: &BigInt256, seed: u32, step: u32, is_t
     }
 }
 
+// Get bias-filtered subset of prime multipliers for Magic 9 optimization
+// Filters primes where prime % 81 == target_mod81 for cluster-specific speedup
+pub fn get_biased_primes(target_mod81: u8) -> Vec<u64> {
+    PRIME_MULTIPLIERS.iter()
+        .filter(|&&prime| (prime % 81) as u8 == target_mod81)
+        .cloned()
+        .collect()
+}
+
+// Fallback to all primes if filtered subset too small
+pub fn get_biased_primes_safe(target_mod81: u8, min_primes: usize) -> Vec<u64> {
+    let filtered = get_biased_primes(target_mod81);
+    if filtered.len() >= min_primes {
+        filtered
+    } else {
+        PRIME_MULTIPLIERS.to_vec()  // Fallback to all primes
+    }
+}
+
 /// Apply bias filters to scalar values for Magic 9 sniper mode
 /// Returns true if scalar passes all bias filters (legacy strict version)
 pub fn apply_biases(scalar: &BigInt256, mod9: u8, mod27: u8, mod81: u8, pos: bool) -> bool {

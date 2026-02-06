@@ -896,9 +896,9 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         // Enhanced bias computation with attractor cross-check and pre-computed database
         let pubkey_affine = curve.to_affine(point);
         let base_biases = crate::utils::bias::compute_pubkey_biases(&BigInt256::from_u64_array(pubkey_affine.x), &attractor_x);
-        // Use pre-computed database for Magic 9, fallback to dynamic
-        let magic9_bias = crate::utils::bias::get_magic9_bias(i);
-        let biases = (magic9_bias.0, magic9_bias.1, magic9_bias.2, magic9_bias.3, true); // mod9,27,81,3,pos
+        // Use cluster-specific pre-computed database for Magic 9
+        let (mod3, mod9, mod27, mod81, _hamming) = crate::utils::bias::get_magic9_bias(i);
+        let biases = (mod9, mod27, mod81, mod3, true); // mod9,27,81,3,pos
 
         // GPU kangaroo walk (concise implementation)
         let point_limbs = [point.x[0], point.x[1], point.x[2], point.x[3],
@@ -923,9 +923,10 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
             continue;
         }
 
-        // G-Link solve with overflow protection
+        // G-Link solve with explicit positive diff handling
         let d_i = BigInt256::from_u64(step_count * 1000);
-        let diff = if d_g > d_i { d_g.clone() - d_i } else { d_g.clone() + curve_order.clone() - d_i };
+        let diff = d_g.checked_sub(&d_i)
+            .unwrap_or_else(|| d_g.clone() + curve_order.clone() - d_i);
         let k_i = (BigInt256::one() + diff) % curve_order.clone();
 
         // Verification (concise)

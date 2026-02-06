@@ -56,6 +56,10 @@ portable_simd = []  # Enable portable SIMD operations for CPU acceleration
 legacy = []  # Enable legacy modules with potential compatibility issues
 phase4 = []  # Enable Phase 4 features and tests
 
+[build-dependencies]
+hex = "0.4"                       # Hex parsing for build script
+num-bigint = "0.4.6"              # Big integer operations for bias computation
+
 [lints.rust]
 # unsafe_code = "deny"  # Disabled for GPU operations (CUDA kernels, Vulkan buffers)
 

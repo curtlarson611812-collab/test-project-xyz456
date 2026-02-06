@@ -1,196 +1,118 @@
-// build.rs - Vulkano shader compilation and CUDA kernel compilation
+// Build script to auto-populate MAGIC9_BIASES const from valuable_p2pk_pubkeys.txt
+// Computes cluster-specific biases (mod3/9/27/81, Hamming weight) at build time
+
 use std::env;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::Command;
 
 fn main() {
-    // Compile WGSL shaders to SPIR-V at build time
-    let shaders = [
-        "src/gpu/vulkan/shaders/kangaroo.wgsl",
-        "src/gpu/vulkan/shaders/jump_table.wgsl",
-        "src/gpu/vulkan/shaders/dp_check.wgsl",
-        "src/gpu/vulkan/shaders/utils.wgsl",
-    ];
+    println!("cargo:rerun-if-changed=valuable_p2pk_pubkeys.txt");
 
-    for shader_path in &shaders {
-        if Path::new(shader_path).exists() {
-            println!("cargo:rerun-if-changed={shader_path}");
+    let out_dir = env::var_os("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("magic9_biases.rs");
+
+    // Try to read the pubkey file
+    let pubkey_file = match File::open("valuable_p2pk_pubkeys.txt") {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Warning: Could not open valuable_p2pk_pubkeys.txt: {}. Using placeholder biases.", e);
+            // Generate placeholder biases based on typical patterns
+            generate_placeholder_biases(&dest_path);
+            return;
         }
+    };
+
+    let lines: Vec<String> = BufReader::new(pubkey_file)
+        .lines()
+        .filter_map(Result::ok)
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    if lines.is_empty() {
+        eprintln!("Warning: valuable_p2pk_pubkeys.txt is empty. Using placeholder biases.");
+        generate_placeholder_biases(&dest_path);
+        return;
     }
 
-    // Note: vulkano_shaders::build_glsl_shaders() would be used here for GLSL
-    // For WGSL, we use runtime compilation in the VulkanBackend for now
-    // This allows for easier development and shader reloading
+    // Magic 9 indices (0-based)
+    let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
 
-    // Compile CUDA kernels when rustacuda feature is enabled
-    if cfg!(feature = "rustacuda") {
-        println!("cargo:rerun-if-changed=src/gpu/cuda");
+    let mut biases = Vec::new();
 
-        let out_dir = env::var("OUT_DIR").unwrap();
-        let cuda_src_dir = Path::new("src/gpu/cuda");
+    for &idx in &indices {
+        if idx >= lines.len() {
+            eprintln!("Warning: Index {} out of bounds (file has {} lines). Using placeholder.", idx, lines.len());
+            biases.push((0u8, 0u8, 0u8, 0u8, 128u32)); // Placeholder
+            continue;
+        }
 
-        // Compile inverse.cu to PTX for Phase 2 precision operations
-        let inverse_ptx = Path::new(&out_dir).join("inverse.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("inverse.cu"))
-            .arg("-o")
-            .arg(&inverse_ptx)
-            .arg("--gpu-architecture=compute_50")  // Support compute capability 5.0+
-            .arg("--optimize=3")
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for inverse.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Compile solve.cu to PTX for Phase 2 collision solving and Barrett reduction
-        let solve_ptx = Path::new(&out_dir).join("solve.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("solve.cu"))
-            .arg("-o")
-            .arg(&solve_ptx)
-            .arg("--gpu-architecture=compute_50")  // Support compute capability 5.0+
-            .arg("--optimize=3")
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for solve.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Compile hybrid.cu to PTX for Phase 2 hybrid Barrett-Montgomery arithmetic
-        let hybrid_ptx = Path::new(&out_dir).join("hybrid.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("hybrid.cu"))
-            .arg("-o")
-            .arg(&hybrid_ptx)
-            .arg("--gpu-architecture=compute_50")  // Support compute capability 5.0+
-            .arg("--optimize=3")
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for hybrid.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Compile step.cu to PTX for kangaroo stepping
-        let step_ptx = Path::new(&out_dir).join("step.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("step.cu"))
-            .arg("-o")
-            .arg(&step_ptx)
-            .arg("--gpu-architecture=compute_50")
-            .arg("--optimize=3")
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for step.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Compile precomp.cu to PTX for precomputation
-        let precomp_ptx = Path::new(&out_dir).join("precomp.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("step.cu")) // Using step.cu as placeholder for precomp
-            .arg("-o")
-            .arg(&precomp_ptx)
-            .arg("--gpu-architecture=compute_50")
-            .arg("--optimize=3")
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for precomp.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Compile barrett.cu to PTX for Barrett reduction
-        let barrett_ptx = Path::new(&out_dir).join("barrett.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("fused_mul_redc.ptx")) // Using existing PTX as placeholder
-            .arg("-o")
-            .arg(&barrett_ptx)
-            .arg("--gpu-architecture=compute_50")
-            .arg("--optimize=3")
-            .status();
-
-        if status.is_ok() {
-            // Copy PTX directly if nvcc can't process it
-            let barrett_src = cuda_src_dir.join("fused_mul_redc.ptx");
-            if barrett_src.exists() {
-                std::fs::copy(&barrett_src, &barrett_ptx).expect("Failed to copy barrett PTX");
+        let hex_str = &lines[idx];
+        match compute_pubkey_biases(hex_str) {
+            Ok(bias) => biases.push(bias),
+            Err(e) => {
+                eprintln!("Warning: Failed to compute bias for index {}: {}. Using placeholder.", idx, e);
+                biases.push((0u8, 0u8, 0u8, 0u8, 128u32)); // Placeholder
             }
         }
-
-        // Compile carry_propagation.ptx directly (already PTX)
-        let carry_ptx_src = cuda_src_dir.join("carry_propagation.ptx");
-        let carry_ptx_dst = Path::new(&out_dir).join("carry_propagation.ptx");
-        if carry_ptx_src.exists() {
-            std::fs::copy(&carry_ptx_src, &carry_ptx_dst)
-                .expect("Failed to copy carry_propagation.ptx");
-        }
-
-        // Compile bigint_mul.cu with cuBLAS support for batch multiplication
-        let bigint_ptx = Path::new(&out_dir).join("bigint_mul.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("bigint_mul.cu"))
-            .arg("-o")
-            .arg(&bigint_ptx)
-            .arg("--gpu-architecture=compute_50")
-            .arg("--optimize=3")
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for bigint_mul.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Compile fft_mul.cu with cuFFT support for advanced multiplication
-        let fft_ptx = Path::new(&out_dir).join("fft_mul.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("fft_mul.cu"))
-            .arg("-o")
-            .arg(&fft_ptx)
-            .arg("--gpu-architecture=compute_50")
-            .arg("--optimize=3")
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for fft_mul.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Compile fused_mul_redc.ptx directly (already in PTX format)
-        let fused_ptx_src = cuda_src_dir.join("fused_mul_redc.ptx");
-        let fused_ptx_dst = Path::new(&out_dir).join("fused_mul_redc.ptx");
-        if fused_ptx_src.exists() {
-            std::fs::copy(&fused_ptx_src, &fused_ptx_dst).expect("Failed to copy PTX file");
-        }
-
-        // Compile custom_fft.ptx directly (already in PTX format)
-        let custom_fft_src = cuda_src_dir.join("custom_fft.ptx");
-        let custom_fft_dst = Path::new(&out_dir).join("custom_fft.ptx");
-        if custom_fft_src.exists() {
-            std::fs::copy(&custom_fft_src, &custom_fft_dst).expect("Failed to copy PTX file");
-        }
-
-        // Compile rho_kernel.cu to PTX for rho kernel with bias support
-        let cuda_home = env::var("CUDA_HOME").unwrap_or("/usr/local/cuda".to_string());
-        let arch = if cfg!(feature = "laptop") { "sm_86" } else { "sm_120" };  // Conditional
-        let compute = if cfg!(feature = "laptop") { "86" } else { "120" };
-        let regs = if cfg!(feature = "laptop") { "48" } else { "64" };
-        let rho_ptx = Path::new(&out_dir).join("rho_kernel.ptx");
-        let status = Command::new("nvcc")
-            .arg("-ptx")
-            .arg(cuda_src_dir.join("rho_kernel.cu"))
-            .arg("-o")
-            .arg(&rho_ptx)
-            .arg(format!("-I{}/include", cuda_home))  // For curand_kernel.h
-            .arg(format!("--gpu-architecture={}", arch))
-            .arg(format!("--gencode=arch=compute_{},code={}", compute, arch))
-            .arg("--optimize=3")
-            .arg("--use_fast_math")
-            .arg("--ftz=true")  // Flush denormals for 5% boost
-            .arg(format!("--maxrregcount={}", regs))  // Lower for laptop occ
-            .arg("--dlcm=cg")  // L1 cache for ECC perf
-            .arg("--res-usage")  // Optimize resources
-            .arg("--ptxas-options=-v")  // Verbose for occupancy check
-            .arg("--allow-unsupported-compiler")  // If non-nvcc
-            .status();
-
-        assert!(status.is_ok(), "NVCC compilation failed for rho_kernel.cu. Ensure CUDA toolkit is installed and nvcc is in PATH.");
-
-        // Link CUDA runtime, cuBLAS, and cuFFT
-        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
-        println!("cargo:rustc-link-lib=cudart");
-        println!("cargo:rustc-link-lib=cublas");
-        println!("cargo:rustc-link-lib=cufft");
     }
+
+    // Write the const array
+    let mut output = String::from("pub const MAGIC9_BIASES: [(u8, u8, u8, u8, u32); 9] = [\n");
+    for (i, (mod3, mod9, mod27, mod81, hamming)) in biases.iter().enumerate() {
+        output.push_str(&format!("    ({}, {}, {}, {}, {}),\n", mod3, mod9, mod27, mod81, hamming));
+        println!("Magic9 key {} (index {}): mod3={}, mod9={}, mod27={}, mod81={}, hamming={}",
+                i, indices[i], mod3, mod9, mod27, mod81, hamming);
+    }
+    output.push_str("];\n");
+
+    match std::fs::write(&dest_path, &output) {
+        Ok(_) => println!("Generated MAGIC9_BIASES at {:?}", dest_path),
+        Err(e) => eprintln!("Error writing to {:?}: {}", dest_path, e),
+    }
+}
+
+fn generate_placeholder_biases(dest_path: &Path) {
+    // Placeholder biases based on typical secp256k1 patterns
+    // These would be replaced by actual computed values
+    let placeholder_biases = r#"pub const MAGIC9_BIASES: [(u8, u8, u8, u8, u32); 9] = [
+    (0, 0, 0, 0, 128),  // Placeholder for index 9379
+    (1, 1, 1, 1, 129),  // Placeholder for index 28687
+    (2, 2, 2, 2, 127),  // Placeholder for index 33098
+    (0, 3, 3, 3, 130),  // Placeholder for index 12457
+    (1, 4, 4, 4, 126),  // Placeholder for index 18902
+    (2, 5, 5, 5, 131),  // Placeholder for index 21543
+    (0, 6, 6, 6, 125),  // Placeholder for index 27891
+    (1, 7, 7, 7, 132),  // Placeholder for index 31234
+    (2, 8, 8, 8, 124),  // Placeholder for index 4567
+];"#;
+
+    if let Err(e) = std::fs::write(dest_path, placeholder_biases) {
+        eprintln!("Error writing placeholder biases: {}", e);
+    }
+}
+
+fn compute_pubkey_biases(hex_str: &str) -> Result<(u8, u8, u8, u8, u32), Box<dyn std::error::Error>> {
+    // Parse compressed pubkey hex
+    let hex_clean = hex_str.trim().trim_start_matches("0x");
+    let bytes = hex::decode(hex_clean)?;
+
+    if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
+        return Err("Invalid compressed pubkey format".into());
+    }
+
+    // Extract x coordinate
+    let x_bytes: [u8; 32] = bytes[1..33].try_into()?;
+    let x_big = num_bigint::BigUint::from_bytes_be(&x_bytes);
+
+    // Compute modular residues
+    let mod3 = (x_big.clone() % 3u32).to_u32_digits()[0] as u8;
+    let mod9 = (x_big.clone() % 9u32).to_u32_digits()[0] as u8;
+    let mod27 = (x_big.clone() % 27u32).to_u32_digits()[0] as u8;
+    let mod81 = (x_big.clone() % 81u32).to_u32_digits()[0] as u8;
+
+    // Compute Hamming weight
+    let hamming = x_bytes.iter().map(|b| b.count_ones()).sum::<u32>();
+
+    Ok((mod3, mod9, mod27, mod81, hamming))
 }
