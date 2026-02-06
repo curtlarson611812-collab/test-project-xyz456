@@ -8,9 +8,7 @@
 use super::bigint::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
-use log::info;
 use std::error::Error;
-use std::ops::Add;
 
 /// secp256k1 curve parameters
 #[derive(Clone)]
@@ -71,26 +69,6 @@ impl Secp256k1 {
             z: [1, 0, 0, 0], // Z=1 for affine points
         };
 
-        // Precompute G multiples for kangaroo jump table synergy
-        // Temporarily create curve instance to compute multiples
-        let temp_barrett_p = BarrettReducer::new(&p);
-        let temp_barrett_n = BarrettReducer::new(&n);
-        let temp_montgomery_p = MontgomeryReducer::new(&p);
-
-        let temp_curve = Secp256k1 {
-            p: p.clone(),
-            n: n.clone(),
-            a: BigInt256::zero(),
-            b: BigInt256::from_u64(7),
-            g: g.clone(),
-            g_multiples: Vec::new(), // Temporary empty vec
-            barrett_p: temp_barrett_p,
-            barrett_n: temp_barrett_n,
-            montgomery_p: temp_montgomery_p,
-        };
-
-        // Temporarily disable G multiples precomputation to test basic functionality
-        // TODO: Re-enable once arithmetic is fully working
         let g_multiples = Vec::new();
 
         let barrett_p = BarrettReducer::new(&p);
@@ -811,7 +789,6 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
     /// Modular exponentiation: base^exp mod modulus
     fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
         use num_bigint::BigUint;
-        use num_integer::Integer;
 
         let base_big = BigUint::from_bytes_be(&base.to_bytes_be());
         let exp_big = BigUint::from_bytes_be(&exp.to_bytes_be());

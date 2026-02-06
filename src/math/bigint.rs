@@ -423,7 +423,6 @@ impl BigInt256 {
     /// Division with remainder: returns (quotient, remainder)
     pub fn div_rem(&self, divisor: &BigInt256) -> (BigInt256, BigInt256) {
         use num_bigint::BigUint;
-        use num_integer::Integer;
 
         let self_big = BigUint::from_bytes_be(&self.to_bytes_be());
         let divisor_big = BigUint::from_bytes_be(&divisor.to_bytes_be());

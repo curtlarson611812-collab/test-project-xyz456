@@ -10,7 +10,7 @@
 use crossterm::{
     terminal::{Clear, ClearType},
     cursor::MoveTo,
-    style::{Color, Print, ResetColor, SetForegroundColor},
+    style::{Color, ResetColor, SetForegroundColor},
     execute,
 };
 use std::io::{stdout, Write};
@@ -218,7 +218,7 @@ fn print_boxed_bias(address: &str, bias_score: f64, biases: &HashMap<u32, f64>) 
         let mut sorted_biases: Vec<_> = biases.iter().collect();
         sorted_biases.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
 
-        for (i, (res, weight)) in sorted_biases.iter().take(3).enumerate() {
+        for (_i, (res, weight)) in sorted_biases.iter().take(3).enumerate() {
             if **weight > 1.3 {
                 execute!(stdout(), SetForegroundColor(Color::Magenta)).ok();
             } else if **weight > 1.1 {
@@ -309,7 +309,7 @@ fn print_boxed_verbose() {
     } else {
         // Show last few log messages
         let start_idx = if log_messages.len() > 6 { log_messages.len() - 6 } else { 0 };
-        for (i, msg) in log_messages.iter().skip(start_idx).enumerate() {
+        for (_i, msg) in log_messages.iter().skip(start_idx).enumerate() {
             let truncated_msg = if msg.len() > 35 {
                 format!("{}...", &msg[..32])
             } else {

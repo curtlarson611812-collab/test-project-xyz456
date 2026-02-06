@@ -347,7 +347,7 @@ impl CollisionDetector {
     }
 
     /// Calculated near collision solve - tries direct k-brute for small diffs
-    pub fn calculated_near_solve(&self, t: &Trap, w: &Trap, range_width: &BigInt256) -> Option<Solution> {
+    pub fn calculated_near_solve(&self, t: &Trap, w: &Trap, _range_width: &BigInt256) -> Option<Solution> {
         let diff = if t.dist > w.dist { &t.dist - &w.dist } else { &w.dist - &t.dist };
         if diff > BigUint::from(self.near_threshold) { return None; }
 
@@ -544,7 +544,7 @@ impl CollisionDetector {
             })
     }
 
-    pub fn walk_back_near_collision(&self, t: &Trap, w: &Trap, jump_table: &[(BigUint, Point)], hash_fn: &impl Fn(&Point) -> usize, range_width: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<Solution> {
+    pub fn walk_back_near_collision(&self, t: &Trap, w: &Trap, jump_table: &[(BigUint, Point)], hash_fn: &impl Fn(&Point) -> usize, range_width: &BigInt256, _biases: &std::collections::HashMap<u32, f64>) -> Option<Solution> {
         // Try calculated approach first for near collisions
         if let Some(sol) = self.calculated_near_solve(t, w, range_width) {
             return Some(sol);

@@ -763,13 +763,13 @@ impl KangarooGenerator {
     }
 
     /// Split Pollard Resolve: Check collisions and return solution if found
-    fn pollard_resolve_split(&self, states: &[KangarooState], dp_table: &DpTable, detector: &CollisionDetector, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+    fn pollard_resolve_split(&self, _states: &[KangarooState], _dp_table: &DpTable, _detector: &CollisionDetector, _biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
         // Placeholder: In full implementation, check DP table for collisions
         // and resolve using collision detector
         None
     }
 
-    pub fn pollard_lambda_parallel(&self, target_pubkey: &Point, range: (BigInt256, BigInt256), count: usize, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+    pub fn pollard_lambda_parallel(&self, target_pubkey: &Point, _range: (BigInt256, BigInt256), count: usize, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
         use crate::math::constants::{DP_BITS, jump_table};
         use crate::dp::DpTable;
         use crate::kangaroo::collision::CollisionDetector;

@@ -506,7 +506,7 @@ pub fn is_bias_significant(obs_freq: &[f64], num_samples: usize) -> bool {
     }
 
     // Expected frequency for uniform distribution
-    let expected = num_samples as f64 / obs_freq.len() as f64;
+    let _expected = num_samples as f64 / obs_freq.len() as f64;
 
     // Generate uniform samples for comparison
     let uniform = Uniform::new(0.0, 1.0).unwrap();
