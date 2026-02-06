@@ -46,6 +46,48 @@ impl MontgomeryReducer {
     }
 }
 
+impl Secp256k1 {
+    /// Known G*3 x-coordinate for testing (from libsecp256k1)
+    pub fn known_3g_x() -> BigInt256 {
+        BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")
+    }
+
+    /// Known G*3 y-coordinate for testing (from libsecp256k1)
+    pub fn known_3g_y() -> BigInt256 {
+        BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+    }
+
+    /// GLV endomorphism lambda (cube root of unity modulo n)
+    pub fn glv_lambda() -> BigInt256 {
+        BigInt256::from_hex("5363ad4cc05c30e0a5261c0286d7dab99cc95b5e4c4659b9d7d27ec4eeda59")
+    }
+
+    /// GLV endomorphism beta (x-coordinate multiplier)
+    pub fn glv_beta() -> BigInt256 {
+        BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee")
+    }
+
+    /// GLV basis vector v1 components (v1 = (v1_1, v1_2))
+    pub fn glv_v1_1() -> BigInt256 {
+        BigInt256::from_hex("3086d221a7d46bcde86c90e49284eb153dab")
+    }
+
+    pub fn glv_v1_2() -> BigInt256 {
+        // Negative value: -0xe4437ed6010e88286f547fa90abfe4c3
+        let positive = BigInt256::from_hex("e4437ed6010e88286f547fa90abfe4c3");
+        positive.negate(&Secp256k1::new().barrett_n) // Negate modulo n
+    }
+
+    /// GLV basis vector v2 components (v2 = (v2_1, v2_2))
+    pub fn glv_v2_1() -> BigInt256 {
+        BigInt256::from_hex("114ca50f7a8e2f3f657c1108d9d44cfd8")
+    }
+
+    pub fn glv_v2_2() -> BigInt256 {
+        BigInt256::from_hex("3086d221a7d46bcde86c90e49284eb153dab")
+    }
+}
+
 /// secp256k1 curve parameters
 #[derive(Clone)]
 pub struct Secp256k1 {
@@ -463,19 +505,20 @@ impl Secp256k1 {
     /// Decomposes k into (k1, k2) such that k*P = k1*P + k2*(λ*P)
     /// Uses optimized lattice basis reduction for shortest vectors
     fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
-        // secp256k1 GLV constants (from bitcoin-core/secp256k1) - FULL VALUES
-        // Lambda constant for endomorphism: λ^3 = 1 mod n
-        let lambda = BigInt256::from_hex("5363AD4CC05C30E0A5261C0286D7DAB99CC95B5E4C4659B9D7D27EC4EEDDA59");
-        // Standard basis vectors for lattice decomposition (full precision)
-        let v1_a = BigInt256::from_hex("3086D221A7D46BCDE86C90E49284EB153DAB");
-        let v1_b = BigInt256::from_hex("E4437ED6010E88286F547FA90ABFE4C3").negate(&self.barrett_n);
-        let v2_a = BigInt256::from_hex("114CA50F7A8E2F3F657C1108D9D44CFD8");
-        let v2_b = BigInt256::from_hex("3086D221A7D46BCDE86C90E49284EB153DAB");
+        // secp256k1 GLV constants using proper methods
+        let lambda = Self::glv_lambda();
+        let v1_a = Self::glv_v1_1();
+        let v1_b = Self::glv_v1_2();
+        let v2_a = Self::glv_v2_1();
+        let v2_b = Self::glv_v2_2();
 
-        // Decompose k using basis vectors: find c1, c2 such that k ≈ c1*v1 + c2*v2
-        // Use Babai's algorithm for closest lattice point (optimal shortest vectors)
-        let c1 = self.round_to_closest(self.barrett_n.mul(k, &v1_b), &self.n);
-        let c2 = self.round_to_closest(self.barrett_n.mul(k, &v2_b), &self.n);
+        // Decompose k using basis vectors: find c1, c2 such that k ≈ c1*v1_a + c2*v1_b
+        // Use Babai's algorithm: round(k * conj(v1)/norm) where conj is for complex lattice
+        // For secp256k1: c1 ≈ round(k * v1_b / n), c2 ≈ round(k * v2_b / n)
+        let kv1b = self.barrett_n.mul(k, &v1_b);
+        let kv2b = self.barrett_n.mul(k, &v2_b);
+        let c1 = self.round_to_closest(kv1b, &self.n);
+        let c2 = self.round_to_closest(kv2b, &self.n);
 
         // Compute k1 = k - c1*v1_a - c2*v2_a
         let c1_v1a = self.barrett_n.mul(&c1, &v1_a);

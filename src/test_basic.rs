@@ -3,6 +3,67 @@
 use crate::math::{secp::Secp256k1, bigint::BigInt256};
 use crate::types::Point;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_g_times_3() {
+        let curve = Secp256k1::new();
+        let three = BigInt256::from_u64(3);
+
+        // Compute G * 3
+        let three_g = curve.mul_constant_time(&three, &curve.g)
+            .expect("G * 3 multiplication failed");
+
+        let three_g_affine = curve.to_affine(&three_g);
+
+        // Verify against known coordinates
+        let expected_x = Secp256k1::known_3g_x();
+        let expected_y = Secp256k1::known_3g_y();
+
+        let computed_x = BigInt256::from_u64_array(three_g_affine.x);
+        let computed_y = BigInt256::from_u64_array(three_g_affine.y);
+
+        assert_eq!(computed_x, expected_x,
+            "G*3 x-coordinate mismatch: got {}, expected {}", computed_x.to_hex(), expected_x.to_hex());
+        assert_eq!(computed_y, expected_y,
+            "G*3 y-coordinate mismatch: got {}, expected {}", computed_y.to_hex(), expected_y.to_hex());
+
+        // Verify point is on curve
+        assert!(curve.is_on_curve(&three_g_affine),
+            "G*3 point is not on curve: x={}, y={}", computed_x.to_hex(), computed_y.to_hex());
+    }
+
+    #[test]
+    fn test_glv_decomposition_correctness() {
+        let curve = Secp256k1::new();
+
+        // Test simple case: k = 3 should decompose to k1 ≈ 3, k2 ≈ 0
+        let k = BigInt256::from_u64(3);
+        let (k1, k2) = curve.glv_decompose(&k);
+
+        // Verify |k1| <= 2^128 (half the bit length of n)
+        assert!(k1.bits() <= 128,
+            "k1 too large: {} bits", k1.bits());
+        assert!(k2.bits() <= 128,
+            "k2 too large: {} bits", k2.bits());
+
+        // Verify reconstruction: k1 + k2 * lambda ≡ k mod n
+        let lambda = Secp256k1::glv_lambda();
+        let k2_lambda = curve.barrett_n.mul(&k2, &lambda);
+        let reconstructed = curve.barrett_n.add(&k1, &k2_lambda);
+        let reconstructed_mod = if reconstructed >= curve.n {
+            curve.barrett_n.sub(&reconstructed, &curve.n)
+        } else {
+            reconstructed
+        };
+
+        assert_eq!(reconstructed_mod, k,
+            "GLV reconstruction failed: got {}, expected {}", reconstructed_mod.to_hex(), k.to_hex());
+    }
+}
+
 pub fn run_basic_test() {
     println!("Testing basic SpeedBitCrackV3 functionality...");
     println!("Basic test completed successfully!");
