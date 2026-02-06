@@ -7,6 +7,7 @@ use std::ops::{Add, Sub, Mul, Div, Rem};
 use std::error::Error;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use num_integer::Integer;
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -433,13 +434,13 @@ impl BigInt256 {
         let (q_big, r_big) = self_big.div_rem(&divisor_big);
 
         // Convert back to BigInt256
-        let q_bytes = q_big.to_bytes_be();
+        let q_bytes: Vec<u8> = q_big.to_bytes_be();
         let mut q_bytes_padded = [0u8; 32];
         let q_start = 32usize.saturating_sub(q_bytes.len());
         q_bytes_padded[q_start..].copy_from_slice(&q_bytes);
         let quotient = BigInt256::from_bytes_be(&q_bytes_padded);
 
-        let r_bytes = r_big.to_bytes_be();
+        let r_bytes: Vec<u8> = r_big.to_bytes_be();
         let mut r_bytes_padded = [0u8; 32];
         let r_start = 32usize.saturating_sub(r_bytes.len());
         r_bytes_padded[r_start..].copy_from_slice(&r_bytes);

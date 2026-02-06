@@ -9,6 +9,8 @@ use super::bigint::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
 use std::error::Error;
+use std::ops::{Add, Sub};
+use log::info;
 
 /// secp256k1 curve parameters
 #[derive(Clone)]
@@ -714,67 +716,69 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
 
     /// General Tonelli-Shanks algorithm for modular square root
     /// Works for any prime modulus p
-    pub fn tonelli_shanks(&self, value: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
-        if *value == BigInt256::zero() {
+    /// Full Tonelli-Shanks algorithm for modular square root
+    /// The gold standard for computing y² ≡ a mod p for any odd prime p
+    pub fn tonelli_shanks(&self, a: &BigInt256, p: &BigInt256) -> Option<BigInt256> {
+        if a.is_zero() {
             return Some(BigInt256::zero());
         }
 
-        // Check if value is a quadratic residue using Legendre symbol
-        let leg_exp = self.barrett_p.sub(modulus, &BigInt256::one()).right_shift(1);
-        let legendre = self.pow_mod(value, &leg_exp, modulus);
+        // 1. Check Legendre symbol (a/p) using Euler criterion
+        let leg_exp = p.clone().sub(BigInt256::one()).right_shift(1);
+        let legendre = self.pow_mod(a, &leg_exp, p);
         if legendre != BigInt256::one() {
             return None; // Not a quadratic residue
         }
 
-        // Decompose modulus-1 = 2^s * q, where q is odd
-        let mut m = self.barrett_p.sub(modulus, &BigInt256::one());
-        let mut s = 0u32;
-        while m.limbs[0] & 1 == 0 {  // While even
+        // 2. Decompose p-1 = 2^s * q (q odd)
+        let mut m = p.clone().sub(BigInt256::one());
+        let mut s: u32 = 0;
+        while m.is_even() {
             m = m.right_shift(1);
             s += 1;
         }
         let q = m;
 
-        // Find a non-quadratic residue z (where Legendre(z/p) = -1)
+        // 3. Find non-residue z where (z/p) = -1
         let mut z = BigInt256::from_u64(2);
-        while self.pow_mod(&z, &leg_exp, modulus) != self.barrett_p.sub(modulus, &BigInt256::one()) {
-            z = self.barrett_p.add(&z, &BigInt256::one());
+        while self.pow_mod(&z, &leg_exp, p) == BigInt256::one() {
+            z = z.add(BigInt256::one());
         }
 
-        // c = z^q mod modulus
-        let mut c = self.pow_mod(&z, &q, modulus);
-        // r = value^{(q+1)/2} mod modulus
-        let (q_plus_1_div_2, _) = self.barrett_p.add(&q, &BigInt256::one()).div_rem(&BigInt256::from_u64(2));
-        let mut r = self.pow_mod(value, &q_plus_1_div_2, modulus);
-        // t = value^q mod modulus
-        let mut t = self.pow_mod(value, &q, modulus);
-        let mut m_val = s;
+        // 4. Initialize c, r, t, m
+        let mut c = self.pow_mod(&z, &q, p);
+        let mut r = self.pow_mod(a, &q.clone().add(BigInt256::one()).right_shift(1), p);
+        let mut t = self.pow_mod(a, &q, p);
+        let mut m = s;
 
+        // 5. Main loop (O(log s) iterations)
         while t != BigInt256::one() {
-            // Find smallest i such that t^{2^i} ≡ 1 mod modulus
-            let mut t2i = t.clone();
-            let mut i = 1u32;
-            while t2i != BigInt256::one() && i < m_val {
+            // Find smallest i where t^{2^i} ≡ 1 mod p
+            let mut i: u32 = 1;
+            let mut t2i = self.barrett_p.mul(&t, &t);
+            t2i = self.barrett_p.reduce(&BigInt512::from_bigint256(&t2i)).unwrap();
+
+            while t2i != BigInt256::one() && i < m {
                 t2i = self.barrett_p.mul(&t2i, &t2i);
-                t2i = self.barrett_p.reduce(&BigInt512::from_bigint256(&t2i)).unwrap_or(BigInt256::zero());
+                t2i = self.barrett_p.reduce(&BigInt512::from_bigint256(&t2i)).unwrap();
                 i += 1;
             }
 
-            // b = c^{2^{m-i-1}} mod modulus
-            let exp_b = BigInt256::from_u64(1 << (m_val - i - 1));
-            let mut b = self.pow_mod(&c, &exp_b, modulus);
+            // Compute b = c^{2^{m-i-1}} mod p
+            let exp_b = BigInt256::from_u64(1u64 << (m - i - 1));
+            let b = self.pow_mod(&c, &exp_b, p);
 
-            // Update r, t, c, m
-            let r_new = self.barrett_p.mul(&r, &b);
-            r = self.barrett_p.reduce(&BigInt512::from_bigint256(&r_new)).unwrap_or(BigInt256::zero());
+            // Update r = r * b, c = b², t = t * c, m = i
+            r = self.barrett_p.mul(&r, &b);
+            r = self.barrett_p.reduce(&BigInt512::from_bigint256(&r)).unwrap();
 
-            let t_new = self.barrett_p.mul(&t, &self.barrett_p.mul(&b, &b));
-            t = self.barrett_p.reduce(&BigInt512::from_bigint256(&t_new)).unwrap_or(BigInt256::zero());
+            let b2 = self.barrett_p.mul(&b, &b);
+            c = self.barrett_p.reduce(&BigInt512::from_bigint256(&b2)).unwrap();
 
-            let c_new = self.barrett_p.mul(&b, &b);
-            c = self.barrett_p.reduce(&BigInt512::from_bigint256(&c_new)).unwrap_or(BigInt256::zero());
+            t = self.barrett_p.mul(&t, &c);
+            t = self.barrett_p.reduce(&BigInt512::from_bigint256(&t)).unwrap();
 
-            m_val = i;
+            m = i;
         }
 
         Some(r)

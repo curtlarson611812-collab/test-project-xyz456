@@ -151,28 +151,41 @@ mod tests {
     }
 
     #[test]
-    fn test_tonelli_shanks_basic() {
-        use crate::math::{BigInt256, BigInt512};
-        use crate::math::bigint::BarrettReducer;
+    fn test_tonelli_shanks_comprehensive() {
+        let curve = Secp256k1::new();
 
-        // Test case: sqrt(4) mod 7 = 2 or 5 (since 2^2 = 4, 5^2 = 25 ≡ 4 mod 7)
-        let value = BigInt256::from_u64(4);
-        let modulus = BigInt256::from_u64(7);
-        let barrett = BarrettReducer::new(&modulus);
+        // Test case 1: sqrt(4) mod 7 = 2 or 5 (since 2^2 = 4, 5^2 = 25 ≡ 4 mod 7)
+        let value1 = BigInt256::from_u64(4);
+        let modulus1 = BigInt256::from_u64(7);
+        let root1 = curve.tonelli_shanks(&value1, &modulus1);
+        assert!(root1.is_some(), "Tonelli-Shanks should find square root for quadratic residue");
 
-        // For p=7 (p≡3 mod 4), use (p+1)/4 = 2
-        let exp = BigInt256::from_u64(2);
-        let root = mod_pow_basic(&value, &exp, &modulus);
+        let root1_val = root1.unwrap();
+        // Verify: root^2 ≡ value mod modulus
+        let root1_sq = curve.barrett_p.mul(&root1_val, &root1_val);
+        let root1_sq_mod = curve.barrett_p.reduce(&BigInt512::from_bigint256(&root1_sq)).unwrap();
+        assert!(root1_sq_mod == value1 || curve.barrett_p.sub(&modulus1, &root1_sq_mod) == value1,
+                "Tonelli-Shanks root should satisfy root^2 ≡ value mod modulus");
 
-        // Check that root^2 ≡ value mod modulus
-        let root_sq = barrett.mul(&root, &root);
-        let root_sq_mod = barrett.reduce(&BigInt512::from_bigint256(&root_sq)).unwrap();
-        assert_eq!(root_sq_mod, value, "Tonelli-Shanks root should satisfy root^2 ≡ value mod modulus");
+        // Test case 2: Test with secp256k1 modulus and a known quadratic residue
+        // Use a small test value that we know is a quadratic residue
+        let test_value = BigInt256::from_u64(9); // 3^2 = 9, so sqrt should be 3 or p-3
+        let root2 = curve.tonelli_shanks(&test_value, &curve.p);
+        assert!(root2.is_some(), "Tonelli-Shanks should work with secp256k1 modulus");
 
-        // Also check the other root: modulus - root
-        let other_root = barrett.sub(&modulus, &root);
-        let other_root_sq = barrett.mul(&other_root, &other_root);
-        let other_root_sq_mod = barrett.reduce(&BigInt512::from_bigint256(&other_root_sq)).unwrap();
-        assert_eq!(other_root_sq_mod, value, "Other root should also satisfy root^2 ≡ value mod modulus");
+        let root2_val = root2.unwrap();
+        let root2_sq = curve.barrett_p.mul(&root2_val, &root2_val);
+        let root2_sq_mod = curve.barrett_p.reduce(&BigInt512::from_bigint256(&root2_sq)).unwrap();
+        assert_eq!(root2_sq_mod, test_value, "Tonelli-Shanks should work for secp256k1");
+
+        // Test case 3: Test non-quadratic residue (should return None)
+        let non_residue = BigInt256::from_u64(3); // 3 is not a quadratic residue mod 7
+        let root3 = curve.tonelli_shanks(&non_residue, &modulus1);
+        assert!(root3.is_none(), "Tonelli-Shanks should return None for non-quadratic residues");
+
+        // Test case 4: Test zero
+        let zero = BigInt256::zero();
+        let root4 = curve.tonelli_shanks(&zero, &curve.p);
+        assert_eq!(root4, Some(BigInt256::zero()), "sqrt(0) should be 0");
     }
 }

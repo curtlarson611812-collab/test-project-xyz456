@@ -36,7 +36,7 @@ impl CollisionDetector {
     pub fn new_with_config(config: &Config) -> Self {
         let range_width = BigInt256::from_u64(1u64 << 63);
         let range_width = range_width.add(BigInt256::from_u64(1u64 << 63)); // 2^64
-        let near_threshold = Self::optimal_near_threshold(&range_width, config.dp_bits as u32);
+        let near_threshold = Self::optimal_near_g_threshold(&range_width, config.dp_bits as u32);
         Self {
             curve: Secp256k1::new(),
             near_threshold,
@@ -44,23 +44,12 @@ impl CollisionDetector {
         }
     }
 
-    /// Calculate optimal near threshold based on range width and DP bits
+    /// Calculate optimal Near-G threshold based on range width and DP bits
     /// Balances brute force cost vs probability of near-G detection
-    pub fn optimal_near_threshold(range_width: &BigInt256, dp_bits: u32) -> u64 {
-        // Probability threshold: 2^(-dp_bits/2) to balance with DP collision probability
-        let prob_threshold = 1u64 << (dp_bits / 2);
-
-        // Cost threshold: range_width / 1000 (brute force becomes feasible)
-        // For large ranges, use a conservative estimate
-        let range_u64 = if range_width.limbs[1] > 0 || range_width.limbs[0] > u64::MAX / 2000 {
-            u64::MAX / 2000 // Conservative estimate for very large ranges
-        } else {
-            range_width.limbs[0] / 1000
-        };
-        let cost_threshold = range_u64;
-
-        // Use the minimum of probability and cost thresholds
-        prob_threshold.min(cost_threshold).max(1000) // Minimum 1000
+    pub fn optimal_near_g_threshold(range_width: &BigInt256, dp_bits: u32) -> u64 {
+        let prob_based = 1u64 << (dp_bits / 2);           // Balance with probability 2^(-dp_bits/2)
+        let cost_based = range_width.limbs[0] / 1000;     // Cost feasibility: range/1000 (low 64 bits)
+        prob_based.min(cost_based).max(4096)              // Minimum sensible floor of 4096
     }
 
     /// Create new CollisionDetector with configurable near threshold
