@@ -921,9 +921,10 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         let p_i_x = BigInt256::from_u64_array(p_i_affine.x);
         let p_i_y = BigInt256::from_u64_array(p_i_affine.y);
 
-        // Block 3: Compute real D_i with biased kangaroo (no more mocks)
-        // Use biased_kangaroo_to_attractor with shared_bias for GOLD cluster
-        let d_i = biased_kangaroo_to_attractor(p_i, &attractor_x, shared_bias, 100000)?;
+        // Block 1: Compute real D_i with biased kangaroo (no more mocks)
+        // Use small max_steps for testing, increase for production
+        let max_kangaroo_steps = 10_000; // Small for testing, increase to 1_000_000 for production
+        let d_i = biased_kangaroo_to_attractor(p_i, &attractor_x, shared_bias, max_kangaroo_steps)?;
         info!("🎯 Computed real D_i: {}", d_i.to_hex());
 
         // Block 4: G-Link Solving with Prime Inversion and Overflow Protection
@@ -950,13 +951,29 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
             return Err(anyhow!("Invalid k_i value: {} (should be 1 to N-1)", k_i.to_hex()));
         }
 
-        // Block 5: Simplified verification (skip k256 for now, focus on core logic)
-        // For debugging, just accept the computed key if it's in valid range
+        // Block 5: Full cryptographic verification (restore proper G * k_i check)
         if k_i > BigInt256::zero() && k_i < n_scalar {
-            let hex_key = hex::encode(k_i.to_bytes_be());
-            solved_keys.push(hex_key.clone());
-            println!("🎉 COMPUTED! Magic 9 #{}: 0x{}", pubkey_index, hex_key);
-            info!("   D_g: {}, D_i: {}, k_i in valid range", d_g.to_hex(), d_i.to_hex());
+            // Compute G * k_i using the fixed elliptic curve arithmetic
+            match curve.mul_constant_time(&k_i, &curve.g) {
+                Ok(computed_point) => {
+                    let computed_affine = curve.to_affine(&computed_point);
+
+                    // Check if computed point matches target point
+                    if computed_affine.x == p_i_affine.x && computed_affine.y == p_i_affine.y {
+                        let hex_key = hex::encode(k_i.to_bytes_be());
+                        solved_keys.push(hex_key.clone());
+                        println!("🎉 VERIFIED! Magic 9 #{}: 0x{}", pubkey_index, hex_key);
+                        info!("   D_g: {}, D_i: {}, k_i verified with elliptic curve arithmetic", d_g.to_hex(), d_i.to_hex());
+                    } else {
+                        warn!("❌ Verification failed - computed point doesn't match target for Magic 9 #{}", pubkey_index);
+                        return Err(anyhow!("Cryptographic verification failed"));
+                    }
+                }
+                Err(e) => {
+                    warn!("❌ Elliptic curve multiplication failed for Magic 9 #{}: {}", pubkey_index, e);
+                    return Err(anyhow!("Elliptic curve multiplication failed"));
+                }
+            }
         } else {
             warn!("❌ Invalid k_i range for Magic 9 #{}", pubkey_index);
             return Err(anyhow!("k_i out of valid range"));

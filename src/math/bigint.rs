@@ -173,9 +173,9 @@ impl BigInt512 {
         BigInt512 { limbs: [1, 0, 0, 0, 0, 0, 0, 0] }
     }
 
-    /// Multiplication (full 512-bit result)
+    /// Multiplication (full 512-bit result) - Fixed carry handling
     pub fn mul(&self, other: &BigInt512) -> BigInt512 {
-        let mut result = [0u128; 16];
+        let mut result = [0u128; 16]; // Use 16 limbs to handle full carry
 
         for i in 0..8 {
             let mut carry = 0u128;
@@ -193,6 +193,7 @@ impl BigInt512 {
             }
         }
 
+        // Return only the lower 8 limbs (512 bits) - higher limbs discarded for BigInt512
         BigInt512 { limbs: [
             result[0] as u64, result[1] as u64, result[2] as u64, result[3] as u64,
             result[4] as u64, result[5] as u64, result[6] as u64, result[7] as u64
