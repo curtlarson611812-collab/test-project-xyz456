@@ -803,36 +803,9 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
     }
 
     /// Compute modular square root using Tonelli-Shanks algorithm
-    /// For secp256k1 (p ≡ 3 mod 4), uses the efficient formula y = value^((p+1)/4) mod p
+    /// Uses the full Tonelli-Shanks algorithm for general prime moduli
     fn compute_modular_sqrt(&self, value: &BigInt256) -> Option<BigInt256> {
-        // For secp256k1 (p ≡ 3 mod 4), use the simplified formula: y = value^((p+1)/4) mod p
-        // Hardcode the correct exp = (p+1)/4
-        let exp = BigInt256::from_hex("3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c");
-        let y = self.pow_mod(value, &exp, &self.p);
-
-        // Use BigUint for verification to match pow_mod
-        use num_bigint::BigUint;
-        let y_big = BigUint::from_bytes_be(&y.to_bytes_be());
-        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
-        let value_big = BigUint::from_bytes_be(&value.to_bytes_be());
-
-        let y_sq_big = (&y_big * &y_big) % &p_big;
-        if y_sq_big == value_big {
-            return Some(y);
-        }
-
-        // If not, try p - y
-        let y_neg_big = &p_big - &y_big;
-        let y_neg_sq_big = (&y_neg_big * &y_neg_big) % &p_big;
-        if y_neg_sq_big == value_big {
-            let y_neg_bytes = y_neg_big.to_bytes_be();
-            let mut y_neg_bytes_padded = [0u8; 32];
-            let start = 32usize.saturating_sub(y_neg_bytes.len());
-            y_neg_bytes_padded[start..].copy_from_slice(&y_neg_bytes);
-            return Some(BigInt256::from_bytes_be(&y_neg_bytes_padded));
-        }
-
-        None
+        self.tonelli_shanks(value, &self.p)
     }
 
     /// Modular exponentiation: base^exp mod modulus

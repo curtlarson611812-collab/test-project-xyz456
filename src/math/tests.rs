@@ -130,4 +130,49 @@ mod tests {
         // For compressed format 02, y should be even
         assert_eq!(p.y[0] & 1, 0, "Y coordinate should be even for 02 prefix");
     }
+
+    fn mod_pow_basic(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+        use crate::math::bigint::BarrettReducer;
+        let barrett = BarrettReducer::new(modulus);
+        let mut result = BigInt256::one();
+        let mut b = barrett.reduce(&BigInt512::from_bigint256(&base.clone())).unwrap();
+        let mut e = exp.clone();
+
+        while !e.is_zero() {
+            if e.limbs[0] & 1 == 1 {
+                result = barrett.mul(&result, &b);
+                result = barrett.reduce(&BigInt512::from_bigint256(&result)).unwrap();
+            }
+            b = barrett.mul(&b, &b);
+            b = barrett.reduce(&BigInt512::from_bigint256(&b)).unwrap();
+            e = e.right_shift(1);
+        }
+        result
+    }
+
+    #[test]
+    fn test_tonelli_shanks_basic() {
+        use crate::math::{BigInt256, BigInt512};
+        use crate::math::bigint::BarrettReducer;
+
+        // Test case: sqrt(4) mod 7 = 2 or 5 (since 2^2 = 4, 5^2 = 25 ≡ 4 mod 7)
+        let value = BigInt256::from_u64(4);
+        let modulus = BigInt256::from_u64(7);
+        let barrett = BarrettReducer::new(&modulus);
+
+        // For p=7 (p≡3 mod 4), use (p+1)/4 = 2
+        let exp = BigInt256::from_u64(2);
+        let root = mod_pow_basic(&value, &exp, &modulus);
+
+        // Check that root^2 ≡ value mod modulus
+        let root_sq = barrett.mul(&root, &root);
+        let root_sq_mod = barrett.reduce(&BigInt512::from_bigint256(&root_sq)).unwrap();
+        assert_eq!(root_sq_mod, value, "Tonelli-Shanks root should satisfy root^2 ≡ value mod modulus");
+
+        // Also check the other root: modulus - root
+        let other_root = barrett.sub(&modulus, &root);
+        let other_root_sq = barrett.mul(&other_root, &other_root);
+        let other_root_sq_mod = barrett.reduce(&BigInt512::from_bigint256(&other_root_sq)).unwrap();
+        assert_eq!(other_root_sq_mod, value, "Other root should also satisfy root^2 ≡ value mod modulus");
+    }
 }
