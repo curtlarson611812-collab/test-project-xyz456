@@ -805,26 +805,52 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
     /// Compute modular square root using Tonelli-Shanks algorithm
     /// For secp256k1 (p ≡ 3 mod 4), uses the efficient formula y = value^((p+1)/4) mod p
     fn compute_modular_sqrt(&self, value: &BigInt256) -> Option<BigInt256> {
-        // Use the general Tonelli-Shanks algorithm
-        self.tonelli_shanks(value, &self.p)
+        // For secp256k1 (p ≡ 3 mod 4), use the simplified formula: y = value^((p+1)/4) mod p
+        // Hardcode the correct exp = (p+1)/4
+        let exp = BigInt256::from_hex("3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c");
+        let y = self.pow_mod(value, &exp, &self.p);
+
+        // Use BigUint for verification to match pow_mod
+        use num_bigint::BigUint;
+        let y_big = BigUint::from_bytes_be(&y.to_bytes_be());
+        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
+        let value_big = BigUint::from_bytes_be(&value.to_bytes_be());
+
+        let y_sq_big = (&y_big * &y_big) % &p_big;
+        if y_sq_big == value_big {
+            return Some(y);
+        }
+
+        // If not, try p - y
+        let y_neg_big = &p_big - &y_big;
+        let y_neg_sq_big = (&y_neg_big * &y_neg_big) % &p_big;
+        if y_neg_sq_big == value_big {
+            let y_neg_bytes = y_neg_big.to_bytes_be();
+            let mut y_neg_bytes_padded = [0u8; 32];
+            let start = 32usize.saturating_sub(y_neg_bytes.len());
+            y_neg_bytes_padded[start..].copy_from_slice(&y_neg_bytes);
+            return Some(BigInt256::from_bytes_be(&y_neg_bytes_padded));
+        }
+
+        None
     }
 
     /// Modular exponentiation: base^exp mod modulus
     fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
-        let mut result = BigInt256::one();
-        let mut b = base.clone() % modulus.clone();
-        let mut e = exp.clone();
-        while !e.is_zero() {
-            if e.limbs[0] & 1 == 1 {
-                result = self.barrett_p.mul(&result, &b);
-                result = self.barrett_p.reduce(&BigInt512::from_bigint256(&result)).unwrap_or(BigInt256::zero());
-            }
-            b = self.barrett_p.mul(&b, &b);
-            b = self.barrett_p.reduce(&BigInt512::from_bigint256(&b)).unwrap_or(BigInt256::zero());
-            e = e.right_shift(1);
-        }
-        // Final reduction
-        self.barrett_p.reduce(&BigInt512::from_bigint256(&result)).unwrap_or(BigInt256::zero())
+        use num_bigint::BigUint;
+        use num_integer::Integer;
+
+        let base_big = BigUint::from_bytes_be(&base.to_bytes_be());
+        let exp_big = BigUint::from_bytes_be(&exp.to_bytes_be());
+        let mod_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+
+        let result_big = base_big.modpow(&exp_big, &mod_big);
+
+        let result_bytes = result_big.to_bytes_be();
+        let mut result_bytes_padded = [0u8; 32];
+        let start = 32usize.saturating_sub(result_bytes.len());
+        result_bytes_padded[start..].copy_from_slice(&result_bytes);
+        BigInt256::from_bytes_be(&result_bytes_padded)
     }
 
     /// Point addition: p1 + p2 on secp256k1 curve

@@ -422,33 +422,29 @@ impl BigInt256 {
 
     /// Division with remainder: returns (quotient, remainder)
     pub fn div_rem(&self, divisor: &BigInt256) -> (BigInt256, BigInt256) {
-        if divisor.is_zero() {
+        use num_bigint::BigUint;
+        use num_integer::Integer;
+
+        let self_big = BigUint::from_bytes_be(&self.to_bytes_be());
+        let divisor_big = BigUint::from_bytes_be(&divisor.to_bytes_be());
+        if divisor_big == BigUint::from(0u32) {
             panic!("Division by zero");
         }
 
-        if *self < *divisor {
-            return (BigInt256::zero(), self.clone());
-        }
+        let (q_big, r_big) = self_big.div_rem(&divisor_big);
 
-        // Simple long division implementation
-        // This is a simplified version - full implementation would be more complex
-        let mut quotient = BigInt256::zero();
-        let mut remainder = self.clone();
+        // Convert back to BigInt256
+        let q_bytes = q_big.to_bytes_be();
+        let mut q_bytes_padded = [0u8; 32];
+        let q_start = 32usize.saturating_sub(q_bytes.len());
+        q_bytes_padded[q_start..].copy_from_slice(&q_bytes);
+        let quotient = BigInt256::from_bytes_be(&q_bytes_padded);
 
-        // Start from most significant bit
-        for bit in (0..256).rev() {
-            if remainder.get_bit(bit) {
-                // Try to subtract divisor shifted left by bit positions
-                let shifted_divisor = divisor.clone() << bit;
-                if remainder >= shifted_divisor {
-                    remainder = remainder - shifted_divisor;
-                    // Set bit in quotient
-                    let limb_idx = bit / 64;
-                    let bit_idx = bit % 64;
-                    quotient.limbs[limb_idx] |= 1 << bit_idx;
-                }
-            }
-        }
+        let r_bytes = r_big.to_bytes_be();
+        let mut r_bytes_padded = [0u8; 32];
+        let r_start = 32usize.saturating_sub(r_bytes.len());
+        r_bytes_padded[r_start..].copy_from_slice(&r_bytes);
+        let remainder = BigInt256::from_bytes_be(&r_bytes_padded);
 
         (quotient, remainder)
     }

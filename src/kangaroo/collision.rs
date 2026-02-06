@@ -5,6 +5,7 @@ use crate::config::Config;
 use anyhow::Result;
 use num_bigint::BigUint;
 use log::info;
+use std::ops::Add;
 
 #[derive(Clone)]
 pub struct Trap {
@@ -33,7 +34,9 @@ impl CollisionDetector {
     }
 
     pub fn new_with_config(config: &Config) -> Self {
-        let near_threshold = Self::optimal_near_threshold(&BigInt256::from_u64(1 << 64), config.dp_bits as u32);
+        let range_width = BigInt256::from_u64(1u64 << 63);
+        let range_width = range_width.add(BigInt256::from_u64(1u64 << 63)); // 2^64
+        let near_threshold = Self::optimal_near_threshold(&range_width, config.dp_bits as u32);
         Self {
             curve: Secp256k1::new(),
             near_threshold,

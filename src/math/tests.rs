@@ -111,4 +111,23 @@ mod tests {
         let other_root_sq = (other_root.clone() * other_root) % modulus;
         assert_eq!(other_root_sq, value);
     }
+
+    #[test]
+    fn test_decompress_135() {
+        let curve = Secp256k1::new();
+        // Puzzle #135 from puzzles.txt
+        let comp_hex = "02145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16";
+        let bytes = hex::decode(comp_hex).unwrap();
+        let mut comp = [0u8; 33];
+        comp.copy_from_slice(&bytes);
+
+        let point = curve.decompress_point(&comp);
+        assert!(point.is_some(), "Failed to decompress puzzle #135");
+
+        let p = point.unwrap();
+        assert!(curve.is_on_curve(&p), "Point not on curve for puzzle #135");
+
+        // For compressed format 02, y should be even
+        assert_eq!(p.y[0] & 1, 0, "Y coordinate should be even for 02 prefix");
+    }
 }
