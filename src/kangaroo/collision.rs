@@ -1,6 +1,7 @@
 use crate::types::{Solution, KangarooState, Point, DpEntry};
 use crate::dp::DpTable;
 use crate::math::{Secp256k1, BigInt256};
+use crate::config::Config;
 use anyhow::Result;
 use num_bigint::BigUint;
 use log::info;
@@ -22,14 +23,41 @@ pub enum CollisionResult {
 pub struct CollisionDetector {
     curve: Secp256k1,
     near_threshold: u64,
+    near_g_thresh: u64,
 }
 
 impl CollisionDetector {
     pub fn new() -> Self {
+        let config = Config::default();
+        Self::new_with_config(&config)
+    }
+
+    pub fn new_with_config(config: &Config) -> Self {
+        let near_threshold = Self::optimal_near_threshold(&BigInt256::from_u64(1 << 64), config.dp_bits as u32);
         Self {
             curve: Secp256k1::new(),
-            near_threshold: 1000,
+            near_threshold,
+            near_g_thresh: config.near_g_thresh,
         }
+    }
+
+    /// Calculate optimal near threshold based on range width and DP bits
+    /// Balances brute force cost vs probability of near-G detection
+    pub fn optimal_near_threshold(range_width: &BigInt256, dp_bits: u32) -> u64 {
+        // Probability threshold: 2^(-dp_bits/2) to balance with DP collision probability
+        let prob_threshold = 1u64 << (dp_bits / 2);
+
+        // Cost threshold: range_width / 1000 (brute force becomes feasible)
+        // For large ranges, use a conservative estimate
+        let range_u64 = if range_width.limbs[1] > 0 || range_width.limbs[0] > u64::MAX / 2000 {
+            u64::MAX / 2000 // Conservative estimate for very large ranges
+        } else {
+            range_width.limbs[0] / 1000
+        };
+        let cost_threshold = range_u64;
+
+        // Use the minimum of probability and cost thresholds
+        prob_threshold.min(cost_threshold).max(1000) // Minimum 1000
     }
 
     /// Create new CollisionDetector with configurable near threshold
@@ -37,6 +65,7 @@ impl CollisionDetector {
         Self {
             curve: Secp256k1::new(),
             near_threshold,
+            near_g_thresh: 1 << 20, // Default 2^20
         }
     }
 
@@ -322,7 +351,7 @@ impl CollisionDetector {
         info!("Near collision diff={}, attempting calculated solve", diff);
 
         // Near-G optimization (low x limbs)
-        if t.x[0] < (1u64 << 20) {
+        if t.x[0] < self.near_g_thresh {
             info!("Near-G subgroup detected, brute k=0..diff");
             for k in 0..diff.to_u64_digits()[0].min(10000) {  // Limit to prevent excessive computation
                 let k_big = BigInt256::from_u64(k);

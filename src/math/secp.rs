@@ -734,58 +734,79 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         Some(point)
     }
 
-    /// Compute modular square root using Tonelli-Shanks algorithm
-    /// For secp256k1 (p ≡ 3 mod 4), uses the efficient formula y = value^((p+1)/4) mod p
-    fn compute_modular_sqrt(&self, value: &BigInt256) -> Option<BigInt256> {
+    /// General Tonelli-Shanks algorithm for modular square root
+    /// Works for any prime modulus p
+    pub fn tonelli_shanks(&self, value: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         if *value == BigInt256::zero() {
             return Some(BigInt256::zero());
         }
 
-        println!("DEBUG: Computing modular sqrt for value: {}", value.to_hex());
-
-        // First, check if value is a quadratic residue using Legendre symbol
-        // Legendre symbol (value/p) = value^((p-1)/2) mod p
-        let legendre_exp = self.barrett_p.sub(&self.p, &BigInt256::from_u64(1)).right_shift(1);
-        let legendre = self.pow_mod(value, &legendre_exp, &self.p);
-        println!("DEBUG: Legendre symbol: {} (exp: {})", legendre.to_hex(), legendre_exp.to_hex());
-
-        // For secp256k1 (p ≡ 3 mod 4), we assume the value is a quadratic residue
-        // since we're dealing with points that should be on the curve
-        if legendre != BigInt256::one() && legendre != BigInt256::zero() {
-            println!("DEBUG: Value is not a quadratic residue! Legendre = {}", legendre.to_hex());
-            return None;
+        // Check if value is a quadratic residue using Legendre symbol
+        let leg_exp = self.barrett_p.sub(modulus, &BigInt256::one()).right_shift(1);
+        let legendre = self.pow_mod(value, &leg_exp, modulus);
+        if legendre != BigInt256::one() {
+            return None; // Not a quadratic residue
         }
 
-        // For secp256k1, use the simpler (p+1)/4 formula since p ≡ 3 mod 4
-        let p_plus_1 = self.barrett_p.add(&self.p, &BigInt256::from_u64(1));
-        let four = BigInt256::from_u64(4);
-        let (exp, _) = p_plus_1.div_rem(&four);
+        // Decompose modulus-1 = 2^s * q, where q is odd
+        let mut m = self.barrett_p.sub(modulus, &BigInt256::one());
+        let mut s = 0u32;
+        while m.limbs[0] & 1 == 0 {  // While even
+            m = m.right_shift(1);
+            s += 1;
+        }
+        let q = m;
 
-        println!("DEBUG: Using exponent: {}", exp.to_hex());
+        // Find a non-quadratic residue z (where Legendre(z/p) = -1)
+        let mut z = BigInt256::from_u64(2);
+        while self.pow_mod(&z, &leg_exp, modulus) != self.barrett_p.sub(modulus, &BigInt256::one()) {
+            z = self.barrett_p.add(&z, &BigInt256::one());
+        }
 
-        let candidate = self.pow_mod(value, &exp, &self.p);
-        let candidate_sq = self.barrett_p.mul(&candidate, &candidate);
+        // c = z^q mod modulus
+        let mut c = self.pow_mod(&z, &q, modulus);
+        // r = value^{(q+1)/2} mod modulus
+        let (q_plus_1_div_2, _) = self.barrett_p.add(&q, &BigInt256::one()).div_rem(&BigInt256::from_u64(2));
+        let mut r = self.pow_mod(value, &q_plus_1_div_2, modulus);
+        // t = value^q mod modulus
+        let mut t = self.pow_mod(value, &q, modulus);
+        let mut m_val = s;
 
-        println!("DEBUG: Candidate: {}, candidate^2: {}", candidate.to_hex(), candidate_sq.to_hex());
-
-        if candidate_sq == *value {
-            println!("DEBUG: Found valid square root!");
-            Some(candidate)
-        } else {
-            // Try the other square root: p - candidate
-            let other_candidate = self.barrett_p.sub(&self.p, &candidate);
-            let other_candidate_sq = self.barrett_p.mul(&other_candidate, &other_candidate);
-
-            println!("DEBUG: Other candidate: {}, other^2: {}", other_candidate.to_hex(), other_candidate_sq.to_hex());
-
-            if other_candidate_sq == *value {
-                println!("DEBUG: Found valid square root (other)!");
-                Some(other_candidate)
-            } else {
-                println!("DEBUG: Both candidates failed - this should not happen for valid curve points");
-                None
+        while t != BigInt256::one() {
+            // Find smallest i such that t^{2^i} ≡ 1 mod modulus
+            let mut t2i = t.clone();
+            let mut i = 1u32;
+            while t2i != BigInt256::one() && i < m_val {
+                t2i = self.barrett_p.mul(&t2i, &t2i);
+                t2i = self.barrett_p.reduce(&BigInt512::from_bigint256(&t2i)).unwrap_or(BigInt256::zero());
+                i += 1;
             }
+
+            // b = c^{2^{m-i-1}} mod modulus
+            let exp_b = BigInt256::from_u64(1 << (m_val - i - 1));
+            let mut b = self.pow_mod(&c, &exp_b, modulus);
+
+            // Update r, t, c, m
+            let r_new = self.barrett_p.mul(&r, &b);
+            r = self.barrett_p.reduce(&BigInt512::from_bigint256(&r_new)).unwrap_or(BigInt256::zero());
+
+            let t_new = self.barrett_p.mul(&t, &self.barrett_p.mul(&b, &b));
+            t = self.barrett_p.reduce(&BigInt512::from_bigint256(&t_new)).unwrap_or(BigInt256::zero());
+
+            let c_new = self.barrett_p.mul(&b, &b);
+            c = self.barrett_p.reduce(&BigInt512::from_bigint256(&c_new)).unwrap_or(BigInt256::zero());
+
+            m_val = i;
         }
+
+        Some(r)
+    }
+
+    /// Compute modular square root using Tonelli-Shanks algorithm
+    /// For secp256k1 (p ≡ 3 mod 4), uses the efficient formula y = value^((p+1)/4) mod p
+    fn compute_modular_sqrt(&self, value: &BigInt256) -> Option<BigInt256> {
+        // Use the general Tonelli-Shanks algorithm
+        self.tonelli_shanks(value, &self.p)
     }
 
     /// Modular exponentiation: base^exp mod modulus

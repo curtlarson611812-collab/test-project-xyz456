@@ -88,4 +88,27 @@ mod tests {
         let product = (a * inv) % modulus;
         assert_eq!(product, BigInt256::one());
     }
+
+    #[test]
+    fn test_tonelli_shanks() {
+        let curve = Secp256k1::new();
+
+        // Test case: find sqrt(4) mod 7 = 2 or 5 (since 2^2 = 4, 5^2 = 25 ≡ 4 mod 7)
+        let value = BigInt256::from_u64(4);
+        let modulus = BigInt256::from_u64(7);
+
+        let root = curve.tonelli_shanks(&value, &modulus);
+        assert!(root.is_some());
+
+        let root_val = root.unwrap();
+        let root_sq = (root_val.clone() * root_val.clone()) % modulus.clone();
+
+        // Check that root^2 ≡ value mod modulus
+        assert_eq!(root_sq, value);
+
+        // Also check the other root: modulus - root
+        let other_root = modulus.clone() - root_val;
+        let other_root_sq = (other_root.clone() * other_root) % modulus;
+        assert_eq!(other_root_sq, value);
+    }
 }

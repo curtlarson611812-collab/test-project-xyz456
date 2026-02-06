@@ -8,6 +8,8 @@ pub mod stepper;
 pub mod collision;
 pub mod search_config;
 pub mod controller;
+#[cfg(test)]
+pub mod tests;
 
 // Re-export main types
 pub use manager::KangarooManager;
