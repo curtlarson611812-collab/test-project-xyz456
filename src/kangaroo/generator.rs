@@ -18,6 +18,109 @@ use rand::Rng;
 use std::sync::Arc;
 // SIMD removed for stability - using regular loops instead
 
+/// Apply bias filters to scalar values for Magic 9 sniper mode
+/// Returns true if scalar passes all bias filters
+pub fn apply_biases(scalar: &BigInt256, mod9: u8, mod27: u8, mod81: u8, pos: bool) -> bool {
+    // Mod9 bias filter
+    let s_mod9 = (scalar.clone() % BigInt256::from_u64(9)).low_u32() as u8;
+    if s_mod9 != mod9 {
+        return false;
+    }
+
+    // Mod27 bias filter
+    let s_mod27 = (scalar.clone() % BigInt256::from_u64(27)).low_u32() as u8;
+    if s_mod27 != mod27 {
+        return false;
+    }
+
+    // Mod81 bias filter
+    let s_mod81 = (scalar.clone() % BigInt256::from_u64(81)).low_u32() as u8;
+    if s_mod81 != mod81 {
+        return false;
+    }
+
+    // Positional bias filter (positive scalars only when enabled)
+    if pos && scalar.is_zero() {
+        return false;
+    }
+
+    true
+}
+
+/// Compute target biases for a pubkey using its x-coordinate
+/// Returns (mod9, mod27, mod81, pos) bias targets
+pub fn compute_pubkey_biases(pubkey_x: &BigInt256) -> (u8, u8, u8, bool) {
+    let mod9 = (pubkey_x.clone() % BigInt256::from_u64(9)).low_u32() as u8;
+    let mod27 = (pubkey_x.clone() % BigInt256::from_u64(27)).low_u32() as u8;
+    let mod81 = (pubkey_x.clone() % BigInt256::from_u64(81)).low_u32() as u8;
+
+    // Use positive scalars for all Magic 9 targets
+    (mod9, mod27, mod81, true)
+}
+
+/// Run biased kangaroo walk to find distance to central attractor
+/// Returns the distance D_i from start_point to attractor
+pub fn biased_kangaroo_to_attractor(
+    start_point: &Point,
+    attractor_x: &BigInt256,
+    biases: (u8, u8, u8, bool),
+    curve: &Secp256k1,
+    max_steps: u64
+) -> Result<BigInt256, anyhow::Error> {
+    let mut current_point = start_point.clone();
+    let mut distance = BigInt256::zero();
+    let mut step_count = 0u64;
+
+    info!("🚀 Starting biased kangaroo walk to attractor x={}", attractor_x.to_hex());
+
+    loop {
+        // Check if we've reached the attractor
+        let current_affine = curve.to_affine(&current_point);
+        if current_affine.x == *attractor_x {
+            info!("🎯 Attractor reached! Distance: {}, Steps: {}", distance.to_hex(), step_count);
+            return Ok(distance);
+        }
+
+        // Generate biased jump scalar
+        let mut jump_scalar = BigInt256::zero();
+        let mut attempts = 0u32;
+
+        // Try to find a jump that passes bias filters
+        while attempts < 1000 {  // Prevent infinite loops
+            // Generate random jump (in practice, this would use deterministic jump table)
+            let random_jump = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
+            if apply_biases(&random_jump, biases.0, biases.1, biases.2, biases.3) {
+                jump_scalar = random_jump;
+                break;
+            }
+            attempts += 1;
+        }
+
+        if jump_scalar.is_zero() {
+            return Err(anyhow::anyhow!("Failed to generate biased jump after {} attempts", attempts));
+        }
+
+        // Apply jump: current_point += jump_scalar * G
+        let jump_point = curve.mul_constant_time(&jump_scalar, &curve.g).unwrap();
+        current_point = curve.add(&current_point, &jump_point);
+
+        // Update distance
+        distance = (distance + jump_scalar) % &curve.order;
+
+        step_count += 1;
+
+        // Safety check to prevent infinite loops
+        if step_count >= max_steps {
+            return Err(anyhow::anyhow!("Timeout: Failed to reach attractor within {} steps", max_steps));
+        }
+
+        // Progress logging
+        if step_count % 10000 == 0 {
+            info!("📊 Kangaroo progress: {} steps, current distance: {}", step_count, distance.to_hex());
+        }
+    }
+}
+
 /// Standalone biased jump function for cycle detection
 pub fn biased_jump_standalone(current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
     use crate::utils::pubkey_loader::detect_bias_single;

@@ -819,6 +819,75 @@ fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt25
     Ok(())
 }
 
+/// Execute magic 9 sniper mode for targeted cluster cracking
+fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
+    use crate::kangaroo::generator::{biased_kangaroo_to_attractor, compute_pubkey_biases};
+    use crate::math::bigint::BigInt256;
+    use crate::math::secp::Secp256k1;
+
+    info!("🎯 Magic 9 Sniper Mode: Targeting {} pubkeys for attractor-based solving", points.len());
+
+    // Define the central attractor x-coordinate (Magic 9 point)
+    let attractor_x_hex = "30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38";
+    let attractor_x = BigInt256::from_hex(attractor_x_hex)
+        .map_err(|e| anyhow!("Invalid attractor hex: {}", e))?;
+
+    let curve = Secp256k1::new();
+    let mut d_g: Option<BigInt256> = None;
+
+    // First, compute D_g (distance from G to attractor)
+    if d_g.is_none() {
+        info!("🔍 Computing D_g: distance from generator G to central attractor...");
+        let biases_g = (0, 0, 0, true); // Use default biases for G
+        d_g = Some(biased_kangaroo_to_attractor(&curve.g, &attractor_x, biases_g, &curve, 1000000)?);
+        info!("✅ D_g computed: {}", d_g.as_ref().unwrap().to_hex());
+    }
+
+    let d_g = d_g.unwrap();
+    let curve_order = curve.order.clone();
+
+    // Process each of the 9 Magic 9 pubkeys
+    let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
+
+    for (i, point) in points.iter().enumerate() {
+        let pubkey_index = indices[i];
+        info!("🎯 Processing Magic 9 pubkey #{} (index {})", i + 1, pubkey_index);
+
+        // Compute biases for this specific pubkey
+        let pubkey_affine = curve.to_affine(point);
+        let biases = compute_pubkey_biases(&pubkey_affine.x);
+        info!("📊 Biases for pubkey {}: mod9={}, mod27={}, mod81={}, pos={}",
+              pubkey_index, biases.0, biases.1, biases.2, biases.3);
+
+        // Compute D_i (distance from P_i to attractor)
+        let d_i = biased_kangaroo_to_attractor(point, &attractor_x, biases, &curve, 1000000)?;
+        info!("📏 D_i computed: {}", d_i.to_hex());
+
+        // Apply G-Link formula: k_i = 1 + D_g - D_i mod N
+        let one = BigInt256::one();
+        let k_i = (one + &d_g - &d_i) % &curve_order;
+
+        info!("🔑 Candidate private key: {}", k_i.to_hex());
+
+        // Verify the solution
+        let computed_point = curve.mul_constant_time(&k_i, &curve.g)
+            .ok_or_else(|| anyhow!("Failed to compute G * k_i"))?;
+        let computed_affine = curve.to_affine(&computed_point);
+
+        if computed_affine.x == pubkey_affine.x && computed_affine.y == pubkey_affine.y {
+            println!("🎉 SUCCESS! Magic 9 #{} CRACKED!", pubkey_index);
+            println!("🔑 Private key: 0x{}", k_i.to_hex());
+            println!("✅ Verification: G * privkey matches target pubkey");
+            println!("🚀 Starship has landed - Magic 9 cluster member solved!");
+        } else {
+            warn!("❌ Verification failed for Magic 9 #{} - possible error in calculation", pubkey_index);
+        }
+    }
+
+    info!("🏆 Magic 9 sniper mode completed!");
+    Ok(())
+}
+
 /// Execute real puzzle mode for production hunting
 fn execute_real(gen: &KangarooGenerator, point: &Point, n: u32, args: &Args) -> Result<()> {
     println!("DEBUG: execute_real called with n={}", n);
