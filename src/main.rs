@@ -43,7 +43,7 @@ struct Args {
     unsolved: bool,  // Skip private key verification for unsolved puzzles
     #[arg(long)]
     bias_analysis: bool,  // Run complete bias analysis on unsolved puzzles
-    #[arg(long, value_name = "TARGET")]
+    #[arg(long, value_name = "TARGETS")]
     analyze_biases: Vec<String>,  // Analyze bias patterns: puzzle numbers or file paths (can specify multiple times)
     #[arg(long)]
     crack_unsolved: bool,  // Auto pick and crack most likely unsolved puzzle
@@ -51,6 +51,8 @@ struct Args {
     num_kangaroos: usize,  // Number of kangaroos for parallel execution
     #[arg(long, default_value_t = 0)]
     bias_mod: u64,  // Bias modulus for jump selection (0 = no bias)
+    #[arg(long)]
+    magic9: bool,  // Enable magic 9 sniper mode for specific 9 pubkeys
     #[arg(long)]
     verbose: bool,  // Enable verbose logging
     #[arg(long)]
@@ -162,6 +164,17 @@ impl PuzzleMode for RealMode {
     }
 }
 
+/// Magic 9 sniper mode for targeting specific clustered pubkeys
+struct Magic9Mode;
+impl PuzzleMode for Magic9Mode {
+    fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>> {
+        load_magic9_pubkeys(curve)
+    }
+    fn execute(&self, gen: &KangarooGenerator, points: &[Point], _args: &Args) -> Result<()> {
+        execute_magic9(gen, points)
+    }
+}
+
 fn check_puzzle_pubkeys() -> Result<()> {
     println!("🔍 Checking all puzzle public keys for proper length and validity...");
     println!("⚠️  Temporarily disabled - using new flat file system");
@@ -204,8 +217,8 @@ fn main() -> Result<()> {
         log::set_max_level(log::LevelFilter::Debug);
     }
 
-    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, verbose={}, laptop={}, puzzle={:?}, test_solved={:?}",
-             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.verbose, args.laptop, args.puzzle, args.test_solved);
+    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, magic9={}, verbose={}, laptop={}, puzzle={:?}, test_solved={:?}",
+             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.magic9, args.verbose, args.laptop, args.puzzle, args.test_solved);
 
     // Enable thermal logging and NVIDIA persistence for laptop mode
     if args.laptop {
@@ -344,7 +357,9 @@ fn main() -> Result<()> {
 
     // Handle puzzle mode options using trait-based polymorphism
     println!("DEBUG: Creating puzzle mode");
-    let mode: Box<dyn PuzzleMode> = if args.valuable {
+    let mode: Box<dyn PuzzleMode> = if args.magic9 {
+        Box::new(Magic9Mode)
+    } else if args.valuable {
         Box::new(ValuableMode)
     } else if args.test_puzzles {
         Box::new(TestMode)
@@ -352,7 +367,7 @@ fn main() -> Result<()> {
         println!("DEBUG: About to create RealMode");
         Box::new(RealMode { n })
     } else {
-        eprintln!("Error: Must specify a mode (--basic-test, --valuable, --test-puzzles, --real-puzzle, or --custom-low/--custom-high)");
+        eprintln!("Error: Must specify a mode (--magic9, --basic-test, --valuable, --test-puzzles, --real-puzzle, or --custom-low/--custom-high)");
         std::process::exit(1);
     };
     println!("DEBUG: Mode created successfully");
@@ -1099,6 +1114,22 @@ fn analyze_single_puzzle(curve: &Secp256k1, puzzle_num: u32, analyses: &mut Vec<
     Err(anyhow::anyhow!("Puzzle #{} not found or has no revealed public key", puzzle_num))
 }
 
+fn analyze_point(curve: &Secp256k1, point: Point, puzzle_num: u32, pubkey_hex: &str, analyses: &mut Vec<(u32, String, u64, u64, u64, f64, f64)>) {
+    let x_bigint = BigInt256::from_u64_array(point.x);
+    let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, puzzle_num);
+
+    let score = if bias_mod == 9 { 1.4 }
+               else if bias_mod == 27 { 1.25 }
+               else if bias_mod == 81 { 1.15 }
+               else { 1.0 };
+
+    let res9 = x_bigint.mod_u64(9);
+    let res27 = x_bigint.mod_u64(27);
+    let res81 = x_bigint.mod_u64(81);
+
+    analyses.push((puzzle_num, pubkey_hex.to_string(), res9, res27, res81, pos_proxy, score));
+}
+
 fn analyze_puzzle_file(curve: &Secp256k1, file_path: &str, analyses: &mut Vec<(u32, String, u64, u64, u64, f64, f64)>) -> Result<()> {
     let content = std::fs::read_to_string(file_path)
         .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", file_path, e))?;
@@ -1121,7 +1152,7 @@ fn analyze_puzzle_file(curve: &Secp256k1, file_path: &str, analyses: &mut Vec<(u
             } else {
                 continue;
             }
-        } else if line.len() > 64 && line.chars().all(|c| c.is_ascii_hexdigit()) {
+        } else if (line.len() == 130 || line.len() == 66) && line.chars().all(|c| c.is_ascii_hexdigit()) {
             // Just a hex public key - assign incremental puzzle numbers
             puzzle_count += 1;
             (puzzle_count + 1000, line.to_string()) // Use 1000+ for file-based puzzles
@@ -1130,13 +1161,22 @@ fn analyze_puzzle_file(curve: &Secp256k1, file_path: &str, analyses: &mut Vec<(u
         };
 
         // Analyze the public key
-        if let Ok(pubkey_bytes) = hex::decode(&pubkey_hex) {
-            if pubkey_bytes.len() == 33 && (pubkey_bytes[0] == 0x02 || pubkey_bytes[0] == 0x03) {
-                let mut compressed = [0u8; 33];
-                compressed.copy_from_slice(&pubkey_bytes);
+        match hex::decode(&pubkey_hex) {
+            Ok(pubkey_bytes) => {
+                if pubkey_bytes.len() == 33 && (pubkey_bytes[0] == 0x02 || pubkey_bytes[0] == 0x03) {
+                    // Compressed key
+                    let mut compressed = [0u8; 33];
+                    compressed.copy_from_slice(&pubkey_bytes);
 
-                if let Some(point) = curve.decompress_point(&compressed) {
-                    let x_bigint = BigInt256::from_u64_array(point.x);
+                    if let Some(point) = curve.decompress_point(&compressed) {
+                        analyze_point(curve, point, puzzle_num, &pubkey_hex, analyses);
+                    }
+                } else if pubkey_bytes.len() == 65 && pubkey_bytes[0] == 0x04 {
+                    // Uncompressed key - extract X coordinate for bias analysis
+                    let mut x_bytes = [0u8; 32];
+                    x_bytes.copy_from_slice(&pubkey_bytes[1..33]); // X coordinate is bytes 1-32
+                    let x_bigint = BigInt256::from_bytes_be(&x_bytes);
+
                     let (bias_mod, dominant_residue, pos_proxy) = speedbitcrack::utils::pubkey_loader::detect_bias_single(&x_bigint, puzzle_num);
 
                     let score = if bias_mod == 9 { 1.4 }
@@ -1150,6 +1190,10 @@ fn analyze_puzzle_file(curve: &Secp256k1, file_path: &str, analyses: &mut Vec<(u
 
                     analyses.push((puzzle_num, pubkey_hex.clone(), res9, res27, res81, pos_proxy, score));
                 }
+            }
+            Err(_) => {
+                // Invalid hex, skip this line
+                continue;
             }
         }
     }

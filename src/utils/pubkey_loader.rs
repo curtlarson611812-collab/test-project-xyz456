@@ -1130,6 +1130,39 @@ mod tests {
         assert!(result.is_err());
     }
 
+/// Load the 9 specific Magic 9 sniper pubkeys by 0-based indices
+/// Indices: [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567]
+pub fn load_magic9_pubkeys(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
+    let content = std::fs::read_to_string("valuable_p2pk_pubkeys.txt")
+        .map_err(|e| format!("Failed to read valuable_p2pk_pubkeys.txt: {}", e))?;
+
+    let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
+    let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
+
+    let mut pubkeys = Vec::with_capacity(9);
+    for &idx in &indices {
+        let line = lines.get(idx)
+            .ok_or_else(|| format!("Index {} out of bounds (file has {} lines)", idx, lines.len()))?;
+
+        let bytes = hex::decode(line.trim())
+            .map_err(|e| format!("Invalid hex at index {}: {}", idx, e))?;
+
+        if bytes.len() != 33 {
+            return Err(format!("Invalid pubkey length {} at index {}", bytes.len(), idx).into());
+        }
+
+        let mut comp = [0u8; 33];
+        comp.copy_from_slice(&bytes);
+
+        let point = curve.decompress_point(&comp)
+            .ok_or_else(|| format!("Failed to decompress pubkey at index {}", idx))?;
+
+        pubkeys.push(point);
+    }
+
+    Ok(pubkeys)
+}
+
 /// Load valuable P2PK pubkeys from file
 pub fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
     load_from_file("valuable_p2pk_pubkeys.txt", curve)
