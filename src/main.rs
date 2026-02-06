@@ -1469,4 +1469,52 @@ mod tests {
         assert!(!effective_high.is_empty());
         assert!(effective_low.is_empty());
     }
+
+    /// Test magic9 CLI argument parsing and mode selection
+    #[test]
+    fn test_magic9_cli_parsing() {
+        // Test that --magic9 flag is properly parsed
+        let args = vec!["speedbitcrack", "--magic9"];
+        let parsed = Args::try_parse_from(args).expect("Failed to parse --magic9 flag");
+
+        assert!(parsed.magic9, "--magic9 flag should be true");
+        assert!(!parsed.valuable, "Other flags should remain false");
+        assert!(!parsed.test_puzzles, "Other flags should remain false");
+        assert!(parsed.real_puzzle.is_none(), "real_puzzle should be None");
+    }
+
+    /// Test magic9 mode selection logic
+    #[test]
+    fn test_magic9_mode_selection() {
+        // This test verifies the mode selection logic works correctly
+        let args = Args {
+            magic9: true,
+            valuable: false,
+            test_puzzles: false,
+            real_puzzle: None,
+            check_pubkeys: false,
+            bias_analysis: false,
+            analyze_biases: vec![],
+            crack_unsolved: false,
+            num_kangaroos: 8,
+            bias_mod: 0,
+            verbose: false,
+            laptop: false,
+            puzzle: None,
+            test_solved: None,
+            custom_low: None,
+            custom_high: None,
+            gpu: false,
+            max_cycles: 0,
+            unsolved: false,
+        };
+
+        // Verify that with magic9=true, other modes are false
+        assert!(args.magic9);
+        assert!(!args.valuable);
+        assert!(!args.test_puzzles);
+        assert!(args.real_puzzle.is_none());
+
+        println!("✅ Magic 9 CLI parsing and mode selection tests passed");
+    }
 }

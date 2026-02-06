@@ -16,6 +16,14 @@ const SOLVED_PUZZLES: &[(&str, &str, &str)] = &[
     // ("66", "pubkey_hex", "privkey_hex"),
 ];
 
+/// Magic 9 test data for validation
+/// Format: (index, expected_pubkey_hex, expected_attractor_convergence)
+const MAGIC9_TEST_DATA: &[(&str, &str, bool)] = &[
+    // Test data for Magic 9 cluster validation
+    // ("9379", "expected_pubkey_hex", true),  // Should converge to attractor
+    // ("28687", "expected_pubkey_hex", true), // Should converge to attractor
+];
+
 /// Test solving puzzle #64
 #[test]
 fn test_puzzle_64() {
@@ -653,4 +661,132 @@ fn test_valuable_mode_bias_logging() {
     let _jump = gen.biased_jump(&test_distance, &biases); // Should log if bias >1.0
 
     println!("Bias logging test: score={:.3}, biases_count={}, jump_calculated=true", score, biases.len());
+}
+
+/// Test Magic 9 pubkey loading functionality
+#[test]
+fn test_load_magic9_pubkeys() {
+    use speedbitcrack::utils::pubkey_loader::load_magic9_pubkeys;
+    use speedbitcrack::math::secp::Secp256k1;
+
+    let curve = Secp256k1::new();
+
+    // Test loading the 9 specific Magic 9 pubkeys
+    let result = load_magic9_pubkeys(&curve);
+    assert!(result.is_ok(), "Failed to load Magic 9 pubkeys: {:?}", result.err());
+
+    let pubkeys = result.unwrap();
+    assert_eq!(pubkeys.len(), 9, "Expected exactly 9 Magic 9 pubkeys");
+
+    // Verify all points are valid on the curve
+    for (i, point) in pubkeys.iter().enumerate() {
+        assert!(point.validate_curve(&curve),
+                "Magic 9 pubkey {} is not on secp256k1 curve", i);
+    }
+
+    println!("✅ Magic 9 pubkey loading test passed: loaded {} valid pubkeys", pubkeys.len());
+}
+
+/// Test bias filtering functions for Magic 9 sniper
+#[test]
+fn test_magic9_bias_filters() {
+    use speedbitcrack::kangaroo::generator::{apply_biases, compute_pubkey_biases};
+    use speedbitcrack::math::bigint::BigInt256;
+
+    // Test apply_biases function with various inputs
+    let test_scalar = BigInt256::from_u64(81); // 81 mod 9 = 0, mod 27 = 0, mod 81 = 0
+
+    // Should pass with matching biases
+    assert!(apply_biases(&test_scalar, 0, 0, 0, true),
+            "Scalar 81 should pass bias filter (0,0,0,true)");
+
+    // Should fail with non-matching mod9 bias
+    assert!(!apply_biases(&test_scalar, 1, 0, 0, true),
+            "Scalar 81 should fail bias filter (1,0,0,true)");
+
+    // Test with different scalar
+    let test_scalar2 = BigInt256::from_u64(82); // 82 mod 9 = 1
+    assert!(apply_biases(&test_scalar2, 1, 1, 1, true),
+            "Scalar 82 should pass bias filter (1,1,1,true)");
+
+    // Test compute_pubkey_biases function
+    let test_x = BigInt256::from_u64(81);
+    let biases = compute_pubkey_biases(&test_x);
+    assert_eq!(biases.0, 0, "Expected mod9 bias = 0 for x=81");
+    assert_eq!(biases.1, 0, "Expected mod27 bias = 0 for x=81");
+    assert_eq!(biases.2, 0, "Expected mod81 bias = 0 for x=81");
+    assert_eq!(biases.3, true, "Expected pos bias = true");
+
+    println!("✅ Magic 9 bias filtering tests passed");
+}
+
+/// Test biased kangaroo walk to attractor (CPU version for testing)
+#[test]
+fn test_biased_kangaroo_to_attractor() {
+    use speedbitcrack::kangaroo::generator::biased_kangaroo_to_attractor;
+    use speedbitcrack::math::secp::Secp256k1;
+    use speedbitcrack::math::bigint::BigInt256;
+
+    let curve = Secp256k1::new();
+
+    // Use generator point G as test start point
+    let start_point = curve.g.clone();
+
+    // Use G's x-coordinate as "attractor" for this simple test
+    let attractor_x = BigInt256::from_u64_array(curve.g.x);
+
+    // Use permissive biases that should allow quick convergence
+    let biases = (0, 0, 0, true); // Allow any mod9/mod27/mod81, positive scalars
+
+    // Test the function (should converge quickly since start == attractor)
+    let result = biased_kangaroo_to_attractor(&start_point, &attractor_x, biases, &curve, 1000);
+
+    assert!(result.is_ok(), "Biased kangaroo should succeed for simple case");
+    let distance = result.unwrap();
+
+    // Since we start at the attractor, distance should be 0
+    assert_eq!(distance, BigInt256::zero(),
+               "Distance should be 0 when starting at attractor");
+
+    println!("✅ Biased kangaroo to attractor test passed: distance={}", distance.to_hex());
+}
+
+/// Integration test for Magic 9 sniper mode (mock test)
+#[test]
+fn test_magic9_sniper_integration() {
+    use speedbitcrack::utils::pubkey_loader::load_magic9_pubkeys;
+    use speedbitcrack::math::secp::Secp256k1;
+
+    let curve = Secp256k1::new();
+
+    // Load Magic 9 pubkeys
+    let pubkeys = load_magic9_pubkeys(&curve).expect("Failed to load Magic 9 pubkeys");
+
+    // Verify we have the expected structure
+    assert_eq!(pubkeys.len(), 9, "Magic 9 sniper should target exactly 9 pubkeys");
+
+    // Test that all pubkeys are distinct
+    for i in 0..pubkeys.len() {
+        for j in (i+1)..pubkeys.len() {
+            assert_ne!(pubkeys[i].x, pubkeys[j].x,
+                      "Magic 9 pubkeys {} and {} should be distinct", i, j);
+        }
+    }
+
+    // Test bias computation for each pubkey
+    for (i, pubkey) in pubkeys.iter().enumerate() {
+        use speedbitcrack::kangaroo::generator::compute_pubkey_biases;
+        let pubkey_affine = curve.to_affine(pubkey);
+        let biases = compute_pubkey_biases(&pubkey_affine.x);
+
+        // Verify biases are reasonable (0-8 for mod9, etc.)
+        assert!(biases.0 <= 8, "mod9 bias should be 0-8 for pubkey {}", i);
+        assert!(biases.1 <= 26, "mod27 bias should be 0-26 for pubkey {}", i);
+        assert!(biases.2 <= 80, "mod81 bias should be 0-80 for pubkey {}", i);
+
+        println!("Pubkey {} biases: mod9={}, mod27={}, mod81={}, pos={}",
+                i, biases.0, biases.1, biases.2, biases.3);
+    }
+
+    println!("✅ Magic 9 sniper integration test passed: {} pubkeys validated", pubkeys.len());
 }
