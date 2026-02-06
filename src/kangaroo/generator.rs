@@ -16,6 +16,7 @@ use rayon::prelude::*;
 use rand::rngs::OsRng;
 use rand::Rng;
 use std::sync::Arc;
+use zerocopy::IntoBytes;
 // SIMD removed for stability - using regular loops instead
 
 // Sacred 32 small odd primes (>128, odd, low hamming weight for fast mul).
@@ -44,7 +45,11 @@ pub fn initialize_kangaroo_start(target_pubkey: &Point, kangaroo_index: usize) -
 
 // Tame kangaroo start (no prime multiplier — clean from G)
 pub fn initialize_tame_start() -> Point {
-    Point::generator()  // or low scalar * G for interval searches
+    // Generator point G in affine coordinates: x=79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+    // y=483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+    let g_x = [0x79BE667EF9DCBBAC, 0x55A06295CE870B07, 0x029BFCDB2DCE28D9, 0x59F2815B16F81798];
+    let g_y = [0x483ADA7726A3C465, 0x5DA4FBFC0E1108A8, 0xFD17B448A6855419, 0x9C47D08FFB10D4B8];
+    Point::from_affine(g_x, g_y)
 }
 
 // Sacred bucket selection — tame deterministic, wild state-mixed
@@ -55,11 +60,12 @@ pub fn select_bucket(point: &Point, dist: &BigInt256, seed: u32, step: u32, is_t
         (step % WALK_BUCKETS) as u32  // Deterministic for tame → exact distance
     } else {
         // State-mixed for wild → avoids traps
-        let affine = point.to_affine();
-        let x_bytes = affine.x.to_bytes();
+        let curve = Secp256k1::new();
+        let affine = point.to_affine(&curve);
+        let x_bytes = affine.x.as_bytes();
         let x0 = u32::from_le_bytes(x_bytes[0..4].try_into().unwrap());
         let x1 = u32::from_le_bytes(x_bytes[4..8].try_into().unwrap());
-        let dist_bytes = dist.to_bytes();
+        let dist_bytes = dist.to_bytes_be();
         let dist0 = u32::from_le_bytes(dist_bytes[0..4].try_into().unwrap());
 
         let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
@@ -68,22 +74,28 @@ pub fn select_bucket(point: &Point, dist: &BigInt256, seed: u32, step: u32, is_t
 }
 
 // Get bias-filtered subset of prime multipliers for Magic 9 optimization
-// Filters primes where prime % 81 == target_mod81 for cluster-specific speedup
-pub fn get_biased_primes(target_mod81: u8) -> Vec<u64> {
-    PRIME_MULTIPLIERS.iter()
-        .filter(|&&prime| (prime % 81) as u8 == target_mod81)
+// Supports hierarchical filtering: tries mod81, falls back to mod27, then all
+pub fn get_biased_primes(target_mod: u8, modulus: u64, min_primes: usize) -> Vec<u64> {
+    let filtered: Vec<u64> = PRIME_MULTIPLIERS.iter()
+        .filter(|&&prime| (prime % modulus) as u8 == target_mod)
         .cloned()
-        .collect()
-}
+        .collect();
 
-// Fallback to all primes if filtered subset too small
-pub fn get_biased_primes_safe(target_mod81: u8, min_primes: usize) -> Vec<u64> {
-    let filtered = get_biased_primes(target_mod81);
     if filtered.len() >= min_primes {
         filtered
     } else {
-        PRIME_MULTIPLIERS.to_vec()  // Fallback to all primes
+        // Relax to next level or fallback to all
+        match modulus {
+            81 => get_biased_primes(target_mod, 27, min_primes), // Try mod27
+            27 => PRIME_MULTIPLIERS.to_vec(), // Fallback to all
+            _ => PRIME_MULTIPLIERS.to_vec(),
+        }
     }
+}
+
+// Convenience function for GOLD cluster (uniform mod81=0 target)
+pub fn get_gold_cluster_primes() -> Vec<u64> {
+    get_biased_primes(0, 81, 4)  // Target mod81=0, min 4 primes
 }
 
 /// Apply bias filters to scalar values for Magic 9 sniper mode

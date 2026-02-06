@@ -4,6 +4,7 @@
 //! optimizations in secp256k1 kangaroo attacks.
 
 use crate::math::bigint::BigInt256;
+use zerocopy::IntoBytes;
 
 /// Compute target biases from pubkey x-coordinate with attractor cross-check
 /// Returns (mod9, mod27, mod81, pos) bias targets
@@ -29,15 +30,16 @@ pub fn apply_biases(scalar: &BigInt256, target: (u8, u8, u8, u8, bool)) -> f64 {
     // Strict mod3 check first (base for mod9 chains) - fail immediately if mismatch
     let s_mod3 = (scalar.clone() % BigInt256::from_u64(3)).low_u32() as u8;
     if s_mod3 != target.3 {
-        return 0.0;  // Strict: no score if mod3 doesn't match
-    }
-    if target.3 && scalar.is_zero() {
-        return 0.0;  // Pos bias: reject zero scalars
+        return 0.0;  // Strict fail
     }
 
-    let mut score = 0.0;
+    // Positional bias filter
+    if target.4 && scalar.is_zero() {
+        return 0.0;  // Reject zero scalars if pos bias enabled
+    }
 
-    // Weighted scoring: mod9 (30%), mod27 (30%), mod81 (40%)
+    // Weighted scoring for mod9, mod27, mod81
+    let mut score = 0.0f64;
     if (scalar.clone() % BigInt256::from_u64(9)).low_u32() as u8 == target.0 {
         score += 0.3;
     }
@@ -48,7 +50,7 @@ pub fn apply_biases(scalar: &BigInt256, target: (u8, u8, u8, u8, bool)) -> f64 {
         score += 0.4;
     }
 
-    score
+    score.min(1.0)
 }
 
 /// Additional bias: mod3 check for finer granularity
@@ -59,11 +61,16 @@ pub fn apply_mod3_bias(scalar: &BigInt256, target_mod3: u8) -> bool {
 
 /// Additional bias: Hamming weight check for low-weight scalars
 /// Returns true if scalar has low Hamming weight (optimization for EC operations)
-/// Optimal threshold: <64 set bits (avg secp scalar ~128, this filters ~1/2 space)
-pub fn apply_hamming_bias(scalar: &BigInt256, max_weight: u32) -> bool {
-    let bytes = scalar.to_bytes_be();
-    let weight: u32 = bytes.iter().map(|b| b.count_ones()).sum();
-    weight < 64  // Optimal: ~1/2 filter, measurable EC speedup
+/// Disabled for GOLD clusters (uniform Hamming=128, no filtering benefit)
+pub fn apply_hamming_bias(scalar: &BigInt256, max_weight: u32, is_gold_cluster: bool) -> bool {
+    if is_gold_cluster {
+        // GOLD clusters have uniform Hamming=128, disable filter to avoid over-filtering
+        true  // Accept all scalars for GOLD clusters
+    } else {
+        let bytes = scalar.to_bytes_be();
+        let weight: u32 = bytes.iter().map(|b| b.count_ones()).sum();
+        weight < max_weight  // Standard filtering for non-GOLD clusters
+    }
 }
 
 /// Compute combined bias score across multiple filters
@@ -74,16 +81,13 @@ pub fn compute_combined_bias_score(
     mod27_target: u8,
     mod81_target: u8,
     mod3_target: u8,
-    max_hamming: u32
+    max_hamming: u32,
+    is_gold_cluster: bool
 ) -> f64 {
-    let mut score = apply_biases(scalar, (mod9_target, mod27_target, mod81_target, true));
+    let mut score = apply_biases(scalar, (mod9_target, mod27_target, mod81_target, mod3_target, true));
 
-    if apply_mod3_bias(scalar, mod3_target) {
-        score += 0.1;  // Additional mod3 bonus
-    }
-
-    if apply_hamming_bias(scalar, max_hamming) {
-        score += 0.1;  // Additional hamming bonus
+    if apply_hamming_bias(scalar, max_hamming, is_gold_cluster) && !is_gold_cluster {
+        score += 0.1;  // Additional hamming bonus only for non-GOLD clusters
     }
 
     score.min(1.0)  // Cap at perfect match
@@ -100,4 +104,37 @@ include!(concat!(env!("OUT_DIR"), "/magic9_biases.rs"));
 /// Returns (mod3, mod9, mod27, mod81, hamming_weight)
 pub fn get_magic9_bias(index: usize) -> (u8, u8, u8, u8, u32) {
     MAGIC9_BIASES.get(index).copied().unwrap_or((0, 0, 0, 0, 128))
+}
+
+/// Pre-computed D_g cache for GOLD cluster mode (shared across all keys)
+static mut PRECOMPUTED_D_G: Option<BigInt256> = None;
+
+/// Get or compute pre-computed D_g for GOLD cluster (shared D_g optimization)
+pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32)) -> BigInt256 {
+    // Check cache first
+    if let Some(d_g) = unsafe { PRECOMPUTED_D_G.as_ref() } {
+        return d_g.clone();
+    }
+
+    // Compute and cache for GOLD cluster
+    info!("🔍 Pre-computing shared D_g for GOLD cluster");
+    let curve = crate::math::secp::Secp256k1::new();
+    let generator = crate::types::Point::generator();
+
+    // Convert bias tuple to kangaroo format
+    let kangaroo_bias = (bias.1, bias.2, bias.3, true); // mod9, mod27, mod81, pos
+
+    // Compute D_g (this is expensive, so we cache it)
+    let d_g = crate::kangaroo::generator::biased_kangaroo_to_attractor(
+        &generator, attractor_x, kangaroo_bias, &curve, 1_000_000
+    ).unwrap_or_else(|_| {
+        warn!("Failed to pre-compute D_g, using fallback");
+        BigInt256::zero()
+    });
+
+    // Cache the result
+    unsafe { PRECOMPUTED_D_G = Some(d_g.clone()) };
+
+    info!("✅ Shared D_g pre-computed: {}", d_g.to_hex());
+    d_g
 }

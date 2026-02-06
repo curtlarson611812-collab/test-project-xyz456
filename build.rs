@@ -12,11 +12,16 @@ fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("magic9_biases.rs");
 
-    // Try to read the pubkey file
+    // Try to read the pubkey file with enhanced error handling
     let pubkey_file = match File::open("valuable_p2pk_pubkeys.txt") {
-        Ok(file) => file,
+        Ok(file) => {
+            println!("cargo:warning=Successfully opened valuable_p2pk_pubkeys.txt for bias computation");
+            file
+        },
         Err(e) => {
-            eprintln!("Warning: Could not open valuable_p2pk_pubkeys.txt: {}. Using placeholder biases.", e);
+            eprintln!("Error: Could not open valuable_p2pk_pubkeys.txt: {}. This file is required for Magic 9 GOLD cluster analysis.", e);
+            eprintln!("Please ensure valuable_p2pk_pubkeys.txt exists in the project root.");
+            eprintln!("Falling back to placeholder biases - GOLD cluster optimizations will be limited.");
             // Generate placeholder biases based on typical patterns
             generate_placeholder_biases(&dest_path);
             return;

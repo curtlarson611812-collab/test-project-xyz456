@@ -11,6 +11,8 @@ use speedbitcrack::config::Config;
 use speedbitcrack::kangaroo::KangarooGenerator;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::pubkey_loader;
+use speedbitcrack::utils::bias;
+use speedbitcrack::gpu::HybridGpuManager;
 use speedbitcrack::utils::output::{start_real_time_output, DisplayArgs, DisplayConfig};
 use speedbitcrack::test_basic::run_basic_test;
 use std::ops::{Add, Sub};
@@ -168,7 +170,7 @@ impl PuzzleMode for RealMode {
 struct Magic9Mode;
 impl PuzzleMode for Magic9Mode {
     fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>> {
-        load_magic9_pubkeys(curve)
+        pubkey_loader::load_magic9_pubkeys(curve)
     }
     fn execute(&self, gen: &KangarooGenerator, points: &[Point], _args: &Args) -> Result<()> {
         execute_magic9(gen, points)
@@ -821,10 +823,6 @@ fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt25
 
 /// Execute magic 9 sniper mode for targeted cluster cracking
 fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
-    use crate::kangaroo::generator::{biased_kangaroo_to_attractor, compute_pubkey_biases};
-    use crate::math::bigint::BigInt256;
-    use crate::math::secp::Secp256k1;
-    use crate::gpu::HybridGpuManager;
 
     info!("🎯 Magic 9 Sniper Mode: Targeting {} pubkeys for attractor-based solving", points.len());
 
@@ -836,8 +834,7 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 
     // Define the central attractor x-coordinate (Magic 9 point)
     let attractor_x_hex = "30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38";
-    let attractor_x = BigInt256::from_hex(attractor_x_hex)
-        .map_err(|e| anyhow!("Invalid attractor hex: {}", e))?;
+    let attractor_x = BigInt256::from_hex(attractor_x_hex);
 
     let curve = Secp256k1::new();
     let mut d_g: Option<BigInt256> = None;
@@ -851,7 +848,7 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
         let g_limbs = [curve.g.x[0], curve.g.x[1], curve.g.x[2], curve.g.x[3],
                        curve.g.y[0], curve.g.y[1], curve.g.y[2], curve.g.y[3],
                        curve.g.z[0], curve.g.z[1], curve.g.z[2], curve.g.z[3]];
-        let attractor_x_limbs = attractor_x.to_u64_array();
+        let attractor_x_limbs = attractor_x.clone().to_u64_array();
 
         let mut g_points = vec![g_limbs];
         let mut reached_attractor = vec![false];
@@ -884,7 +881,7 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     }
 
     let d_g = d_g.unwrap();
-    let curve_order = curve.order.clone();
+    let curve_order = curve.n.clone();
 
     // Concise solve loop with enhanced biases
     let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
@@ -895,16 +892,16 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 
         // Enhanced bias computation with attractor cross-check and pre-computed database
         let pubkey_affine = curve.to_affine(point);
-        let base_biases = crate::utils::bias::compute_pubkey_biases(&BigInt256::from_u64_array(pubkey_affine.x), &attractor_x);
+        let base_biases = bias::compute_pubkey_biases(&BigInt256::from_u64_array(pubkey_affine.x), &attractor_x);
         // Use cluster-specific pre-computed database for Magic 9
-        let (mod3, mod9, mod27, mod81, _hamming) = crate::utils::bias::get_magic9_bias(i);
-        let biases = (mod9, mod27, mod81, mod3, true); // mod9,27,81,3,pos
+        let (mod3, mod9, mod27, mod81, _hamming) = bias::get_magic9_bias(i);
+        let biases = (mod9, mod27, mod81, true); // mod9,27,81,pos (hybrid manager expects 4 elements)
 
         // GPU kangaroo walk (concise implementation)
         let point_limbs = [point.x[0], point.x[1], point.x[2], point.x[3],
                           point.y[0], point.y[1], point.y[2], point.y[3],
                           point.z[0], point.z[1], point.z[2], point.z[3]];
-        let attractor_x_limbs = attractor_x.to_u64_array();
+        let attractor_x_limbs = attractor_x.clone().to_u64_array();
 
         let mut pubkey_points = vec![point_limbs];
         let mut reached_attractor = vec![false];
@@ -925,23 +922,202 @@ fn execute_magic9(gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 
         // G-Link solve with explicit positive diff handling
         let d_i = BigInt256::from_u64(step_count * 1000);
-        let diff = d_g.checked_sub(&d_i)
-            .unwrap_or_else(|| d_g.clone() + curve_order.clone() - d_i);
+        let diff = if d_g > d_i {
+            d_g.clone() - d_i
+        } else {
+            d_g.clone() + curve_order.clone() - d_i
+        };
         let k_i = (BigInt256::one() + diff) % curve_order.clone();
 
         // Verification (concise)
-        let computed_point = curve.mul_constant_time(&k_i, &curve.g)
-            .ok_or_else(|| anyhow!("Failed to compute G * k_i"))?;
+        let computed_point = match curve.mul_constant_time(&k_i, &curve.g) {
+            Ok(point) => point,
+            Err(_) => {
+                warn!("❌ Failed to compute G * k_i for Magic 9 #{}", pubkey_index);
+                continue;
+            }
+        };
         let computed_affine = curve.to_affine(&computed_point);
 
-        if computed_affine.x == pubkey_affine.x && computed_affine.y == pubkey_affine.y {
-            println!("🎉 SUCCESS! Magic 9 #{}: 0x{}", pubkey_index, hex::encode(k_i.to_bytes()));
+        if BigInt256::from_u64_array(computed_affine.x) == BigInt256::from_u64_array(pubkey_affine.x) &&
+           BigInt256::from_u64_array(computed_affine.y) == BigInt256::from_u64_array(pubkey_affine.y) {
+            println!("🎉 SUCCESS! Magic 9 #{}: 0x{}", pubkey_index, hex::encode(k_i.to_bytes_be()));
         } else {
             warn!("❌ Verification failed for Magic 9 #{}", pubkey_index);
         }
     }
 
     info!("🏆 Magic 9 sniper mode completed with GPU acceleration!");
+    Ok(())
+}
+
+/// Detect if we're in GOLD cluster mode (all keys share identical bias patterns)
+fn is_magic9_gold_cluster() -> bool {
+    use speedbitcrack::utils::bias::MAGIC9_BIASES;
+
+    if MAGIC9_BIASES.is_empty() {
+        return false;
+    }
+
+    // Check if all biases are identical (GOLD cluster pattern)
+    let first_bias = MAGIC9_BIASES[0];
+    MAGIC9_BIASES.iter().all(|&bias| bias == first_bias)
+}
+
+/// GOLD Cluster Mode: Optimized processing for uniform bias patterns
+async fn execute_magic9_gold_cluster(
+    points: &[Point],
+    indices: &[u32; 9],
+    curve: &Secp256k1,
+    attractor_x: &BigInt256,
+    hybrid_manager: &HybridGpuManager,
+) -> Result<()> {
+    use speedbitcrack::utils::bias;
+
+    info!("🏆 Executing GOLD Cluster Mode with shared optimizations");
+
+    // Shared bias for entire cluster (all identical)
+    let shared_bias = bias::get_magic9_bias(0);
+    let biases = (shared_bias.1, shared_bias.2, shared_bias.3, true); // mod9,27,81,pos
+
+    // Pre-compute shared D_g once for entire cluster
+    let shared_d_g = bias::get_precomputed_d_g(attractor_x, shared_bias);
+    info!("📊 Shared D_g pre-computed for GOLD cluster");
+
+    // Process all cluster keys with shared optimizations
+    for (i, point) in points.iter().enumerate() {
+        let pubkey_index = indices[i];
+        info!("🎯 Processing GOLD cluster key #{} (index {})", i + 1, pubkey_index);
+
+        // GPU kangaroo walk with shared bias
+        let point_limbs = [point.x[0], point.x[1], point.x[2], point.x[3],
+                          point.y[0], point.y[1], point.y[2], point.y[3],
+                          point.z[0], point.z[1], point.z[2], point.z[3]];
+        let attractor_x_limbs = attractor_x.clone().to_u64_array();
+
+        let mut pubkey_points = vec![point_limbs];
+        let mut reached_attractor = vec![false];
+        let mut step_count = 0u64;
+        const MAX_STEPS: u64 = 1000000;
+
+        while !reached_attractor[0] && step_count < MAX_STEPS {
+            reached_attractor = hybrid_manager.dispatch_biased_kangaroo_step(
+                &mut pubkey_points, &attractor_x_limbs, biases, 100
+            )?;
+            step_count += 1;
+        }
+
+        if !reached_attractor[0] {
+            warn!("❌ Failed to reach attractor for GOLD key #{} within {} steps", pubkey_index, MAX_STEPS);
+            continue;
+        }
+
+        // G-Link solve using shared D_g
+        let d_i = BigInt256::from_u64(step_count * 1000);
+        let curve_order = curve.n.clone();
+        let diff = if shared_d_g > d_i {
+            shared_d_g.clone() - d_i
+        } else {
+            shared_d_g.clone() + curve_order.clone() - d_i
+        };
+        let k_i = (BigInt256::one() + diff) % curve_order;
+
+        // Verification
+        let computed_point = match curve.mul_constant_time(&k_i, &curve.g) {
+            Ok(point) => point,
+            Err(_) => {
+                warn!("❌ Failed to compute G * k_i for GOLD key #{}", pubkey_index);
+                continue;
+            }
+        };
+        let computed_affine = curve.to_affine(&computed_point);
+        let pubkey_affine = curve.to_affine(point);
+
+        if BigInt256::from_u64_array(computed_affine.x) == BigInt256::from_u64_array(pubkey_affine.x) &&
+           BigInt256::from_u64_array(computed_affine.y) == BigInt256::from_u64_array(pubkey_affine.y) {
+            println!("🎉 SUCCESS! GOLD Cluster #{}: 0x{}", pubkey_index, hex::encode(k_i.to_bytes_be()));
+        } else {
+            warn!("❌ Verification failed for GOLD key #{}", pubkey_index);
+        }
+    }
+
+    info!("🏆 GOLD Cluster Mode completed - all 9 keys processed with shared optimizations!");
+    Ok(())
+}
+
+/// Standard Magic 9 processing for non-uniform clusters
+async fn execute_magic9_standard(
+    points: &[Point],
+    indices: &[u32; 9],
+    curve: &Secp256k1,
+    attractor_x: &BigInt256,
+    d_g: BigInt256,
+    hybrid_manager: &HybridGpuManager,
+) -> Result<()> {
+    use speedbitcrack::utils::bias;
+
+    // Standard per-key processing (original logic)
+    for (i, point) in points.iter().enumerate() {
+        let pubkey_index = indices[i];
+        info!("🎯 Processing Magic 9 pubkey #{} (index {})", i + 1, pubkey_index);
+
+        let pubkey_affine = curve.to_affine(point);
+        let base_biases = bias::compute_pubkey_biases(&BigInt256::from_u64_array(pubkey_affine.x), &attractor_x);
+        let (mod3, mod9, mod27, mod81, _hamming) = bias::get_magic9_bias(i);
+        let biases = (mod9, mod27, mod81, true);
+
+        // GPU kangaroo walk
+        let point_limbs = [point.x[0], point.x[1], point.x[2], point.x[3],
+                          point.y[0], point.y[1], point.y[2], point.y[3],
+                          point.z[0], point.z[1], point.z[2], point.z[3]];
+        let attractor_x_limbs = attractor_x.clone().to_u64_array();
+
+        let mut pubkey_points = vec![point_limbs];
+        let mut reached_attractor = vec![false];
+        let mut step_count = 0u64;
+        const MAX_STEPS: u64 = 1000000;
+
+        while !reached_attractor[0] && step_count < MAX_STEPS {
+            reached_attractor = hybrid_manager.dispatch_biased_kangaroo_step(
+                &mut pubkey_points, &attractor_x_limbs, biases, 100
+            )?;
+            step_count += 1;
+        }
+
+        if !reached_attractor[0] {
+            warn!("❌ Failed to reach attractor for Magic 9 #{} within {} steps", pubkey_index, MAX_STEPS);
+            continue;
+        }
+
+        // G-Link solve
+        let d_i = BigInt256::from_u64(step_count * 1000);
+        let curve_order = curve.n.clone();
+        let diff = if d_g > d_i {
+            d_g.clone() - d_i
+        } else {
+            d_g.clone() + curve_order.clone() - d_i
+        };
+        let k_i = (BigInt256::one() + diff) % curve_order;
+
+        // Verification
+        let computed_point = match curve.mul_constant_time(&k_i, &curve.g) {
+            Ok(point) => point,
+            Err(_) => {
+                warn!("❌ Failed to compute G * k_i for Magic 9 #{}", pubkey_index);
+                continue;
+            }
+        };
+        let computed_affine = curve.to_affine(&computed_point);
+        let pubkey_affine = curve.to_affine(point);
+
+        if BigInt256::from_u64_array(computed_affine.x) == BigInt256::from_u64_array(pubkey_affine.x) &&
+           BigInt256::from_u64_array(computed_affine.y) == BigInt256::from_u64_array(pubkey_affine.y) {
+            println!("🎉 SUCCESS! Magic 9 #{}: 0x{}", pubkey_index, hex::encode(k_i.to_bytes_be()));
+        } else {
+            warn!("❌ Verification failed for Magic 9 #{}", pubkey_index);
+        }
+    }
+
     Ok(())
 }
 
