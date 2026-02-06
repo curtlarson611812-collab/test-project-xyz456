@@ -80,6 +80,27 @@ impl BigInt512 {
 
         let limb_shift = n / 64;
         let bit_shift = n % 64;
+        let mut result = [0u64; 8];
+
+        for i in 0..8 {
+            if i + limb_shift < 8 {
+                result[i + limb_shift] |= self.limbs[i] << bit_shift;
+            }
+            if bit_shift > 0 && i + limb_shift + 1 < 8 {
+                result[i + limb_shift + 1] |= self.limbs[i] >> (64 - bit_shift);
+            }
+        }
+
+        BigInt512 { limbs: result }
+    }
+
+    pub fn right_shift(&self, n: usize) -> BigInt512 {
+        if n >= 512 {
+            return BigInt512 { limbs: [0; 8] };
+        }
+
+        let limb_shift = n / 64;
+        let bit_shift = n % 64;
 
         let mut result = [0u64; 8];
 
@@ -621,22 +642,17 @@ impl BarrettReducer {
         let two_to_512 = BigUint::from(1u32) << 512;
         let mu_big: BigUint = two_to_512 / p_big;
 
-        // Convert back to BigInt512 limbs (big-endian to little-endian limb order)
-        let mut mu_limbs = [0u64; 8];
+        // Convert back to BigInt512 limbs (proper BE to LE conversion)
         let mu_bytes = mu_big.to_bytes_be();
-        let pad_len = 64usize.saturating_sub(mu_bytes.len());
-        let mut padded_bytes = vec![0u8; pad_len];
-        padded_bytes.extend_from_slice(&mu_bytes);
+        let mut mu_limbs = [0u64; 8];
+        let pad_len = 64 - mu_bytes.len();
+        let mut padded = vec![0u8; 64];
+        padded[pad_len..].copy_from_slice(&mu_bytes);  // Pad high (MSB) with zeros
 
-        // Convert from big-endian bytes to little-endian limb order
-        // mu_bytes[0] is MSB, should go to limbs[7] (highest limb)
+        // Convert to little-endian limb order (limbs[0] = LSB)
         for i in 0..8 {
             let start = i * 8;
-            let end = start + 8;
-            if end <= padded_bytes.len() {
-                let limb_bytes = &padded_bytes[start..end];
-                mu_limbs[7 - i] = u64::from_be_bytes(limb_bytes.try_into().unwrap_or([0; 8]));
-            }
+            mu_limbs[i] = u64::from_le_bytes(padded[start..start+8].try_into().unwrap());
         }
 
         let mu = BigInt512 { limbs: mu_limbs };
@@ -734,6 +750,11 @@ impl MontgomeryReducer {
         &self.r_inv
     }
 
+    /// Get modulus
+    pub fn get_modulus(&self) -> &BigInt256 {
+        &self.modulus
+    }
+
     /// Compute n' = -modulus^(-1) mod 2^64 for REDC algorithm
     fn compute_n_prime(modulus_low: u64) -> u64 {
         // Find x such that modulus_low * x ≡ -1 mod 2^64
@@ -768,50 +789,22 @@ impl MontgomeryReducer {
     /// Montgomery modular multiplication: REDC(a * b) = (a * b * R^(-1)) mod modulus
     /// Full REDC (REDCed) algorithm implementation
     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
+        // Proper REDC algorithm for R = 2^256
+        let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
 
-        // Full REDC algorithm for R = 2^256
-        // Step 1: Compute t = a * b (this produces a 512-bit result)
-        let t = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
+        // m = (t_low * n_prime) % 2^64
+        let t_low = prod.limbs[0];
+        let m = ((t_low as u128 * self.n_prime as u128) % (1u128 << 64)) as u64;
 
-        // Step 2: m = (t mod R) * n_prime mod R
-        // Since R = 2^256, t mod R is just the lower 256 bits of t
-        // But we need t mod 2^64 (least significant word) for n_prime multiplication
-        let t_mod_r_low = t.limbs[0] as u128;
-        let n_prime_u128 = self.n_prime as u128;
-        let m = ((t_mod_r_low * n_prime_u128) % (1u128 << 64)) as u64;
+        // u = (t + m * p) / 2^256
+        let m_big = BigInt512::from_u64(m);
+        let mp = m_big.mul(BigInt512::from_bigint256(&self.modulus));
+        let u_big = prod.add(mp);
+        let u = u_big.right_shift(256);  // High 256 bits
 
-        // Step 3: u = (t + m * modulus) / R
-        // First compute m * modulus (64-bit * 256-bit = 320-bit, but we handle as 512-bit)
-        let m_big = BigInt256::from_u64(m);
-        let m_modulus = BigInt512::from_bigint256(&self.modulus).mul(BigInt512::from_bigint256(&m_big));
+        let mut result = u.to_bigint256();
 
-        // Add t + m*modulus
-        let sum = t.add(m_modulus);
-
-        // Divide by R = 2^256 by shifting right 256 bits
-        // Since sum is 512 bits, we take limbs[4] through limbs[7] (bits 256-511)
-        let mut result_limbs = [0u32; 8];
-        // Convert from BigInt512 limbs (u64) to BigInt256 limbs (u32)
-        result_limbs[0] = (sum.limbs[4] & 0xFFFFFFFF) as u32;
-        result_limbs[1] = ((sum.limbs[4] >> 32) & 0xFFFFFFFF) as u32;
-        result_limbs[2] = (sum.limbs[5] & 0xFFFFFFFF) as u32;
-        result_limbs[3] = ((sum.limbs[5] >> 32) & 0xFFFFFFFF) as u32;
-        result_limbs[4] = (sum.limbs[6] & 0xFFFFFFFF) as u32;
-        result_limbs[5] = ((sum.limbs[6] >> 32) & 0xFFFFFFFF) as u32;
-        result_limbs[6] = (sum.limbs[7] & 0xFFFFFFFF) as u32;
-        result_limbs[7] = ((sum.limbs[7] >> 32) & 0xFFFFFFFF) as u32;
-
-        let result_u64 = [
-            (result_limbs[0] as u64) | ((result_limbs[1] as u64) << 32),
-            (result_limbs[2] as u64) | ((result_limbs[3] as u64) << 32),
-            (result_limbs[4] as u64) | ((result_limbs[5] as u64) << 32),
-            (result_limbs[6] as u64) | ((result_limbs[7] as u64) << 32),
-        ];
-        let mut result = BigInt256::from_u64_array(result_u64);
-
-        // Step 4: Final conditional subtraction
-        // If result >= modulus, result = result - modulus
+        // Final conditional subtraction
         if result >= self.modulus {
             result = result.sub(self.modulus.clone());
         }

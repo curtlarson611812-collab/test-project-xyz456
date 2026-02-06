@@ -14,20 +14,35 @@ use log::info;
 use anyhow::{anyhow, Result};
 
 // Block 1: Montgomery Domain Management (fixed for proper arithmetic)
-impl Secp256k1 {
-    // Enter Montgomery form: x * R mod p (R = 2^256 for 256-bit modulus)
-    pub fn montgomery_convert_in(&self, x: &BigInt256) -> BigInt256 {
-        // x * R mod p = x * 2^256 mod p
-        // Since R = 2^256 > p for secp256k1, this is just x * 2^256 mod p = (x << 256) mod p
-        let x_big = BigInt512::from_bigint256(x);
-        let shifted = x_big.left_shift(256); // x * 2^256
-        self.barrett_p.reduce(&shifted).unwrap_or(BigInt256::zero())
+impl MontgomeryReducer {
+    /// Convert to Montgomery form: x * R mod modulus
+    pub fn convert_in(&self, x: &BigInt256) -> BigInt256 {
+        let x_big = BigInt512::from_bigint256(x).left_shift(256);
+        self.reduce_big(&x_big)
     }
 
-    // Exit Montgomery form: x_r * R^-1 mod p = x
-    pub fn montgomery_convert_out(&self, x_r: &BigInt256) -> BigInt256 {
-        // x_r * R^-1 mod p = x_r * r_inv mod p
-        self.montgomery_p.mul(x_r, &self.montgomery_p.get_r_inv())
+    /// Convert from Montgomery form: x * R^-1 mod modulus
+    pub fn convert_out(&self, x_r: &BigInt256) -> BigInt256 {
+        self.mul(x_r, &self.get_r_inv())
+    }
+
+    /// Reduce BigInt512 modulo modulus using simple division
+    fn reduce_big(&self, x: &BigInt512) -> BigInt256 {
+        // For values < 2*p, simple subtraction works
+        let m_big = BigInt512::from_bigint256(self.get_modulus());
+        let two_m = m_big.mul(&BigInt512::from_u64(2));
+
+        if x < &two_m {
+            if x >= &m_big {
+                x.clone().sub(m_big).to_bigint256()
+            } else {
+                x.clone().to_bigint256()
+            }
+        } else {
+            // Use div_rem for larger values
+            let (_quot, rem) = x.div_rem(&m_big);
+            rem.to_bigint256()
+        }
     }
 }
 
@@ -58,6 +73,16 @@ impl Secp256k1 {
     /// Get the prime modulus p
     pub fn modulus(&self) -> &BigInt256 {
         &self.p
+    }
+
+    // Enter Montgomery form: x * R mod p (R = 2^256 for 256-bit modulus)
+    pub fn montgomery_convert_in(&self, x: &BigInt256) -> BigInt256 {
+        self.montgomery_p.convert_in(x)
+    }
+
+    // Exit Montgomery form: x_r * R^-1 mod p = x
+    pub fn montgomery_convert_out(&self, x_r: &BigInt256) -> BigInt256 {
+        self.montgomery_p.convert_out(x_r)
     }
 
     /// Get the group order n
