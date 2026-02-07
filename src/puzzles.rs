@@ -18,6 +18,7 @@ pub struct PuzzleEntry {
     pub status: PuzzleStatus,
     pub btc_reward: f64,
     pub pub_key_hex: String,
+    pub privkey_hex: Option<String>,
     pub target_address: String,
     pub range_min: BigInt256,
     pub range_max: BigInt256,
@@ -62,15 +63,16 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         };
         let btc_reward: f64 = parts[2].trim().parse()?;
         let pub_key_hex = parts[3].trim().to_string();
+        let privkey_hex = if parts[4].trim().is_empty() { None } else { Some(parts[4].trim().to_string()) };
         let target_address = parts[5].trim().to_string();
         let range_min_hex = parts[6].trim();
         let range_max_hex = parts[7].trim();
         let search_space_bits: u32 = parts[8].trim().parse()?;
 
-        // Calculate estimated ops (log2 of search space)
-        let estimated_ops = search_space_bits as f64;
+        // Calculate estimated ops (sqrt of search space for kangaroo algorithm)
+        let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
 
-        // Parse ranges
+        // Parse ranges from hex strings
         let range_min = BigInt256::from_hex(range_min_hex);
         let range_max = BigInt256::from_hex(range_max_hex);
 
@@ -79,6 +81,7 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
             status,
             btc_reward,
             pub_key_hex,
+            privkey_hex,
             target_address,
             range_min,
             range_max,
@@ -131,21 +134,27 @@ pub fn get_sequential_puzzle_ranges(start: u32, end: u32) -> Vec<(u32, BigInt256
     let mut ranges = Vec::new();
 
     for n in start..=end {
-        let min = if n == 0 {
-            BigInt256::zero()
-        } else {
-            // 2^(n-1)
-            BigInt256::one() << ((n - 1) as usize)
-        };
+        // Calculate 2^(n-1) and 2^n - 1 using iterative multiplication
+        // This is efficient for reasonable n values (n <= 160 in practice)
+        if n == 0 {
+            ranges.push((n, BigInt256::zero(), BigInt256::one()));
+            continue;
+        }
 
-        let max = if n == 0 {
-            BigInt256::one()
-        } else {
-            // 2^n - 1
-            (BigInt256::one() << (n as usize)) - BigInt256::one()
-        };
+        // Calculate 2^(n-1)
+        let mut current_min = BigInt256::one();
+        for _ in 0..(n-1) {
+            current_min = current_min.clone() + current_min; // Double the value
+        }
 
-        ranges.push((n, min, max));
+        // Calculate 2^n - 1
+        let mut current_max = BigInt256::one();
+        for _ in 0..n {
+            current_max = current_max.clone() + current_max; // Double the value
+        }
+        current_max = current_max - BigInt256::one(); // Subtract 1
+
+        ranges.push((n, current_min, current_max));
     }
 
     ranges
@@ -354,16 +363,70 @@ mod tests {
 
     #[test]
     fn test_remaining_prize_pool() {
-        let remaining = calculate_remaining_prize_pool();
+        let remaining = calculate_remaining_prize_pool().unwrap();
         println!("Remaining prize pool: {} BTC", remaining);
         assert!(remaining > 900.0); // Should be around 969 BTC
     }
 
     #[test]
     fn test_solved_puzzles_have_private_keys() {
-        let solved = get_solved_puzzles();
+        let solved = get_solved_puzzles().unwrap();
         for puzzle in solved {
-            assert!(puzzle.priv_hex.is_some());
+            assert!(puzzle.privkey_hex.is_some());
+        }
+    }
+
+    #[test]
+    fn benchmark_load_puzzles() {
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let puzzles = load_puzzles_from_file().unwrap();
+        let duration = start.elapsed();
+
+        println!("Loaded {} puzzles in {:?}", puzzles.len(), duration);
+        assert!(puzzles.len() > 100); // Should have many puzzles
+        assert!(duration.as_millis() < 100); // Should load quickly
+    }
+
+    #[test]
+    fn benchmark_range_calculations() {
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let ranges = get_sequential_puzzle_ranges(1, 50); // Test first 50 ranges
+        let duration = start.elapsed();
+
+        println!("Calculated {} ranges in {:?}", ranges.len(), duration);
+        assert_eq!(ranges.len(), 50);
+
+        // Verify range calculations
+        let (n, min, max) = &ranges[0]; // n=1
+        assert_eq!(*n, 1);
+        assert_eq!(min, &BigInt256::one()); // 2^0 = 1
+        assert_eq!(max, &BigInt256::from_u64(1)); // 2^1 - 1 = 1
+
+        let (n, min, max) = &ranges[1]; // n=2
+        assert_eq!(*n, 2);
+        assert_eq!(min, &BigInt256::from_u64(2)); // 2^1 = 2
+        assert_eq!(max, &BigInt256::from_u64(3)); // 2^2 - 1 = 3
+
+        assert!(duration.as_millis() < 10); // Should be very fast
+    }
+
+    #[test]
+    fn test_range_hex_parsing() {
+        // Test that ranges are properly parsed from hex
+        let puzzles = load_puzzles_from_file().unwrap();
+
+        for puzzle in puzzles {
+            // For solved puzzles, ranges should be properly set
+            if puzzle.status == PuzzleStatus::Solved {
+                // Range min should be > 0 for solved puzzles
+                assert!(!puzzle.range_min.is_zero());
+                assert!(!puzzle.range_max.is_zero());
+                assert!(puzzle.range_max > puzzle.range_min);
+            }
         }
     }
 }

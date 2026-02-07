@@ -675,14 +675,14 @@ impl BarrettReducer {
     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
         use num_bigint::BigUint;
 
-        // Convert x to BigUint (LE bytes)
+        // Convert x to BigUint (LE bytes) - BigInt512 is 64 bytes
         let mut x_bytes = vec![0u8; 64];
         for (i, &limb) in x.limbs.iter().enumerate() {
             x_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
         }
         let x_big = BigUint::from_bytes_le(&x_bytes);
 
-        // mu_big from self.mu (LE)
+        // mu_big from self.mu (LE) - BarrettReducer.mu is BigInt512 (64 bytes)
         let mut mu_bytes = vec![0u8; 64];
         for (i, &limb) in self.mu.limbs.iter().enumerate() {
             mu_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
@@ -690,20 +690,22 @@ impl BarrettReducer {
         let mu_big = BigUint::from_bytes_le(&mu_bytes);
 
         let b = (self.modulus.bit_length() as u32); // 256
+        println!("DEBUG Barrett: b={}, x_big.bit_length()={}", b, x_big.bits());
         let q1 = x_big.clone() >> (b - 1);
         let q2 = q1 * mu_big;
         let q3 = q2 >> (b + 1);
         let modulus_big = BigUint::from_bytes_be(&self.modulus.to_bytes_be());
-        let q_m = q3 * modulus_big;
+        let q_m = q3 * modulus_big.clone();
+        println!("DEBUG Barrett: x_big={}, q_m={}, x_big >= q_m: {}", x_big, q_m, x_big >= q_m);
         let mut r_big = x_big - q_m;
-        let p_big = modulus_big.clone();
+        let p_big = modulus_big;
         while r_big >= p_big {
             r_big -= &p_big;
         }
         // Convert r_big to BigInt256 (pad BE to 32 bytes)
         let r_bytes = r_big.to_bytes_be();
         let mut padded = [0u8; 32];
-        let start = 32.saturating_sub(r_bytes.len());
+        let start = 32usize.saturating_sub(r_bytes.len());
         padded[start..].copy_from_slice(&r_bytes);
         Ok(BigInt256::from_bytes_be(&padded))
     }

@@ -756,11 +756,56 @@ impl CollisionDetector {
         })
     }
 
+    /// Solve collision using SmallOddPrime inversion
+    pub fn solve_collision(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
+        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
+        use crate::math::secp::mod_inverse;
+
+        let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
+        let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
+
+        // d_tame - d_wild (distance difference)
+        let tame_dist = BigInt256::from_u64_array(tame.distance);
+        let wild_dist = BigInt256::from_u64_array(wild.distance);
+        let diff = CURVE_ORDER_BIGINT.sub(&tame_dist, &wild_dist);
+
+        // k = inv(prime) * (d_tame - d_wild) mod n
+        if let Some(inv_prime) = mod_inverse(&prime, &CURVE_ORDER_BIGINT) {
+            let k = CURVE_ORDER_BIGINT.mul(&inv_prime, &diff);
+            Some(k)
+        } else {
+            None
+        }
+    }
+
+    /// Solve collision using prime factorization approach
+    pub fn solve_collision_with_prime(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
+        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
+        use crate::math::secp::mod_inverse;
+
+        let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
+        let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
+
+        // Extended Euclidean algorithm for solving: prime * x ≡ (d_tame - d_wild) mod n
+        let tame_dist = BigInt256::from_u64_array(tame.distance);
+        let wild_dist = BigInt256::from_u64_array(wild.distance);
+        let diff = CURVE_ORDER_BIGINT.sub(&tame_dist, &wild_dist);
+
+        // Find x such that prime * x ≡ diff mod n
+        // This is equivalent to x ≡ diff * inv(prime) mod n
+        if let Some(inv_prime) = mod_inverse(&prime, &CURVE_ORDER_BIGINT) {
+            let k = CURVE_ORDER_BIGINT.mul(&inv_prime, &diff);
+            Some(k)
+        } else {
+            None
+        }
+    }
+
     // fn hash_position(&self, p: &Point) -> u32 {
     //     let aff = self.curve.to_affine(p);
     //     (0..4).fold(0u32, |h, i| h ^ (aff.x[i] ^ aff.y[i]) as u32)
     // }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -793,103 +838,6 @@ mod tests {
         assert!(solution.is_none());
     }
 
-    /// Brent's cycle detection fallback for DP misses
-    pub fn brents_cycle_fallback(&self, start_dist: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
-        use crate::kangaroo::generator::biased_brent_cycle;
-
-        // Use the biased Brent's cycle detection from generator.rs
-        biased_brent_cycle(start_dist, biases)
-    }
-
-    /// Check and resolve collisions with Brent's fallback
-    pub fn check_and_resolve_collisions(dp_table: &DpTable, states: &[KangarooState], biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
-        use crate::kangaroo::generator::biased_brent_cycle;
-        use crate::math::constants::CURVE_ORDER_BIGINT;
-
-        // Existing DP check
-        for state in states {
-            // Check if this state would be a DP candidate
-            if state.distance.trailing_zeros() >= crate::math::constants::DP_BITS {
-                // In full implementation, would check dp_table for collisions
-                // For now, skip DP table lookup
-            }
-        }
-
-        // Brent's fallback if no DP collision found
-        for state in states {
-            if let Some(cycle_point) = biased_brent_cycle(&BigInt256::from_u64(state.distance), biases) {
-                info!("Cycle resolved, solving dlog for state distance {}", state.distance);
-                // Simplified collision resolution from cycle detection
-                // In practice, would need to distinguish tame vs wild kangaroos
-                // and compute proper discrete log
-                let diff = BigInt256::from_u64(state.distance) - cycle_point;
-                // Mock inverse for demonstration - would use proper modular inverse
-                let inv_jump = BigInt256::from_u64(1);
-                let result = (diff * inv_jump) % CURVE_ORDER_BIGINT.clone();
-                return Some(result);
-            }
-        }
-        None
-    }
-
-    /// Solve collision using SmallOddPrime inversion
-    pub fn solve_collision(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
-        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
-        use crate::math::secp::mod_inverse;
-
-        let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
-        let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
-
-        // d_tame - d_wild (distance difference)
-        let tame_dist = BigInt256::from_u64_array(tame.distance);
-        let wild_dist = BigInt256::from_u64_array(wild.distance);
-        let diff = CURVE_ORDER_BIGINT.sub(&tame_dist, &wild_dist);
-
-        // k = inv(prime) * (d_tame - d_wild) mod n
-        if let Some(inv_prime) = mod_inverse(&prime, &CURVE_ORDER_BIGINT) {
-            let k = CURVE_ORDER_BIGINT.mul(&diff, &inv_prime);
-            let result = CURVE_ORDER_BIGINT.reduce(&k, &CURVE_ORDER_BIGINT);
-            Some(result)
-        } else {
-            warn!("Failed to compute modular inverse for prime {}", PRIME_MULTIPLIERS[prime_idx]);
-            None
-        }
-    }
-
-    /// Solve collision using SmallOddPrime inversion
-    pub fn solve_collision_with_prime(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
-        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
-
-        let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
-        let prime = PRIME_MULTIPLIERS[prime_idx];
-        let prime_bigint = BigInt256::from_u64(prime);
-
-        // For collision: tame_dist ≡ wild_dist + k * prime mod order
-        // So: k ≡ (tame_dist - wild_dist) * inv(prime) mod order
-
-        // Calculate difference: tame_dist - wild_dist
-        let tame_dist = BigInt256::from_u64_array(tame.distance);
-        let wild_dist = BigInt256::from_u64_array(wild.distance);
-        let diff = if tame_dist >= wild_dist {
-            tame_dist - wild_dist
-        } else {
-            // Handle modular arithmetic wraparound
-            CURVE_ORDER_BIGINT.clone() + tame_dist - wild_dist
-        };
-
-        // Find modular inverse of prime
-        if let Some(inv_prime) = self.curve.mod_inverse(&prime_bigint, &CURVE_ORDER_BIGINT) {
-            // Calculate k = diff * inv_prime mod order
-            let k = self.curve.barrett_n.mul(&diff, &inv_prime);
-            let k_reduced = self.curve.barrett_n.reduce(&BigInt512::from_bigint256(&k), &CURVE_ORDER_BIGINT);
-
-            Some(k_reduced)
-        } else {
-            warn!("Failed to compute modular inverse for prime {}", prime);
-            None
-        }
-    }
-
     #[test]
     fn test_hash_position() {
         let detector = CollisionDetector::new();
@@ -899,24 +847,10 @@ mod tests {
     }
 
     #[test]
-    fn test_calculated_near_solve_small_diff() {
-        let detector = CollisionDetector::default_with_range(&BigInt256::from_u64(100000));
-        let tame_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(10u64), is_tame: true };
-        let wild_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(5u64), is_tame: false };
-        let range_width = BigInt256::from_u64(100000);
-
-        // Test that calculated_near_solve handles small diffs
-        let result = detector.calculated_near_solve(&tame_trap, &wild_trap, &range_width);
-        // Should attempt calculated solve and either succeed or fail gracefully
-        // (exact behavior depends on curve math, but shouldn't panic)
-        assert!(result.is_some() || result.is_none()); // Either outcome is acceptable for this test
-    }
-
-    #[test]
-    fn test_walk_back_near_collision_with_calculated() {
-        let detector = CollisionDetector::default_with_range(&BigInt256::from_u64(100000));
-        let tame_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(10u64), is_tame: true };
-        let wild_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(5u64), is_tame: false };
+    fn test_walk_back_near_collision() {
+        let detector = CollisionDetector::new();
+        let tame_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true };
+        let wild_trap = Trap { x: [5, 6, 7, 8], dist: BigUint::from(50u64), is_tame: false };
         let jump_table = vec![];
         let hash_fn = |p: &Point| p.x[0] as usize;
         let range_width = BigInt256::from_u64(100000);

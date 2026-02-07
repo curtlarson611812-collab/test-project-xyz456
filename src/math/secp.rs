@@ -345,49 +345,86 @@ impl Secp256k1 {
             return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
         }
 
-        // Jacobian doubling: use Montgomery domain for all mul operations (full Mont for perf)
-        let px_r = self.montgomery_p.convert_in(&px);
-        let py_r = self.montgomery_p.convert_in(&py);
-        let pz_r = self.montgomery_p.convert_in(&pz);
+        // Temporarily bypass Montgomery for testing - use direct values
+        let px_r = px;
+        let py_r = py;
+        let pz_r = pz;
 
-        // All operations in Montgomery domain
-        let xx_r = self.montgomery_p.mul(&px_r, &px_r); // XX = X1^2
-        let yy_r = self.montgomery_p.mul(&py_r, &py_r); // YY = Y1^2
-        let yyyy_r = self.montgomery_p.mul(&yy_r, &yy_r); // YYYY = YY^2
+        // Use simple modular arithmetic for testing (bypass Montgomery/Barrett issues)
+        let p_val = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
 
-        // S = 2*((X1 + YY)^2 - XX - YYYY) using Montgomery
-        let x_plus_yy_r = self.montgomery_p.add(&px_r, &yy_r); // X1 + YY
-        let x_plus_yy_sq_r = self.montgomery_p.mul(&x_plus_yy_r, &x_plus_yy_r); // (X1 + YY)^2
+        // Helper function for modular multiplication
+        let mod_mul = |a: &BigInt256, b: &BigInt256| -> BigInt256 {
+            let a_big = num_bigint::BigUint::from_bytes_be(&a.to_bytes_be());
+            let b_big = num_bigint::BigUint::from_bytes_be(&b.to_bytes_be());
+            let p_big = num_bigint::BigUint::from_bytes_be(&p_val.to_bytes_be());
+            let prod = (a_big * b_big) % p_big;
+            let bytes = prod.to_bytes_be();
+            let mut padded = [0u8; 32];
+            let start = 32usize.saturating_sub(bytes.len());
+            padded[start..].copy_from_slice(&bytes);
+            BigInt256::from_bytes_be(&padded)
+        };
 
-        let xx_plus_yyyy_r = self.montgomery_p.add(&xx_r, &yyyy_r); // XX + YYYY
-        let inner_r = self.montgomery_p.sub(&x_plus_yy_sq_r, &xx_plus_yyyy_r); // (X1 + YY)^2 - XX - YYYY
-        let s_r = self.montgomery_p.add(&inner_r, &inner_r); // S = 2*inner
+        let mod_add = |a: &BigInt256, b: &BigInt256| -> BigInt256 {
+            let a_big = num_bigint::BigUint::from_bytes_be(&a.to_bytes_be());
+            let b_big = num_bigint::BigUint::from_bytes_be(&b.to_bytes_be());
+            let p_big = num_bigint::BigUint::from_bytes_be(&p_val.to_bytes_be());
+            let sum = (a_big + b_big) % p_big;
+            let bytes = sum.to_bytes_be();
+            let mut padded = [0u8; 32];
+            let start = 32usize.saturating_sub(bytes.len());
+            padded[start..].copy_from_slice(&bytes);
+            BigInt256::from_bytes_be(&padded)
+        };
+
+        let mod_sub = |a: &BigInt256, b: &BigInt256| -> BigInt256 {
+            let a_big = num_bigint::BigUint::from_bytes_be(&a.to_bytes_be());
+            let b_big = num_bigint::BigUint::from_bytes_be(&b.to_bytes_be());
+            let p_big = num_bigint::BigUint::from_bytes_be(&p_val.to_bytes_be());
+            let diff = if a_big >= b_big { a_big - b_big } else { p_big + a_big - b_big };
+            let bytes = diff.to_bytes_be();
+            let mut padded = [0u8; 32];
+            let start = 32usize.saturating_sub(bytes.len());
+            padded[start..].copy_from_slice(&bytes);
+            BigInt256::from_bytes_be(&padded)
+        };
+
+        let xx_r = mod_mul(&px_r, &px_r); // XX = X1^2
+        let yy_r = mod_mul(&py_r, &py_r); // YY = Y1^2
+        let yyyy_r = mod_mul(&yy_r, &yy_r); // YYYY = YY^2
+
+        // S = 2*((X1 + YY)^2 - XX - YYYY)
+        let x_plus_yy_r = mod_add(&px_r, &yy_r); // X1 + YY
+        let x_plus_yy_sq_r = mod_mul(&x_plus_yy_r, &x_plus_yy_r); // (X1 + YY)^2
+
+        let xx_plus_yyyy_r = mod_add(&xx_r, &yyyy_r); // XX + YYYY
+        let inner_r = mod_sub(&x_plus_yy_sq_r, &xx_plus_yyyy_r); // (X1 + YY)^2 - XX - YYYY
+        let s_r = mod_add(&inner_r, &inner_r); // S = 2*inner
 
         let three = BigInt256::from_u64(3);
-        let three_r = self.montgomery_p.convert_in(&three)?;
-        let m_r = self.montgomery_p.mul(&three_r, &xx_r); // M = 3*XX
+        let m_r = mod_mul(&three, &xx_r); // M = 3*XX
 
-        let t_r = self.montgomery_p.mul(&m_r, &m_r); // T = M^2
+        let t_r = mod_mul(&m_r, &m_r); // T = M^2
 
-        let two_s_r = self.montgomery_p.add(&s_r, &s_r); // 2*S
-        let x3_r = self.montgomery_p.sub(&t_r, &two_s_r); // X3 = T - 2*S
+        let two_s_r = mod_add(&s_r, &s_r); // 2*S
+        let x3_r = mod_sub(&t_r, &two_s_r); // X3 = T - 2*S
 
-        let s_minus_x3_r = self.montgomery_p.sub(&s_r, &x3_r); // S - X3
-        let m_times_diff_r = self.montgomery_p.mul(&m_r, &s_minus_x3_r); // M*(S - X3)
+        let s_minus_x3_r = mod_sub(&s_r, &x3_r); // S - X3
+        let m_times_diff_r = mod_mul(&m_r, &s_minus_x3_r); // M*(S - X3)
 
         let eight = BigInt256::from_u64(8);
-        let eight_r = self.montgomery_p.convert_in(&eight)?;
-        let eight_yyyy_r = self.montgomery_p.mul(&eight_r, &yyyy_r); // 8*YYYY
-        let y3_r = self.montgomery_p.sub(&m_times_diff_r, &eight_yyyy_r); // Y3 = M*(S - X3) - 8*YYYY
+        let eight_yyyy_r = mod_mul(&eight, &yyyy_r); // 8*YYYY
+        let y3_r = mod_sub(&m_times_diff_r, &eight_yyyy_r); // Y3 = M*(S - X3) - 8*YYYY
 
-        let py_pz_r = self.montgomery_p.mul(&py_r, &pz_r); // Y*Z in Mont
-        let two_r = self.montgomery_p.convert_in(&BigInt256::from_u64(2));
-        let z3_r = self.montgomery_p.mul(&py_pz_r, &two_r); // Z3 = 2*Y*Z in Mont
+        let py_pz_r = mod_mul(&py_r, &pz_r); // Y*Z
+        let two = BigInt256::from_u64(2);
+        let z3_r = mod_mul(&py_pz_r, &two); // Z3 = 2*Y*Z
 
-        // Convert back from Montgomery domain
-        let x3 = self.montgomery_p.convert_out(&x3_r);
-        let y3 = self.montgomery_p.convert_out(&y3_r);
-        let z3 = self.montgomery_p.convert_out(&z3_r);
+        // No conversion needed since we bypassed Montgomery
+        let x3 = x3_r;
+        let y3 = y3_r;
+        let z3 = z3_r;
 
         let result = Point {
             x: x3.to_u64_array(),
