@@ -318,7 +318,13 @@ impl BigInt256 {
             hex.to_string()
         };
 
-        let mut bytes = hex::decode(&hex).expect("Invalid hex string");
+        // Try to decode, but handle errors more gracefully
+        let mut bytes = match hex::decode(&hex) {
+            Ok(b) => b,
+            Err(e) => {
+                panic!("Invalid hex string '{}': {}. First 20 chars: '{}', len: {}", hex, e, &hex[..hex.len().min(20)], hex.len());
+            }
+        };
 
         // Pad with leading zeros to make exactly 32 bytes (256 bits)
         while bytes.len() < 32 {

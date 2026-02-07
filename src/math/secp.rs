@@ -65,7 +65,7 @@ impl Secp256k1 {
 
     /// GLV basis vector v2 components (v2 = (v2_1, v2_2))
     pub fn glv_v2_1() -> BigInt256 {
-        BigInt256::from_hex("114ca50f7a8e2f3f657c1108d9d44cfd8")
+        BigInt256::from_hex("114ca50f7a8e2f3f657c1108d9d44cfd")
     }
 
     pub fn glv_v2_2() -> BigInt256 {

@@ -73,9 +73,51 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
 
         // Parse ranges from hex strings
-        // TODO: Re-enable proper range parsing after debugging hex decode issue
-        let range_min = BigInt256::zero();
-        let range_max = BigInt256::zero();
+        let range_min_hex = parts[6].trim();
+        let range_max_hex = parts[7].trim();
+
+        // Basic validation
+        println!("Debug puzzle {}: range_min_hex='{}' len={}", n, range_min_hex, range_min_hex.len());
+        println!("Debug puzzle {}: range_max_hex='{}' len={}", n, range_max_hex, range_max_hex.len());
+
+        // Try to decode with hex crate directly first
+        let range_min_bytes = match hex::decode(range_min_hex) {
+            Ok(bytes) => {
+                if bytes.len() == 32 {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    arr
+                } else {
+                    println!("❌ Wrong byte length for puzzle {} range_min: expected 32, got {}", n, bytes.len());
+                    return Err(anyhow!("Wrong byte length for range_min: expected 32, got {}", bytes.len()));
+                }
+            }
+            Err(e) => {
+                println!("❌ Hex decode failed for puzzle {} range_min: {} (len={}, first 20 chars: {})", n, e, range_min_hex.len(), &range_min_hex[..20.min(range_min_hex.len())]);
+                return Err(anyhow!("Invalid hex in range_min for puzzle {}: {}", n, e));
+            }
+        };
+
+        let range_max_bytes = match hex::decode(range_max_hex) {
+            Ok(bytes) => {
+                if bytes.len() == 32 {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    arr
+                } else {
+                    println!("❌ Wrong byte length for puzzle {} range_max: expected 32, got {}", n, bytes.len());
+                    return Err(anyhow!("Wrong byte length for range_max: expected 32, got {}", bytes.len()));
+                }
+            }
+            Err(e) => {
+                println!("❌ Hex decode failed for puzzle {} range_max: {} (len={}, first 20 chars: {})", n, e, range_max_hex.len(), &range_max_hex[..20.min(range_max_hex.len())]);
+                return Err(anyhow!("Invalid hex in range_max for puzzle {}: {}", n, e));
+            }
+        };
+
+        // Convert bytes to BigInt256
+        let range_min = BigInt256::from_bytes_be(&range_min_bytes);
+        let range_max = BigInt256::from_bytes_be(&range_max_bytes);
 
         puzzles.push(PuzzleEntry {
             n,
