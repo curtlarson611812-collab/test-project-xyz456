@@ -4,6 +4,7 @@ use crate::math::{Secp256k1, BigInt256};
 use crate::config::Config;
 use anyhow::Result;
 use num_bigint::BigUint;
+use std::ops::{Sub, Mul};
 use log::{info, debug};
 use std::ops::Add;
 
@@ -757,44 +758,56 @@ impl CollisionDetector {
     }
 
     /// Solve collision using SmallOddPrime inversion
-    pub fn solve_collision(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
+    pub fn solve_collision_with_prime(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
         use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
-        use crate::math::secp::mod_inverse;
 
         let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
         let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
 
         // d_tame - d_wild (distance difference)
-        let tame_dist = BigInt256::from_u64_array(tame.distance);
-        let wild_dist = BigInt256::from_u64_array(wild.distance);
-        let diff = CURVE_ORDER_BIGINT.sub(&tame_dist, &wild_dist);
+        let tame_dist = BigInt256::from_u64(tame.distance);
+        let wild_dist = BigInt256::from_u64(wild.distance);
+        let diff = tame_dist - wild_dist;
 
         // k = inv(prime) * (d_tame - d_wild) mod n
-        if let Some(inv_prime) = mod_inverse(&prime, &CURVE_ORDER_BIGINT) {
-            let k = CURVE_ORDER_BIGINT.mul(&inv_prime, &diff);
+        let prime_big = BigUint::from_bytes_be(&prime.to_bytes_be());
+        let order_big = BigUint::from_bytes_be(&CURVE_ORDER_BIGINT.to_bytes_be());
+        if let Some(inv_prime) = self.mod_inverse_big(&prime_big, &order_big) {
+            let inv_prime_bytes = inv_prime.to_bytes_be();
+            let mut padded = [0u8; 32];
+            let start = 32usize.saturating_sub(inv_prime_bytes.len());
+            padded[start..].copy_from_slice(&inv_prime_bytes);
+            let inv_prime_bigint = BigInt256::from_bytes_be(&padded);
+            let k = diff * inv_prime_bigint;
             Some(k)
         } else {
             None
         }
     }
 
-    /// Solve collision using prime factorization approach
-    pub fn solve_collision_with_prime(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
+    /// Solve collision using prime factorization approach with Euclidean algorithm
+    pub fn solve_collision_with_prime_euclidean(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
         use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
-        use crate::math::secp::mod_inverse;
 
         let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
         let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
 
         // Extended Euclidean algorithm for solving: prime * x ≡ (d_tame - d_wild) mod n
-        let tame_dist = BigInt256::from_u64_array(tame.distance);
-        let wild_dist = BigInt256::from_u64_array(wild.distance);
-        let diff = CURVE_ORDER_BIGINT.sub(&tame_dist, &wild_dist);
+        let tame_dist = BigInt256::from_u64(tame.distance);
+        let wild_dist = BigInt256::from_u64(wild.distance);
+        let diff = tame_dist - wild_dist;
 
         // Find x such that prime * x ≡ diff mod n
         // This is equivalent to x ≡ diff * inv(prime) mod n
-        if let Some(inv_prime) = mod_inverse(&prime, &CURVE_ORDER_BIGINT) {
-            let k = CURVE_ORDER_BIGINT.mul(&inv_prime, &diff);
+        let prime_big = BigUint::from_bytes_be(&prime.to_bytes_be());
+        let order_big = BigUint::from_bytes_be(&CURVE_ORDER_BIGINT.to_bytes_be());
+        if let Some(inv_prime) = self.mod_inverse_big(&prime_big, &order_big) {
+            let inv_prime_bytes = inv_prime.to_bytes_be();
+            let mut padded = [0u8; 32];
+            let start = 32usize.saturating_sub(inv_prime_bytes.len());
+            padded[start..].copy_from_slice(&inv_prime_bytes);
+            let inv_prime_bigint = BigInt256::from_bytes_be(&padded);
+            let k = diff * inv_prime_bigint;
             Some(k)
         } else {
             None
@@ -805,7 +818,7 @@ impl CollisionDetector {
     //     let aff = self.curve.to_affine(p);
     //     (0..4).fold(0u32, |h, i| h ^ (aff.x[i] ^ aff.y[i]) as u32)
     // }
-
+}
 
 #[cfg(test)]
 mod tests {

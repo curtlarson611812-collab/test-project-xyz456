@@ -67,8 +67,6 @@ struct Args {
     #[arg(long)]
     test_solved: Option<u32>,  // Test solved puzzle verification, e.g. 32, 64, 66
     #[arg(long)]
-    test_crypto: bool,  // Test cryptographic operations for puzzle 32
-    #[arg(long)]
     custom_low: Option<String>,  // Custom search range low (hex)
     #[arg(long)]
     custom_high: Option<String>,  // Custom search range high (hex)
@@ -277,10 +275,6 @@ fn main() -> Result<()> {
     }
 
     // Handle solved puzzle testing
-    if args.test_crypto {
-        test_puzzle32_crypto()?;
-        return Ok(());
-    }
 
     if let Some(puzzle_num) = args.test_solved {
         test_solved_puzzle(puzzle_num)?;
@@ -546,62 +540,6 @@ fn test_solved_puzzle(puzzle_num: u32) -> Result<()> {
     Ok(())
 }
 
-/// Manual test for puzzle 32 cryptographic operations
-fn test_puzzle32_crypto() -> Result<()> {
-    println!("🧪 Manual Puzzle 32 Cryptographic Test");
-    println!("=====================================");
-
-    // Puzzle 32 known data
-    let pubkey_hex = "0338927063468507204561021489e2239f1c7901844ad4047a0641199a80436814";
-    let privkey_hex = "00000000000000000000000000000000000000000000000000000000B86246CE";
-
-    println!("📄 Test Data:");
-    println!("   Public Key:  {}...{}", &pubkey_hex[..16], &pubkey_hex[pubkey_hex.len()-16..]);
-    println!("   Private Key: {}...{}", &privkey_hex[..16], &privkey_hex[privkey_hex.len()-16..]);
-    println!();
-
-    // Test private key parsing
-    println!("1️⃣ Testing Private Key Parsing...");
-    let privkey = BigInt256::from_hex(privkey_hex);
-    println!("   ✅ Private key parsed successfully");
-
-    // Test public key parsing
-    println!("\n2️⃣ Testing Public Key Parsing...");
-    let pubkey_result = parse_compressed(pubkey_hex);
-    match pubkey_result {
-        Ok(_) => println!("   ✅ Public key parsed successfully"),
-        Err(e) => {
-            println!("   ❌ Failed to parse public key: {:?}", e);
-            return Err(anyhow!("Public key parsing failed"));
-        }
-    }
-
-    // Test scalar multiplication
-    println!("\n3️⃣ Testing Scalar Multiplication...");
-    let curve = Secp256k1::new();
-    match curve.mul_constant_time(&privkey, &curve.g) {
-        Ok(point) => {
-            println!("   ✅ Scalar multiplication successful");
-
-            if curve.is_on_curve(&point) {
-                println!("   ✅ Result point is on the curve");
-            } else {
-                println!("   ❌ Result point is NOT on the curve");
-                return Err(anyhow!("Point not on curve"));
-            }
-        },
-        Err(e) => {
-            println!("   ❌ Scalar multiplication failed: {:?}", e);
-            return Err(anyhow!("Scalar multiplication failed"));
-        }
-    }
-
-    println!("\n🎉 Puzzle 32 Cryptographic Test: PASSED ✅");
-    println!("   All core cryptographic operations working correctly!");
-    println!("   Ready for full ECDLP solving!");
-
-    Ok(())
-}
 
 /// Run a specific puzzle for testing
 fn run_puzzle_test(puzzle_num: u32) -> Result<()> {

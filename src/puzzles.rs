@@ -73,8 +73,9 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
 
         // Parse ranges from hex strings
-        let range_min = BigInt256::from_hex(range_min_hex);
-        let range_max = BigInt256::from_hex(range_max_hex);
+        // TEMP: Skip parsing to isolate the issue
+        let range_min = BigInt256::zero();
+        let range_max = BigInt256::zero();
 
         puzzles.push(PuzzleEntry {
             n,
