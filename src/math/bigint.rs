@@ -736,7 +736,7 @@ impl BarrettReducer {
             x_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
         }
         let x_big = BigUint::from_bytes_le(&x_bytes);
-        println!("DEBUG Barrett: x_bytes len: {}", x_bytes.len());
+        // println!("DEBUG Barrett: x_bytes len: {}", x_bytes.len());
 
         // mu_big from self.mu (LE) - BarrettReducer.mu is BigInt512 (64 bytes)
         let mut mu_bytes = vec![0u8; 64];
@@ -746,13 +746,13 @@ impl BarrettReducer {
         let mu_big = BigUint::from_bytes_le(&mu_bytes);
 
         let b = (self.modulus.bit_length() as u32); // 256
-        println!("DEBUG Barrett: b={}, x_big.bit_length()={}", b, x_big.bits());
+        // println!("DEBUG Barrett: b={}, x_big.bit_length()={}", b, x_big.bits());
         let q1 = x_big.clone() >> (b - 1);
         let q2 = q1 * mu_big;
         let q3 = q2 >> (b + 1);
         let modulus_big = BigUint::from_bytes_be(&self.modulus.to_bytes_be());
         let q_m = q3.clone() * modulus_big.clone();
-        println!("DEBUG Barrett: x_big={}, q_m={}, x_big >= q_m: {}", x_big, q_m, x_big >= q_m);
+        // println!("DEBUG Barrett: x_big={}, q_m={}, x_big >= q_m: {}", x_big, q_m, x_big >= q_m);
 
         // Handle underflow: if q_m > x_big, adjust q3 downward until q_m <= x_big
         let mut r_big = if x_big >= q_m {

@@ -124,7 +124,7 @@ impl Secp256k1 {
 
     /// Create new secp256k1 curve instance
     pub fn new() -> Self {
-        println!("DEBUG: Entering Secp256k1::new()");
+        // println!("DEBUG: Entering Secp256k1::new()");
         info!("DEBUG: Secp256k1::new() - creating curve parameters");
         let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
         println!("DEBUG: Created p");
@@ -133,7 +133,7 @@ impl Secp256k1 {
         info!("DEBUG: Created n");
         let a = BigInt256::zero();
         let b = BigInt256::from_u64(7);
-        info!("DEBUG: Created a and b");
+        // info!("DEBUG: Created a and b");
 
         // Generator point G (Jacobian coordinates with Z=1)
         let g = Point {
@@ -327,7 +327,7 @@ impl Secp256k1 {
         // Fixed: Proper Montgomery domain management
 
         #[cfg(debug_assertions)]
-        println!("DEBUG Double: Input X={:x}, Y={:x}, Z={:x}", p.x[3], p.y[3], p.z[3]);
+        // println!("DEBUG Double: Input X={:x}, Y={:x}, Z={:x}", p.x[3], p.y[3], p.z[3]);
 
         if p.is_infinity() {
             return *p;
@@ -338,7 +338,7 @@ impl Secp256k1 {
         let pz = BigInt256::from_u64_array(p.z);
 
         #[cfg(debug_assertions)]
-        println!("DEBUG Double: px={}, py={}, pz={}", px.to_hex(), py.to_hex(), pz.to_hex());
+        // println!("DEBUG Double: px={}, py={}, pz={}", px.to_hex(), py.to_hex(), pz.to_hex());
 
         // Check for order 2 point (Y=0)
         if py == BigInt256::zero() {
@@ -439,8 +439,8 @@ impl Secp256k1 {
         // MODULAR FIX BLOCK 1: Enhanced debug output
         #[cfg(debug_assertions)]
         {
-            println!("DEBUG Double: Result X={:x}, Y={:x}, Z={:x}", result.x[3], result.y[3], result.z[3]);
-            println!("DEBUG Double: Affine x={}, y={}, on_curve={}", BigInt256::from_u64_array(result_affine.x).to_hex(), BigInt256::from_u64_array(result_affine.y).to_hex(), on_curve);
+            // println!("DEBUG Double: Result X={:x}, Y={:x}, Z={:x}", result.x[3], result.y[3], result.z[3]);
+            // println!("DEBUG Double: Affine x={}, y={}, on_curve={}", BigInt256::from_u64_array(result_affine.x).to_hex(), BigInt256::from_u64_array(result_affine.y).to_hex(), on_curve);
         }
 
         // Re-enable on_curve assert as per fix requirements
