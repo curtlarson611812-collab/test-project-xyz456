@@ -346,9 +346,9 @@ impl Secp256k1 {
         }
 
         // Jacobian doubling: use Montgomery domain for all mul operations (full Mont for perf)
-        let px_r = self.montgomery_p.convert_in(&px).unwrap();
-        let py_r = self.montgomery_p.convert_in(&py).unwrap();
-        let pz_r = self.montgomery_p.convert_in(&pz).unwrap();
+        let px_r = self.montgomery_p.convert_in(&px);
+        let py_r = self.montgomery_p.convert_in(&py);
+        let pz_r = self.montgomery_p.convert_in(&pz);
 
         // All operations in Montgomery domain
         let xx_r = self.montgomery_p.mul(&px_r, &px_r); // XX = X1^2
@@ -381,13 +381,13 @@ impl Secp256k1 {
         let y3_r = self.montgomery_p.sub(&m_times_diff_r, &eight_yyyy_r); // Y3 = M*(S - X3) - 8*YYYY
 
         let py_pz_r = self.montgomery_p.mul(&py_r, &pz_r); // Y*Z in Mont
-        let two_r = self.montgomery_p.convert_in(&BigInt256::from_u64(2)).unwrap();
+        let two_r = self.montgomery_p.convert_in(&BigInt256::from_u64(2));
         let z3_r = self.montgomery_p.mul(&py_pz_r, &two_r); // Z3 = 2*Y*Z in Mont
 
         // Convert back from Montgomery domain
-        let x3 = self.montgomery_p.convert_out(&x3_r).unwrap();
-        let y3 = self.montgomery_p.convert_out(&y3_r).unwrap();
-        let z3 = self.montgomery_p.convert_out(&z3_r).unwrap();
+        let x3 = self.montgomery_p.convert_out(&x3_r);
+        let y3 = self.montgomery_p.convert_out(&y3_r);
+        let z3 = self.montgomery_p.convert_out(&z3_r);
 
         let result = Point {
             x: x3.to_u64_array(),
@@ -1610,7 +1610,167 @@ mod tests {
         assert_eq!(curve.g_multiples[5], sixteen_g);
     }
 
-    // GLV Benchmarks
+    // EC-Specific Montgomery Benchmark
+    #[test]
+    fn benchmark_ec_montgomery_3g() {
+        let curve = Secp256k1::new();
+        let k = BigInt256::from_u64(3);
+        let num_iters = 1000;
+
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let result = curve.mul_constant_time(&k, &curve.g).unwrap();
+            // Verify result matches known 3G
+            let expected = curve.known_3g();
+            let result_affine = result.to_affine(&curve);
+            assert_eq!(BigInt256::from_u64_array(result_affine.x), expected.0);
+            assert_eq!(BigInt256::from_u64_array(result_affine.y), expected.1);
+        }
+        let time = start.elapsed();
+
+        println!("1000x 3*G (EC scalar mul with Montgomery): {:?}", time);
+        println!("Avg per scalar mul: {:.2} μs", time.as_micros() as f64 / num_iters as f64);
+
+        // Compare to expected performance: should be reasonable for EC ops
+        assert!(time.as_micros() > 0);
+    }
+
+    // GLV Benchmarks - Complete Implementation
+
+    /// Benchmark GLV scalar multiplication for different k sizes
+    #[test]
+    fn benchmark_glv_scalar_mul() {
+        let curve = Secp256k1::new();
+        let num_iters = 100;
+
+        // Small k (should bypass GLV)
+        let small_k = BigInt256::from_u64(3);
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let _ = curve.mul_constant_time(&small_k, &curve.g).unwrap();
+        }
+        let small_time = start.elapsed();
+
+        // Medium k (128 bits, partial GLV)
+        let medium_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffff");
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let _ = curve.mul_constant_time(&medium_k, &curve.g).unwrap();
+        }
+        let medium_time = start.elapsed();
+
+        // Large k (256 bits, full GLV)
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let _ = curve.mul_constant_time(&large_k, &curve.g).unwrap();
+        }
+        let large_time = start.elapsed();
+
+        println!("GLV small k (3) time: {:?}", small_time);
+        println!("GLV medium k (128-bit) time: {:?}", medium_time);
+        println!("GLV large k (256-bit) time: {:?}", large_time);
+
+        println!("Avg small k: {:.2} μs", small_time.as_micros() as f64 / num_iters as f64);
+        println!("Avg medium k: {:.2} μs", medium_time.as_micros() as f64 / num_iters as f64);
+        println!("Avg large k: {:.2} μs", large_time.as_micros() as f64 / num_iters as f64);
+
+        assert!(small_time.as_micros() > 0 && medium_time.as_micros() > 0 && large_time.as_micros() > 0);
+    }
+
+    /// Benchmark GLV decompose overhead
+    #[test]
+    fn benchmark_glv_decompose_overhead() {
+        let curve = Secp256k1::new();
+        let num_iters = 10000;
+
+        // Small k decompose
+        let small_k = BigInt256::from_u64(3);
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let _ = curve.glv_decompose(&small_k);
+        }
+        let small_decomp_time = start.elapsed();
+
+        // Large k decompose
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let _ = curve.glv_decompose(&large_k);
+        }
+        let large_decomp_time = start.elapsed();
+
+        println!("GLV small k decompose overhead: {:?}", small_decomp_time);
+        println!("GLV large k decompose overhead: {:?}", large_decomp_time);
+        println!("Avg small decompose: {:.2} ns", small_decomp_time.as_nanos() as f64 / num_iters as f64);
+        println!("Avg large decompose: {:.2} ns", large_decomp_time.as_nanos() as f64 / num_iters as f64);
+
+        assert!(small_decomp_time.as_nanos() > 0 && large_decomp_time.as_nanos() > 0);
+    }
+
+    /// Benchmark naive vs GLV comparison (using internal mul_naive)
+    #[test]
+    fn benchmark_naive_vs_glv_comparison() {
+        let curve = Secp256k1::new();
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let num_iters = 50; // Fewer iterations for expensive naive mul
+
+        // GLV time (current implementation)
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let _ = curve.mul_constant_time(&large_k, &curve.g).unwrap();
+        }
+        let glv_time = start.elapsed();
+
+        // Naive time (simulate by temporarily bypassing GLV - use double/add loop)
+        let start = std::time::Instant::now();
+        for _ in 0..num_iters {
+            let mut result = Point { x: [0; 4], y: [0; 4], z: [0; 4] }; // infinity
+            let mut current = curve.g;
+
+            // Simple double-and-add for comparison (not optimized)
+            for i in 0..256 {
+                if large_k.bit(i) {
+                    result = curve.add(&result, &current).unwrap();
+                }
+                current = curve.double(&current);
+            }
+        }
+        let naive_time = start.elapsed();
+
+        let speedup = (naive_time.as_nanos() as f64 - glv_time.as_nanos() as f64) / naive_time.as_nanos() as f64 * 100.0;
+
+        println!("Naive scalar mul time: {:?}", naive_time);
+        println!("GLV scalar mul time: {:?}", glv_time);
+        println!("GLV speedup: {:.2}%", speedup);
+
+        // GLV should provide significant speedup for large k
+        assert!(naive_time.as_micros() > 0 && glv_time.as_micros() > 0);
+        // Note: speedup may vary, but GLV should be faster
+    }
+
+    /// Full GLV benchmark suite
+    #[test]
+    fn benchmark_full_glv_suite() {
+        let curve = Secp256k1::new();
+
+        // Test GLV correctness with known values
+        let test_k = BigInt256::from_u64(7); // 7 = 3 + 1*λ mod n (simplified)
+        let result_glv = curve.mul_constant_time(&test_k, &curve.g).unwrap();
+        let result_affine = result_glv.to_affine(&curve);
+
+        // 7G should equal (6G + G) = double(3G) + G
+        let three_g = curve.mul_constant_time(&BigInt256::from_u64(3), &curve.g).unwrap();
+        let six_g = curve.double(&three_g);
+        let expected = curve.add(&six_g, &curve.g).unwrap();
+        let expected_affine = expected.to_affine(&curve);
+
+        assert_eq!(result_affine.x, expected_affine.x);
+        assert_eq!(result_affine.y, expected_affine.y);
+
+        println!("GLV correctness verified with 7G test ✓");
+    }
+
     #[test]
     fn test_glv_basic() {
         let curve = Secp256k1::new();

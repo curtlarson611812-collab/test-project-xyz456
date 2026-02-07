@@ -208,7 +208,7 @@ fn load_test_puzzles(file_path: &str, curve: &Secp256k1) -> Vec<crate::types::Po
 }
 
 #[cfg(test)]
-mod tests {
+mod benchmark_tests {
     use super::*;
     use crate::math::secp::Secp256k1;
 

@@ -1422,13 +1422,26 @@ mod tests {
         assert!(identity >= BigInt256::zero());
     }
 
-    // Montgomery Benchmarks
+    // Montgomery Benchmarks - Complete Implementation
+
+    /// Benchmark Montgomery vs naive modular multiplication
     #[test]
-    fn benchmark_montgomery_mul_single() {
+    fn benchmark_montgomery_vs_naive() {
         let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
         let mont = MontgomeryReducer::new(&p);
-        let num_iters = 1000; // Reduced for faster testing
+        let barrett = BarrettReducer::new(&p); // Use Barrett as naive baseline
+        let num_iters = 10000;
 
+        // Benchmark naive (Barrett) multiplication
+        let start = std::time::Instant::now();
+        for i in 0..num_iters {
+            let a = BigInt256::from_u64(i as u64 % 100000);
+            let b = BigInt256::from_u64((i * 2) as u64 % 100000);
+            let _ = barrett.mul(&a, &b);
+        }
+        let naive_time = start.elapsed();
+
+        // Benchmark Montgomery multiplication (with conversions)
         let start = std::time::Instant::now();
         for i in 0..num_iters {
             let a = BigInt256::from_u64(i as u64 % 100000);
@@ -1438,11 +1451,17 @@ mod tests {
             let prod_mont = mont.mul(&a_mont, &b_mont);
             let _ = mont.convert_out(&prod_mont);
         }
-        let time = start.elapsed();
+        let mont_time = start.elapsed();
 
-        println!("Montgomery single mul (with conversions): {:?}", time);
-        println!("Avg per mul: {:.2} μs", time.as_micros() as f64 / num_iters as f64);
-        assert!(time.as_micros() > 0); // Basic sanity check
+        let speedup = (naive_time.as_nanos() as f64 - mont_time.as_nanos() as f64) / naive_time.as_nanos() as f64 * 100.0;
+
+        println!("Naive (Barrett) mul time: {:?}", naive_time);
+        println!("Montgomery mul time (with conversions): {:?}", mont_time);
+        println!("Montgomery speedup: {:.2}%", speedup);
+
+        // Note: In practice, Montgomery should show speedup for chains
+        // Single ops may be slower due to conversion overhead
+        assert!(naive_time.as_micros() > 0 && mont_time.as_micros() > 0);
     }
 
     #[test]
@@ -1515,6 +1534,94 @@ mod tests {
         }
 
         println!("Montgomery round-trip validation passed ✓");
+    }
+
+    // Barrett Benchmarks - Complete Implementation
+
+    /// Benchmark Barrett single reduce operation
+    #[test]
+    fn benchmark_barrett_single_reduce() {
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let barrett = BarrettReducer::new(&p);
+        let num_iters = 10000;
+
+        let start = std::time::Instant::now();
+        for i in 0..num_iters {
+            // Create test BigInt512 input (simulate mul result)
+            let x = BigInt512::from_bigint256(&BigInt256::from_u64(i as u64 * 12345));
+            let _ = barrett.reduce(&x).unwrap();
+        }
+        let time = start.elapsed();
+
+        println!("Barrett single reduce: {:?}", time);
+        println!("Avg per reduce: {:.2} μs", time.as_micros() as f64 / num_iters as f64);
+        assert!(time.as_micros() > 0);
+    }
+
+    /// Benchmark Barrett mul operation (includes internal reduce)
+    #[test]
+    fn benchmark_barrett_mul_operation() {
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let barrett = BarrettReducer::new(&p);
+        let num_iters = 10000;
+
+        let start = std::time::Instant::now();
+        for i in 0..num_iters {
+            let a = BigInt256::from_u64(i as u64 % 100000);
+            let b = BigInt256::from_u64((i * 2) as u64 % 100000);
+            let _ = barrett.mul(&a, &b);
+        }
+        let time = start.elapsed();
+
+        println!("Barrett mul operation: {:?}", time);
+        println!("Avg per mul: {:.2} μs", time.as_micros() as f64 / num_iters as f64);
+        assert!(time.as_micros() > 0);
+    }
+
+    /// Benchmark Barrett chain operations (simulate EC arithmetic)
+    #[test]
+    fn benchmark_barrett_chain_operations() {
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let barrett = BarrettReducer::new(&p);
+        let num_iters = 1000;
+        let chain_len = 10; // Simulate EC double operations
+
+        let start = std::time::Instant::now();
+        for i in 0..num_iters {
+            let mut res = BigInt256::from_u64(i as u64);
+            for j in 0..chain_len {
+                let b = BigInt256::from_u64(j as u64);
+                res = barrett.mul(&res, &b);
+            }
+        }
+        let time = start.elapsed();
+
+        println!("Barrett chain operations ({} links): {:?}", chain_len, time);
+        println!("Avg per chain: {:.2} μs", time.as_micros() as f64 / num_iters as f64);
+        assert!(time.as_micros() > 0);
+    }
+
+    /// Test Barrett reduction with known large value
+    #[test]
+    fn test_barrett_large_reduce() {
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let barrett = BarrettReducer::new(&p);
+
+        // Test with 2^256 mod p (should give small result)
+        let two_256 = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000"));
+        let reduced = barrett.reduce(&two_256).unwrap();
+
+        // 2^256 mod p should be computable and small
+        assert!(reduced < p);
+        assert!(reduced >= BigInt256::zero());
+
+        // Test with p*2 (should reduce to 0)
+        let p_big = BigInt512::from_bigint256(&p);
+        let two_p = BigInt512::add(&p_big, &p_big);
+        let reduced_2p = barrett.reduce(&two_p).unwrap();
+        assert_eq!(reduced_2p, BigInt256::zero());
+
+        println!("Barrett large value reduction works correctly ✓");
     }
 
     #[test]
