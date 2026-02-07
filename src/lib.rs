@@ -26,6 +26,7 @@ pub mod utils;
 pub mod puzzles;
 pub mod security;
 pub mod test_basic;
+pub mod simple_test;
 
 // Re-export key types for library usage
 pub use config::Config;

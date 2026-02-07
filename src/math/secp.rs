@@ -57,6 +57,15 @@ impl Secp256k1 {
         BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
     }
 
+    /// Known G*3 coordinates as tuple for testing
+    pub fn known_3g() -> (BigInt256, BigInt256) {
+        (
+            BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b"),
+            BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+        )
+    }
+
+
     /// GLV endomorphism lambda (cube root of unity modulo n)
     pub fn glv_lambda() -> BigInt256 {
         BigInt256::from_hex("5363ad4cc05c30e0a5261c0286d7dab99cc95b5e4c4659b9d7d27ec4eeda59")

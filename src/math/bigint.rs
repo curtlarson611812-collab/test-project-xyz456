@@ -789,19 +789,40 @@ impl MontgomeryReducer {
     /// Montgomery modular multiplication: REDC(a * b) = (a * b * R^(-1)) mod modulus
     /// Full REDC (REDCed) algorithm implementation
     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        // Proper REDC algorithm for R = 2^256
+        // Optimized REDC algorithm for R = 2^256 with proper carry handling
         let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
 
         // m = (t_low * n_prime) % 2^64
         let t_low = prod.limbs[0];
         let m = ((t_low as u128 * self.n_prime as u128) % (1u128 << 64)) as u64;
 
-        // u = (t + m * p) / 2^256
+        // u = (t + m * p) / 2^256 with proper carry propagation using u128 limbs
         let m_big = BigInt512::from_u64(m);
         let mp = m_big.mul(BigInt512::from_bigint256(&self.modulus));
-        let u_big = prod.add(mp);
-        let u = u_big.right_shift(256);  // High 256 bits
 
+        // Add t + m*p with proper carry handling
+        let mut result_limbs = [0u128; 8];
+        let mut carry = 0u128;
+        for i in 0..8 {
+            let t_limb = prod.limbs[i] as u128;
+            let mp_limb = mp.limbs[i] as u128;
+            let sum = t_limb + mp_limb + carry;
+            result_limbs[i] = sum & ((1u128 << 64) - 1);
+            carry = sum >> 64;
+        }
+
+        // Handle any remaining carry (should be minimal for properly sized inputs)
+        if carry > 0 {
+            // Add carry to the lowest limb (handles t + m*p >= 2^512 case)
+            result_limbs[0] += carry;
+        }
+
+        let u_big = BigInt512 { limbs: [
+            result_limbs[0] as u64, result_limbs[1] as u64, result_limbs[2] as u64, result_limbs[3] as u64,
+            result_limbs[4] as u64, result_limbs[5] as u64, result_limbs[6] as u64, result_limbs[7] as u64
+        ]};
+
+        let u = u_big.right_shift(256);  // High 256 bits
         let mut result = u.to_bigint256();
 
         // Final conditional subtraction

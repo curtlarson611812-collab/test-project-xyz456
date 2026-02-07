@@ -15,6 +15,7 @@ use speedbitcrack::utils::bias;
 use speedbitcrack::gpu::HybridGpuManager;
 use speedbitcrack::utils::output::{start_real_time_output, DisplayArgs, DisplayConfig};
 use speedbitcrack::test_basic::run_basic_test;
+use speedbitcrack::simple_test::run_simple_test;
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::math::bigint::BigInt256;
@@ -369,6 +370,7 @@ fn main() -> Result<()> {
     // Check if basic test is requested
     if args.basic_test {
         run_basic_test();
+        run_simple_test();
         return Ok(());
     }
 
