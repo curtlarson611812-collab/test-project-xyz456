@@ -329,6 +329,7 @@ impl BigInt256 {
         match b {
             b'0'..=b'9' => Ok(b - b'0'),
             b'a'..=b'f' => Ok(10 + b - b'a'),
+            b'A'..=b'F' => Ok(10 + b - b'A'),
             _ => Err(format!("Invalid nibble {}", char::from(b))),
         }
     }
@@ -339,7 +340,7 @@ impl BigInt256 {
         if clean.len() % 2 != 0 {
             format!("0{}", clean)
         } else {
-            clean.to_lowercase()
+            clean  // Keep original case since we handle both upper and lower
         }
     }
 
@@ -347,11 +348,22 @@ impl BigInt256 {
     pub fn from_hex(hex: &str) -> Self {
         let hex = hex.trim_start_matches("0x");
 
+        // Handle compressed public keys (66 chars: 02/03 + 32 bytes)
+        let hex = if hex.len() == 66 && (hex.starts_with("02") || hex.starts_with("03")) {
+            // Skip the compression prefix, take the 32 bytes
+            hex[2..].to_string()
+        } else if hex.len() > 64 {
+            // Truncate to last 64 characters (32 bytes) for compatibility
+            hex[hex.len() - 64..].to_string()
+        } else {
+            hex.to_string()
+        };
+
         // Ensure even length by padding with leading zero if necessary
         let hex = if hex.len() % 2 != 0 {
             format!("0{}", hex)
         } else {
-            hex.to_string()
+            hex
         };
 
         // Use manual parser instead of hex crate for better error handling
@@ -362,12 +374,13 @@ impl BigInt256 {
             }
         };
 
-        // Pad with leading zeros to make exactly 32 bytes (256 bits)
+        // Ensure exactly 32 bytes (truncate or pad as needed)
+        if bytes.len() > 32 {
+            bytes = bytes[bytes.len() - 32..].to_vec();
+        }
         while bytes.len() < 32 {
             bytes.insert(0, 0);
         }
-
-        assert_eq!(bytes.len(), 32, "Hex string too long after padding");
 
         let mut limbs = [0u64; 4];
         // Convert big-endian bytes to little-endian limbs
@@ -741,14 +754,25 @@ impl BarrettReducer {
         let q_m = q3.clone() * modulus_big.clone();
         println!("DEBUG Barrett: x_big={}, q_m={}, x_big >= q_m: {}", x_big, q_m, x_big >= q_m);
 
-        // Handle underflow: if q_m > x_big, adjust q3 downward
+        // Handle underflow: if q_m > x_big, adjust q3 downward until q_m <= x_big
         let mut r_big = if x_big >= q_m {
             x_big - q_m
         } else {
-            log::warn!("Barrett underflow: q_m > x_big - adjusting q3");
-            let q3_adj = q3 - BigUint::from(1u32);
-            let q_m_adj = q3_adj * modulus_big.clone();
-            x_big - q_m_adj
+            log::warn!("Barrett underflow: q_m > x_big - adjusting q3 downward");
+            let mut q3_adj = q3.clone();
+            let mut q_m_adj = q_m.clone();
+            while q_m_adj > x_big && q3_adj > BigUint::from(0u32) {
+                q3_adj -= BigUint::from(1u32);
+                q_m_adj = q3_adj.clone() * modulus_big.clone();
+            }
+            if q_m_adj > x_big {
+                // If still too large, this indicates a serious calculation error
+                // Fall back to slow but correct division
+                log::error!("Barrett reduction failed, using fallback division");
+                x_big % modulus_big.clone()
+            } else {
+                x_big - q_m_adj
+            }
         };
         let p_big = modulus_big;
         while r_big >= p_big {

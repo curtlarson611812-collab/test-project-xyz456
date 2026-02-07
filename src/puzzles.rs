@@ -162,12 +162,8 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         let range_min_hex = parts[6].trim();
         let range_max_hex = parts[7].trim();
 
-        // Debug: Comprehensive char code analysis for hex strings (only in debug builds)
-        #[cfg(debug_assertions)]
-        {
-            debug_hex_string(range_min_hex, "range_min_hex", n);
-            debug_hex_string(range_max_hex, "range_max_hex", n);
-        }
+        // Debug: Comprehensive char code analysis for hex strings (when verbose logging enabled)
+        // Note: Disabled to focus on DP and collision debugging
 
         // Parse ranges with comprehensive fallback for unsolved puzzles
         let (range_min, range_max) = match (BigInt256::manual_hex_to_bytes(range_min_hex), BigInt256::manual_hex_to_bytes(range_max_hex)) {
