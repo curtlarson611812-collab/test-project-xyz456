@@ -675,63 +675,37 @@ impl BarrettReducer {
     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
         use num_bigint::BigUint;
 
-        if x.bits() > 512 {
-            // Handle large intermediates (>512 bits) by using BigUint directly
-            let x_bytes_le = x.to_bytes_le();
-            let mut x_bytes_extended = [0u8; 128]; // Support up to 1024 bits
-            let copy_len = std::cmp::min(x_bytes_le.len(), 128);
-            x_bytes_extended[..copy_len].copy_from_slice(&x_bytes_le[..copy_len]);
-            let x_big = BigUint::from_bytes_le(&x_bytes_extended);
-
-            let modulus_big = BigUint::from_bytes_be(&self.modulus.to_bytes_be());
-            let r_big = x_big % modulus_big;
-
-            let r_bytes = r_big.to_bytes_be();
-            let mut r_array = [0u8; 32];
-            if r_bytes.len() >= 32 {
-                r_array.copy_from_slice(&r_bytes[r_bytes.len() - 32..]);
-            } else {
-                r_array[32 - r_bytes.len()..].copy_from_slice(&r_bytes);
-            }
-            return Ok(BigInt256::from_bytes_be(&r_array));
+        // Convert x to BigUint (LE bytes)
+        let mut x_bytes = vec![0u8; 64];
+        for (i, &limb) in x.limbs.iter().enumerate() {
+            x_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
         }
+        let x_big = BigUint::from_bytes_le(&x_bytes);
 
-        // Convert to BigUint for full precision arithmetic (handle full 512 bits)
-        let x_bytes_le = x.to_bytes_le();
-        let x_big = BigUint::from_bytes_le(&x_bytes_le);
-
-        let modulus_bytes = self.modulus.to_bytes_le();
-        let modulus_big = BigUint::from_bytes_le(&modulus_bytes);
-
-        let mu_bytes = self.mu.to_bytes_le();
+        // mu_big from self.mu (LE)
+        let mut mu_bytes = vec![0u8; 64];
+        for (i, &limb) in self.mu.limbs.iter().enumerate() {
+            mu_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
+        }
         let mu_big = BigUint::from_bytes_le(&mu_bytes);
 
-        let b = self.k * 64; // 256 bits for secp256k1 (k=4)
-        let q1 = &x_big >> (b - 1);
-        let q2 = &q1 * &mu_big;
-        let q3 = &q2 >> (b + 1);
-        let q_m = &q3 * &modulus_big;
-        let r_big = &x_big - &q_m;
-
-        // Convert back to BigInt256 (take low 256 bits)
+        let b = (self.modulus.bit_length() as u32); // 256
+        let q1 = x_big.clone() >> (b - 1);
+        let q2 = q1 * mu_big;
+        let q3 = q2 >> (b + 1);
+        let modulus_big = BigUint::from_bytes_be(&self.modulus.to_bytes_be());
+        let q_m = q3 * modulus_big;
+        let mut r_big = x_big - q_m;
+        let p_big = modulus_big.clone();
+        while r_big >= p_big {
+            r_big -= &p_big;
+        }
+        // Convert r_big to BigInt256 (pad BE to 32 bytes)
         let r_bytes = r_big.to_bytes_be();
-        let mut r_array = [0u8; 32];
-        if r_bytes.len() >= 32 {
-            r_array.copy_from_slice(&r_bytes[r_bytes.len() - 32..]);
-        } else {
-            r_array[32 - r_bytes.len()..].copy_from_slice(&r_bytes);
-        }
-        let mut r = BigInt256::from_bytes_be(&r_array);
-
-        // Multiple subtractions if needed (max 3 for Barrett bound)
-        let mut count = 0;
-        while r >= self.modulus && count < 3 {
-            r = r.sub(self.modulus.clone());
-            count += 1;
-        }
-        if count == 3 { log::warn!("Barrett max adjust—input large?"); }
-
-        Ok(r)
+        let mut padded = [0u8; 32];
+        let start = 32.saturating_sub(r_bytes.len());
+        padded[start..].copy_from_slice(&r_bytes);
+        Ok(BigInt256::from_bytes_be(&padded))
     }
 
     /// Barrett modular addition
@@ -1622,6 +1596,16 @@ mod tests {
         assert_eq!(reduced_2p, BigInt256::zero());
 
         println!("Barrett large value reduction works correctly ✓");
+    }
+
+    #[test]
+    fn test_barrett_large() {
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let reducer = BarrettReducer::new(&p);
+        let two_256 = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000"));
+        let reduced = reducer.reduce(&two_256).unwrap();
+        let expected = BigInt256::from_u64(0x1000003d1);
+        assert_eq!(reduced, expected);
     }
 
     #[test]
