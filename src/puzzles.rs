@@ -73,7 +73,7 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
 
         // Parse ranges from hex strings
-        // TEMP: Skip parsing to isolate the issue
+        // TODO: Re-enable proper range parsing after debugging hex decode issue
         let range_min = BigInt256::zero();
         let range_max = BigInt256::zero();
 
