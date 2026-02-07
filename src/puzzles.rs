@@ -51,7 +51,13 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
             continue;
         }
 
-        let n: u32 = parts[0].trim().parse()?;
+        let n: u32 = match parts[0].trim().parse() {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Invalid n '{}' in line {}: {}, skipping", parts[0], line_num + 1, e);
+                continue;
+            }
+        };
         let status = match parts[1].trim() {
             "SOLVED" => PuzzleStatus::Solved,
             "UNSOLVED" => PuzzleStatus::Unsolved,
@@ -61,13 +67,25 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
                 continue;
             }
         };
-        let btc_reward: f64 = parts[2].trim().parse()?;
+        let btc_reward: f64 = match parts[2].trim().parse() {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Invalid btc_reward '{}' in line {}: {}, skipping", parts[2], line_num + 1, e);
+                continue;
+            }
+        };
         let pub_key_hex = parts[3].trim().to_string();
         let privkey_hex = if parts[4].trim().is_empty() { None } else { Some(parts[4].trim().to_string()) };
         let target_address = parts[5].trim().to_string();
         let range_min_hex = parts[6].trim();
         let range_max_hex = parts[7].trim();
-        let search_space_bits: u32 = parts[8].trim().parse()?;
+        let search_space_bits: u32 = match parts[8].trim().parse::<f64>() {
+            Ok(v) => v as u32,
+            Err(e) => {
+                warn!("Invalid search_space_bits '{}' in line {}: {}, skipping", parts[8], line_num + 1, e);
+                continue;
+            }
+        };
 
         // Calculate estimated ops (sqrt of search space for kangaroo algorithm)
         let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
@@ -76,48 +94,45 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         let range_min_hex = parts[6].trim();
         let range_max_hex = parts[7].trim();
 
-        // Basic validation
-        println!("Debug puzzle {}: range_min_hex='{}' len={}", n, range_min_hex, range_min_hex.len());
-        println!("Debug puzzle {}: range_max_hex='{}' len={}", n, range_max_hex, range_max_hex.len());
-
-        // Try to decode with hex crate directly first
-        let range_min_bytes = match hex::decode(range_min_hex) {
-            Ok(bytes) => {
-                if bytes.len() == 32 {
-                    let mut arr = [0u8; 32];
-                    arr.copy_from_slice(&bytes);
-                    arr
+        // Parse ranges with fallback for unsolved puzzles
+        let (range_min, range_max) = match (BigInt256::manual_hex_to_bytes(range_min_hex), BigInt256::manual_hex_to_bytes(range_max_hex)) {
+            (Ok(min_bytes), Ok(max_bytes)) => {
+                if min_bytes.len() != 32 || max_bytes.len() != 32 {
+                    warn!("Wrong byte length for puzzle {} ranges (min: {}, max: {}), using fallback", n, min_bytes.len(), max_bytes.len());
+                    // Use fallback calculation - calculate 2^(n-1) and 2^n - 1 manually
+                    let mut min_val = BigInt256::one();
+                    for _ in 0..(n-1) {
+                        min_val = min_val.clone() + min_val; // Double for 2^(n-1)
+                    }
+                    let mut max_val = BigInt256::one();
+                    for _ in 0..n {
+                        max_val = max_val.clone() + max_val; // Double for 2^n
+                    }
+                    max_val = max_val - BigInt256::one(); // Subtract 1 for 2^n - 1
+                    (min_val, max_val)
                 } else {
-                    println!("❌ Wrong byte length for puzzle {} range_min: expected 32, got {}", n, bytes.len());
-                    return Err(anyhow!("Wrong byte length for range_min: expected 32, got {}", bytes.len()));
+                    let mut min_arr = [0u8; 32];
+                    let mut max_arr = [0u8; 32];
+                    min_arr.copy_from_slice(&min_bytes);
+                    max_arr.copy_from_slice(&max_bytes);
+                    (BigInt256::from_bytes_be(&min_arr), BigInt256::from_bytes_be(&max_arr))
                 }
             }
-            Err(e) => {
-                println!("❌ Hex decode failed for puzzle {} range_min: {} (len={}, first 20 chars: {})", n, e, range_min_hex.len(), &range_min_hex[..20.min(range_min_hex.len())]);
-                return Err(anyhow!("Invalid hex in range_min for puzzle {}: {}", n, e));
-            }
-        };
-
-        let range_max_bytes = match hex::decode(range_max_hex) {
-            Ok(bytes) => {
-                if bytes.len() == 32 {
-                    let mut arr = [0u8; 32];
-                    arr.copy_from_slice(&bytes);
-                    arr
-                } else {
-                    println!("❌ Wrong byte length for puzzle {} range_max: expected 32, got {}", n, bytes.len());
-                    return Err(anyhow!("Wrong byte length for range_max: expected 32, got {}", bytes.len()));
+            _ => {
+                warn!("Hex parsing failed for puzzle {} ranges, using fallback calculation", n);
+                // Use fallback sequential calculation - calculate 2^(n-1) and 2^n - 1 manually
+                let mut min_val = BigInt256::one();
+                for _ in 0..(n-1) {
+                    min_val = min_val.clone() + min_val; // Double for 2^(n-1)
                 }
-            }
-            Err(e) => {
-                println!("❌ Hex decode failed for puzzle {} range_max: {} (len={}, first 20 chars: {})", n, e, range_max_hex.len(), &range_max_hex[..20.min(range_max_hex.len())]);
-                return Err(anyhow!("Invalid hex in range_max for puzzle {}: {}", n, e));
+                let mut max_val = BigInt256::one();
+                for _ in 0..n {
+                    max_val = max_val.clone() + max_val; // Double for 2^n
+                }
+                max_val = max_val - BigInt256::one(); // Subtract 1 for 2^n - 1
+                (min_val, max_val)
             }
         };
-
-        // Convert bytes to BigInt256
-        let range_min = BigInt256::from_bytes_be(&range_min_bytes);
-        let range_max = BigInt256::from_bytes_be(&range_max_bytes);
 
         puzzles.push(PuzzleEntry {
             n,

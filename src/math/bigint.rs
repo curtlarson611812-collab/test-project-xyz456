@@ -307,6 +307,31 @@ impl BigInt256 {
         BigInt256 { limbs: [x, 0, 0, 0] }
     }
 
+    /// Manual byte-level hex parser for robust parsing
+    pub fn manual_hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
+        let clean = hex.chars().filter(|c| c.is_ascii_hexdigit()).map(|c| c.to_ascii_lowercase()).collect::<String>();
+        if clean.len() % 2 != 0 {
+            return Err("Odd length after clean".to_string());
+        }
+        let mut bytes = Vec::with_capacity(clean.len() / 2);
+        let chars = clean.as_bytes();
+        for i in (0..clean.len()).step_by(2) {
+            let high = Self::nibble(chars[i])?;
+            let low = Self::nibble(chars[i+1])?;
+            bytes.push((high << 4) | low);
+        }
+        Ok(bytes)
+    }
+
+    /// Convert single hex nibble to u8 value
+    pub fn nibble(b: u8) -> Result<u8, String> {
+        match b {
+            b'0'..=b'9' => Ok(b - b'0'),
+            b'a'..=b'f' => Ok(10 + b - b'a'),
+            _ => Err(format!("Invalid nibble {}", char::from(b))),
+        }
+    }
+
     /// Create from hex string (pads with leading zeros if shorter than 256 bits)
     pub fn from_hex(hex: &str) -> Self {
         let hex = hex.trim_start_matches("0x");
@@ -318,8 +343,8 @@ impl BigInt256 {
             hex.to_string()
         };
 
-        // Try to decode, but handle errors more gracefully
-        let mut bytes = match hex::decode(&hex) {
+        // Use manual parser instead of hex crate for better error handling
+        let mut bytes = match Self::manual_hex_to_bytes(&hex) {
             Ok(b) => b,
             Err(e) => {
                 panic!("Invalid hex string '{}': {}. First 20 chars: '{}', len: {}", hex, e, &hex[..hex.len().min(20)], hex.len());
