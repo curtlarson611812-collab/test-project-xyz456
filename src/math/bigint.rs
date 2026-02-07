@@ -309,7 +309,8 @@ impl BigInt256 {
 
     /// Manual byte-level hex parser for robust parsing
     pub fn manual_hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
-        let clean = hex.chars().filter(|c| c.is_ascii_hexdigit()).map(|c| c.to_ascii_lowercase()).collect::<String>();
+        // First sanitize the input to remove any non-hex characters
+        let clean = Self::sanitize_hex(hex);
         if clean.len() % 2 != 0 {
             return Err("Odd length after clean".to_string());
         }
@@ -329,6 +330,16 @@ impl BigInt256 {
             b'0'..=b'9' => Ok(b - b'0'),
             b'a'..=b'f' => Ok(10 + b - b'a'),
             _ => Err(format!("Invalid nibble {}", char::from(b))),
+        }
+    }
+
+    /// Sanitize hex string by removing non-hex characters and ensuring even length
+    fn sanitize_hex(hex: &str) -> String {
+        let clean = hex.trim_start_matches("0x").chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>();
+        if clean.len() % 2 != 0 {
+            format!("0{}", clean)
+        } else {
+            clean.to_lowercase()
         }
     }
 

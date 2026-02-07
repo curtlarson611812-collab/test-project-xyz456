@@ -6,10 +6,68 @@
 use crate::math::BigInt256;
 use crate::types::Point;
 use serde::{Deserialize, Serialize};
-use log::warn;
+use log::{warn, info};
 use std::fs;
 use std::path::Path;
 use anyhow::{Result, anyhow};
+
+/// Debug helper: Analyze hex string character codes for invisible characters
+fn debug_hex_string(hex: &str, label: &str, puzzle_n: u32) {
+    println!("🔍 Debug {} for puzzle {} (len {}): {:?}", label, puzzle_n, hex.len(), hex.as_bytes());
+    let mut invalid_chars = Vec::new();
+
+    for (i, &byte) in hex.as_bytes().iter().enumerate() {
+        let c = char::from(byte);
+        let code = byte as u32;
+        let is_valid_hex = byte.is_ascii_hexdigit();
+        let printable = if c.is_ascii_graphic() {
+            format!("'{}'", c)
+        } else {
+            format!("\\x{:02x}", byte)
+        };
+
+        if !is_valid_hex {
+            invalid_chars.push((i, byte, c));
+            println!("❌ INVALID: Byte {}: {} code={:02x} ({})", i, printable, code, if is_valid_hex { "valid" } else { "INVALID" });
+        } else if code < 32 || code > 126 {
+            // Non-printable ASCII characters (but still valid hex)
+            println!("⚠️  Non-printable: Byte {}: {} code={:02x} (valid hex but non-printable)", i, printable, code);
+        }
+    }
+
+    if !invalid_chars.is_empty() {
+        println!("🚨 Found {} invalid characters in {} for puzzle {}", invalid_chars.len(), label, puzzle_n);
+        for (pos, byte, c) in invalid_chars {
+            println!("   Position {}: byte={:02x}, char='{}', code={}", pos, byte, c.escape_default(), byte as u32);
+        }
+    } else {
+        println!("✅ All characters in {} are valid hex digits", label);
+    }
+}
+
+/// Calculate fallback ranges for puzzles when hex parsing fails
+/// Returns (min, max) as BigInt256 representing 2^(n-1) to 2^n - 1
+fn calculate_fallback_ranges(n: u32) -> (BigInt256, BigInt256) {
+    if n == 0 {
+        return (BigInt256::zero(), BigInt256::one());
+    }
+
+    // Calculate 2^(n-1)
+    let mut min_val = BigInt256::one();
+    for _ in 0..(n-1) {
+        min_val = min_val.clone() + min_val; // Double for 2^(n-1)
+    }
+
+    // Calculate 2^n - 1
+    let mut max_val = BigInt256::one();
+    for _ in 0..n {
+        max_val = max_val.clone() + max_val; // Double for 2^n
+    }
+    max_val = max_val - BigInt256::one(); // Subtract 1 for 2^n - 1
+
+    info!("Calculated fallback ranges for puzzle {}: min={}, max={}", n, min_val.to_hex(), max_val.to_hex());
+    (min_val, max_val)
+}
 
 /// Puzzle entry loaded from puzzles.txt
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +95,16 @@ pub enum PuzzleStatus {
 pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
     let file_path = Path::new("puzzles.txt");
     let contents = fs::read_to_string(file_path)?;
+
+    // Check for non-ASCII characters that could cause parsing issues
+    let contents_ascii = contents.chars().filter(|&c| c.is_ascii()).collect::<String>();
+    if contents.len() != contents_ascii.len() {
+        warn!("Warning: puzzles.txt contains {} non-ASCII characters. This may cause parsing issues.",
+              contents.len() - contents_ascii.len());
+        // Continue with ASCII-only content to be safe
+        let contents = contents_ascii;
+    }
+
     let mut puzzles = Vec::new();
 
     for (line_num, line) in contents.lines().enumerate() {
@@ -94,43 +162,47 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         let range_min_hex = parts[6].trim();
         let range_max_hex = parts[7].trim();
 
-        // Parse ranges with fallback for unsolved puzzles
+        // Debug: Comprehensive char code analysis for hex strings (only in debug builds)
+        #[cfg(debug_assertions)]
+        {
+            debug_hex_string(range_min_hex, "range_min_hex", n);
+            debug_hex_string(range_max_hex, "range_max_hex", n);
+        }
+
+        // Parse ranges with comprehensive fallback for unsolved puzzles
         let (range_min, range_max) = match (BigInt256::manual_hex_to_bytes(range_min_hex), BigInt256::manual_hex_to_bytes(range_max_hex)) {
             (Ok(min_bytes), Ok(max_bytes)) => {
                 if min_bytes.len() != 32 || max_bytes.len() != 32 {
-                    warn!("Wrong byte length for puzzle {} ranges (min: {}, max: {}), using fallback", n, min_bytes.len(), max_bytes.len());
-                    // Use fallback calculation - calculate 2^(n-1) and 2^n - 1 manually
-                    let mut min_val = BigInt256::one();
-                    for _ in 0..(n-1) {
-                        min_val = min_val.clone() + min_val; // Double for 2^(n-1)
-                    }
-                    let mut max_val = BigInt256::one();
-                    for _ in 0..n {
-                        max_val = max_val.clone() + max_val; // Double for 2^n
-                    }
-                    max_val = max_val - BigInt256::one(); // Subtract 1 for 2^n - 1
-                    (min_val, max_val)
+                    warn!("Puzzle {}: Wrong byte length for ranges (min: {} bytes, max: {} bytes), using fallback calculation", n, min_bytes.len(), max_bytes.len());
+                    calculate_fallback_ranges(n)
                 } else {
                     let mut min_arr = [0u8; 32];
                     let mut max_arr = [0u8; 32];
                     min_arr.copy_from_slice(&min_bytes);
                     max_arr.copy_from_slice(&max_bytes);
-                    (BigInt256::from_bytes_be(&min_arr), BigInt256::from_bytes_be(&max_arr))
+                    let parsed_min = BigInt256::from_bytes_be(&min_arr);
+                    let parsed_max = BigInt256::from_bytes_be(&max_arr);
+
+                    // Validate ranges make sense (max > min, both > 0)
+                    if parsed_max <= parsed_min || parsed_min.is_zero() {
+                        warn!("Puzzle {}: Invalid parsed ranges (min: {}, max: {}), using fallback calculation", n, parsed_min.to_hex(), parsed_max.to_hex());
+                        calculate_fallback_ranges(n)
+                    } else {
+                        (parsed_min, parsed_max)
+                    }
                 }
             }
-            _ => {
-                warn!("Hex parsing failed for puzzle {} ranges, using fallback calculation", n);
-                // Use fallback sequential calculation - calculate 2^(n-1) and 2^n - 1 manually
-                let mut min_val = BigInt256::one();
-                for _ in 0..(n-1) {
-                    min_val = min_val.clone() + min_val; // Double for 2^(n-1)
-                }
-                let mut max_val = BigInt256::one();
-                for _ in 0..n {
-                    max_val = max_val.clone() + max_val; // Double for 2^n
-                }
-                max_val = max_val - BigInt256::one(); // Subtract 1 for 2^n - 1
-                (min_val, max_val)
+            (Err(min_err), Err(max_err)) => {
+                warn!("Puzzle {}: Hex parsing failed for both ranges (min: {}, max: {}), using fallback calculation", n, min_err, max_err);
+                calculate_fallback_ranges(n)
+            }
+            (Err(min_err), Ok(max_bytes)) => {
+                warn!("Puzzle {}: Hex parsing failed for min range ({}), max parsed successfully, using fallback calculation", n, min_err);
+                calculate_fallback_ranges(n)
+            }
+            (Ok(min_bytes), Err(max_err)) => {
+                warn!("Puzzle {}: Hex parsing failed for max range ({}), min parsed successfully, using fallback calculation", n, max_err);
+                calculate_fallback_ranges(n)
             }
         };
 
