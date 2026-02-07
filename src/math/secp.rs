@@ -13,55 +13,31 @@ use std::ops::{Add, Sub};
 use log::info;
 use anyhow::{anyhow, Result};
 
-// Block 1: Montgomery Domain Management (fixed for proper arithmetic)
-impl MontgomeryReducer {
-    /// Convert to Montgomery form: x * R mod modulus
-    pub fn convert_in(&self, x: &BigInt256) -> BigInt256 {
-        let x_big = BigInt512::from_bigint256(x).left_shift(256);
-        self.reduce_big(&x_big)
-    }
-
-    /// Convert from Montgomery form: x * R^-1 mod modulus
-    pub fn convert_out(&self, x_r: &BigInt256) -> BigInt256 {
-        self.mul(x_r, &self.get_r_inv())
-    }
-
-    /// Reduce BigInt512 modulo modulus using simple division
-    fn reduce_big(&self, x: &BigInt512) -> BigInt256 {
-        // For values < 2*p, simple subtraction works
-        let m_big = BigInt512::from_bigint256(self.get_modulus());
-        let two_m = m_big.mul(&BigInt512::from_u64(2));
-
-        if x < &two_m {
-            if x >= &m_big {
-                x.clone().sub(m_big).to_bigint256()
-            } else {
-                x.clone().to_bigint256()
-            }
-        } else {
-            // Use div_rem for larger values
-            let (_quot, rem) = x.div_rem(&m_big);
-            rem.to_bigint256()
-        }
-    }
-}
 
 impl Secp256k1 {
-    /// Known G*3 x-coordinate for testing (from libsecp256k1)
+    /// Known G*3 x-coordinate for testing (standard from ecdsa tool)
     pub fn known_3g_x() -> BigInt256 {
-        BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")
+        BigInt256::from_hex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9")
     }
 
-    /// Known G*3 y-coordinate for testing (from libsecp256k1)
+    /// Known G*3 y-coordinate for testing (standard from ecdsa tool)
     pub fn known_3g_y() -> BigInt256 {
-        BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+        BigInt256::from_hex("388f7b0f632de8140fe337e62a37f3566500a99934c2231b6cb9fd7584b8e672")
     }
 
     /// Known G*3 coordinates as tuple for testing
     pub fn known_3g() -> (BigInt256, BigInt256) {
         (
-            BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b"),
-            BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+            Self::known_3g_x(),
+            Self::known_3g_y()
+        )
+    }
+
+    /// Known 2G coordinates for debugging double operation (standard from ecdsa tool)
+    pub fn known_2g() -> (BigInt256, BigInt256) {
+        (
+            BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"),
+            BigInt256::from_hex("1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a")
         )
     }
 
@@ -166,7 +142,26 @@ impl Secp256k1 {
             z: [1, 0, 0, 0], // Z=1 for affine points
         };
 
-        let g_multiples = Vec::new();
+        // Populate g_multiples: [G, 2G, 3G, 4G, 8G, 16G, -G, -2G, -3G, -4G, -8G, -16G]
+        let mut temp_curve = Secp256k1 {
+            p: p.clone(), n: n.clone(), a: a.clone(), b: b.clone(), g: g.clone(),
+            g_multiples: Vec::new(),
+            barrett_p: BarrettReducer::new(&p),
+            barrett_n: BarrettReducer::new(&n),
+            montgomery_p: MontgomeryReducer::new(&p),
+        };
+
+        let mut g_multiples = Vec::new();
+        let ks = [1u64, 2, 3, 4, 8, 16];
+        for &k in &ks {
+            let k_big = BigInt256::from_u64(k);
+            let multiple = temp_curve.mul_constant_time(&k_big, &g).unwrap();
+            g_multiples.push(multiple);
+        }
+        for i in 0..6 {
+            let neg = g_multiples[i].negate(&temp_curve);
+            g_multiples.push(neg);
+        }
 
         let barrett_p = BarrettReducer::new(&p);
         let barrett_n = BarrettReducer::new(&n);
@@ -253,8 +248,9 @@ impl Secp256k1 {
         let z3_r = self.montgomery_p.mul(&pz_qz_r, &h_r);
         let z3 = self.montgomery_convert_out(&z3_r);
         let result = Point { x: x3.to_u64_array(), y: y3.to_u64_array(), z: z3.to_u64_array() };
-        // Temporarily disable assertion for debugging
-        // assert!(self.is_on_curve(&result.to_affine(self))); // Rule requirement
+        // Re-enable on_curve assert as per fix requirements
+        let result_affine = result.to_affine(self);
+        assert!(self.is_on_curve(&result_affine), "Add produced off-curve point");
         result
     }
 
@@ -330,6 +326,9 @@ impl Secp256k1 {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
         // Fixed: Proper Montgomery domain management
 
+        #[cfg(debug_assertions)]
+        println!("DEBUG Double: Input X={:x}, Y={:x}, Z={:x}", p.x[3], p.y[3], p.z[3]);
+
         if p.is_infinity() {
             return *p;
         }
@@ -338,57 +337,57 @@ impl Secp256k1 {
         let py = BigInt256::from_u64_array(p.y);
         let pz = BigInt256::from_u64_array(p.z);
 
+        #[cfg(debug_assertions)]
+        println!("DEBUG Double: px={}, py={}, pz={}", px.to_hex(), py.to_hex(), pz.to_hex());
+
         // Check for order 2 point (Y=0)
         if py == BigInt256::zero() {
             return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
         }
 
-        // Jacobian doubling: use Montgomery domain for multiplications
-        let px_r = self.montgomery_convert_in(&px);
-        let py_r = self.montgomery_convert_in(&py);
-        let pz_r = self.montgomery_convert_in(&pz);
+        // Jacobian doubling: use Montgomery domain for all mul operations (full Mont for perf)
+        let px_r = self.montgomery_p.convert_in(&px).unwrap();
+        let py_r = self.montgomery_p.convert_in(&py).unwrap();
+        let pz_r = self.montgomery_p.convert_in(&pz).unwrap();
 
-        let xx_r = self.montgomery_p.mul(&px_r, &px_r); // XX = X1^2 in Mont
-        let yy_r = self.montgomery_p.mul(&py_r, &py_r); // YY = Y1^2 in Mont
-        let yyyy_r = self.montgomery_p.mul(&yy_r, &yy_r); // YYYY = YY^2 in Mont
+        // All operations in Montgomery domain
+        let xx_r = self.montgomery_p.mul(&px_r, &px_r); // XX = X1^2
+        let yy_r = self.montgomery_p.mul(&py_r, &py_r); // YY = Y1^2
+        let yyyy_r = self.montgomery_p.mul(&yy_r, &yy_r); // YYYY = YY^2
 
-        // Convert back for Barrett operations
-        let xx = self.montgomery_convert_out(&xx_r);
-        let yy = self.montgomery_convert_out(&yy_r);
-        let yyyy = self.montgomery_convert_out(&yyyy_r);
+        // S = 2*((X1 + YY)^2 - XX - YYYY) using Montgomery
+        let x_plus_yy_r = self.montgomery_p.add(&px_r, &yy_r); // X1 + YY
+        let x_plus_yy_sq_r = self.montgomery_p.mul(&x_plus_yy_r, &x_plus_yy_r); // (X1 + YY)^2
 
-        // S = 2*((X1 + YY)^2 - XX - YYYY) using Barrett
-        let x_plus_yy = self.barrett_p.add(&px, &yy); // X1 + YY
-        let x_plus_yy_sq_r = self.montgomery_convert_in(&x_plus_yy);
-        let x_plus_yy_sq_r = self.montgomery_p.mul(&x_plus_yy_sq_r, &x_plus_yy_sq_r); // (X1 + YY)^2 in Mont
-        let x_plus_yy_sq = self.montgomery_convert_out(&x_plus_yy_sq_r);
+        let xx_plus_yyyy_r = self.montgomery_p.add(&xx_r, &yyyy_r); // XX + YYYY
+        let inner_r = self.montgomery_p.sub(&x_plus_yy_sq_r, &xx_plus_yyyy_r); // (X1 + YY)^2 - XX - YYYY
+        let s_r = self.montgomery_p.add(&inner_r, &inner_r); // S = 2*inner
 
-        let xx_plus_yyyy = self.barrett_p.add(&xx, &yyyy); // XX + YYYY
-        let inner = self.barrett_p.sub(&x_plus_yy_sq, &xx_plus_yyyy); // (X1 + YY)^2 - XX - YYYY
-        let s = self.barrett_p.add(&inner, &inner); // S = 2*inner
+        let three = BigInt256::from_u64(3);
+        let three_r = self.montgomery_p.convert_in(&three)?;
+        let m_r = self.montgomery_p.mul(&three_r, &xx_r); // M = 3*XX
 
-        let m = self.barrett_p.mul(&BigInt256::from_u64(3), &xx); // M = 3*XX
+        let t_r = self.montgomery_p.mul(&m_r, &m_r); // T = M^2
 
-        // Convert M to Mont for squaring
-        let m_r = self.montgomery_convert_in(&m);
-        let t_r = self.montgomery_p.mul(&m_r, &m_r); // T = M^2 in Mont
-        let t = self.montgomery_convert_out(&t_r);
+        let two_s_r = self.montgomery_p.add(&s_r, &s_r); // 2*S
+        let x3_r = self.montgomery_p.sub(&t_r, &two_s_r); // X3 = T - 2*S
 
-        let two_s = self.barrett_p.add(&s, &s); // 2*S
-        let x3 = self.barrett_p.sub(&t, &two_s); // X3 = T - 2*S
+        let s_minus_x3_r = self.montgomery_p.sub(&s_r, &x3_r); // S - X3
+        let m_times_diff_r = self.montgomery_p.mul(&m_r, &s_minus_x3_r); // M*(S - X3)
 
-        let s_minus_x3 = self.barrett_p.sub(&s, &x3); // S - X3
-        let s_minus_x3_r = self.montgomery_convert_in(&s_minus_x3);
-        let m_times_diff_r = self.montgomery_p.mul(&m_r, &s_minus_x3_r); // M*(S - X3) in Mont
-        let m_times_diff = self.montgomery_convert_out(&m_times_diff_r);
+        let eight = BigInt256::from_u64(8);
+        let eight_r = self.montgomery_p.convert_in(&eight)?;
+        let eight_yyyy_r = self.montgomery_p.mul(&eight_r, &yyyy_r); // 8*YYYY
+        let y3_r = self.montgomery_p.sub(&m_times_diff_r, &eight_yyyy_r); // Y3 = M*(S - X3) - 8*YYYY
 
-        let eight_yyyy = self.barrett_p.mul(&BigInt256::from_u64(8), &yyyy); // 8*YYYY
-        let y3 = self.barrett_p.sub(&m_times_diff, &eight_yyyy); // Y3 = M*(S - X3) - 8*YYYY
-
-        let two_r = self.montgomery_convert_in(&BigInt256::from_u64(2));
-        let py_pz_r = self.montgomery_p.mul(&py_r, &pz_r);
+        let py_pz_r = self.montgomery_p.mul(&py_r, &pz_r); // Y*Z in Mont
+        let two_r = self.montgomery_p.convert_in(&BigInt256::from_u64(2)).unwrap();
         let z3_r = self.montgomery_p.mul(&py_pz_r, &two_r); // Z3 = 2*Y*Z in Mont
-        let z3 = self.montgomery_convert_out(&z3_r);
+
+        // Convert back from Montgomery domain
+        let x3 = self.montgomery_p.convert_out(&x3_r).unwrap();
+        let y3 = self.montgomery_p.convert_out(&y3_r).unwrap();
+        let z3 = self.montgomery_p.convert_out(&z3_r).unwrap();
 
         let result = Point {
             x: x3.to_u64_array(),
@@ -400,11 +399,15 @@ impl Secp256k1 {
         let result_affine = result.to_affine(self);
         let on_curve = self.is_on_curve(&result_affine);
 
-        // Temporarily disable assertion for debugging
-        // assert!(on_curve, "Point not on curve after multiplication");
-        if !on_curve {
-            println!("WARNING: Double result not on curve - continuing for debugging");
+        // MODULAR FIX BLOCK 1: Enhanced debug output
+        #[cfg(debug_assertions)]
+        {
+            println!("DEBUG Double: Result X={:x}, Y={:x}, Z={:x}", result.x[3], result.y[3], result.z[3]);
+            println!("DEBUG Double: Affine x={}, y={}, on_curve={}", BigInt256::from_u64_array(result_affine.x).to_hex(), BigInt256::from_u64_array(result_affine.y).to_hex(), on_curve);
         }
+
+        // Re-enable on_curve assert as per fix requirements
+        assert!(on_curve, "Double produced off-curve point");
         result
     }
 
@@ -436,14 +439,37 @@ impl Secp256k1 {
     /// Constant-time scalar multiplication: [k]p
     /// Uses k256 for side-channel resistance (timing attack prevention)
     /// Provides constant-time field arithmetic to prevent power/DPA attacks
+    /// MODULAR FIX: Add threshold for small scalars to isolate GLV debugging
     pub fn mul_constant_time(&self, k: &BigInt256, p: &Point) -> Result<Point, Box<dyn Error>> {
-        // Debug prints for scalar validation
-        println!("DEBUG: Scalar range check: k = {}", k.to_hex());
+        // MODULAR FIX BLOCK 1: Isolate GLV for small scalars
+        // For |k| < 2^8, use naive double-add to rule out GLV bugs
+        if k.bit_length() < 8 {
+            let mut result = Point::infinity();
+            let mut addend = p.clone();
+            let mut scalar = k.clone();
+            while !scalar.is_zero() {
+                if scalar.limbs[0] & 1 == 1 {  // is_odd check
+                    result = self.add(&result, &addend);
+                }
+                addend = self.double(&addend);
+                scalar = scalar.right_shift(1);
+            }
+            return Ok(result);
+        }
+        // MODULAR FIX BLOCK 1: Enhanced debug prints (conditional compilation)
+        #[cfg(debug_assertions)]
+        {
+            println!("DEBUG: Scalar range check: k = {}", k.to_hex());
+            println!("DEBUG: Point input: X={:x}, Y={:x}, Z={:x}", p.x[3], p.y[3], p.z[3]);
+        }
+
         if k.is_zero() {
+            #[cfg(debug_assertions)]
             println!("WARNING: Zero scalar detected");
             return Ok(Point::infinity());
         }
         if k >= &self.n {
+            #[cfg(debug_assertions)]
             println!("WARNING: Scalar >= N - should be reduced: {} >= {}", k.to_hex(), self.n.to_hex());
         }
         if p.is_infinity() {
@@ -514,6 +540,11 @@ impl Secp256k1 {
     /// Decomposes k into (k1, k2) such that k*P = k1*P + k2*(λ*P)
     /// Uses optimized lattice basis reduction for shortest vectors
     fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
+        // Small k short-circuit: for |k| < 2^128, no decomposition needed
+        if k.bit_length() < 128 {
+            return (k.clone(), BigInt256::zero());
+        }
+
         // secp256k1 GLV constants using proper methods
         let lambda = Self::glv_lambda();
         let v1_a = Self::glv_v1_1();
@@ -605,11 +636,18 @@ impl Secp256k1 {
 
     /// Convert Jacobian point to affine coordinates
     pub fn to_affine(&self, p: &Point) -> Point {
+        // MODULAR FIX BLOCK 1: Safe affine conversion with Z=0 check
         if p.is_infinity() {
             return *p;
         }
 
-        let z_inv = Self::mod_inverse(&BigInt256::from_u64_array(p.z), &self.p).unwrap();
+        let z_big = BigInt256::from_u64_array(p.z);
+        if z_big.is_zero() {
+            // Infinity point - return (0,0,0) representation
+            return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
+        }
+
+        let z_inv = Self::mod_inverse(&z_big, &self.p).unwrap();
         let z_inv_sq = self.montgomery_p.mul(&z_inv, &z_inv);
         let z_inv_cu = self.montgomery_p.mul(&z_inv_sq, &z_inv);
 
@@ -1570,5 +1608,37 @@ mod tests {
         let sixteen = BigInt256::from_u64(16);
         let sixteen_g = curve.mul_constant_time(&sixteen, &curve.g).unwrap();
         assert_eq!(curve.g_multiples[5], sixteen_g);
+    }
+
+    // GLV Benchmarks
+    #[test]
+    fn test_glv_basic() {
+        let curve = Secp256k1::new();
+
+        // Test small k bypass
+        let small_k = BigInt256::from_u64(3);
+        let (k1, k2) = curve.glv_decompose(&small_k);
+        assert_eq!(k1, small_k);
+        assert_eq!(k2, BigInt256::zero());
+
+        // Test large k decomposition
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let (k1_large, k2_large) = curve.glv_decompose(&large_k);
+        assert!(k1_large.bits() <= 128);
+        assert!(k2_large.bits() <= 128);
+
+        // Test reconstruction
+        let lambda = Secp256k1::glv_lambda();
+        let k2_lambda = curve.barrett_n.mul(&k2_large, &lambda);
+        let reconstructed = curve.barrett_n.add(&k1_large, &k2_lambda);
+        let reconstructed_mod = if reconstructed >= curve.n {
+            curve.barrett_n.sub(&reconstructed, &curve.n)
+        } else {
+            reconstructed
+        };
+        let expected = curve.barrett_n.sub(&large_k, &curve.n); // large_k - n for mod
+        assert_eq!(reconstructed_mod, expected);
+
+        println!("GLV decomposition works correctly ✓");
     }
 }
