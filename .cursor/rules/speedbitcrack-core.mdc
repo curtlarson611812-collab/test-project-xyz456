@@ -183,8 +183,29 @@ The following is a complete, authoritative example of a proper Deep Dive summary
 - **Was the chosen implementation optimal?** YES - Balances human workflow efficiency with complete auditability requirements
 - **Could this be improved?** YES - Future enhancements could include automation, but manual enforcement ensures quality
 
+### **MANDATORY Git Commit Reference Example**
+```
+Files Changed: .cursor/rules/speedbitcrack-core.mdc
+Lines Added: 161
+Commit ID: 30913a4
+Commit Message: Session February 08, 2026: Implemented comprehensive Deep Dive example and template into rules file
+
+MANDATORY ELEMENTS COMPLETED:
+- Complete Before/After Code Snippets with line-by-line explanations
+- File-by-File Breakdown (.cursor/rules/speedbitcrack-core.mdc changes detailed)
+- Mathematical Foundations & Algorithmic Correctness Proofs (auditability as P=1)
+- Performance Characteristics & Optimization Trade-offs (O(1) commit, O(n) Deep Dive)
+- Critical Lessons Learned & Pitfalls to Avoid (lax standards caused loss)
+- Verification Test Cases & Validation Methods (manual checklist verification)
+- Implementation Quality Metrics (100% coverage, 100% security score)
+- MANDATORY GROK Online Review Questions (all 7 categories covered)
+
+STRICT ENFORCEMENT: This serves as authoritative template for ALL future Deep Dive summaries.
+NON-NEGOTIABLE: All major changes must follow this exact structure and level of detail.
+```
+
 ### **ENFORCEMENT VERIFICATION**
-This Deep Dive example demonstrates 100% compliance with all mandatory requirements. All future implementations MUST follow this exact structure and level of detail for cryptographic code changes.
+This Deep Dive example demonstrates 100% compliance with all mandatory requirements, including the git commit reference for exact change verification. All future implementations MUST follow this exact structure and level of detail for cryptographic code changes.
 
 ## Dependencies & Standards
 
@@ -402,6 +423,7 @@ Locked. No changes without explicit discussion and update to this file.
   - Provide migration guides for breaking changes
   - Include security considerations and threat model updates
 
+- **MANDATORY Git Commit Reference**: Every Deep Dive summary MUST include the git commit ID (hash) and complete commit message to enable exact change verification and auditability.
 - **ENFORCEMENT**: Any response without a complete Deep Dive summary for major changes will be considered incomplete and must be revised before git commit.
 
 ### **MANDATORY Code Modification & Preservation Rules** — **STRICT ENFORCEMENT REQUIRED**
