@@ -2,6 +2,7 @@
 mod tests {
     use super::*;
     use crate::math::secp::Secp256k1;
+    use crate::math::bigint::{BigInt256, BigInt512, BarrettReducer};
 
     #[test]
     fn test_decompress_puzzles() {

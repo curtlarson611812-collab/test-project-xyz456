@@ -23,13 +23,13 @@ pub const GENERATOR_Y: &str = "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199
 
 // Lazy initialized versions for computation
 pub static CURVE_ORDER_BIGINT: LazyLock<BigInt256> = LazyLock::new(|| {
-    BigInt256::from_hex(CURVE_ORDER)
+    BigInt256::from_hex(CURVE_ORDER).expect("Invalid curve order")
 });
 
 pub static GENERATOR: LazyLock<Point> = LazyLock::new(|| {
     Point {
-        x: BigInt256::from_hex(GENERATOR_X).limbs,
-        y: BigInt256::from_hex(GENERATOR_Y).limbs,
+        x: BigInt256::from_hex(GENERATOR_X).unwrap().limbs,
+        y: BigInt256::from_hex(GENERATOR_Y).unwrap().limbs,
         z: BigInt256::from_u64(1).limbs,
     }
 });

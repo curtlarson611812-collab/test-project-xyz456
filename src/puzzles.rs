@@ -145,8 +145,8 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         let pub_key_hex = parts[3].trim().to_string();
         let privkey_hex = if parts[4].trim().is_empty() { None } else { Some(parts[4].trim().to_string()) };
         let target_address = parts[5].trim().to_string();
-        let range_min_hex = parts[6].trim();
-        let range_max_hex = parts[7].trim();
+        let _range_min_hex = parts[6].trim();
+        let _range_max_hex = parts[7].trim();
         let search_space_bits: u32 = match parts[8].trim().parse::<f64>() {
             Ok(v) => v as u32,
             Err(e) => {
@@ -166,38 +166,26 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         // Note: Disabled to focus on DP and collision debugging
 
         // Parse ranges with comprehensive fallback for unsolved puzzles
-        let (range_min, range_max) = match (BigInt256::manual_hex_to_bytes(range_min_hex), BigInt256::manual_hex_to_bytes(range_max_hex)) {
-            (Ok(min_bytes), Ok(max_bytes)) => {
-                if min_bytes.len() != 32 || max_bytes.len() != 32 {
-                    warn!("Puzzle {}: Wrong byte length for ranges (min: {} bytes, max: {} bytes), using fallback calculation", n, min_bytes.len(), max_bytes.len());
+        let (range_min, range_max) = match (BigInt256::from_hex(range_min_hex), BigInt256::from_hex(range_max_hex)) {
+            (Ok(parsed_min), Ok(parsed_max)) => {
+                // Validate ranges make sense (max > min, both > 0)
+                if parsed_max <= parsed_min || parsed_min.is_zero() {
+                    warn!("Puzzle {}: Invalid parsed ranges (min: {}, max: {}), using fallback calculation", n, parsed_min.to_hex(), parsed_max.to_hex());
                     calculate_fallback_ranges(n)
                 } else {
-                    let mut min_arr = [0u8; 32];
-                    let mut max_arr = [0u8; 32];
-                    min_arr.copy_from_slice(&min_bytes);
-                    max_arr.copy_from_slice(&max_bytes);
-                    let parsed_min = BigInt256::from_bytes_be(&min_arr);
-                    let parsed_max = BigInt256::from_bytes_be(&max_arr);
-
-                    // Validate ranges make sense (max > min, both > 0)
-                    if parsed_max <= parsed_min || parsed_min.is_zero() {
-                        warn!("Puzzle {}: Invalid parsed ranges (min: {}, max: {}), using fallback calculation", n, parsed_min.to_hex(), parsed_max.to_hex());
-                        calculate_fallback_ranges(n)
-                    } else {
-                        (parsed_min, parsed_max)
-                    }
+                    (parsed_min, parsed_max)
                 }
             }
             (Err(min_err), Err(max_err)) => {
                 warn!("Puzzle {}: Hex parsing failed for both ranges (min: {}, max: {}), using fallback calculation", n, min_err, max_err);
                 calculate_fallback_ranges(n)
             }
-            (Err(min_err), Ok(max_bytes)) => {
-                warn!("Puzzle {}: Hex parsing failed for min range ({}), max parsed successfully, using fallback calculation", n, min_err);
+            (Err(min_err), Ok(_)) => {
+                warn!("Puzzle {}: Hex parsing failed for min range ({}), using fallback calculation", n, min_err);
                 calculate_fallback_ranges(n)
             }
-            (Ok(min_bytes), Err(max_err)) => {
-                warn!("Puzzle {}: Hex parsing failed for max range ({}), min parsed successfully, using fallback calculation", n, max_err);
+            (Ok(_), Err(max_err)) => {
+                warn!("Puzzle {}: Hex parsing failed for max range ({}), using fallback calculation", n, max_err);
                 calculate_fallback_ranges(n)
             }
         };

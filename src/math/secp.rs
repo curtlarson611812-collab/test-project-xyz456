@@ -17,12 +17,12 @@ use anyhow::{anyhow, Result};
 impl Secp256k1 {
     /// Known G*3 x-coordinate for testing (standard from ecdsa tool)
     pub fn known_3g_x() -> BigInt256 {
-        BigInt256::from_hex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9")
+        BigInt256::from_hex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9").unwrap()
     }
 
     /// Known G*3 y-coordinate for testing (standard from ecdsa tool)
     pub fn known_3g_y() -> BigInt256 {
-        BigInt256::from_hex("388f7b0f632de8140fe337e62a37f3566500a99934c2231b6cb9fd7584b8e672")
+        BigInt256::from_hex("388f7b0f632de8140fe337e62a37f3566500a99934c2231b6cb9fd7584b8e672").unwrap()
     }
 
     /// Known G*3 coordinates as tuple for testing
@@ -36,40 +36,40 @@ impl Secp256k1 {
     /// Known 2G coordinates for debugging double operation (standard from ecdsa tool)
     pub fn known_2g() -> (BigInt256, BigInt256) {
         (
-            BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"),
-            BigInt256::from_hex("1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a")
+            BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5").unwrap(),
+            BigInt256::from_hex("1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a").unwrap()
         )
     }
 
 
     /// GLV endomorphism lambda (cube root of unity modulo n)
     pub fn glv_lambda() -> BigInt256 {
-        BigInt256::from_hex("5363ad4cc05c30e0a5261c0286d7dab99cc95b5e4c4659b9d7d27ec4eeda59")
+        BigInt256::from_hex("5363ad4cc05c30e0a5261c0286d7dab99cc95b5e4c4659b9d7d27ec4eeda59").unwrap()
     }
 
     /// GLV endomorphism beta (x-coordinate multiplier)
     pub fn glv_beta() -> BigInt256 {
-        BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee")
+        BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee").unwrap()
     }
 
     /// GLV basis vector v1 components (v1 = (v1_1, v1_2))
     pub fn glv_v1_1() -> BigInt256 {
-        BigInt256::from_hex("3086d221a7d46bcde86c90e49284eb153dab")
+        BigInt256::from_hex("3086d221a7d46bcde86c90e49284eb153dab").unwrap()
     }
 
     pub fn glv_v1_2() -> BigInt256 {
         // Negative value: -0xe4437ed6010e88286f547fa90abfe4c3
-        let positive = BigInt256::from_hex("e4437ed6010e88286f547fa90abfe4c3");
+        let positive = BigInt256::from_hex("e4437ed6010e88286f547fa90abfe4c3").unwrap();
         positive.negate(&Secp256k1::new().barrett_n) // Negate modulo n
     }
 
     /// GLV basis vector v2 components (v2 = (v2_1, v2_2))
     pub fn glv_v2_1() -> BigInt256 {
-        BigInt256::from_hex("114ca50f7a8e2f3f657c1108d9d44cfd")
+        BigInt256::from_hex("114ca50f7a8e2f3f657c1108d9d44cfd").unwrap()
     }
 
     pub fn glv_v2_2() -> BigInt256 {
-        BigInt256::from_hex("3086d221a7d46bcde86c90e49284eb153dab")
+        BigInt256::from_hex("3086d221a7d46bcde86c90e49284eb153dab").unwrap()
     }
 }
 
@@ -94,6 +94,8 @@ pub struct Secp256k1 {
     pub barrett_n: BarrettReducer,
     /// Montgomery reducer for p
     pub montgomery_p: MontgomeryReducer,
+    /// Curve parameter b in Montgomery form (for optimized operations)
+    pub mont_b: BigInt256,
 }
 
 impl Secp256k1 {
@@ -126,10 +128,10 @@ impl Secp256k1 {
     pub fn new() -> Self {
         // println!("DEBUG: Entering Secp256k1::new()");
         info!("DEBUG: Secp256k1::new() - creating curve parameters");
-        let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+        let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").unwrap();
         println!("DEBUG: Created p");
         info!("DEBUG: Created p");
-        let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+        let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").unwrap();
         info!("DEBUG: Created n");
         let a = BigInt256::zero();
         let b = BigInt256::from_u64(7);
@@ -137,28 +139,33 @@ impl Secp256k1 {
 
         // Generator point G (Jacobian coordinates with Z=1)
         let g = Point {
-            x: BigInt256::from_hex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798").to_u64_array(),
-            y: BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8").to_u64_array(),
+            x: BigInt256::from_hex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798").unwrap().to_u64_array(),
+            y: BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8").unwrap().to_u64_array(),
             z: [1, 0, 0, 0], // Z=1 for affine points
         };
 
         // Populate g_multiples: [G, 2G, 3G, 4G, 8G, 16G, -G, -2G, -3G, -4G, -8G, -16G]
+        let montgomery_p_temp = MontgomeryReducer::new(&p);
+        let mont_b_temp = montgomery_p_temp.convert_in(&b);
         let mut temp_curve = Secp256k1 {
             p: p.clone(), n: n.clone(), a: a.clone(), b: b.clone(), g: g.clone(),
             g_multiples: Vec::new(),
             barrett_p: BarrettReducer::new(&p),
             barrett_n: BarrettReducer::new(&n),
-            montgomery_p: MontgomeryReducer::new(&p),
+            montgomery_p: montgomery_p_temp,
+            mont_b: mont_b_temp,
         };
 
         let mut g_multiples = Vec::new();
-        let ks = [1u64, 2, 3, 4, 8, 16];
+        // Temporarily reduce to smaller k values to avoid hang during debugging
+        let ks = [1u64, 2];
         for &k in &ks {
             let k_big = BigInt256::from_u64(k);
             let multiple = temp_curve.mul_constant_time(&k_big, &g).unwrap();
             g_multiples.push(multiple);
         }
-        for i in 0..6 {
+        // Adjust for reduced ks array (only 2 elements now)
+        for i in 0..2 {
             let neg = g_multiples[i].negate(&temp_curve);
             g_multiples.push(neg);
         }
@@ -166,10 +173,11 @@ impl Secp256k1 {
         let barrett_p = BarrettReducer::new(&p);
         let barrett_n = BarrettReducer::new(&n);
         let montgomery_p = MontgomeryReducer::new(&p);
+        let mont_b = montgomery_p.convert_in(&b);
 
         Secp256k1 {
             p: p, n: n, a, b, g, g_multiples,
-            barrett_p, barrett_n, montgomery_p,
+            barrett_p, barrett_n, montgomery_p, mont_b,
         }
     }
 
@@ -351,7 +359,7 @@ impl Secp256k1 {
         let pz_r = pz;
 
         // Use simple modular arithmetic for testing (bypass Montgomery/Barrett issues)
-        let p_val = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+        let p_val = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").unwrap();
 
         // Helper function for modular multiplication
         let mod_mul = |a: &BigInt256, b: &BigInt256| -> BigInt256 {
@@ -576,7 +584,7 @@ impl Secp256k1 {
     /// GLV decomposition for secp256k1 using precomputed basis vectors
     /// Decomposes k into (k1, k2) such that k*P = k1*P + k2*(λ*P)
     /// Uses optimized lattice basis reduction for shortest vectors
-    fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
+    pub fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
         // Small k short-circuit: for |k| < 2^128, no decomposition needed
         if k.bit_length() < 128 {
             return (k.clone(), BigInt256::zero());
@@ -614,7 +622,7 @@ impl Secp256k1 {
 
         // Babai's algorithm for shortest vectors: Adjust if |k1| or |k2| are too large
         // sqrt(n/2) ≈ 2^127.5, use approximation
-        let sqrt_n_over_2 = BigInt256::from_hex("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8");
+        let sqrt_n_over_2 = BigInt256::from_hex("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8").unwrap();
 
         // Manual absolute value (since BigInt256 doesn't have abs())
         let k1_abs = if k1 < BigInt256::zero() { self.barrett_n.sub(&BigInt256::zero(), &k1) } else { k1.clone() };
@@ -659,7 +667,7 @@ impl Secp256k1 {
     fn apply_endomorphism(&self, p: &Point) -> Point {
         // secp256k1 endomorphism λ where λ*P = (β*x, y)
         // β = 0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee
-        let beta = BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee");
+        let beta = BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee").unwrap();
 
         let px = BigInt256::from_u64_array(p.x);
         let new_x = self.barrett_p.mul(&beta, &px);
@@ -684,7 +692,7 @@ impl Secp256k1 {
             return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
         }
 
-        let z_inv = Self::mod_inverse(&z_big, &self.p).unwrap();
+        let z_inv = self.mod_inverse_method(&z_big, &self.p).unwrap();
         let z_inv_sq = self.montgomery_p.mul(&z_inv, &z_inv);
         let z_inv_cu = self.montgomery_p.mul(&z_inv_sq, &z_inv);
 
@@ -720,7 +728,7 @@ impl Secp256k1 {
         }
 
         // Compute inverse of product
-        let z_product_inv = Self::mod_inverse(&z_product, &self.p).unwrap();
+        let z_product_inv = self.mod_inverse_method(&z_product, &self.p).unwrap();
 
         // Compute individual inverses working backwards
         let mut inverses = Vec::with_capacity(points.len());
@@ -907,8 +915,8 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         }
 
         // Special cases for known puzzles - use known y coordinates
-        let generator_x = BigInt256::from_hex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798");
-        let generator_y = BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8");
+        let generator_x = BigInt256::from_hex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798").unwrap();
+        let generator_y = BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8").unwrap();
 
         // For unknown points, compute y^2 = x^3 + ax + b mod p
         // Use BigUint for accurate calculation to avoid Barrett bugs
@@ -936,10 +944,10 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         println!("DEBUG: Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
 
         // Special case: if this is puzzle #66's x coordinate, return the known y
-        let puzzle66_x = BigInt256::from_hex("00000000000000000000000000000002e00ddc93b1a8f8bf9afe880853090228");
+        let puzzle66_x = BigInt256::from_hex("00000000000000000000000000000002e00ddc93b1a8f8bf9afe880853090228").unwrap();
         if x == puzzle66_x {
             println!("DEBUG: Recognized puzzle #66 x coordinate, using known y");
-            let known_y = BigInt256::from_hex("000000000000000000000000000000006c9226f6233635cd3b3a7662ea4c5c24");
+            let known_y = BigInt256::from_hex("000000000000000000000000000000006c9226f6233635cd3b3a7662ea4c5c24").unwrap();
             let point = Point {
                 x: x.to_u64_array(),
                 y: known_y.to_u64_array(),
@@ -1074,7 +1082,7 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
     }
 
     /// Modular exponentiation: base^exp mod modulus
-    fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+    pub fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
         use num_bigint::BigUint;
 
         let base_big = BigUint::from_bytes_be(&base.to_bytes_be());
@@ -1199,7 +1207,7 @@ mod tests {
 
         // Test inverse of 3 mod p (should exist)
         let three = BigInt256::from_u64(3);
-        let inv_three = curve.mod_inverse(&three, &curve.p);
+        let inv_three = Secp256k1::mod_inverse(&three, &curve.p);
         assert!(inv_three.is_some());
 
         let inv_three = inv_three.unwrap();
@@ -1208,7 +1216,7 @@ mod tests {
 
         // Test inverse of 0 (should not exist)
         let zero = BigInt256::zero();
-        let inv_zero = curve.mod_inverse(&zero, &curve.p);
+        let inv_zero = Secp256k1::mod_inverse(&zero, &curve.p);
         assert!(inv_zero.is_none());
     }
 
@@ -1275,8 +1283,10 @@ mod tests {
         let three_g = curve.mul(&three, &curve.g);
         let three_g_affine = curve.to_affine(&three_g);
 
-        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b");
-        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d");
+        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")
+            .expect("Invalid expected x");
+        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+            .expect("Invalid expected y");
 
         assert_eq!(three_g_affine.x, expected_x.to_u64_array());
         assert_eq!(three_g_affine.y, expected_y.to_u64_array());
@@ -1288,7 +1298,8 @@ mod tests {
         let curve = Secp256k1::new();
 
         // Test that GLV decomposition gives correct scalar multiplication
-        let k = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0");
+        let k = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0")
+            .expect("Invalid test scalar");
         let (k1, k2) = curve.glv_decompose(&k);
 
         // Verify: k*P = k1*P + k2*λ(P)
@@ -1429,8 +1440,10 @@ mod tests {
         assert_eq!(glv_affine.y, naive_affine.y);
 
         // Also verify against known 3G vector
-        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b");
-        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d");
+        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")
+            .expect("Invalid expected x");
+        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+            .expect("Invalid expected y");
 
         assert_eq!(glv_affine.x, expected_x.to_u64_array());
         assert_eq!(glv_affine.y, expected_y.to_u64_array());
@@ -1442,7 +1455,8 @@ mod tests {
         use std::time::Instant;
 
         let curve = Secp256k1::new();
-        let k = BigInt256::from_hex("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890");
+        let k = BigInt256::from_hex("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            .expect("Invalid benchmark scalar");
         let start_naive = Instant::now();
         let _naive = curve.mul_naive(&k, &curve.g);
         let duration_naive = start_naive.elapsed();

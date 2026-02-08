@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn test_shared_buffer_creation() {
         let buffer: SharedBuffer<u64> = SharedBuffer::new(1024);
-        assert_eq!(buffer.len, 1024);
+        assert_eq!(buffer.len(), 1024);
         assert!(buffer.as_slice().iter().all(|&x| x == 0));
     }
 }

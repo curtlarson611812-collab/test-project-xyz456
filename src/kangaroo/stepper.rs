@@ -270,6 +270,7 @@ mod tests {
             [0; 4], // alpha
             [0; 4], // beta
             true,   // tame
+            false,  // is_dp
             0,      // id
         );
 
@@ -341,6 +342,7 @@ mod tests {
             [0; 4],
             [0; 4],
             true,
+            false,
             0,
         );
         let state2 = KangarooState::new(
@@ -349,6 +351,7 @@ mod tests {
             [0; 4],
             [0; 4],
             true,
+            false,
             1,
         );
         let kangaroos = vec![state1, state2];

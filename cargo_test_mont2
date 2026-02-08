@@ -1,0 +1,2477 @@
+warning: speedbitcrack@0.1.0: Successfully opened valuable_p2pk_pubkeys.txt for bias computation
+   Compiling speedbitcrack v0.1.0 (/data/Projects/SpeedBitCrackV3)
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/cuda_backend.rs:1041:30
+     |
+1041 |     pub fn create_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+     |                              ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error[E0425]: cannot find value `inv_three` in this scope
+    --> src/math/bigint.rs:1432:20
+     |
+1432 |         assert_eq!(inv_three, Some(6));
+     |                    ^^^^^^^^^ not found in this scope
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:34:23
+   |
+34 | ...   let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFF...
+   |                     ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BarrettReducer`
+  --> src/math/tests.rs:35:23
+   |
+35 |         let reducer = BarrettReducer::new(&modulus).unwrap();
+   |                       ^^^^^^^^^^^^^^ use of undeclared type `BarrettReducer`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BarrettReducer;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:39:13
+   |
+39 |             BigInt256::from_u64(1),
+   |             ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:40:13
+   |
+40 |             BigInt256::from_u64(123456),
+   |             ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:41:13
+   |
+41 |             BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"),
+   |             ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+  --> src/math/tests.rs:45:43
+   |
+45 |             let reduced = reducer.reduce(&BigInt512::from_bigint256(&val)).unwrap();
+   |                                           ^^^^^^^^^ use of undeclared type `BigInt512`
+   |
+help: consider importing this struct
+   |
+ 3 +     use crate::math::bigint::BigInt512;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+  --> src/math/tests.rs:52:17
+   |
+52 |         let a = BigInt512::from_bigint256(&BigInt256::from_u64(2));
+   |                 ^^^^^^^^^ use of undeclared type `BigInt512`
+   |
+help: consider importing this struct
+   |
+ 3 +     use crate::math::bigint::BigInt512;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:52:44
+   |
+52 |         let a = BigInt512::from_bigint256(&BigInt256::from_u64(2));
+   |                                            ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+  --> src/math/tests.rs:53:17
+   |
+53 |         let b = BigInt512::from_bigint256(&BigInt256::from_u64(3));
+   |                 ^^^^^^^^^ use of undeclared type `BigInt512`
+   |
+help: consider importing this struct
+   |
+ 3 +     use crate::math::bigint::BigInt512;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:53:44
+   |
+53 |         let b = BigInt512::from_bigint256(&BigInt256::from_u64(3));
+   |                                            ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:68:20
+   |
+68 |         let base = BigInt256::from_u64(2);
+   |                    ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:69:19
+   |
+69 |         let exp = BigInt256::from_u64(3);
+   |                   ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:70:23
+   |
+70 |         let modulus = BigInt256::from_u64(7);
+   |                       ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:72:28
+   |
+72 |         assert_eq!(result, BigInt256::one());
+   |                            ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:75:18
+   |
+75 |         let qr = BigInt256::from_u64(4); // 4 is QR mod 7
+   |                  ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:76:28
+   |
+76 |         let legendre_exp = BigInt256::from_u64(3); // (7-1)/2 = 3
+   |                            ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:77:59
+   |
+77 |         let legendre = curve.pow_mod(&qr, &legendre_exp, &BigInt256::from_u64(7));
+   |                                                           ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:78:30
+   |
+78 |         assert_eq!(legendre, BigInt256::one());
+   |                              ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:84:17
+   |
+84 |         let a = BigInt256::from_u64(3);
+   |                 ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:85:23
+   |
+85 |         let modulus = BigInt256::from_u64(7);
+   |                       ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:89:29
+   |
+89 |         assert_eq!(product, BigInt256::one());
+   |                             ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:97:21
+   |
+97 |         let value = BigInt256::from_u64(4);
+   |                     ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/math/tests.rs:98:23
+   |
+98 |         let modulus = BigInt256::from_u64(7);
+   |                       ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0425]: cannot find type `BigInt256` in this scope
+   --> src/math/tests.rs:134:29
+    |
+134 |     fn mod_pow_basic(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+    |                             ^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0425]: cannot find type `BigInt256` in this scope
+   --> src/math/tests.rs:134:46
+    |
+134 |     fn mod_pow_basic(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+    |                                              ^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0425]: cannot find type `BigInt256` in this scope
+   --> src/math/tests.rs:134:67
+    |
+134 |     fn mod_pow_basic(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+    |                                                                   ^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0425]: cannot find type `BigInt256` in this scope
+   --> src/math/tests.rs:134:81
+    |
+134 |     fn mod_pow_basic(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+    |                                                                                 ^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+   --> src/math/tests.rs:137:26
+    |
+137 |         let mut result = BigInt256::one();
+    |                          ^^^^^^^^^ use of undeclared type `BigInt256`
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+   --> src/math/tests.rs:138:37
+    |
+138 |         let mut b = barrett.reduce(&BigInt512::from_bigint256(&base.clone())).unwrap();
+    |                                     ^^^^^^^^^ use of undeclared type `BigInt512`
+    |
+help: consider importing this struct
+    |
+  3 +     use crate::math::bigint::BigInt512;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+   --> src/math/tests.rs:144:42
+    |
+144 |                 result = barrett.reduce(&BigInt512::from_bigint256(&result)).unwrap();
+    |                                          ^^^^^^^^^ use of undeclared type `BigInt512`
+    |
+help: consider importing this struct
+    |
+  3 +     use crate::math::bigint::BigInt512;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+   --> src/math/tests.rs:147:33
+    |
+147 |             b = barrett.reduce(&BigInt512::from_bigint256(&b)).unwrap();
+    |                                 ^^^^^^^^^ use of undeclared type `BigInt512`
+    |
+help: consider importing this struct
+    |
+  3 +     use crate::math::bigint::BigInt512;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+   --> src/math/tests.rs:158:22
+    |
+158 |         let value1 = BigInt256::from_u64(4);
+    |                      ^^^^^^^^^ use of undeclared type `BigInt256`
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+   --> src/math/tests.rs:159:24
+    |
+159 |         let modulus1 = BigInt256::from_u64(7);
+    |                        ^^^^^^^^^ use of undeclared type `BigInt256`
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+   --> src/math/tests.rs:166:52
+    |
+166 |         let root1_sq_mod = curve.barrett_p.reduce(&BigInt512::from_bigint256(&root1_sq)).unwrap();
+    |                                                    ^^^^^^^^^ use of undeclared type `BigInt512`
+    |
+help: consider importing this struct
+    |
+  3 +     use crate::math::bigint::BigInt512;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+   --> src/math/tests.rs:172:26
+    |
+172 |         let test_value = BigInt256::from_u64(9); // 3^2 = 9, so sqrt should be 3 or p-3
+    |                          ^^^^^^^^^ use of undeclared type `BigInt256`
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt512`
+   --> src/math/tests.rs:178:52
+    |
+178 |         let root2_sq_mod = curve.barrett_p.reduce(&BigInt512::from_bigint256(&root2_sq)).unwrap();
+    |                                                    ^^^^^^^^^ use of undeclared type `BigInt512`
+    |
+help: consider importing this struct
+    |
+  3 +     use crate::math::bigint::BigInt512;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+   --> src/math/tests.rs:182:27
+    |
+182 |         let non_residue = BigInt256::from_u64(3); // 3 is not a quadratic residue mod 7
+    |                           ^^^^^^^^^ use of undeclared type `BigInt256`
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+   --> src/math/tests.rs:187:20
+    |
+187 |         let zero = BigInt256::zero();
+    |                    ^^^^^^^^^ use of undeclared type `BigInt256`
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+   --> src/math/tests.rs:189:32
+    |
+189 |         assert_eq!(root4, Some(BigInt256::zero()), "sqrt(0) should be 0");
+    |                                ^^^^^^^^^ use of undeclared type `BigInt256`
+    |
+help: consider importing this struct through its public re-export
+    |
+  3 +     use crate::math::BigInt256;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `CollisionDetector`
+  --> src/kangaroo/tests.rs:11:24
+   |
+11 |         let detector = CollisionDetector::new_with_config(&config);
+   |                        ^^^^^^^^^^^^^^^^^ use of undeclared type `CollisionDetector`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::kangaroo::CollisionDetector;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/kangaroo/tests.rs:14:27
+   |
+14 |         let range_small = BigInt256::from_u64(1_000_000); // Small range
+   |                           ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `CollisionDetector`
+  --> src/kangaroo/tests.rs:15:31
+   |
+15 |         let threshold_small = CollisionDetector::optimal_near_g_threshold(&range_small, 24);
+   |                               ^^^^^^^^^^^^^^^^^ use of undeclared type `CollisionDetector`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::kangaroo::CollisionDetector;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/kangaroo/tests.rs:18:27
+   |
+18 |         let range_large = BigInt256::from_u64(10_000_000); // Larger range
+   |                           ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `CollisionDetector`
+  --> src/kangaroo/tests.rs:19:31
+   |
+19 |         let threshold_large = CollisionDetector::optimal_near_g_threshold(&range_large, 24);
+   |                               ^^^^^^^^^^^^^^^^^ use of undeclared type `CollisionDetector`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::kangaroo::CollisionDetector;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `BigInt256`
+  --> src/kangaroo/tests.rs:29:27
+   |
+29 |         let range_width = BigInt256::from_u64(1 << 20); // Small range for testing
+   |                           ^^^^^^^^^ use of undeclared type `BigInt256`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::math::BigInt256;
+   |
+
+error[E0433]: failed to resolve: use of undeclared type `CollisionDetector`
+  --> src/kangaroo/tests.rs:39:24
+   |
+39 |         let detector = CollisionDetector::new_with_config(&config);
+   |                        ^^^^^^^^^^^^^^^^^ use of undeclared type `CollisionDetector`
+   |
+help: consider importing this struct through its public re-export
+   |
+ 3 +     use crate::kangaroo::CollisionDetector;
+   |
+
+error[E0425]: cannot find type `SoaLayout` in this scope
+    --> src/gpu/backends/cuda_backend.rs:1041:69
+     |
+1041 |     pub fn create_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+     |                                                                     ^^^^^^^^^ not found in this scope
+     |
+help: you might be missing a type parameter
+     |
+1041 |     pub fn create_soa_layout<SoaLayout>(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+     |                             +++++++++++
+
+error[E0425]: cannot find type `DriverError` in this scope
+    --> src/gpu/backends/cuda_backend.rs:1041:80
+     |
+1041 |     pub fn create_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+     |                                                                                ^^^^^^^^^^^ not found in this scope
+     |
+help: you might be missing a type parameter
+     |
+1041 |     pub fn create_soa_layout<DriverError>(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+     |                             +++++++++++++
+
+error[E0425]: cannot find function `load_real_puzzle` in this scope
+    --> src/test_basic.rs:239:21
+     |
+ 131 | fn load_test_puzzles(file_path: &str, curve: &Secp256k1) -> Vec<crate::types::Point> {
+     | ------------------------------------------------------------------------------------ similarly named function `load_test_puzzles` defined here
+...
+ 239 |         let point = load_real_puzzle(64, &curve)?;
+     |                     ^^^^^^^^^^^^^^^^ help: a function with a similar name exists: `load_test_puzzles`
+     |
+note: function `crate::utils::pubkey_loader::tests::load_real_puzzle` exists but is inaccessible
+    --> src/utils/pubkey_loader.rs:1194:1
+     |
+1194 | pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point, Box<dyn std::error::Error>> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+
+error[E0425]: cannot find function `load_from_file` in this scope
+    --> src/test_basic.rs:248:22
+     |
+ 248 |         let result = load_from_file("valuable_p2pk_pubkeys.txt", &curve);
+     |                      ^^^^^^^^^^^^^^ not found in this scope
+     |
+note: function `crate::utils::pubkey_loader::tests::load_from_file` exists but is inaccessible
+    --> src/utils/pubkey_loader.rs:1218:1
+     |
+1218 | pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+
+warning: unused import: `anyhow`
+  --> src/math/secp.rs:14:14
+   |
+14 | use anyhow::{anyhow, Result};
+   |              ^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary parentheses around assigned value
+   --> src/math/bigint.rs:698:17
+    |
+698 |         let k = ((modulus.bit_length() + 63) / 64); // Correct: ceil(bit_length / 64), 4 for 256-bit
+    |                 ^                                ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+698 -         let k = ((modulus.bit_length() + 63) / 64); // Correct: ceil(bit_length / 64), 4 for 256-bit
+698 +         let k = (modulus.bit_length() + 63) / 64; // Correct: ceil(bit_length / 64), 4 for 256-bit
+    |
+
+warning: unnecessary parentheses around assigned value
+   --> src/math/bigint.rs:743:17
+    |
+743 |         let b = (self.modulus.bit_length() as u32); // 256
+    |                 ^                                ^
+    |
+help: remove these parentheses
+    |
+743 -         let b = (self.modulus.bit_length() as u32); // 256
+743 +         let b = self.modulus.bit_length() as u32; // 256
+    |
+
+warning: unnecessary parentheses around assigned value
+   --> src/math/bigint.rs:894:27
+    |
+894 |         let mut r: i128 = (1i128 << 64); // 2^64
+    |                           ^           ^
+    |
+help: remove these parentheses
+    |
+894 -         let mut r: i128 = (1i128 << 64); // 2^64
+894 +         let mut r: i128 = 1i128 << 64; // 2^64
+    |
+
+warning: duplicated attribute
+    --> src/math/bigint.rs:1287:5
+     |
+1287 |     #[test]
+     |     ^^^^^^^
+     |
+     = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: unused import: `std::ops::Mul`
+ --> src/math/constants.rs:7:5
+  |
+7 | use std::ops::Mul;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+ --> src/math/tests.rs:3:9
+  |
+3 |     use super::*;
+  |         ^^^^^^^^
+
+warning: unused import: `num_traits::cast::ToPrimitive`
+  --> src/kangaroo/manager.rs:23:5
+   |
+23 | use num_traits::cast::ToPrimitive;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+   --> src/kangaroo/manager.rs:827:9
+    |
+827 |     use super::*;
+    |         ^^^^^^^^
+
+warning: unused import: `crate::config::Config`
+   --> src/kangaroo/manager.rs:828:9
+    |
+828 |     use crate::config::Config;
+    |         ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+ --> src/kangaroo/tests.rs:3:9
+  |
+3 |     use super::*;
+  |         ^^^^^^^^
+
+warning: unused import: `crate::types::Point`
+ --> src/kangaroo/tests.rs:5:9
+  |
+5 |     use crate::types::Point;
+  |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::math::bigint::BigInt256`
+   --> src/gpu/backends/cuda_backend.rs:914:9
+    |
+914 |     use crate::math::bigint::BigInt256;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+   --> src/dp/pruning.rs:298:9
+    |
+298 |     use super::*;
+    |         ^^^^^^^^
+
+warning: unused doc comment
+   --> src/utils/bias.rs:97:1
+    |
+ 97 | / /// Pre-computed bias database for Magic 9 sniper mode
+ 98 | | /// Auto-generated at build time from valuable_p2pk_pubkeys.txt
+ 99 | | /// Format: (mod3, mod9, mod27, mod81, hamming_weight) for each of the 9 pubkeys
+100 | | /// Indices: [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567]
+101 | | /// Generated by build.rs from cluster analysis
+    | |_----------------------------------------------^
+    |   |
+    |   rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+    = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `zerocopy::IntoBytes`
+ --> src/utils/bias.rs:7:5
+  |
+7 | use zerocopy::IntoBytes;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `log::Log`
+  --> src/utils/output.rs:31:9
+   |
+31 |     use log::Log;
+   |         ^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+   --> src/utils/output.rs:387:9
+    |
+387 |     use std::sync::Arc;
+    |         ^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::atomic::AtomicBool`
+   --> src/utils/output.rs:388:9
+    |
+388 |     use std::sync::atomic::AtomicBool;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `cudarc`
+   --> src/security.rs:104:15
+    |
+104 |     #[cfg(not(feature = "cudarc"))]
+    |               ^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cuda-runtime-sys`, `default`, `fuzz`, `laptop`, `legacy`, `libfuzzer-sys`, `phase4`, `portable_simd`, `rustacuda`, `smoke`, `vulkano`, and `wgpu`
+    = help: consider adding `cudarc` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unused import: `BigInt512`
+ --> src/simple_test.rs:2:56
+  |
+2 | use crate::math::{secp::Secp256k1, bigint::{BigInt256, BigInt512}};
+  |                                                        ^^^^^^^^^
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+  --> src/test_basic.rs:11:28
+   |
+11 |     fn test_g_times_3() -> Result<()> {
+   |                            ^^^^^^ -- supplied 1 generic argument
+   |                            |
+   |                            expected 2 generic arguments
+   |
+help: add missing generic argument
+   |
+11 |     fn test_g_times_3() -> Result<(), E> {
+   |                                     +++
+
+warning: variable does not need to be mutable
+   --> src/kangaroo/collision.rs:387:13
+    |
+387 |         let mut tame_walk = tame.clone();
+    |             ----^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/kangaroo/collision.rs:427:13
+    |
+427 |         let mut wild_walk = wild.clone();
+    |             ----^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+error[E0599]: no method named `mod_inverse` found for struct `secp::Secp256k1` in the current scope
+    --> src/math/secp.rs:1210:31
+     |
+  78 | pub struct Secp256k1 {
+     | -------------------- method `mod_inverse` not found for this struct
+...
+1210 |         let inv_three = curve.mod_inverse(&three, &curve.p);
+     |                               ^^^^^^^^^^^ this is an associated function, not a method
+     |
+     = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
+note: the candidate is defined in an impl for the type `secp::Secp256k1`
+    --> src/math/secp.rs:803:1
+     |
+ 803 | pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: use associated function syntax instead
+     |
+1210 -         let inv_three = curve.mod_inverse(&three, &curve.p);
+1210 +         let inv_three = secp::Secp256k1::mod_inverse(&three, &curve.p);
+     |
+help: one of the expressions' fields has a method of the same name
+     |
+1210 |         let inv_three = curve.montgomery_p.mod_inverse(&three, &curve.p);
+     |                               +++++++++++++
+help: there is a method `mod_inverse_method` with a similar name
+     |
+1210 |         let inv_three = curve.mod_inverse_method(&three, &curve.p);
+     |                                          +++++++
+
+error[E0599]: no method named `mod_inverse` found for struct `secp::Secp256k1` in the current scope
+    --> src/math/secp.rs:1219:30
+     |
+  78 | pub struct Secp256k1 {
+     | -------------------- method `mod_inverse` not found for this struct
+...
+1219 |         let inv_zero = curve.mod_inverse(&zero, &curve.p);
+     |                              ^^^^^^^^^^^ this is an associated function, not a method
+     |
+     = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
+note: the candidate is defined in an impl for the type `secp::Secp256k1`
+    --> src/math/secp.rs:803:1
+     |
+ 803 | pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: use associated function syntax instead
+     |
+1219 -         let inv_zero = curve.mod_inverse(&zero, &curve.p);
+1219 +         let inv_zero = secp::Secp256k1::mod_inverse(&zero, &curve.p);
+     |
+help: one of the expressions' fields has a method of the same name
+     |
+1219 |         let inv_zero = curve.montgomery_p.mod_inverse(&zero, &curve.p);
+     |                              +++++++++++++
+help: there is a method `mod_inverse_method` with a similar name
+     |
+1219 |         let inv_zero = curve.mod_inverse_method(&zero, &curve.p);
+     |                                         +++++++
+
+error[E0599]: no method named `to_u64_array` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/secp.rs:1289:49
+     |
+1289 |         assert_eq!(three_g_affine.x, expected_x.to_u64_array());
+     |                                                 ^^^^^^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `to_u64_array` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:436:5
+     |
+ 436 |     pub fn to_u64_array(self) -> [u64; 4] {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1289 |         assert_eq!(three_g_affine.x, expected_x.expect("REASON").to_u64_array());
+     |                                                +++++++++++++++++
+
+error[E0599]: no method named `to_u64_array` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/secp.rs:1290:49
+     |
+1290 |         assert_eq!(three_g_affine.y, expected_y.to_u64_array());
+     |                                                 ^^^^^^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `to_u64_array` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:436:5
+     |
+ 436 |     pub fn to_u64_array(self) -> [u64; 4] {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1290 |         assert_eq!(three_g_affine.y, expected_y.expect("REASON").to_u64_array());
+     |                                                +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1300:44
+     |
+1300 |         let (k1, k2) = curve.glv_decompose(&k);
+     |                              ------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                              |
+     |                              arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:587:8
+     |
+ 587 |     fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
+     |        ^^^^^^^^^^^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1303:28
+     |
+1303 |         let kp = curve.mul(&k, &curve.g);
+     |                        --- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                        |
+     |                        arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:461:12
+     |
+ 461 |     pub fn mul(&self, k: &BigInt256, p: &Point) -> Point {
+     |            ^^^        -------------
+
+error[E0599]: no method named `to_u64_array` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/secp.rs:1443:45
+     |
+1443 |         assert_eq!(glv_affine.x, expected_x.to_u64_array());
+     |                                             ^^^^^^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `to_u64_array` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:436:5
+     |
+ 436 |     pub fn to_u64_array(self) -> [u64; 4] {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1443 |         assert_eq!(glv_affine.x, expected_x.expect("REASON").to_u64_array());
+     |                                            +++++++++++++++++
+
+error[E0599]: no method named `to_u64_array` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/secp.rs:1444:45
+     |
+1444 |         assert_eq!(glv_affine.y, expected_y.to_u64_array());
+     |                                             ^^^^^^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `to_u64_array` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:436:5
+     |
+ 436 |     pub fn to_u64_array(self) -> [u64; 4] {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1444 |         assert_eq!(glv_affine.y, expected_y.expect("REASON").to_u64_array());
+     |                                            +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1455:38
+     |
+1455 |         let _naive = curve.mul_naive(&k, &curve.g);
+     |                            --------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                            |
+     |                            arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:565:8
+     |
+ 565 |     fn mul_naive(&self, k: &BigInt256, p: &Point) -> Point {
+     |        ^^^^^^^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1458:30
+     |
+1458 |         let _glv = curve.mul(&k, &curve.g);
+     |                          --- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                          |
+     |                          arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:461:12
+     |
+ 461 |     pub fn mul(&self, k: &BigInt256, p: &Point) -> Point {
+     |            ^^^        -------------
+
+error[E0599]: no method named `to_u64_array` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/secp.rs:1494:48
+     |
+1494 |         assert_eq!(four_g_affine.x, expected_x.to_u64_array());
+     |                                                ^^^^^^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `to_u64_array` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:436:5
+     |
+ 436 |     pub fn to_u64_array(self) -> [u64; 4] {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1494 |         assert_eq!(four_g_affine.x, expected_x.expect("REASON").to_u64_array());
+     |                                               +++++++++++++++++
+
+error[E0599]: no method named `to_u64_array` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/secp.rs:1495:48
+     |
+1495 |         assert_eq!(four_g_affine.y, expected_y.to_u64_array());
+     |                                                ^^^^^^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `to_u64_array` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:436:5
+     |
+ 436 |     pub fn to_u64_array(self) -> [u64; 4] {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1495 |         assert_eq!(four_g_affine.y, expected_y.expect("REASON").to_u64_array());
+     |                                               +++++++++++++++++
+
+error[E0599]: no method named `known_3g` found for struct `secp::Secp256k1` in the current scope
+    --> src/math/secp.rs:1669:34
+     |
+  78 | pub struct Secp256k1 {
+     | -------------------- method `known_3g` not found for this struct
+...
+1669 |             let expected = curve.known_3g();
+     |                            ------^^^^^^^^--
+     |                            |     |
+     |                            |     this is an associated function, not a method
+     |                            help: use associated function syntax instead: `secp::Secp256k1::known_3g()`
+     |
+     = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
+note: the candidate is defined in an impl for the type `secp::Secp256k1`
+    --> src/math/secp.rs:29:5
+     |
+  29 |     pub fn known_3g() -> (BigInt256, BigInt256) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1703:45
+     |
+1703 |             let _ = curve.mul_constant_time(&medium_k, &curve.g).unwrap();
+     |                           ----------------- ^^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                           |
+     |                           arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:488:12
+     |
+ 488 |     pub fn mul_constant_time(&self, k: &BigInt256, p: &Point) -> Result<Point, Box<dyn Error>> {
+     |            ^^^^^^^^^^^^^^^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1711:45
+     |
+1711 |             let _ = curve.mul_constant_time(&large_k, &curve.g).unwrap();
+     |                           ----------------- ^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                           |
+     |                           arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:488:12
+     |
+ 488 |     pub fn mul_constant_time(&self, k: &BigInt256, p: &Point) -> Result<Point, Box<dyn Error>> {
+     |            ^^^^^^^^^^^^^^^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1744:41
+     |
+1744 |             let _ = curve.glv_decompose(&large_k);
+     |                           ------------- ^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                           |
+     |                           arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:587:8
+     |
+ 587 |     fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
+     |        ^^^^^^^^^^^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1766:45
+     |
+1766 |             let _ = curve.mul_constant_time(&large_k, &curve.g).unwrap();
+     |                           ----------------- ^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                           |
+     |                           arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:488:12
+     |
+ 488 |     pub fn mul_constant_time(&self, k: &BigInt256, p: &Point) -> Result<Point, Box<dyn Error>> {
+     |            ^^^^^^^^^^^^^^^^^        -------------
+
+error[E0599]: no method named `bit` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/secp.rs:1778:28
+     |
+1778 |                 if large_k.bit(i) {
+     |                            ^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `bit` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:614:5
+     |
+ 614 |     pub fn bit(&self, pos: usize) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1778 |                 if large_k.expect("REASON").bit(i) {
+     |                           +++++++++++++++++
+
+error[E0599]: no method named `unwrap` found for struct `types::Point` in the current scope
+    --> src/math/secp.rs:1779:59
+     |
+1779 |                     result = curve.add(&result, &current).unwrap();
+     |                                                           ^^^^^^ method not found in `types::Point`
+     |
+    ::: src/types.rs:42:1
+     |
+  42 | pub struct Point {
+     | ---------------- method `unwrap` not found for this struct
+
+error[E0599]: no method named `unwrap` found for struct `types::Point` in the current scope
+    --> src/math/secp.rs:1810:52
+     |
+1810 |         let expected = curve.add(&six_g, &curve.g).unwrap();
+     |                                                    ^^^^^^ method not found in `types::Point`
+     |
+    ::: src/types.rs:42:1
+     |
+  42 | pub struct Point {
+     | ---------------- method `unwrap` not found for this struct
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1831:56
+     |
+1831 |         let (k1_large, k2_large) = curve.glv_decompose(&large_k);
+     |                                          ------------- ^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                                          |
+     |                                          arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/secp.rs:587:8
+     |
+ 587 |     fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
+     |        ^^^^^^^^^^^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/secp.rs:1844:44
+     |
+1844 |         let expected = curve.barrett_n.sub(&large_k, &curve.n); // large_k - n for mod
+     |                                        --- ^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                                        |
+     |                                        arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:805:12
+     |
+ 805 |     pub fn sub(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
+     |            ^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1376:38
+     |
+1376 |         let reduced = reducer.reduce(&max_val).expect("Barrett reduction failed");
+     |                               ------ ^^^^^^^^ expected `&BigInt512`, found `&BigInt256`
+     |                               |
+     |                               arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt512`
+                found reference `&math::bigint::BigInt256`
+note: method defined here
+    --> src/math/bigint.rs:725:12
+     |
+ 725 |     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
+     |            ^^^^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1382:35
+     |
+1382 |         assert_eq!(reducer.reduce(&small_val), small_val);
+     |                            ------ ^^^^^^^^^^ expected `&BigInt512`, found `&BigInt256`
+     |                            |
+     |                            arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt512`
+                found reference `&math::bigint::BigInt256`
+note: method defined here
+    --> src/math/bigint.rs:725:12
+     |
+ 725 |     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
+     |            ^^^^^^        -------------
+
+error[E0369]: binary operation `==` cannot be applied to type `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>`
+    --> src/math/bigint.rs:1382:9
+     |
+1382 |         assert_eq!(reducer.reduce(&small_val), small_val);
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |         |
+     |         std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>
+     |         math::bigint::BigInt256
+     |
+note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` does not implement `PartialEq<math::bigint::BigInt256>`
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:557:1
+     |
+     = note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` is defined in another crate
+     = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1410:43
+     |
+1410 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1411:49
+     |
+1411 |         let montgomery = MontgomeryReducer::new(&p);
+     |                          ---------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                          |
+     |                          arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:836:12
+     |
+ 836 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1422:34
+     |
+1422 |         assert!(barrett_result < p);
+     |                 --------------   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1422 |         assert!(barrett_result < p.expect("REASON"));
+     |                                   +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1423:37
+     |
+1423 |         assert!(montgomery_result < p);
+     |                 -----------------   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1423 |         assert!(montgomery_result < p.expect("REASON"));
+     |                                      +++++++++++++++++
+
+error[E0609]: no field `limbs` on type `std::result::Result<math::bigint::BigInt256, std::string::String>`
+    --> src/math/bigint.rs:1444:22
+     |
+1444 |         assert_eq!(n.limbs[0] & 1, 1);
+     |                      ^^^^^ unknown field
+     |
+help: one of the expressions' fields has a field of the same name
+     |
+1444 |         assert_eq!(n.unwrap().limbs[0] & 1, 1);
+     |                      +++++++++
+
+error[E0599]: no method named `get_bit` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/bigint.rs:1447:19
+     |
+1447 |         assert!(n.get_bit(0)); // LSB should be 1
+     |                   ^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `get_bit` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:495:5
+     |
+ 495 |     pub fn get_bit(&self, bit: usize) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1447 |         assert!(n.expect("REASON").get_bit(0)); // LSB should be 1
+     |                  +++++++++++++++++
+
+error[E0599]: no method named `bit_length` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/bigint.rs:1448:22
+     |
+1448 |         assert_eq!(n.bit_length(), 256); // Should be 256 bits
+     |                      ^^^^^^^^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `bit_length` exists on the type `math::bigint::BigInt256`
+    --> src/math/bigint.rs:485:5
+     |
+ 485 |     pub fn bit_length(&self) -> usize {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1448 |         assert_eq!(n.expect("REASON").bit_length(), 256); // Should be 256 bits
+     |                     +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1465:43
+     |
+1465 |         let reducer = BarrettReducer::new(p);
+     |                       ------------------- ^ expected `&BigInt256`, found `Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                     found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1468:35
+     |
+1468 |         assert_eq!(reducer.reduce(&BigInt256::zero()), BigInt256::zero());
+     |                            ------ ^^^^^^^^^^^^^^^^^^ expected `&BigInt512`, found `&BigInt256`
+     |                            |
+     |                            arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt512`
+                found reference `&math::bigint::BigInt256`
+note: method defined here
+    --> src/math/bigint.rs:725:12
+     |
+ 725 |     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
+     |            ^^^^^^        -------------
+
+error[E0369]: binary operation `==` cannot be applied to type `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>`
+    --> src/math/bigint.rs:1468:9
+     |
+1468 |         assert_eq!(reducer.reduce(&BigInt256::zero()), BigInt256::zero());
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |         |
+     |         std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>
+     |         math::bigint::BigInt256
+     |
+note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` does not implement `PartialEq<math::bigint::BigInt256>`
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:557:1
+     |
+     = note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` is defined in another crate
+     = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1471:35
+     |
+1471 |         assert_eq!(reducer.reduce(&p), BigInt256::zero());
+     |                            ------ ^^ expected `&BigInt512`, found `&Result<BigInt256, String>`
+     |                            |
+     |                            arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt512`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:725:12
+     |
+ 725 |     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
+     |            ^^^^^^        -------------
+
+error[E0369]: binary operation `==` cannot be applied to type `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>`
+    --> src/math/bigint.rs:1471:9
+     |
+1471 |         assert_eq!(reducer.reduce(&p), BigInt256::zero());
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |         |
+     |         std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>
+     |         math::bigint::BigInt256
+     |
+note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` does not implement `PartialEq<math::bigint::BigInt256>`
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:557:1
+     |
+     = note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` is defined in another crate
+     = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0369]: cannot add `std::result::Result<math::bigint::BigInt256, std::string::String>` to `std::result::Result<math::bigint::BigInt256, std::string::String>`
+    --> src/math/bigint.rs:1474:23
+     |
+1474 |         let two_p = p + p;
+     |                     - ^ - std::result::Result<math::bigint::BigInt256, std::string::String>
+     |                     |
+     |                     std::result::Result<math::bigint::BigInt256, std::string::String>
+     |
+note: `std::result::Result<math::bigint::BigInt256, std::string::String>` does not implement `std::ops::Add`
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:557:1
+     |
+     = note: `std::result::Result<math::bigint::BigInt256, std::string::String>` is defined in another crate
+
+error[E0369]: binary operation `==` cannot be applied to type `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>`
+    --> src/math/bigint.rs:1475:9
+     |
+1475 |         assert_eq!(reducer.reduce(&two_p), BigInt256::zero());
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |         |
+     |         std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>
+     |         math::bigint::BigInt256
+     |
+note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` does not implement `PartialEq<math::bigint::BigInt256>`
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:557:1
+     |
+     = note: `std::result::Result<math::bigint::BigInt256, Box<dyn StdError>>` is defined in another crate
+     = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1491:47
+     |
+1491 |         let plain_mod = plain_product.div_rem(&p).1;
+     |                                       ------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                                       |
+     |                                       arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:505:12
+     |
+ 505 |     pub fn div_rem(&self, divisor: &BigInt256) -> (BigInt256, BigInt256) {
+     |            ^^^^^^^        -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1495:29
+     |
+1495 |         assert!(plain_mod < p); // This works but violates the rule
+     |                 ---------   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1495 |         assert!(plain_mod < p.expect("REASON")); // This works but violates the rule
+     |                              +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1501:46
+     |
+1501 |         let reducer = MontgomeryReducer::new(&p);
+     |                       ---------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:836:12
+     |
+ 836 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1503:68
+     |
+1503 |         let inv = MontgomeryReducer::mod_inverse(&reducer, &three, &p).unwrap();
+     |                   ------------------------------                   ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                   |
+     |                   arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:1023:12
+     |
+1023 |     pub fn mod_inverse(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+     |            ^^^^^^^^^^^                       -------------------
+
+error[E0599]: no method named `sub` found for enum `std::result::Result<T, E>` in the current scope
+    --> src/math/bigint.rs:1510:27
+     |
+1510 |         let neg_three = p.sub(&three);
+     |                           ^^^ method not found in `std::result::Result<math::bigint::BigInt256, std::string::String>`
+     |
+note: the method `sub` exists on the type `math::bigint::BigInt256`
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ops/arith.rs:205:5
+help: consider using `Result::expect` to unwrap the `math::bigint::BigInt256` value, panicking if the value is a `Result::Err`
+     |
+1510 |         let neg_three = p.expect("REASON").sub(&three);
+     |                          +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1511:76
+     |
+1511 |         let inv_neg = MontgomeryReducer::mod_inverse(&reducer, &neg_three, &p).unwrap();
+     |                       ------------------------------                       ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:1023:12
+     |
+1023 |     pub fn mod_inverse(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+     |            ^^^^^^^^^^^                       -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1522:46
+     |
+1522 |         let reducer = MontgomeryReducer::new(&p);
+     |                       ---------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:836:12
+     |
+ 836 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: arguments to this method are incorrect
+    --> src/math/bigint.rs:1535:30
+     |
+1535 |         let result = reducer.mul(&a, &b);
+     |                              ^^^
+     |
+note: expected `&BigInt256`, found `&Result<BigInt256, String>`
+    --> src/math/bigint.rs:1535:34
+     |
+1535 |         let result = reducer.mul(&a, &b);
+     |                                  ^^
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: expected `&BigInt256`, found `&Result<BigInt256, String>`
+    --> src/math/bigint.rs:1535:38
+     |
+1535 |         let result = reducer.mul(&a, &b);
+     |                                      ^^
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:911:12
+     |
+ 911 |     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
+     |            ^^^        -------------  -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1538:26
+     |
+1538 |         assert!(result < p);
+     |                 ------   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1538 |         assert!(result < p.expect("REASON"));
+     |                           +++++++++++++++++
+
+error[E0308]: arguments to this method are incorrect
+    --> src/math/bigint.rs:1543:41
+     |
+1543 |         let left = reducer.mul(&reducer.mul(&a, &b), &c);
+     |                                         ^^^
+     |
+note: expected `&BigInt256`, found `&Result<BigInt256, String>`
+    --> src/math/bigint.rs:1543:45
+     |
+1543 |         let left = reducer.mul(&reducer.mul(&a, &b), &c);
+     |                                             ^^
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: expected `&BigInt256`, found `&Result<BigInt256, String>`
+    --> src/math/bigint.rs:1543:49
+     |
+1543 |         let left = reducer.mul(&reducer.mul(&a, &b), &c);
+     |                                                 ^^
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:911:12
+     |
+ 911 |     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
+     |            ^^^        -------------  -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1544:50
+     |
+1544 |         let right = reducer.mul(&a, &reducer.mul(&b, &c));
+     |                                              --- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                                              |
+     |                                              arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:911:12
+     |
+ 911 |     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
+     |            ^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1544:33
+     |
+1544 |         let right = reducer.mul(&a, &reducer.mul(&b, &c));
+     |                             --- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                             |
+     |                             arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:911:12
+     |
+ 911 |     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
+     |            ^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1549:36
+     |
+1549 |         let identity = reducer.mul(&a, &one);
+     |                                --- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                                |
+     |                                arguments to this method are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: method defined here
+    --> src/math/bigint.rs:911:12
+     |
+ 911 |     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
+     |            ^^^        -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1551:28
+     |
+1551 |         assert!(identity < p);
+     |                 --------   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1551 |         assert!(identity < p.expect("REASON"));
+     |                             +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1561:43
+     |
+1561 |         let mont = MontgomeryReducer::new(&p);
+     |                    ---------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                    |
+     |                    arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:836:12
+     |
+ 836 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1562:43
+     |
+1562 |         let barrett = BarrettReducer::new(&p); // Use Barrett as naive baseline
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1579:46
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1579 |             let a_mont = mont.convert_in(&a).unwrap();
+     |                                              ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1580:46
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1580 |             let b_mont = mont.convert_in(&b).unwrap();
+     |                                              ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1600:43
+     |
+1600 |         let mont = MontgomeryReducer::new(&p);
+     |                    ---------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                    |
+     |                    arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:836:12
+     |
+ 836 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1604:42
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1604 |         let a_mont = mont.convert_in(&a).unwrap();
+     |                                          ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1605:48
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1605 |         let a_back = mont.convert_out(&a_mont).unwrap();
+     |                                                ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1610:42
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1610 |         let b_mont = mont.convert_in(&b).unwrap();
+     |                                          ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1612:49
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1612 |         let prod = mont.convert_out(&prod_mont).unwrap();
+     |                                                 ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1615:43
+     |
+1615 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1624:43
+     |
+1624 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1632:24
+     |
+1632 |         assert!(prod < p);
+     |                 ----   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1632 |         assert!(prod < p.expect("REASON"));
+     |                         +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1638:27
+     |
+1638 |         assert!(reduced < p);
+     |                 -------   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1638 |         assert!(reduced < p.expect("REASON"));
+     |                            +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1645:43
+     |
+1645 |         let mont = MontgomeryReducer::new(&p);
+     |                    ---------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                    |
+     |                    arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:836:12
+     |
+ 836 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1653:13
+     |
+1653 | ...   BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), // m...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1653 |             BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("REASON"), // max u256
+     |                                                                                                    +++++++++++++++++
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1661:45
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1661 |             let mont_x = mont.convert_in(x).unwrap();
+     |                                             ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1662:52
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1662 |             let back_x = mont.convert_out(&mont_x).unwrap();
+     |                                                    ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1675:43
+     |
+1675 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1695:43
+     |
+1695 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1715:43
+     |
+1715 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1738:43
+     |
+1738 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1741:49
+     |
+1741 | ... = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000"));
+     |       ------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |       |
+     |       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:28:12
+     |
+  28 |     pub fn from_bigint256(x: &BigInt256) -> Self {
+     |            ^^^^^^^^^^^^^^ -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1745:27
+     |
+1745 |         assert!(reduced < p);
+     |                 -------   ^ expected `BigInt256`, found `Result<BigInt256, String>`
+     |                 |
+     |                 expected because this is `math::bigint::BigInt256`
+     |
+     = note: expected struct `math::bigint::BigInt256`
+                  found enum `std::result::Result<math::bigint::BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<math::bigint::BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+     |
+1745 |         assert!(reduced < p.expect("REASON"));
+     |                            +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1749:47
+     |
+1749 |         let p_big = BigInt512::from_bigint256(&p);
+     |                     ------------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                     |
+     |                     arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:28:12
+     |
+  28 |     pub fn from_bigint256(x: &BigInt256) -> Self {
+     |            ^^^^^^^^^^^^^^ -------------
+
+error[E0308]: arguments to this function are incorrect
+    --> src/math/bigint.rs:1750:21
+     |
+1750 |         let two_p = BigInt512::add(&p_big, &p_big);
+     |                     ^^^^^^^^^^^^^^ ------  ------ expected `BigInt512`, found `&BigInt512`
+     |                                    |
+     |                                    expected `BigInt512`, found `&BigInt512`
+     |
+note: method defined here
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ops/arith.rs:92:8
+help: consider removing the borrow
+     |
+1750 -         let two_p = BigInt512::add(&p_big, &p_big);
+1750 +         let two_p = BigInt512::add(p_big, &p_big);
+     |
+help: consider removing the borrow
+     |
+1750 -         let two_p = BigInt512::add(&p_big, &p_big);
+1750 +         let two_p = BigInt512::add(&p_big, p_big);
+     |
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1760:43
+     |
+1760 |         let reducer = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1761:49
+     |
+1761 | ... = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000"));
+     |       ------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |       |
+     |       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:28:12
+     |
+  28 |     pub fn from_bigint256(x: &BigInt256) -> Self {
+     |            ^^^^^^^^^^^^^^ -------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1770:43
+     |
+1770 |         let barrett = BarrettReducer::new(&p);
+     |                       ------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                       |
+     |                       arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:694:12
+     |
+ 694 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0308]: mismatched types
+    --> src/math/bigint.rs:1771:43
+     |
+1771 |         let mont = MontgomeryReducer::new(&p);
+     |                    ---------------------- ^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+     |                    |
+     |                    arguments to this function are incorrect
+     |
+     = note: expected reference `&math::bigint::BigInt256`
+                found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+    --> src/math/bigint.rs:836:12
+     |
+ 836 |     pub fn new(modulus: &BigInt256) -> Self {
+     |            ^^^ -------------------
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1779:42
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1779 |         let a_mont = mont.convert_in(&a).unwrap();
+     |                                          ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1780:42
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1780 |         let b_mont = mont.convert_in(&b).unwrap();
+     |                                          ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0599]: no method named `unwrap` found for struct `math::bigint::BigInt256` in the current scope
+    --> src/math/bigint.rs:1782:56
+     |
+  14 | pub struct BigInt256 {
+     | -------------------- method `unwrap` not found for this struct
+...
+1782 |         let mont_result = mont.convert_out(&mont_prod).unwrap();
+     |                                                        ^^^^^^ method not found in `math::bigint::BigInt256`
+
+error[E0282]: type annotations needed
+  --> src/math/tests.rs:46:74
+   |
+46 |             assert!(reduced < modulus, "Reduction failed for value: {}", val.to_hex());
+   |                                                                          ^^^ cannot infer type
+
+error[E0624]: method `pow_mod` is private
+    --> src/math/tests.rs:71:28
+     |
+  71 |         let result = curve.pow_mod(&base, &exp, &modulus);
+     |                            ^^^^^^^ private method
+     |
+    ::: src/math/secp.rs:1085:5
+     |
+1085 |     fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+     |     -------------------------------------------------------------------------------------- private method defined here
+
+error[E0624]: method `pow_mod` is private
+    --> src/math/tests.rs:77:30
+     |
+  77 |         let legendre = curve.pow_mod(&qr, &legendre_exp, &BigInt256::from_u64(7));
+     |                              ^^^^^^^ private method
+     |
+    ::: src/math/secp.rs:1085:5
+     |
+1085 |     fn pow_mod(&self, base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+     |     -------------------------------------------------------------------------------------- private method defined here
+
+error[E0425]: cannot find function `mod_inverse` in this scope
+  --> src/math/tests.rs:86:19
+   |
+86 |         let inv = mod_inverse(&a, &modulus).unwrap();
+   |                   ^^^^^^^^^^^ not found in this scope
+
+error[E0061]: this function takes 7 arguments but 6 arguments were supplied
+   --> src/kangaroo/stepper.rs:267:24
+    |
+267 |         let kangaroo = KangarooState::new(
+    |                        ^^^^^^^^^^^^^^^^^^
+...
+273 |             0,      // id
+    |             - argument #6 of type `bool` is missing
+    |
+note: associated function defined here
+   --> src/types.rs:221:12
+    |
+221 | ...fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, i...
+    |       ^^^                                                                                 -----------
+help: provide the argument
+    |
+267 ~         let kangaroo = KangarooState::new(
+268 +             initial_pos,
+269 +             0,
+270 +             [0; 4],
+271 +             [0; 4],
+272 +             true,
+273 +             /* bool */,
+274 +             0,
+275 ~         );
+    |
+
+error[E0061]: this function takes 7 arguments but 6 arguments were supplied
+   --> src/kangaroo/stepper.rs:338:22
+    |
+338 |         let state1 = KangarooState::new(
+    |                      ^^^^^^^^^^^^^^^^^^
+...
+344 |             0,
+    |             - argument #6 of type `bool` is missing
+    |
+note: associated function defined here
+   --> src/types.rs:221:12
+    |
+221 | ...fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, i...
+    |       ^^^                                                                                 -----------
+help: provide the argument
+    |
+338 |         let state1 = KangarooState::new(
+...
+343 |             true,
+344 ~             /* bool */,
+345 ~             0,
+    |
+
+error[E0061]: this function takes 7 arguments but 6 arguments were supplied
+   --> src/kangaroo/stepper.rs:346:22
+    |
+346 |         let state2 = KangarooState::new(
+    |                      ^^^^^^^^^^^^^^^^^^
+...
+352 |             1,
+    |             - argument #6 of type `bool` is missing
+    |
+note: associated function defined here
+   --> src/types.rs:221:12
+    |
+221 | ...fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, i...
+    |       ^^^                                                                                 -----------
+help: provide the argument
+    |
+346 |         let state2 = KangarooState::new(
+...
+351 |             true,
+352 ~             /* bool */,
+353 ~             1,
+    |
+
+error[E0599]: no method named `hash_position` found for struct `collision::CollisionDetector` in the current scope
+   --> src/kangaroo/collision.rs:858:29
+    |
+ 25 | pub struct CollisionDetector {
+    | ---------------------------- method `hash_position` not found for this struct
+...
+858 |         let hash = detector.hash_position(&point);
+    |                             ^^^^^^^^^^^^^ method not found in `collision::CollisionDetector`
+
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+   --> src/kangaroo/collision.rs:872:31
+    |
+872 | ...ctor.walk_back_near_collision(&tame_trap, &wild_trap, &jump_table, &hash_fn, &range_width);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^------------------------------------------------------------- argument #6 of type `&std::collections::HashMap<u32, f64>` is missing
+    |
+note: method defined here
+   --> src/kangaroo/collision.rs:675:12
+    |
+675 | ...fn walk_back_near_collision(&self, t: &Trap, w: &Trap, jump_table: &[(BigUint, Point)], hash_fn: &impl Fn(&Point) -> usize, range_width: &BigInt256, _biases: &std::collections::HashMap<u32, f64>) -...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^                                                                                                                          ---------------------------------------------
+help: provide the argument
+    |
+872 |         let result = detector.walk_back_near_collision(&tame_trap, &wild_trap, &jump_table, &hash_fn, &range_width, /* &std::collections::HashMap<u32, f64> */);
+    |                                                                                                                   ++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0433]: failed to resolve: use of undeclared type `DriverError`
+    --> src/gpu/backends/cuda_backend.rs:1061:17
+     |
+1061 |             Err(DriverError::InvalidValue)
+     |                 ^^^^^^^^^^^ use of undeclared type `DriverError`
+
+error[E0599]: no method named `mod_inverse_batch` found for struct `cpu_backend::CpuBackend` in the current scope
+   --> src/gpu/backends/cpu_backend.rs:354:33
+    |
+ 13 | pub struct CpuBackend;
+    | --------------------- method `mod_inverse_batch` not found for this struct
+...
+354 |         let inv_batch = backend.mod_inverse_batch(&a, &modulus);
+    |                                 ^^^^^^^^^^^^^^^^^ method not found in `cpu_backend::CpuBackend`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:358:46
+    |
+358 |         let reducer = MontgomeryReducer::new(&modulus);
+    |                       ---------------------- ^^^^^^^^ expected `&BigInt256`, found `&Result<BigInt256, String>`
+    |                       |
+    |                       arguments to this function are incorrect
+    |
+    = note: expected reference `&math::bigint::BigInt256`
+               found reference `&std::result::Result<math::bigint::BigInt256, std::string::String>`
+note: associated function defined here
+   --> src/math/bigint.rs:836:12
+    |
+836 |     pub fn new(modulus: &BigInt256) -> Self {
+    |            ^^^ -------------------
+
+error[E0615]: attempted to take value of method `len` on type `shared::SharedBuffer<u64>`
+   --> src/gpu/shared.rs:113:27
+    |
+113 |         assert_eq!(buffer.len, 1024);
+    |                           ^^^ method, not a field
+    |
+help: use parentheses to call the method
+    |
+113 |         assert_eq!(buffer.len(), 1024);
+    |                              ++
+
+error[E0061]: this function takes 7 arguments but 6 arguments were supplied
+   --> src/dp/table.rs:949:25
+    |
+949 |             let state = KangarooState::new(point.clone(), i as u64, [0; 4], [0; 4], true, i as u64);
+    |                         ^^^^^^^^^^^^^^^^^^                                                -------- argument #6 of type `bool` is missing
+    |
+note: associated function defined here
+   --> src/types.rs:221:12
+    |
+221 | ...fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, i...
+    |       ^^^                                                                                 -----------
+help: provide the argument
+    |
+949 |             let state = KangarooState::new(point.clone(), i as u64, [0; 4], [0; 4], true, /* bool */, i as u64);
+    |                                                                                           +++++++++++
+
+error[E0433]: failed to resolve: use of undeclared type `DPPruner`
+   --> src/dp/pruning.rs:306:22
+    |
+306 |         let pruner = DPPruner::new(dp_table.clone(), 1000);
+    |                      ^^^^^^^^ use of undeclared type `DPPruner`
+
+error[E0061]: this function takes 7 arguments but 6 arguments were supplied
+   --> src/dp/pruning.rs:318:29
+    |
+318 |                 let state = crate::types::KangarooState::new(
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+324 |                     i as u64,
+    |                     -------- argument #6 of type `bool` is missing
+    |
+note: associated function defined here
+   --> src/types.rs:221:12
+    |
+221 | ...fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, i...
+    |       ^^^                                                                                 -----------
+help: provide the argument
+    |
+318 ~                 let state = crate::types::KangarooState::new(
+319 +                     point.clone(),
+320 +                     i as u64 * 1000,
+321 +                     [0; 4],
+322 +                     [0; 4],
+323 +                     true,
+324 +                     /* bool */,
+325 +                     i as u64,
+326 ~                 );
+    |
+
+error[E0282]: type annotations needed
+   --> src/dp/pruning.rs:332:21
+    |
+332 |         let stats = pruner.prune_value_based().await.unwrap();
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+
+error[E0433]: failed to resolve: use of undeclared type `DPPruner`
+   --> src/dp/pruning.rs:340:22
+    |
+340 |         let pruner = DPPruner::new(dp_table.clone(), 100);
+    |                      ^^^^^^^^ use of undeclared type `DPPruner`
+
+error[E0061]: this function takes 7 arguments but 6 arguments were supplied
+   --> src/dp/pruning.rs:353:29
+    |
+353 |                 let state = crate::types::KangarooState::new(
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+359 |                     i as u64,
+    |                     -------- argument #6 of type `bool` is missing
+    |
+note: associated function defined here
+   --> src/types.rs:221:12
+    |
+221 | ...fn new(position: Point, distance: u64, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, i...
+    |       ^^^                                                                                 -----------
+help: provide the argument
+    |
+353 |                 let state = crate::types::KangarooState::new(
+...
+358 |                     true,
+359 ~                     /* bool */,
+360 ~                     i as u64,
+    |
+
+error[E0282]: type annotations needed
+   --> src/dp/pruning.rs:367:21
+    |
+367 |         let stats = pruner.prune_advanced_clusters(10).await.unwrap();
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+
+error[E0624]: method `glv_decompose` is private
+   --> src/test_basic.rs:44:30
+    |
+ 44 |         let (k1, k2) = curve.glv_decompose(&k);
+    |                              ^^^^^^^^^^^^^ private method
+    |
+   ::: src/math/secp.rs:587:5
+    |
+587 |     fn glv_decompose(&self, k: &BigInt256) -> (BigInt256, BigInt256) {
+    |     ---------------------------------------------------------------- private method defined here
+
+error[E0282]: type annotations needed
+  --> src/test_basic.rs:47:17
+   |
+47 |         assert!(k1.bits() <= 128,
+   |                 ^^ cannot infer type
+
+error[E0282]: type annotations needed
+  --> src/test_basic.rs:49:17
+   |
+49 |         assert!(k2.bits() <= 128,
+   |                 ^^ cannot infer type
+
+error[E0277]: the `?` operator can only be applied to values that implement `Try`
+   --> src/test_basic.rs:218:22
+    |
+218 |         let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve)?;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the `?` operator cannot be applied to type `Vec<types::Point>`
+    |
+    = help: the trait `Try` is not implemented for `Vec<types::Point>`
+
+error[E0282]: type annotations needed
+   --> src/test_basic.rs:218:13
+    |
+218 |         let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve)?;
+    |             ^^^^^^
+219 |         assert!(!points.is_empty(), "Should load at least test puzzles");
+    |                  ------ type must be known at this point
+    |
+help: consider giving `points` an explicit type
+    |
+218 |         let points: /* Type */ = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve)?;
+    |                   ++++++++++++
+
+warning: unused import: `Mul`
+ --> src/kangaroo/collision.rs:7:21
+  |
+7 | use std::ops::{Sub, Mul};
+  |                     ^^^
+
+warning: unused import: `Sub`
+ --> src/kangaroo/collision.rs:7:16
+  |
+7 | use std::ops::{Sub, Mul};
+  |                ^^^
+
+warning: variable does not need to be mutable
+   --> src/math/secp.rs:150:13
+    |
+150 |         let mut temp_curve = Secp256k1 {
+    |             ----^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+error[E0382]: borrow of moved value: `p`
+    --> src/math/bigint.rs:1345:33
+     |
+1337 |         let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc...
+     |             - move occurs because `p` has type `math::bigint::BigInt256`, which does not implement the `Copy` trait
+...
+1341 |         for _ in 0..100 {
+     |         ---------------
+     |         |
+     |         inside of this loop
+     |         inside of this loop
+...
+1345 |             let a_mod = if a >= p { a - p } else { a };
+     |                                 ^       - value moved here, in previous iteration of loop
+     |                                 |
+     |                                 value borrowed here after move
+1346 |             let b_mod = if b >= p { b - p } else { b };
+     |                                         - value moved here, in previous iteration of loop
+     |
+help: consider cloning the value if the performance cost is acceptable
+     |
+1345 |             let a_mod = if a >= p { a - p.clone() } else { a };
+     |                                          ++++++++
+help: consider cloning the value if the performance cost is acceptable
+     |
+1346 |             let b_mod = if b >= p { b - p.clone() } else { b };
+     |                                          ++++++++
+
+error[E0382]: borrow of moved value: `p`
+    --> src/math/bigint.rs:1346:33
+     |
+1337 |         let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc...
+     |             - move occurs because `p` has type `math::bigint::BigInt256`, which does not implement the `Copy` trait
+...
+1341 |         for _ in 0..100 {
+     |         --------------- inside of this loop
+...
+1345 |             let a_mod = if a >= p { a - p } else { a };
+     |                                         - value moved here
+1346 |             let b_mod = if b >= p { b - p } else { b };
+     |                                 ^ value borrowed here after move
+     |
+help: consider cloning the value if the performance cost is acceptable
+     |
+1345 |             let a_mod = if a >= p { a - p.clone() } else { a };
+     |                                          ++++++++
+
+warning: unused variable: `gid`
+   --> src/kangaroo/manager.rs:793:18
+    |
+793 |             for (gid, group_states) in &mut groups {
+    |                  ^^^ help: if this is intentional, prefix it with an underscore: `_gid`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `all_traps` is never read
+   --> src/gpu/backends/hybrid_backend.rs:189:29
+    |
+189 |         let mut all_traps = Vec::new();
+    |                             ^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/dp/table.rs:694:13
+    |
+694 |         let mut table = DpTable::with_disk_support(4, true, Some(db_path.clone()));
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `contents`
+   --> src/puzzles.rs:105:13
+    |
+105 |         let contents = contents_ascii;
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contents`
+
+Some errors have detailed explanations: E0061, E0107, E0277, E0282, E0308, E0369, E0382, E0425, E0433...
+For more information about an error, try `rustc --explain E0061`.
+warning: `speedbitcrack` (lib test) generated 30 warnings
+warning: speedbitcrack@0.1.0: Successfully opened valuable_p2pk_pubkeys.txt for bias computation
+error: could not compile `speedbitcrack` (lib test) due to 165 previous errors; 30 warnings emitted

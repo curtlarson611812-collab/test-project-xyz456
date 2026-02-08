@@ -32,6 +32,7 @@ impl DpPruning {
             // Check if pruning is needed
             let needs_pruning = {
                 let table = self.dp_table.lock().await;
+                stats.entries_before = table.stats().total_entries;
                 table.needs_pruning() ||
                 table.stats().utilization >= self.pruning_threshold
             };
@@ -78,6 +79,7 @@ impl DpPruning {
             let mut table = self.dp_table.lock().await;
             let removed_count = table.remove_dps(&entries_to_prune.iter().map(|(_, hash)| *hash).collect::<Vec<_>>());
             stats.entries_removed = removed_count;
+            stats.entries_after = table.stats().total_entries;
         }
 
         Ok(stats)
@@ -226,6 +228,10 @@ impl DpPruning {
     pub async fn prune_value_based(&self, target_utilization: f64) -> Result<PruningStats> {
         let mut stats = PruningStats::default();
 
+        let table = self.dp_table.lock().await;
+        stats.entries_before = table.stats().total_entries;
+        drop(table);
+
         while {
             let table = self.dp_table.lock().await;
             table.stats().utilization > target_utilization
@@ -234,6 +240,10 @@ impl DpPruning {
             stats.entries_removed += chunk_stats.entries_removed;
             stats.chunks_processed += 1;
         }
+
+        // Update entries_after
+        let table = self.dp_table.lock().await;
+        stats.entries_after = table.stats().total_entries;
 
         Ok(stats)
     }
@@ -268,12 +278,27 @@ impl DpPruning {
 }
 
 /// Pruning operation statistics
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PruningStats {
+    pub entries_before: usize,
+    pub entries_after: usize,
     pub entries_removed: usize,
     pub chunks_processed: usize,
     pub duration_ms: u64,
     pub additional_info: String,
+}
+
+impl Default for PruningStats {
+    fn default() -> Self {
+        PruningStats {
+            entries_before: 0,
+            entries_after: 0,
+            entries_removed: 0,
+            chunks_processed: 0,
+            duration_ms: 0,
+            additional_info: String::new(),
+        }
+    }
 }
 
 /// Pruning recommendations
@@ -303,7 +328,7 @@ mod tests {
     #[tokio::test]
     async fn test_dp_pruning_value_based() {
         let dp_table = Arc::new(Mutex::new(DpTable::new(24)));
-        let pruner = DPPruner::new(dp_table.clone(), 1000);
+        let pruner = DpPruning::new(dp_table.clone(), 0.8, 1000);
 
         // Fill table with some entries
         {
@@ -321,6 +346,7 @@ mod tests {
                     [0; 4],
                     [0; 4],
                     true,
+                    false,
                     i as u64,
                 );
                 let entry = crate::types::DpEntry::new(point, state, hash, (i % 10) as u32);
@@ -337,7 +363,7 @@ mod tests {
     #[tokio::test]
     async fn test_dp_pruning_cluster_based() {
         let dp_table = Arc::new(Mutex::new(DpTable::new(24)));
-        let pruner = DPPruner::new(dp_table.clone(), 100);
+        let pruner = DpPruning::new(dp_table.clone(), 0.8, 100);
 
         // Fill table with clustered entries
         {
@@ -356,6 +382,7 @@ mod tests {
                     [0; 4],
                     [0; 4],
                     true,
+                    false,
                     i as u64,
                 );
                 let entry = crate::types::DpEntry::new(point, state, hash, cluster_id);

@@ -1036,9 +1036,11 @@ mod tests {
 
         CudaStream::new(CudaStreamFlags::NON_BLOCKING, None)
     }
+}
 
     /// Set up SoA (Struct of Arrays) memory layout for better coalescing
-    pub fn create_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+#[cfg(feature = "rustacuda")]
+pub fn create_soa_layout(num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
         #[cfg(feature = "rustacuda")]
         {
             // Allocate separate arrays for each BigInt256 component
@@ -1061,7 +1063,6 @@ mod tests {
             Err(DriverError::InvalidValue)
         }
     }
-}
 
 /// SoA (Struct of Arrays) layout for coalesced BigInt256 operations
 #[cfg(feature = "rustacuda")]

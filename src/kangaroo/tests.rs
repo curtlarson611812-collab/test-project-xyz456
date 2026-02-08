@@ -3,6 +3,9 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::types::Point;
+    use crate::kangaroo::collision::Trap;
+    use crate::math::BigInt256;
+    use crate::kangaroo::CollisionDetector;
 
     #[test]
     fn test_near_g_threshold() {

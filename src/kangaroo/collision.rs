@@ -814,10 +814,10 @@ impl CollisionDetector {
         }
     }
 
-    // fn hash_position(&self, p: &Point) -> u32 {
-    //     let aff = self.curve.to_affine(p);
-    //     (0..4).fold(0u32, |h, i| h ^ (aff.x[i] ^ aff.y[i]) as u32)
-    // }
+    pub fn hash_position(&self, p: &Point) -> u32 {
+        let aff = self.curve.to_affine(p);
+        (0..4).fold(0u32, |h, i| h ^ (aff.x[i] ^ aff.y[i]) as u32)
+    }
 }
 
 #[cfg(test)]
@@ -869,7 +869,7 @@ mod tests {
         let range_width = BigInt256::from_u64(100000);
 
         // Test that walk_back_near_collision tries calculated first
-        let result = detector.walk_back_near_collision(&tame_trap, &wild_trap, &jump_table, &hash_fn, &range_width);
+        let result = detector.walk_back_near_collision(&tame_trap, &wild_trap, &jump_table, &hash_fn, &range_width, &std::collections::HashMap::new());
         // Should either solve via calculated approach or fallback gracefully
         assert!(result.is_some() || result.is_none());
     }

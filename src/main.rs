@@ -401,7 +401,9 @@ fn main() -> Result<()> {
 
             // Load the target public key - simplified for demonstration
             println!("DEBUG: Creating target point for demonstration...");
+            println!("DEBUG: About to create Secp256k1 curve...");
             let curve = Secp256k1::new();
+            println!("DEBUG: Secp256k1 curve created successfully");
             // For demonstration purposes, use a simple target point
             let target_point = curve.g.clone(); // Use generator as target for demo
             println!("DEBUG: Target point created successfully");
@@ -773,9 +775,9 @@ fn main() -> Result<()> {
     if let (Some(low_hex), Some(high_hex)) = (args.custom_low.clone(), args.custom_high.clone()) {
         info!("🎯 Custom range mode: [{}, {}]", low_hex, high_hex);
 
-        // Parse hex values (BigInt256::from_hex panics on invalid input)
-        let low = BigInt256::from_hex(&low_hex);
-        let high = BigInt256::from_hex(&high_hex);
+        // Parse hex values
+        let low = BigInt256::from_hex(&low_hex).expect("Invalid low hex");
+        let high = BigInt256::from_hex(&high_hex).expect("Invalid high hex");
 
         if high <= low {
             return Err(anyhow!("High value must be greater than low value"));
@@ -831,7 +833,15 @@ fn run_bias_analysis() -> Result<()> {
     let puzzles = speedbitcrack::puzzles::load_puzzles_from_file()?;
     let solved: Vec<(u32, BigInt256)> = puzzles.iter()
         .filter(|p| p.status == speedbitcrack::puzzles::PuzzleStatus::Solved && p.privkey_hex.is_some())
-        .map(|p| (p.n, BigInt256::from_hex(&p.privkey_hex.as_ref().unwrap())))
+        .filter_map(|p| {
+            match BigInt256::from_hex(&p.privkey_hex.as_ref().unwrap()) {
+                Ok(privkey) => Some((p.n, privkey)),
+                Err(e) => {
+                    warn!("Skipping puzzle {} with invalid privkey hex: {}", p.n, e);
+                    None
+                }
+            }
+        })
         .collect();
 
     if solved.is_empty() {
@@ -1103,7 +1113,7 @@ fn load_test_puzzles(_curve: &Secp256k1) -> Result<Vec<Point>> {
     // Use solved puzzles from database for testing
 
 /// Load a specific real unsolved puzzle
-fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
+pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point> {
     // Load from embedded puzzle data
     use std::fs;
 
@@ -1397,9 +1407,9 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 
     // Define the central attractor x-coordinate (Magic 9 point)
     let attractor_x_hex = "30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38";
-    let attractor_x = BigInt256::from_hex(attractor_x_hex);
+    let attractor_x = BigInt256::from_hex(attractor_x_hex).expect("Failed to parse attractor_x hex");
     let curve = Secp256k1::new();
-    let n_scalar = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+    let n_scalar = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").expect("Failed to parse n_scalar hex");
 
     // Block 2: Pre-Compute Shared D_g and Tame Paths
     let dp_bits = 20; // For /81 space, scale to 2^20 collisions
@@ -1502,7 +1512,7 @@ fn generate_shared_tame_paths(
 ) -> Result<std::collections::HashMap<u64, BigInt256>> {
     let mut tame_map = std::collections::HashMap::new();
     let curve = Secp256k1::new();
-    let n_scalar = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+    let n_scalar = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").expect("Failed to parse n_scalar hex");
 
     // Start from attractor point
     let attractor_point = Point::from_affine(attractor_x.clone().to_u64_array(), [0u64; 4]); // Y doesn't matter for DP
@@ -1566,7 +1576,7 @@ fn biased_kangaroo_to_attractor(
     max_steps: u64
 ) -> Result<BigInt256> {
     let curve = Secp256k1::new();
-    let n_scalar = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+    let n_scalar = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").expect("Failed to parse n_scalar hex");
 
     let mut current_point = *start_point;
     let mut distance = BigInt256::zero();

@@ -4,7 +4,7 @@
 //! Supports both compressed and uncompressed formats with validation
 
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, BufReader};
 use std::ops::{Add, Sub};
 use hex::decode;
 use crate::types::Point;
@@ -353,7 +353,7 @@ fn is_mod81_attractor_candidate(x: &BigInt256) -> bool {
 /// Concise Block: Detect Vanity Bias in Pubkey Hex
 fn is_vanity_biased(x_hex: &str, prefix_pattern: &str, suffix_mod: u64) -> bool {
     if x_hex.starts_with(prefix_pattern) { return true; } // e.g., "02" for compressed
-    BigInt256::from_hex(x_hex).mod_u64(suffix_mod) == 9 // Suffix mod for '9' bias
+    BigInt256::from_hex(x_hex).unwrap().mod_u64(suffix_mod) == 9 // Suffix mod for '9' bias
 }
 
 /// Concise Block: Detect Exposed Pub Bias for Quantum Threat Target
@@ -1254,8 +1254,12 @@ pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<d
 }
 
 // Chunk: AVX Bias Check (pubkey_loader.rs)
-use std::simd::prelude::*;
+// Temporarily disabled SIMD code due to feature gate issues
+// use std::simd::prelude::*;
 pub fn simd_bias_check(res: u32, high_residues: &[u32]) -> bool {
+    // Scalar fallback - SIMD temporarily disabled
+    high_residues.contains(&res)
+    /*
     let mut padded = [0u32; 128];
     for (i, &val) in high_residues.iter().enumerate().take(128) {
         padded[i] = val;
@@ -1266,6 +1270,7 @@ pub fn simd_bias_check(res: u32, high_residues: &[u32]) -> bool {
         if vec_res.simd_eq(vec_high).any() { return true; }
     }
     false
+    */
 }
 
     #[test]

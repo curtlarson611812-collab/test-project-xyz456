@@ -123,7 +123,8 @@ pub fn run_simple_test() {
 
     // Test 5: MODULAR FIX BLOCK 1: Test Montgomery conversion round-trip
     println!("\nTest 5: Montgomery conversion round-trip");
-    let test_val = BigInt256::from_hex("79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"); // G.x
+    let test_val = BigInt256::from_hex("79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
+        .expect("Invalid G.x"); // G.x
 
     // Debug the conversion process
     println!("DEBUG: test_val = {}", test_val.to_hex());

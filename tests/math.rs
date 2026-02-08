@@ -18,7 +18,7 @@ mod tests {
         let modulus = curve.p.clone();
 
         let inv = curve.mod_inverse(&a, &modulus).unwrap();
-        let product = curve.montgomery.mul(&a, &inv);
+        let product = curve.montgomery_p.mul(&a, &inv);
 
         // a * a^(-1) ≡ 1 mod p
         assert_eq!(product, BigInt256::from_u64(1));
@@ -171,7 +171,7 @@ mod tests {
         let curve = Secp256k1::new();
         let a = BigInt256::from_u64(5);
         let inv = curve.mod_inverse(&a, &curve.p).unwrap();
-        let product = curve.montgomery.mul(&a, &inv);
+        let product = curve.montgomery_p.mul(&a, &inv);
         let one = BigInt256::from_u64(1);
         assert_eq!(product, one);
     }
@@ -185,7 +185,7 @@ mod tests {
         let b = BigInt256::from_u64(7);
         let expected = BigInt256::from_u64(35);
 
-        let result = curve.montgomery.mul(&a, &b);
+        let result = curve.montgomery_p.mul(&a, &b);
 
         // Convert back from Montgomery form for comparison
         let result_normal = curve.montgomery.reduce(&result, &curve.p);
@@ -196,11 +196,11 @@ mod tests {
     // Chunk: Mod Inverse Test (tests/math.rs)
     // Dependencies: math::secp::mod_inverse, constants::CURVE_ORDER
     #[test]
-    fn test_mod_inverse() {
+    fn test_mod_inverse_n() {
         let curve = Secp256k1::new();
         let a = BigInt256::from_u64(5);
         let inv = curve.mod_inverse(&a, &curve.n).unwrap();
-        let product = curve.montgomery.mul(&a, &inv);
+        let product = curve.montgomery_p.mul(&a, &inv);
         let one = BigInt256::from_u64(1);
         assert_eq!(product % curve.n, one);
     }
@@ -231,7 +231,7 @@ mod tests {
 
             // Only test if a and p are coprime (gcd = 1)
             if let Some(inv) = curve.mod_inverse(&a_big, &curve.p) {
-                let product = curve.montgomery.mul(&a_big, &inv);
+                let product = curve.montgomery_p.mul(&a_big, &inv);
                 let product_reduced = curve.montgomery.reduce(&product, &curve.p);
 
                 prop_assert_eq!(product_reduced, BigInt256::from_u64(1));

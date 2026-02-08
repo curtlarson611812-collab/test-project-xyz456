@@ -57,11 +57,11 @@ impl CpuBackend {
     // Test: Small range 1-1000, target hash of known key, expect find
 
     // Batch modular inverse using Montgomery reduction
-    // fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {
-    //     use crate::math::bigint::MontgomeryReducer;
-    //     let reducer = MontgomeryReducer::new(modulus);
-    //     a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap_or(crate::math::bigint::BigInt256::zero())).collect()
-    // }
+    pub fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {
+        use crate::math::bigint::MontgomeryReducer;
+        let reducer = MontgomeryReducer::new(modulus);
+        a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap_or(crate::math::bigint::BigInt256::zero())).collect()
+    }
 }
 
 #[async_trait::async_trait]

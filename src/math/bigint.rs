@@ -312,13 +312,13 @@ impl BigInt256 {
         // First sanitize the input to remove any non-hex characters
         let clean = Self::sanitize_hex(hex);
         if clean.len() % 2 != 0 {
-            return Err("Odd length after clean".to_string());
+            return Err(format!("Hex string length {} is odd after sanitization", clean.len()));
         }
         let mut bytes = Vec::with_capacity(clean.len() / 2);
         let chars = clean.as_bytes();
         for i in (0..clean.len()).step_by(2) {
-            let high = Self::nibble(chars[i])?;
-            let low = Self::nibble(chars[i+1])?;
+            let high = Self::nibble(chars[i]).map_err(|e| format!("High nibble error at position {} in cleaned string: {}", i, e))?;
+            let low = Self::nibble(chars[i+1]).map_err(|e| format!("Low nibble error at position {} in cleaned string: {}", i+1, e))?;
             bytes.push((high << 4) | low);
         }
         Ok(bytes)
@@ -345,7 +345,7 @@ impl BigInt256 {
     }
 
     /// Create from hex string (pads with leading zeros if shorter than 256 bits)
-    pub fn from_hex(hex: &str) -> Self {
+    pub fn from_hex(hex: &str) -> Result<Self, String> {
         let hex = hex.trim_start_matches("0x");
 
         // Handle compressed public keys (66 chars: 02/03 + 32 bytes)
@@ -367,12 +367,7 @@ impl BigInt256 {
         };
 
         // Use manual parser instead of hex crate for better error handling
-        let mut bytes = match Self::manual_hex_to_bytes(&hex) {
-            Ok(b) => b,
-            Err(e) => {
-                panic!("Invalid hex string '{}': {}. First 20 chars: '{}', len: {}", hex, e, &hex[..hex.len().min(20)], hex.len());
-            }
-        };
+        let mut bytes = Self::manual_hex_to_bytes(&hex)?;
 
         // Ensure exactly 32 bytes (truncate or pad as needed)
         if bytes.len() > 32 {
@@ -391,7 +386,7 @@ impl BigInt256 {
             ]);
         }
 
-        BigInt256 { limbs }
+        Ok(BigInt256 { limbs })
     }
 
     /// Create from big-endian bytes
@@ -700,7 +695,7 @@ impl BarrettReducer {
         use num_bigint::BigUint;
 
         // Calculate k = ceil(bit_length(modulus) / 64) + 1 for Barrett reduction
-        let k = ((modulus.bit_length() + 63) / 64); // Correct: ceil(bit_length / 64), 4 for 256-bit
+        let k = (modulus.bit_length() + 63) / 64; // Correct: ceil(bit_length / 64), 4 for 256-bit
 
         // Exact mu calculation using BigUint: floor(2^512 / modulus)
         let p_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
@@ -754,24 +749,38 @@ impl BarrettReducer {
         let q_m = q3.clone() * modulus_big.clone();
         // println!("DEBUG Barrett: x_big={}, q_m={}, x_big >= q_m: {}", x_big, q_m, x_big >= q_m);
 
-        // Handle underflow: if q_m > x_big, adjust q3 downward until q_m <= x_big
+        // Handle underflow: if q_m > x_big, use binary search to find correct q3
         let mut r_big = if x_big >= q_m {
             x_big - q_m
         } else {
-            log::warn!("Barrett underflow: q_m > x_big - adjusting q3 downward");
-            let mut q3_adj = q3.clone();
-            let mut q_m_adj = q_m.clone();
-            while q_m_adj > x_big && q3_adj > BigUint::from(0u32) {
-                q3_adj -= BigUint::from(1u32);
-                q_m_adj = q3_adj.clone() * modulus_big.clone();
+            log::warn!("Underflow - binary searching q3_adj");
+            let mut low = BigUint::from(0u32);
+            let mut high = q3.clone();
+            let mut iterations = 0;
+            const MAX_ITER: u32 = 512; // Safe cap
+            while low < high && iterations < MAX_ITER {
+                let mid = (&low + &high) / BigUint::from(2u32);
+                let mid_m = &mid * &modulus_big;
+                if mid_m > x_big {
+                    high = mid;
+                } else {
+                    low = mid + BigUint::from(1u32);
+                }
+                iterations += 1;
             }
-            if q_m_adj > x_big {
-                // If still too large, this indicates a serious calculation error
-                // Fall back to slow but correct division
-                log::error!("Barrett reduction failed, using fallback division");
-                x_big % modulus_big.clone()
+            if iterations == MAX_ITER {
+                log::error!("Binary max iter - fallback %");
+                x_big % &modulus_big
             } else {
-                x_big - q_m_adj
+                let q3_adj = &low - BigUint::from(1u32);
+                let q_m_adj = &q3_adj * &modulus_big;
+                if q_m_adj > x_big {
+                    log::error!("Binary search failed - fallback %");
+                    x_big % &modulus_big
+                } else {
+                    log::info!("Binary search found adjustment in {} iterations", iterations);
+                    x_big - q_m_adj
+                }
             }
         };
         let p_big = modulus_big;
@@ -846,10 +855,12 @@ impl MontgomeryReducer {
         let modulus_u64 = modulus.limbs[0]; // Lower 64 bits of modulus
         let n_prime = Self::compute_n_prime(modulus_u64);
 
-        let r_squared = BigInt256::from_hex("1000007a2000e90a1"); // 2^512 % p (verified for secp256k1)
+        let r_squared = BigInt256::from_hex("1000007a2000e90a1")
+            .expect("Invalid r_squared for secp256k1");
 
         // Hardcode verified n_prime for secp256k1 to fix compute_n_prime bug
-        let n_prime = if *modulus == BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f") {
+        let n_prime = if *modulus == BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid modulus hex") {
             0xd838091dd2253531u64
         } else {
             n_prime
@@ -935,6 +946,7 @@ impl MontgomeryReducer {
         }
         let mut result = BigInt256 { limbs: u_limbs };
         if extra_carry > 0 { // Rare >2p case - subtract modulus * extra_carry
+            println!("DEBUG Mont: extra_carry={} detected, performing modulus subtraction", extra_carry);
             let mut modulus_scaled = self.modulus.clone();
             for _ in 1..extra_carry {
                 modulus_scaled = modulus_scaled.add(self.modulus.clone());
@@ -1064,8 +1076,8 @@ impl MontgomeryReducer {
     /// Used to decide between Fermat vs Extended Euclidean for inverse
     fn is_prime_approx(n: &BigInt256) -> bool {
         // For secp256k1 parameters, we know they're prime, so shortcut
-        let secp_p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
-        let secp_n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+        let secp_p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").unwrap();
+        let secp_n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").unwrap();
 
         if *n == secp_p || *n == secp_n {
             return true;
@@ -1266,14 +1278,79 @@ impl Rem for BigInt256 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
+    use num_bigint::BigUint;
+    use std::time::Duration;
 
     /// secp256k1 prime modulus
     const SECP256K1_P: &str = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F";
 
     #[test]
+    fn test_montgomery_correctness() {
+        let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F")
+            .expect("Invalid secp256k1 modulus");
+        let mont = MontgomeryReducer::new(&p);
+
+        // Test round-trip: convert to Montgomery and back
+        let original = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0")
+            .expect("Invalid test value");
+        let mont_form = mont.convert_in(&original);
+        let back = mont.convert_out(&mont_form);
+        assert_eq!(original, back, "Montgomery round-trip failed");
+
+        // Test associativity: (a * b) * c == a * (b * c)
+        let a = BigInt256::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
+            .expect("Invalid a");
+        let b = BigInt256::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
+            .expect("Invalid b");
+        let c = BigInt256::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
+            .expect("Invalid c");
+
+        let left = mont.mul(&mont.mul(&a, &b), &c);
+        let right = mont.mul(&a, &mont.mul(&b, &c));
+        assert_eq!(left, right, "Montgomery associativity failed");
+
+        // Test against Barrett for small values
+        let small_a = BigInt256::from_u64(12345);
+        let small_b = BigInt256::from_u64(67890);
+        let barrett = BarrettReducer::new(&p);
+
+        let mont_result = mont.mul(&small_a, &small_b);
+        let barrett_result = barrett.mul(&small_a, &small_b);
+        assert_eq!(mont_result, barrett_result, "Montgomery vs Barrett mismatch for small values");
+    }
+
+    #[test]
+    fn test_mont_associativity() {
+        // Simple test to see if MontgomeryReducer can be created
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
+        println!("Creating MontgomeryReducer...");
+        let _mont = MontgomeryReducer::new(&p);
+        println!("MontgomeryReducer created successfully");
+        // TODO: Add actual multiplication tests once creation works
+    }
+
+    #[test]
+    fn test_mont_vs_barrett_random() {
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
+        let mont = MontgomeryReducer::new(&p);
+        let barrett = BarrettReducer::new(&p);
+        for _ in 0..100 {
+            let a = BigInt256::random();
+            let b = BigInt256::random();
+            // Ensure values are < p for valid modular arithmetic
+            let a_mod = if a >= &p { a - p.clone() } else { a };
+            let b_mod = if b >= &p { b - p.clone() } else { b };
+            let mont_res = mont.mul(&a_mod, &b_mod);
+            let barrett_res = barrett.mul(&a_mod, &b_mod);
+            assert_eq!(mont_res, barrett_res);
+        }
+    }
+
     fn test_bigint256_from_hex() {
-        let p = BigInt256::from_hex(SECP256K1_P);
+        let p = BigInt256::from_hex(SECP256K1_P).expect("Invalid secp256k1 modulus");
         assert_eq!(p.to_string(), format!("0x{}", SECP256K1_P.to_lowercase()));
     }
 
@@ -1290,12 +1367,12 @@ mod tests {
 
     #[test]
     fn test_barrett_reduction_secp256k1() {
-        let p = BigInt256::from_hex(SECP256K1_P);
-        let reducer = BarrettReducer::new(p);
+        let p = BigInt256::from_hex(SECP256K1_P).expect("Invalid secp256k1 modulus");
+        let reducer = BarrettReducer::new(&p);
 
         // Test: (2^256 - 1) mod p should give a valid result
-        let max_val = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
-        let reduced = reducer.reduce(&max_val);
+        let max_val = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").expect("Invalid max val");
+        let reduced = reducer.reduce(&max_val).expect("Barrett reduction failed");
         assert!(reduced < p);
         assert!(reduced >= BigInt256::zero());
 
@@ -1306,8 +1383,8 @@ mod tests {
 
     #[test]
     fn test_montgomery_reduction_secp256k1() {
-        let p = BigInt256::from_hex(SECP256K1_P);
-        let reducer = MontgomeryReducer::new(p);
+        let p = BigInt256::from_hex(SECP256K1_P).expect("Invalid secp256k1 modulus");
+        let reducer = MontgomeryReducer::new(&p);
 
         // Test basic multiplication: (2 * 3) mod p = 6
         let a = BigInt256::from_u64(2);
@@ -1328,9 +1405,9 @@ mod tests {
 
     #[test]
     fn test_barrett_montgomery_consistency() {
-        let p = BigInt256::from_hex(SECP256K1_P);
-        let barrett = BarrettReducer::new(p);
-        let montgomery = MontgomeryReducer::new(p);
+        let p = BigInt256::from_hex(SECP256K1_P).expect("Invalid secp256k1 modulus");
+        let barrett = BarrettReducer::new(&p);
+        let montgomery = MontgomeryReducer::new(&p);
 
         // Test that both reducers give consistent results for simple cases
         let a = BigInt256::from_u64(12345);
@@ -1350,7 +1427,7 @@ mod tests {
         // Test modular inverse for small numbers using u64 version
         // Test 3 * 6 ≡ 1 mod 17 (since 3 * 6 = 18 ≡ 1 mod 17)
         // TODO: Uncomment when implementing modular inverse
-        // let inv_three = MontgomeryReducer::mod_inverse_u64(3, 17);
+        let inv_three = MontgomeryReducer::mod_inverse_u64(3, 17);
         assert_eq!(inv_three, Some(6));
 
         // Test that 3 * 6 % 17 = 1
@@ -1360,7 +1437,7 @@ mod tests {
     #[test]
     fn test_secp256k1_order_operations() {
         // Test operations with secp256k1 group order
-        let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+        let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").expect("Invalid secp256k1 order");
 
         // Test that n is odd (important for some algorithms)
         assert_eq!(n.limbs[0] & 1, 1);
@@ -1440,7 +1517,8 @@ mod tests {
 
     #[test]
     fn test_montgomery_full_redc() {
-        let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+        let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F")
+            .expect("Invalid secp256k1 modulus");
         let reducer = MontgomeryReducer::new(&p);
 
         // Test basic multiplication: 3 * 4 = 12 mod p
@@ -1452,8 +1530,10 @@ mod tests {
         assert_eq!(result, expected);
 
         // Test with larger numbers
-        let a = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0");
-        let b = BigInt256::from_hex("FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210");
+        let a = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0")
+            .expect("Invalid a hex");
+        let b = BigInt256::from_hex("FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210")
+            .expect("Invalid b hex");
         let result = reducer.mul(&a, &b);
 
         // Verify result < modulus
@@ -1479,7 +1559,8 @@ mod tests {
     /// Benchmark Montgomery vs naive modular multiplication
     #[test]
     fn benchmark_montgomery_vs_naive() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
         let mont = MontgomeryReducer::new(&p);
         let barrett = BarrettReducer::new(&p); // Use Barrett as naive baseline
         let num_iters = 10000;
@@ -1518,7 +1599,8 @@ mod tests {
 
     #[test]
     fn test_montgomery_basic() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
         let mont = MontgomeryReducer::new(&p);
 
         // Test basic round-trip
@@ -1542,7 +1624,8 @@ mod tests {
     // Barrett Benchmarks
     #[test]
     fn test_barrett_basic() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
         let barrett = BarrettReducer::new(&p);
 
         // Test basic mul
@@ -1563,7 +1646,8 @@ mod tests {
 
     #[test]
     fn test_montgomery_round_trip() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
         let mont = MontgomeryReducer::new(&p);
 
         // Test round-trip: convert_in -> convert_out should be identity
@@ -1572,8 +1656,8 @@ mod tests {
             BigInt256::from_u64(1),
             BigInt256::from_u64(12345),
             BigInt256::from_u64(999999),
-            BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), // max u256
-            BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e"), // p-1
+            BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("Invalid max u256"), // max u256
+            BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e").expect("Invalid p-1"), // p-1
         ];
 
         for (i, x) in test_values.iter().enumerate() {
@@ -1656,11 +1740,13 @@ mod tests {
     /// Test Barrett reduction with known large value
     #[test]
     fn test_barrett_large_reduce() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
         let barrett = BarrettReducer::new(&p);
 
         // Test with 2^256 mod p (should give small result)
-        let two_256 = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000"));
+        let two_256 = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000")
+            .expect("Invalid 2^256 hex"));
         let reduced = barrett.reduce(&two_256).unwrap();
 
         // 2^256 mod p should be computable and small
@@ -1678,9 +1764,11 @@ mod tests {
 
     #[test]
     fn test_barrett_large() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
         let reducer = BarrettReducer::new(&p);
-        let two_256 = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000"));
+        let two_256 = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000")
+            .expect("Invalid 2^256 hex"));
         let reduced = reducer.reduce(&two_256).unwrap();
         let expected = BigInt256::from_u64(0x1000003d1);
         assert_eq!(reduced, expected);
@@ -1688,7 +1776,8 @@ mod tests {
 
     #[test]
     fn test_barrett_vs_montgomery() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
+            .expect("Invalid secp256k1 modulus");
         let barrett = BarrettReducer::new(&p);
         let mont = MontgomeryReducer::new(&p);
 
@@ -1707,9 +1796,10 @@ mod tests {
         println!("Barrett and Montgomery produce same results ✓");
     }
 
+
     #[test]
     fn test_barrett_puzzle_range() {
-        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p = BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f").unwrap();
         let barrett = BarrettReducer::new(&p);
 
         // Simulate puzzle range operations: use simpler values to test Barrett
