@@ -691,7 +691,7 @@ mod tests {
         let db_path = temp_dir.path().to_path_buf();
 
         // Create table with disk support
-        let mut table = DpTable::with_disk_support(4, true, Some(db_path.clone()));
+        let table = DpTable::with_disk_support(4, true, Some(db_path.clone()));
 
         // Create a test entry
         let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };

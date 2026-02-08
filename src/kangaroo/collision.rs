@@ -25,7 +25,7 @@ pub enum CollisionResult {
 pub struct CollisionDetector {
     curve: Secp256k1,
     near_threshold: u64,
-    near_g_thresh: u64,
+    pub near_g_thresh: u64,
 }
 
 impl CollisionDetector {
@@ -384,7 +384,7 @@ impl CollisionDetector {
         let walk_back_steps = 10000; // 10k backward steps minimum
 
         // Walk backwards from tame kangaroo (towards wild)
-        let mut tame_walk = tame.clone();
+        let tame_walk = tame.clone();
         for step in 0..walk_back_steps {
             // Simplified backward walk: try small negative jumps
             // In practice, this would need proper jump reversal or history tracking
@@ -424,7 +424,7 @@ impl CollisionDetector {
         }
 
         // Walk forwards from wild kangaroo (towards tame)
-        let mut wild_walk = wild.clone();
+        let wild_walk = wild.clone();
         for step in 0..max_walk_steps {
             // Apply forward jumps using the same logic as normal kangaroo stepping
             // Simplified: try various jump sizes

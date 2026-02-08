@@ -216,7 +216,7 @@ mod benchmark_tests {
     #[test]
     fn test_valuable_mode() -> Result<(), Box<dyn std::error::Error>> {
         let curve = Secp256k1::new();
-        let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve)?;
+        let points = load_test_puzzles("valuable_p2pk_pubkeys.txt", &curve);
         assert!(!points.is_empty(), "Should load at least test puzzles");
         Ok(())
     }

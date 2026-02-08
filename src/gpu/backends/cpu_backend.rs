@@ -60,7 +60,7 @@ impl CpuBackend {
     pub fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {
         use crate::math::bigint::MontgomeryReducer;
         let reducer = MontgomeryReducer::new(modulus);
-        a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap_or(crate::math::bigint::BigInt256::zero())).collect()
+        a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap()).collect()
     }
 }
 
@@ -349,7 +349,7 @@ mod tests {
     fn test_gpu_backend_inverse() -> Result<(), anyhow::Error> {
         let backend = CpuBackend::new()?;
         let a = vec![BigInt256::from_u64(3)];
-        let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+        let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").expect("valid modulus");
 
         let inv_batch = backend.mod_inverse_batch(&a, &modulus);
         assert_eq!(inv_batch.len(), 1);

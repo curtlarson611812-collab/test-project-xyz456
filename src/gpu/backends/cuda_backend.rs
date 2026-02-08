@@ -910,8 +910,6 @@ impl GpuBackend for CudaBackend {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::math::bigint::BigInt256;
 
     #[test]
     #[cfg(feature = "rustacuda")]

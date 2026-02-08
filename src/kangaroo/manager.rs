@@ -20,7 +20,6 @@ use crate::kangaroo::collision::{CollisionDetector, CollisionResult};
 use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
-use num_traits::cast::ToPrimitive;
 use anyhow::anyhow;
 
 /// Concise Block: Precompute Small k*G Table for Nearest Adjust
@@ -790,7 +789,7 @@ impl KangarooManager {
 
         for state in states {
             let mut found_group = false;
-            for (gid, group_states) in &mut groups {
+            for (_gid, group_states) in &mut groups {
                 if let Some(existing) = group_states.first() {
                     let state_affine = self.collision_detector.curve().to_affine(&state.position);
                     let existing_affine = self.collision_detector.curve().to_affine(&existing.position);
@@ -824,8 +823,6 @@ impl KangarooManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::config::Config;
 
     #[tokio::test]
     async fn test_basic() {

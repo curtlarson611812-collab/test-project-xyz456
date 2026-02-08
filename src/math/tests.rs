@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::math::bigint::MontgomeryReducer;
     use crate::math::secp::Secp256k1;
     use crate::math::bigint::{BigInt256, BigInt512, BarrettReducer};
 
@@ -32,14 +32,14 @@ mod tests {
 
     #[test]
     fn test_barrett_reduction() {
-        let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
-        let reducer = BarrettReducer::new(&modulus).unwrap();
+        let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").expect("valid modulus");
+        let reducer = BarrettReducer::new(&modulus);
 
         // Test with various values
         let test_values = vec![
             BigInt256::from_u64(1),
             BigInt256::from_u64(123456),
-            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"),
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").expect("valid test value"),
         ];
 
         for val in test_values {
@@ -84,7 +84,8 @@ mod tests {
         // Test 3 * inv(3) ≡ 1 mod 7
         let a = BigInt256::from_u64(3);
         let modulus = BigInt256::from_u64(7);
-        let inv = mod_inverse(&a, &modulus).unwrap();
+        let reducer = MontgomeryReducer::new(&modulus);
+        let inv = reducer.mod_inverse(&a, &modulus).unwrap();
 
         let product = (a * inv) % modulus;
         assert_eq!(product, BigInt256::one());
@@ -132,6 +133,7 @@ mod tests {
         assert_eq!(p.y[0] & 1, 0, "Y coordinate should be even for 02 prefix");
     }
 
+    #[allow(dead_code)]
     fn mod_pow_basic(base: &BigInt256, exp: &BigInt256, modulus: &BigInt256) -> BigInt256 {
         use crate::math::bigint::BarrettReducer;
         let barrett = BarrettReducer::new(modulus);

@@ -4,7 +4,6 @@
 //! optimizations in secp256k1 kangaroo attacks.
 
 use crate::math::bigint::BigInt256;
-use zerocopy::IntoBytes;
 use log::{info, warn};
 
 /// Compute target biases from pubkey x-coordinate with attractor cross-check
@@ -94,6 +93,7 @@ pub fn compute_combined_bias_score(
     score.min(1.0)  // Cap at perfect match
 }
 
+#[allow(unused_doc_comments)]
 /// Pre-computed bias database for Magic 9 sniper mode
 /// Auto-generated at build time from valuable_p2pk_pubkeys.txt
 /// Format: (mod3, mod9, mod27, mod81, hamming_weight) for each of the 9 pubkeys

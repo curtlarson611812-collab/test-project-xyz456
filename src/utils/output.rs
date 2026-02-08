@@ -384,8 +384,6 @@ fn calculate_hashrate(total_ops: u64, run_time: Duration) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
-    use std::sync::atomic::AtomicBool;
 
     #[test]
     fn test_format_duration() {

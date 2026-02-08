@@ -355,7 +355,7 @@ mod tests {
         }
 
         // Prune based on value
-        let stats = pruner.prune_value_based().await.unwrap();
+        let stats = pruner.prune_value_based(0.5).await.unwrap();
         assert!(stats.entries_removed > 0);
         assert!(stats.entries_after < stats.entries_before);
     }

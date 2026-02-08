@@ -11,7 +11,6 @@ use rand::{RngCore, rngs::OsRng};
 use std::error::Error;
 use std::ops::{Add, Sub};
 use log::info;
-use anyhow::{anyhow, Result};
 
 
 impl Secp256k1 {
@@ -147,7 +146,7 @@ impl Secp256k1 {
         // Populate g_multiples: [G, 2G, 3G, 4G, 8G, 16G, -G, -2G, -3G, -4G, -8G, -16G]
         let montgomery_p_temp = MontgomeryReducer::new(&p);
         let mont_b_temp = montgomery_p_temp.convert_in(&b);
-        let mut temp_curve = Secp256k1 {
+        let temp_curve = Secp256k1 {
             p: p.clone(), n: n.clone(), a: a.clone(), b: b.clone(), g: g.clone(),
             g_multiples: Vec::new(),
             barrett_p: BarrettReducer::new(&p),
@@ -161,7 +160,7 @@ impl Secp256k1 {
         let ks = [1u64, 2];
         for &k in &ks {
             let k_big = BigInt256::from_u64(k);
-            let multiple = temp_curve.mul_constant_time(&k_big, &g).unwrap();
+            let multiple = temp_curve.mul_constant_time(&k_big, &g).expect("valid k");
             g_multiples.push(multiple);
         }
         // Adjust for reduced ks array (only 2 elements now)
@@ -1495,8 +1494,8 @@ mod tests {
         let four = BigInt256::from_u64(4);
         let four_g = curve.mul(&four, &curve.g);
         let four_g_affine = curve.to_affine(&four_g);
-        let expected_x = BigInt256::from_hex("490f943d44d80675a1a1d5e2250a8d0f9e787c5f8f08d8e8c97b4a8f6f4f4f4f");
-        let expected_y = BigInt256::from_hex("2e0774c5e8f8a77d96d0c20a6c5a7e2302b7f1484bd3c84101384d90e6b4b1ac");
+        let expected_x = BigInt256::from_hex("490f943d44d80675a1a1d5e2250a8d0f9e787c5f8f08d8e8c97b4a8f6f4f4f4f").expect("valid expected x");
+        let expected_y = BigInt256::from_hex("2e0774c5e8f8a77d96d0c20a6c5a7e2302b7f1484bd3c84101384d90e6b4b1ac").expect("valid expected y");
         assert_eq!(four_g_affine.x, expected_x.to_u64_array());
         assert_eq!(four_g_affine.y, expected_y.to_u64_array());
     }
@@ -1638,7 +1637,7 @@ mod tests {
 
         // Test 3G computation
         let three = BigInt256::from_u64(3);
-        let three_g = curve.mul_constant_time(&three, &curve.g).unwrap();
+        let three_g = curve.mul_constant_time(&three, &curve.g).expect("valid k");
         assert_eq!(curve.g_multiples[2], three_g);
 
         // Test negative multiples
@@ -1657,7 +1656,7 @@ mod tests {
 
         // Verify 16G = [16]G
         let sixteen = BigInt256::from_u64(16);
-        let sixteen_g = curve.mul_constant_time(&sixteen, &curve.g).unwrap();
+        let sixteen_g = curve.mul_constant_time(&sixteen, &curve.g).expect("valid k");
         assert_eq!(curve.g_multiples[5], sixteen_g);
     }
 
@@ -1670,9 +1669,9 @@ mod tests {
 
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let result = curve.mul_constant_time(&k, &curve.g).unwrap();
+            let result = curve.mul_constant_time(&k, &curve.g).expect("valid k");
             // Verify result matches known 3G
-            let expected = curve.known_3g();
+            let expected = Secp256k1::known_3g();
             let result_affine = result.to_affine(&curve);
             assert_eq!(BigInt256::from_u64_array(result_affine.x), expected.0);
             assert_eq!(BigInt256::from_u64_array(result_affine.y), expected.1);
@@ -1698,23 +1697,23 @@ mod tests {
         let small_k = BigInt256::from_u64(3);
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&small_k, &curve.g).unwrap();
+            let _ = curve.mul_constant_time(&small_k, &curve.g).expect("valid k");
         }
         let small_time = start.elapsed();
 
         // Medium k (128 bits, partial GLV)
-        let medium_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffff");
+        let medium_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffff").expect("valid medium k");
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&medium_k, &curve.g).unwrap();
+            let _ = curve.mul_constant_time(&medium_k, &curve.g).expect("valid k");
         }
         let medium_time = start.elapsed();
 
         // Large k (256 bits, full GLV)
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&large_k, &curve.g).unwrap();
+            let _ = curve.mul_constant_time(&large_k, &curve.g).expect("valid k");
         }
         let large_time = start.elapsed();
 
@@ -1744,7 +1743,7 @@ mod tests {
         let small_decomp_time = start.elapsed();
 
         // Large k decompose
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
             let _ = curve.glv_decompose(&large_k);
@@ -1763,13 +1762,13 @@ mod tests {
     #[test]
     fn benchmark_naive_vs_glv_comparison() {
         let curve = Secp256k1::new();
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
         let num_iters = 50; // Fewer iterations for expensive naive mul
 
         // GLV time (current implementation)
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&large_k, &curve.g).unwrap();
+            let _ = curve.mul_constant_time(&large_k, &curve.g).expect("valid k");
         }
         let glv_time = start.elapsed();
 
@@ -1782,7 +1781,7 @@ mod tests {
             // Simple double-and-add for comparison (not optimized)
             for i in 0..256 {
                 if large_k.bit(i) {
-                    result = curve.add(&result, &current).unwrap();
+                    result = curve.add(&result, &current);
                 }
                 current = curve.double(&current);
             }
@@ -1813,7 +1812,7 @@ mod tests {
         // 7G should equal (6G + G) = double(3G) + G
         let three_g = curve.mul_constant_time(&BigInt256::from_u64(3), &curve.g).unwrap();
         let six_g = curve.double(&three_g);
-        let expected = curve.add(&six_g, &curve.g).unwrap();
+        let expected = curve.add(&six_g, &curve.g);
         let expected_affine = expected.to_affine(&curve);
 
         assert_eq!(result_affine.x, expected_affine.x);
@@ -1833,7 +1832,7 @@ mod tests {
         assert_eq!(k2, BigInt256::zero());
 
         // Test large k decomposition
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
         let (k1_large, k2_large) = curve.glv_decompose(&large_k);
         assert!(k1_large.bits() <= 128);
         assert!(k2_large.bits() <= 128);

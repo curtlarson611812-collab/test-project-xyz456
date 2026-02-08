@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::config::Config;
-    use crate::types::Point;
     use crate::kangaroo::collision::Trap;
     use crate::math::BigInt256;
     use crate::kangaroo::CollisionDetector;
@@ -10,7 +8,7 @@ mod tests {
     #[test]
     fn test_near_g_threshold() {
         let config = Config::default();
-        let detector = CollisionDetector::new_with_config(&config);
+        let _detector = CollisionDetector::new_with_config(&config);
 
         // Test optimal Near-G threshold calculation
         let range_small = BigInt256::from_u64(1_000_000); // Small range
@@ -22,13 +20,13 @@ mod tests {
         assert_eq!(threshold_large, 4096); // prob_based = 4096, cost_based = 10000, min=4096
 
         // Test Near-G detection with low x[0]
-        let trap_near_g = Trap {
+        let _trap_near_g = Trap {
             x: [100000, 0, 0, 0], // Below default 2^20 threshold
             dist: num_bigint::BigUint::from(1000u64),
             is_tame: true,
         };
 
-        let range_width = BigInt256::from_u64(1 << 20); // Small range for testing
+        let _range_width = BigInt256::from_u64(1 << 20); // Small range for testing
         // This should trigger near-G brute force logic
         // (We can't easily test the full collision solve without mocking)
     }

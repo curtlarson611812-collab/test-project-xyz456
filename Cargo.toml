@@ -56,6 +56,7 @@ laptop = []  # Enable laptop optimizations (sm_86, lower resources)
 portable_simd = []  # Enable portable SIMD operations for CPU acceleration
 legacy = []  # Enable legacy modules with potential compatibility issues
 phase4 = []  # Enable Phase 4 features and tests
+cudarc = []
 
 [build-dependencies]
 hex = "0.4"                       # Hex parsing for build script

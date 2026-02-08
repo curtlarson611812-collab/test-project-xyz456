@@ -4,7 +4,6 @@
 
 use crate::math::bigint::BigInt256;
 use crate::types::Point;
-use std::ops::Mul;
 use std::sync::LazyLock;
 
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)

@@ -431,6 +431,7 @@ impl KangarooGenerator {
     }
 
     /// Entropy primes — only when flag enabled (real RNG, odd primes only)
+    #[allow(dead_code)]
     fn generate_entropy_primes(&self, count: usize) -> Result<Vec<u64>> {
         use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
@@ -454,6 +455,7 @@ impl KangarooGenerator {
     }
 
     /// Simple primality check (Miller-Rabin could be more robust but overkill here)
+    #[allow(dead_code)]
     fn is_probably_prime(&self, n: u64) -> bool {
         if n <= 1 {
             return false;
@@ -878,6 +880,7 @@ impl KangarooGenerator {
     /// Uses multiple independent kangaroo pairs for O(√w / t) expected time
     /// where t is the number of kangaroo pairs
     /// Initialize kangaroo states for parallel execution
+    #[allow(dead_code)]
     fn pollard_init_parallel(&self, curve: &Arc<Secp256k1>, _g: &Arc<Point>, _q: &Arc<Point>,
                            a: &Arc<BigInt256>, w: &Arc<BigInt256>, num_kangaroos: usize)
                            -> Vec<(BigInt256, BigInt256)> {
@@ -897,6 +900,7 @@ impl KangarooGenerator {
     }
 
     /// Run parallel kangaroo search
+    #[allow(dead_code)]
     fn pollard_run_parallel(&self, curve: &Arc<Secp256k1>, g: &Arc<Point>, q: &Arc<Point>,
                           states: Vec<(BigInt256, BigInt256)>, max_cycles: u64,
                           bias_mod: u64, b_pos: f64, pos_proxy: f64, biases: Option<&std::collections::HashMap<u32, f64>>) -> Option<BigInt256> {
@@ -907,6 +911,7 @@ impl KangarooGenerator {
         })
     }
 
+    #[allow(dead_code)]
     fn pollard_init(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize) -> Vec<(BigInt256, BigInt256)> {
         let curve_arc = Arc::new(curve.clone());
         let g_arc = Arc::new(g.clone());
@@ -916,6 +921,7 @@ impl KangarooGenerator {
         self.pollard_init_parallel(&curve_arc, &g_arc, &q_arc, &a_arc, &w_arc, num_kangaroos)
     }
 
+    #[allow(dead_code)]
     fn pollard_run(&self, curve: &Secp256k1, g: &Point, q: &Point, states: Vec<(BigInt256, BigInt256)>, max_cycles: u64, bias_mod: u64, b_pos: f64, pos_proxy: f64, biases: Option<&std::collections::HashMap<u32, f64>>) -> Option<BigInt256> {
         let curve_arc = Arc::new(curve.clone());
         let g_arc = Arc::new(g.clone());
@@ -923,6 +929,7 @@ impl KangarooGenerator {
         self.pollard_run_parallel(&curve_arc, &g_arc, &q_arc, states, max_cycles, bias_mod, b_pos, pos_proxy, biases)
     }
 
+    #[allow(dead_code)]
     fn pollard_resolve(&self, _dp_table: &DpTable, _states: &[RhoState]) -> Option<BigInt256> {
         // Placeholder - would check collisions in dp_table
         None
