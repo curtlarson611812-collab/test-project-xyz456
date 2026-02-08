@@ -2,7 +2,6 @@
 
 use crate::math::{secp::Secp256k1, bigint::BigInt256};
 use crate::types::Point;
-use anyhow::Result;
 
 #[cfg(test)]
 mod tests {
@@ -129,6 +128,7 @@ pub fn run_basic_test() {
 }
 
 /// Load test puzzles from file with robust error handling
+#[allow(dead_code)]
 fn load_test_puzzles(file_path: &str, curve: &Secp256k1) -> Vec<crate::types::Point> {
     use std::fs::File;
     use std::io::{self, BufRead};

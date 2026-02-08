@@ -4,7 +4,7 @@
 //! Supports both compressed and uncompressed formats with validation
 
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead};
 use std::ops::{Add, Sub};
 use hex::decode;
 use crate::types::Point;
@@ -645,6 +645,7 @@ pub fn iterative_mod9_slice(points: &[Point], max_levels: u32) -> f64 {
 /// SIMD-accelerated bias checking using portable SIMD when available
 /// Falls back to scalar operations when SIMD is not enabled
 #[cfg(feature = "portable_simd")]
+#[allow(dead_code)]
 fn simd_bias_check(res: u32, high_res: &[u32]) -> bool {
     use std::simd::{u32x4, SimdPartialEq};
 
@@ -665,6 +666,7 @@ fn simd_bias_check(res: u32, high_res: &[u32]) -> bool {
 }
 
 #[cfg(not(feature = "portable_simd"))]
+#[allow(dead_code)]
 fn simd_bias_check(res: u32, high_res: &[u32]) -> bool {
     // Scalar fallback for systems without SIMD support
     high_res.contains(&res)
@@ -1216,6 +1218,7 @@ pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point, Box<dyn std:
 
 /// Generic file loader for compressed pubkey files
 pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
+    use std::io::BufReader;
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let mut points = Vec::new();

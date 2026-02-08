@@ -685,6 +685,7 @@ pub struct BarrettReducer {
     /// Precomputed mu = floor(2^(512) / modulus)
     mu: BigInt512,
     /// Bit length of modulus / 64
+    #[allow(dead_code)]
     k: usize,
 }
 
@@ -820,6 +821,7 @@ pub struct MontgomeryReducer {
     /// Modulus
     modulus: BigInt256,
     /// R = 2^256
+    #[allow(dead_code)]
     r: BigInt256,
     /// R^(-1) mod modulus
     r_inv: BigInt256,

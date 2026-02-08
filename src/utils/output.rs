@@ -28,7 +28,6 @@ const MAX_LOG_LINES: usize = 8; // Show last 8 log messages
 
 /// Initialize log buffer capture
 pub fn init_log_capture() {
-    use log::Log;
     use std::sync::Once;
     static INIT: Once = Once::new();
 

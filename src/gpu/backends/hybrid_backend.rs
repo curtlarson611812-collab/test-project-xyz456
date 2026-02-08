@@ -186,6 +186,7 @@ impl HybridBackend {
     ) -> Result<Vec<Trap>> {
         let (_cuda_ratio, _vulkan_ratio) = self.profile_device_performance().await;
 
+        #[allow(unused_assignments)]
         let mut all_traps = Vec::new();
 
         #[cfg(feature = "rustacuda")]
@@ -790,6 +791,7 @@ impl HybridBackend {
         Err("Bias table not implemented".into())
     }
 
+    #[allow(dead_code)]
     async fn check_and_resolve_collisions(&self, _dp_table: &crate::dp::DpTable, _states: &[RhoState])
                                          -> Option<BigInt256> {
         // Placeholder collision detection

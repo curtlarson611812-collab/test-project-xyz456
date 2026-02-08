@@ -12,6 +12,7 @@ use std::path::Path;
 use anyhow::{Result, anyhow};
 
 /// Debug helper: Analyze hex string character codes for invisible characters
+#[allow(dead_code)]
 fn debug_hex_string(hex: &str, label: &str, puzzle_n: u32) {
     println!("🔍 Debug {} for puzzle {} (len {}): {:?}", label, puzzle_n, hex.len(), hex.as_bytes());
     let mut invalid_chars = Vec::new();
@@ -102,7 +103,7 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         warn!("Warning: puzzles.txt contains {} non-ASCII characters. This may cause parsing issues.",
               contents.len() - contents_ascii.len());
         // Continue with ASCII-only content to be safe
-        let contents = contents_ascii;
+        let _contents = contents_ascii;
     }
 
     let mut puzzles = Vec::new();

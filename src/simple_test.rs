@@ -1,5 +1,5 @@
 // Simple test program to verify G*3 computation and GLV constants
-use crate::math::{secp::Secp256k1, bigint::{BigInt256, BigInt512}};
+use crate::math::{secp::Secp256k1, bigint::BigInt256};
 
 pub fn run_simple_test() {
     println!("Running simple arithmetic verification tests...");

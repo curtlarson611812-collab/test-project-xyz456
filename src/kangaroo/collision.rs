@@ -4,7 +4,6 @@ use crate::math::{Secp256k1, BigInt256};
 use crate::config::Config;
 use anyhow::Result;
 use num_bigint::BigUint;
-use std::ops::{Sub, Mul};
 use log::{info, debug};
 use std::ops::Add;
 
@@ -855,8 +854,8 @@ mod tests {
     fn test_hash_position() {
         let detector = CollisionDetector::new();
         let point = Point { x: [1, 2, 3, 4], y: [5, 6, 7, 8], z: [1, 0, 0, 0] };
-        let hash = detector.hash_position(&point);
-        assert!(hash >= 0); // Just verify it runs
+        let _hash = detector.hash_position(&point);
+        // Just verify it runs
     }
 
     #[test]
