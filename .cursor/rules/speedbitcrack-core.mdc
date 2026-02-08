@@ -23,6 +23,8 @@ This is the **STRICT CORE RULES** for ALL code generation, suggestions, and chan
 
 **alwaysApply: true** — These rules override ALL defaults, library behaviors, and AI tendencies to simplify or generalize. Any generated code MUST adhere strictly unless user explicitly approves a deviation with a dedicated CLI flag.
 
+**MANDATORY DOCUMENTATION & COMMIT PROTOCOL alwaysApply: true** — The Deep Dive documentation standards and git commit protocol MUST be followed for ALL code changes, fixes, and implementations. No exceptions. This ensures complete auditability, mathematical correctness validation, and expert-level review of all cryptographic implementations.
+
 ## Dependencies & Standards
 
 **Required Crates** (add to Cargo.toml):
@@ -51,7 +53,8 @@ This is the **STRICT CORE RULES** for ALL code generation, suggestions, and chan
 - All public functions documented
 - Error handling with anyhow or thiserror (no unwrap/panic in hot paths)
 
-**Git Practices**:
+**MANDATORY Git Commit Protocol** — **STRICT ENFORCEMENT REQUIRED**:
+- **CRITICAL WORKFLOW REQUIREMENT**: At the conclusion of EVERY work session, BEFORE providing any summary or final response to the user, you MUST execute a git commit command to capture all changes made during that session. This ensures complete auditability and prevents loss of work. Format: `git add . && git commit -m "Session [date]: [brief description of changes]"`. This is NON-NEGOTIABLE and must be visibly demonstrated in responses.
 - Main branch protected — require PRs for all changes
 - Commit messages: Conventional Commits style (feat:, fix:, refactor:, test:, chore:)
 - Branch naming: feature/<name>, fix/<issue>, refactor/<module>, test/puzzle-<N>
@@ -210,18 +213,38 @@ Leverage Cursor's agent features to:
 
 Locked. No changes without explicit discussion and update to this file.
 
-### Documentation & Code Review Standards
-- **Comprehensive Deep Dives**: When completing major code changes or fixes, always provide detailed deep dive summaries for code review including:
-  - Complete before/after code snippets with explanations
-  - File-by-file breakdown of changes
-  - Mathematical foundations and algorithmic correctness proofs
-  - Performance characteristics and optimization trade-offs
-  - Critical lessons learned and pitfalls to avoid
-  - Verification test cases and validation methods
-  - Questions for external reviewers (like GROK Big Brother)
+### **MANDATORY Deep Dive Documentation & Code Review Standards** — **AUTHORITATIVE & ALWAYS REQUIRED**
+- **STRICT ENFORCEMENT**: Every major code change, fix, or implementation round MUST include a comprehensive Deep Dive summary BEFORE any git commit or session conclusion. This is NON-NEGOTIABLE and must be visibly demonstrated in ALL responses.
 
-  These summaries must be thorough enough for external experts to fully understand, validate, and potentially rebuild the implementation.
+- **Comprehensive Deep Dive Requirements** — **MANDATORY ELEMENTS**:
+  - **Complete Before/After Code Snippets**: Every changed function, struct, or significant code block must show EXACT before/after implementations with line-by-line explanations of what changed and why
+  - **File-by-File Breakdown**: Detailed analysis of every modified file including what was added, removed, or modified, with rationale for each change
+  - **Mathematical Foundations & Algorithmic Correctness Proofs**: Complete mathematical validation of all cryptographic operations, including proof of correctness, edge cases, and mathematical invariants
+  - **Performance Characteristics & Optimization Trade-offs**: Detailed benchmarking results, complexity analysis (time/space), memory usage patterns, and trade-off decisions with quantitative justification
+  - **Critical Lessons Learned & Pitfalls to Avoid**: Documented experience from implementation challenges, debugging sessions, and architectural decisions that could cause future issues
+  - **Verification Test Cases & Validation Methods**: Complete test suites with edge cases, failure modes, and validation strategies including formal proofs where applicable
+  - **Implementation Quality Metrics**: Code complexity metrics, maintainability scores, security analysis, and compliance with cryptographic standards
 
-### Code Modification & Preservation Rules
+- **MANDATORY GROK Online Review Questions** — **ALWAYS INCLUDE**:
+  - **What Was Implemented**: Detailed explanation of exactly what functionality was added, including edge cases and error handling
+  - **What Could/Should Be Implemented**: Analysis of missing features, potential extensions, and architectural gaps that should be addressed in future rounds
+  - **How Questions**: Implementation strategy validation, alternative approaches that could be considered, and rationale for chosen solutions
+  - **What Questions**: Validation of correctness, security implications, and compliance with cryptographic standards
+  - **Where Questions**: Code organization, module boundaries, and architectural decisions about component placement
+  - **When Questions**: Timing considerations, performance implications, and runtime behavior analysis
+  - **Implementation Necessity Analysis**: Critical assessment of whether each code change was truly required or if simpler/better alternatives exist
+
+- **Documentation Standards**:
+  - All summaries must be thorough enough for external experts to fully understand, validate, and potentially rebuild the implementation
+  - Include complete code examples that can be directly copied and tested
+  - Document all assumptions, constraints, and limitations
+  - Provide migration guides for breaking changes
+  - Include security considerations and threat model updates
+
+- **ENFORCEMENT**: Any response without a complete Deep Dive summary for major changes will be considered incomplete and must be revised before git commit.
+
+### **MANDATORY Code Modification & Preservation Rules** — **STRICT ENFORCEMENT REQUIRED**
 - **Functionality Preservation**: Tough implementations cannot reduce or overwrite existing functionality—it's there on purpose. Always modularize changes, use mocks or stubs for testing, stop and ask for confirmation before altering core features, and preserve all sacred elements from previous rounds (e.g., bias chains, shared tame paths, G-Link, near detection). If compile errors occur, debug incrementally without removal.
 - **Modular Development & Sacred Preservation**: Tough implementations cannot reduce or overwrite existing functionality—it's there on purpose. Always modularize changes into smaller, self-contained blocks with mocks or stubs for testing, stop and ask for confirmation before altering core features from previous rounds (e.g., bias scoring, shared tame paths, G-Link, near detection), and preserve all sacred elements. If compile errors occur, debug incrementally using debug prints and unit tests without removal—confirm with Big Brother if stuck.
+- **MANDATORY Documentation Integration**: All code modifications MUST be accompanied by comprehensive Deep Dive documentation as specified above. No code change is complete without its corresponding detailed analysis and review questions.
+- **Session Conclusion Requirements**: Every work session MUST end with git commit + Deep Dive summary. This ensures complete auditability and prevents loss of implementation details.
