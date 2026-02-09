@@ -447,6 +447,22 @@ impl BigInt256 {
         bytes
     }
 
+    /// Convert from BigUint (num-bigint)
+    pub fn from_biguint(value: &num_bigint::BigUint) -> Self {
+        let digits = value.to_u64_digits();
+        let mut limbs = [0u64; 4];
+        for (i, &digit) in digits.iter().enumerate().take(4) {
+            limbs[i] = digit;
+        }
+        BigInt256 { limbs }
+    }
+
+    /// Convert to BigUint (num-bigint)
+    pub fn to_biguint(&self) -> num_bigint::BigUint {
+        let u32_limbs: Vec<u32> = self.limbs.iter().flat_map(|&x| vec![x as u32, (x >> 32) as u32]).collect();
+        num_bigint::BigUint::from_slice(&u32_limbs)
+    }
+
     /// Convert to little-endian bytes
     pub fn to_bytes_le(&self) -> [u8; 32] {
         let mut bytes = [0u8; 32];

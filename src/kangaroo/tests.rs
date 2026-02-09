@@ -24,6 +24,7 @@ mod tests {
             x: [100000, 0, 0, 0], // Below default 2^20 threshold
             dist: num_bigint::BigUint::from(1000u64),
             is_tame: true,
+            alpha: [0; 4],
         };
 
         let _range_width = BigInt256::from_u64(1 << 20); // Small range for testing

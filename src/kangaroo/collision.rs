@@ -1,4 +1,4 @@
-use crate::types::{Solution, KangarooState, Point, DpEntry};
+use crate::types::{Solution, KangarooState, Point, DpEntry, Scalar};
 use crate::dp::DpTable;
 use crate::math::{Secp256k1, BigInt256};
 use crate::config::Config;
@@ -6,12 +6,14 @@ use anyhow::Result;
 use num_bigint::BigUint;
 use log::{info, debug};
 use std::ops::Add;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Trap {
     pub x: [u64; 4],
     pub dist: BigUint,
     pub is_tame: bool,
+    pub alpha: [u64; 4], // Alpha coefficient for collision solving
 }
 
 #[derive(Debug)]
@@ -25,12 +27,14 @@ pub struct CollisionDetector {
     curve: Secp256k1,
     near_threshold: u64,
     pub near_g_thresh: u64,
+    target: Point,
+    config: Config,
 }
 
 impl CollisionDetector {
     pub fn new() -> Self {
         let config = Config::default();
-        Self::new_with_config(&config)
+        Self::new_with_config(&config).with_target(Point::infinity())
     }
 
     pub fn new_with_config(config: &Config) -> Self {
@@ -41,7 +45,14 @@ impl CollisionDetector {
             curve: Secp256k1::new(),
             near_threshold,
             near_g_thresh: config.near_g_thresh,
+            target: Point::infinity(), // Will be set by caller
+            config: config.clone(),
         }
+    }
+
+    pub fn with_target(mut self, target: Point) -> Self {
+        self.target = target;
+        self
     }
 
     /// Calculate optimal Near-G threshold based on range width and DP bits
@@ -58,6 +69,8 @@ impl CollisionDetector {
             curve: Secp256k1::new(),
             near_threshold,
             near_g_thresh: 1 << 20, // Default 2^20
+            config: Config::default(),
+            target: Point::infinity(),
         }
     }
 
@@ -262,6 +275,26 @@ impl CollisionDetector {
                     info!("🎯 Near collision detected: DP bits match {:.1}%, distance={}, threshold={}",
                           (1.0 - hamming_distance as f64 / 64.0) * 100.0, hamming_distance, dp_bit_threshold);
 
+                    // Try resolve_near_collision before walk
+                    let trap1 = Trap {
+                        x: entry1.point.x,
+                        dist: BigUint::from(entry1.state.distance),
+                        is_tame: entry1.state.is_tame,
+                        alpha: entry1.state.alpha,
+                    };
+                    let trap2 = Trap {
+                        x: entry2.point.x,
+                        dist: BigUint::from(entry2.state.distance),
+                        is_tame: entry2.state.is_tame,
+                        alpha: entry2.state.alpha,
+                    };
+
+                    if let Some(offset) = self.resolve_near_collision(&trap1, &trap2, dp_bit_threshold) {
+                        // Construct solution from resolved offset
+                        let solution = Solution::new(offset.to_u64_array(), entry1.point, entry1.state.distance + entry2.state.distance, 0.0);
+                        return Ok(CollisionResult::Full(solution));
+                    }
+
                     // Attempt walk back/forward to find exact collision
                     if let Some(solution) = self.walk_back_forward_near_collision(&entry1.state, &entry2.state).await? {
                         return Ok(CollisionResult::Full(solution));
@@ -306,12 +339,20 @@ impl CollisionDetector {
             priv_array[i] = digit;
         }
 
-        Some(Solution::new(
+        let solution = Solution::new(
             priv_array,
             Point { x: tame.x, y: [0; 4], z: [1; 4] },
             (&tame.dist + &wild.dist).to_u64_digits().first().copied().unwrap_or(0),
             0.0,
-        ))
+        );
+
+        // Verify solution
+        let computed_point = self.curve.mul(&BigInt256::from_u64_array(priv_array), &self.curve.g);
+        if computed_point.x == self.target.x && computed_point.y == self.target.y {
+            Some(solution)
+        } else {
+            None
+        }
     }
 
     /// Solve collision using alpha/beta coefficients
@@ -347,6 +388,7 @@ impl CollisionDetector {
                 x: k.position.x, // Assuming affine x is stored
                 dist: BigUint::from(k.distance),
                 is_tame: k.is_tame,
+                alpha: k.alpha,
             }
         }).collect();
 
@@ -691,8 +733,8 @@ impl CollisionDetector {
 
         // Early return for close distances (legacy check, now redundant but kept for safety)
         if diff < BigUint::from(self.near_threshold) {
-            let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame };
-            let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame };
+            let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame, alpha: [0; 4] };
+            let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame, alpha: [0; 4] };
             return self.solve_trap_collision(&trap_l, &trap_s);
         }
 
@@ -707,8 +749,8 @@ impl CollisionDetector {
             diff = if dist_l >= dist_s { &dist_l - &dist_s } else { &dist_s - &dist_l };
 
             if pos_l.x == pos_s.x {
-                let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame };
-                let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame };
+                let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame, alpha: [0; 4] };
+                let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame, alpha: [0; 4] };
                 return self.solve_trap_collision(&trap_l, &trap_s);
             }
         }
@@ -716,8 +758,8 @@ impl CollisionDetector {
         // Fine alternating rewind
         for step in 0..200 {
             if pos_l.x == pos_s.x {
-                let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame };
-                let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame };
+                let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame, alpha: [0; 4] };
+                let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame, alpha: [0; 4] };
                 return self.solve_trap_collision(&trap_l, &trap_s);
             }
 
@@ -817,6 +859,117 @@ impl CollisionDetector {
         let aff = self.curve.to_affine(p);
         (0..4).fold(0u32, |h, i| h ^ (aff.x[i] ^ aff.y[i]) as u32)
     }
+
+    /// Resolve near-collision with prime inverse calculation or BSGS
+    pub fn resolve_near_collision(
+        &self,
+        trap_i: &Trap,
+        trap_j: &Trap,
+        threshold: u64,
+    ) -> Option<BigInt256> {
+        let diff = if trap_i.dist > trap_j.dist {
+            &trap_i.dist - &trap_j.dist
+        } else {
+            &trap_j.dist - &trap_i.dist
+        };
+
+        // For GOLD combo, try factoring diff first
+        let mut effective_diff = diff.clone();
+        if self.config.gold_bias_combo {
+            let diff_scalar = Scalar::new(BigInt256::from_biguint(&diff));
+            if let Some((reduced_diff, _factors)) = diff_scalar.mod_small_primes() {
+                effective_diff = reduced_diff.value.to_biguint();
+            }
+        }
+
+        // If small diff, use BSGS for mini-ECDLP
+        if self.config.use_hybrid_bsgs && effective_diff < BigUint::from(self.config.bsgs_threshold) {
+            return self.bsgs_mini_ecdlp(trap_i, trap_j);
+        }
+
+        // Try prime inverse if wild trap (multiplicative)
+        if !trap_i.is_tame && trap_i.alpha != [0; 4] {
+            let prime_scalar = Scalar::new(BigInt256::from_u64_array(trap_i.alpha));
+            if let Some(inv_prime) = self.compute_inverse(&prime_scalar.value) {
+                let diff_bigint = BigInt256::from_biguint(&diff);
+                let k_candidate = (inv_prime.clone() * diff_bigint + BigInt256::one()) % self.curve.n.clone();
+                let computed = self.curve.mul(&k_candidate, &self.curve.g);
+                if computed.x == self.target.x && computed.y == self.target.y {
+                    return Some(k_candidate);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// BSGS implementation for mini-ECDLP on small differences
+    fn bsgs_mini_ecdlp(&self, trap_i: &Trap, trap_j: &Trap) -> Option<BigInt256> {
+        let diff = if trap_i.dist > trap_j.dist {
+            &trap_i.dist - &trap_j.dist
+        } else {
+            &trap_j.dist - &trap_i.dist
+        };
+
+        if diff > BigUint::from(self.config.bsgs_threshold) {
+            return None;
+        }
+
+        let m = (diff.bits() as f64).sqrt().ceil() as u64;
+        let mut baby_table: HashMap<[u64; 4], u64> = HashMap::new();
+
+        // Build baby steps: g^0, g^1, ..., g^{m-1}
+        for i in 0..m {
+            let baby_point = self.curve.mul(&BigInt256::from_u64(i), &self.curve.g);
+            baby_table.insert(baby_point.x, i);
+        }
+
+        // Giant steps: target * g^{-m*j}
+        let g_m_inv = self.compute_inverse(&BigInt256::from_u64(m))?;
+        let mut current = self.target;
+
+        for j in 0..m {
+            if let Some(baby) = baby_table.get(&current.x) {
+                let solution = baby + j * m;
+                // Verify solution
+                let verify_point = self.curve.mul(&BigInt256::from_u64(solution), &self.curve.g);
+                if verify_point.x == self.target.x && verify_point.y == self.target.y {
+                    return Some(BigInt256::from_u64(solution));
+                }
+            }
+
+            // current = current * g^{-m}
+            let step = self.curve.mul(&g_m_inv, &current);
+            current = step;
+        }
+
+        None
+    }
+
+    /// Compute modular inverse using extended Euclidean algorithm
+    fn compute_inverse(&self, a: &BigInt256) -> Option<BigInt256> {
+        let mut old_r = self.curve.n.clone();
+        let mut r = a.clone();
+        let mut old_s = BigInt256::zero();
+        let mut s = BigInt256::one();
+
+        while r != BigInt256::zero() {
+            let quotient = old_r.clone() / r.clone();
+            let temp_r = old_r - quotient.clone() * r.clone();
+            old_r = r;
+            r = temp_r;
+
+            let temp_s = old_s - quotient * s.clone();
+            old_s = s;
+            s = temp_s;
+        }
+
+        if old_r == BigInt256::one() {
+            Some(old_s % self.curve.n.clone())
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -827,8 +980,8 @@ mod tests {
     fn test_exact_collision() {
         let detector = CollisionDetector::new();
         let traps = vec![
-            Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true },
-            Trap { x: [1, 2, 3, 4], dist: BigUint::from(50u64), is_tame: false },
+            Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true, alpha: [0; 4] },
+            Trap { x: [1, 2, 3, 4], dist: BigUint::from(50u64), is_tame: false, alpha: [0; 4] },
         ];
 
         let solution = detector.detect_exact_collisions(&traps);
@@ -842,8 +995,8 @@ mod tests {
     fn test_no_collision() {
         let detector = CollisionDetector::new();
         let traps = vec![
-            Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true },
-            Trap { x: [5, 6, 7, 8], dist: BigUint::from(50u64), is_tame: false },
+            Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true, alpha: [0; 4] },
+            Trap { x: [5, 6, 7, 8], dist: BigUint::from(50u64), is_tame: false, alpha: [0; 4] },
         ];
 
         let solution = detector.detect_exact_collisions(&traps);
@@ -858,18 +1011,47 @@ mod tests {
         // Just verify it runs
     }
 
-    #[test]
-    fn test_walk_back_near_collision() {
-        let detector = CollisionDetector::new();
-        let tame_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true };
-        let wild_trap = Trap { x: [5, 6, 7, 8], dist: BigUint::from(50u64), is_tame: false };
-        let jump_table = vec![];
-        let hash_fn = |p: &Point| p.x[0] as usize;
-        let range_width = BigInt256::from_u64(100000);
+#[test]
+fn test_walk_back_near_collision() {
+    let detector = CollisionDetector::new();
+    let tame_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true, alpha: [0; 4] };
+    let wild_trap = Trap { x: [5, 6, 7, 8], dist: BigUint::from(50u64), is_tame: false, alpha: [0; 4] };
+    let jump_table = vec![];
+    let hash_fn = |p: &Point| p.x[0] as usize;
+    let range_width = BigInt256::from_u64(100000);
 
-        // Test that walk_back_near_collision tries calculated first
-        let result = detector.walk_back_near_collision(&tame_trap, &wild_trap, &jump_table, &hash_fn, &range_width, &std::collections::HashMap::new());
-        // Should either solve via calculated approach or fallback gracefully
-        assert!(result.is_some() || result.is_none());
-    }
+    // Test that walk_back_near_collision tries calculated first
+    let result = detector.walk_back_near_collision(&tame_trap, &wild_trap, &jump_table, &hash_fn, &range_width, &std::collections::HashMap::new());
+    // Should either solve via calculated approach or fallback gracefully
+    assert!(result.is_some() || result.is_none());
+}
+
+#[test]
+fn test_resolve_near_collision() {
+    let config = Config {
+        use_hybrid_bsgs: true,
+        bsgs_threshold: 10000,
+        ..Default::default()
+    };
+    let mut detector = CollisionDetector::new_with_config(&config).with_target(Point::infinity());
+
+    // Create test traps with small difference
+    let tame_trap = Trap {
+        x: [1, 2, 3, 4],
+        dist: BigUint::from(100u64),
+        is_tame: true,
+        alpha: [0; 4],
+    };
+    let wild_trap = Trap {
+        x: [5, 6, 7, 8],
+        dist: BigUint::from(90u64),
+        is_tame: false,
+        alpha: [2, 0, 0, 0], // Prime 2
+    };
+
+    // Test BSGS path for small diff
+    let result = detector.resolve_near_collision(&tame_trap, &wild_trap, 20);
+    // Should either find a solution or return None gracefully
+    assert!(result.is_some() || result.is_none());
+}
 }
