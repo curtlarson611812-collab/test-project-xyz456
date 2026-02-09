@@ -1072,7 +1072,8 @@ pub fn is_attractor_proxy(x: &BigInt256) -> bool {
 pub fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
     // Use CUDA mod9 check for acceleration
     let rt = tokio::runtime::Runtime::new()?;
-    let hybrid = rt.block_on(crate::gpu::HybridGpuManager::new(0.001, 5))?;
+    let config = crate::config::Config::default();
+    let hybrid = rt.block_on(crate::gpu::HybridGpuManager::new(&config, 0.001, 5))?;
     let x_limbs: Vec<[u64;4]> = points.iter().map(|p| p.x).collect();
     let mod9_results = hybrid.dispatch_mod9_check(&x_limbs)?;
 

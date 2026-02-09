@@ -225,7 +225,7 @@ impl KangarooManager {
         targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1 }); // Attractors first
 
         // Concise Block: Run GPU Prime Mul Test on Manager Init
-        let hybrid = HybridGpuManager::new(0.001, 5).await?;
+        let hybrid = HybridGpuManager::new(&config, 0.001, 5).await?;
         let test_target = if targets_only.is_empty() { Secp256k1::new().g.clone() } else { targets_only[0] };
         if !hybrid.test_prime_mul_gpu(&test_target)? {
             println!("GPU prime mul drift detected! Fallback to CPU.");
@@ -652,7 +652,7 @@ impl KangarooManager {
         }
 
         // Create hybrid manager with drift monitoring
-        let hybrid_manager = HybridGpuManager::new(0.001, 5).await?; // 0.1% error threshold, 5s check interval
+        let hybrid_manager = HybridGpuManager::new(&self.config, 0.001, 5).await?; // 0.1% error threshold, 5s check interval
 
         // Execute hybrid computation with drift mitigation
         hybrid_manager.execute_with_drift_monitoring(

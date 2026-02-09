@@ -7,9 +7,14 @@ use super::shared::SharedBuffer;
 use super::backends::hybrid_backend::HybridBackend;
 use super::backends::backend_trait::GpuBackend;
 use crate::types::Point;
+use crate::kangaroo::collision::Trap;
 use crate::math::{secp::Secp256k1, bigint::BigInt256};
+use crate::config::{Config, BiasMode};
+use crate::kangaroo::generator::PRIME_MULTIPLIERS;
 use anyhow::Result;
+use num_bigint::BigUint;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use log::{info, warn, debug};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -29,7 +34,8 @@ pub struct HybridGpuManager {
     hybrid_backend: HybridBackend,
     curve: Secp256k1,
     drift_threshold: f64,
-            metrics: Arc<Mutex<DriftMetrics>>,
+    config: Arc<Config>,  // Full config for bias/bsgs/bloom/gold propagation
+    metrics: Arc<Mutex<DriftMetrics>>,
 }
 
 impl HybridGpuManager {
@@ -64,8 +70,8 @@ impl HybridGpuManager {
         y_squared == x_cubed_plus_7
     }
 
-    /// Create new hybrid manager with drift monitoring
-    pub async fn new(drift_threshold: f64, _check_interval_secs: u64) -> Result<Self> {
+    /// Create new hybrid manager with drift monitoring and config propagation
+    pub async fn new(config: &Config, drift_threshold: f64, _check_interval_secs: u64) -> Result<Self> {
         let hybrid_backend = HybridBackend::new().await?;
         // Log CUDA version for compatibility (only if CUDA feature enabled)
         #[cfg(feature = "rustacuda")]
@@ -79,6 +85,7 @@ impl HybridGpuManager {
             hybrid_backend,
             curve,
             drift_threshold,
+            config: Arc::new(config.clone()),
             metrics: Arc::new(Mutex::new(DriftMetrics {
                 error_rate: 0.0,
                 cuda_throughput: 0.0,
@@ -105,13 +112,31 @@ impl HybridGpuManager {
         _total_steps: u64,
         threshold: f64,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let attractor_rate = self.get_attractor_rate(points_data);
-        if attractor_rate < 10.0 { // Low hits = bias lost
+        let base_attractor_rate = self.get_attractor_rate(points_data);
+
+        // Propagate bias_mode for adaptive backend selection
+        let bias_adjustment = match self.config.bias_mode {
+            BiasMode::Magic9 => {
+                // Magic9 expects higher attractor rates, adjust threshold
+                if base_attractor_rate < 15.0 { 1.5 } else { 1.0 } // Boost if low
+            },
+            BiasMode::Primes => {
+                // Primes mode may have different convergence patterns
+                if base_attractor_rate < 12.0 { 1.3 } else { 1.0 }
+            },
+            _ => 1.0, // Uniform mode
+        };
+
+        let adjusted_attractor_rate = base_attractor_rate * bias_adjustment;
+
+        if adjusted_attractor_rate < 10.0 { // Low hits = bias lost
             // Swap to CUDA for precision mul/add
-            println!("Low attractor rate {:.1}%, swapping to CUDA precision", attractor_rate);
+            println!("Low attractor rate {:.1}% (adjusted from {:.1}%), swapping to CUDA precision",
+                    adjusted_attractor_rate, base_attractor_rate);
         } else {
             // Vulkan for speed on attractor-rich
-            println!("High attractor rate {:.1}%, using Vulkan speed", attractor_rate);
+            println!("High attractor rate {:.1}% (adjusted from {:.1}%), using Vulkan speed",
+                    adjusted_attractor_rate, base_attractor_rate);
         }
         let error = self.calculate_drift_error(shared_points, 1000)?;
 
@@ -763,9 +788,131 @@ mod tests {
     use super::*;
     use tokio;
 
+    /// Dispatch collision solving with BSGS offload if configured
+    pub fn dispatch_collision_gpu(&self, traps: &[Trap], target: &Point) -> Vec<Solution> {
+        let mut solutions = Vec::new();
+
+        // First, try standard collision detection
+        // Note: This would call the existing collision detection logic
+
+        // If hybrid BSGS is enabled, offload near-collision resolution to GPU
+        if self.config.use_hybrid_bsgs {
+            let near_traps: Vec<&Trap> = traps.iter()
+                .filter(|trap| {
+                    // Check if this trap pair could benefit from BSGS
+                    // This is a simplified check - in practice we'd check distance differences
+                    trap.dist.bits() < 32 // Small differences suitable for BSGS
+                })
+                .collect();
+
+            if !near_traps.is_empty() {
+                debug!("Offloading {} near-collision traps to GPU BSGS", near_traps.len());
+                let batch_solutions = self.batch_bsgs_collision_gpu(&near_traps, target);
+                solutions.extend(batch_solutions);
+            }
+        }
+
+        solutions
+    }
+
+    /// Batch BSGS collision solving on GPU
+    fn batch_bsgs_collision_gpu(&self, traps: &[&Trap], target: &Point) -> Vec<Solution> {
+        let mut solutions = Vec::new();
+
+        // For each trap, compute delta and solve using BSGS
+        for trap in traps {
+            // Simplified: in practice this would batch multiple deltas
+            let delta_point = self.compute_delta_point(trap, target);
+            if let Some(offset) = self.bsgs_solve_gpu(&delta_point, self.config.bsgs_threshold) {
+                // Verify and construct solution
+                let candidate_key = BigInt256::from_u64_array(offset);
+                let computed_point = self.curve.mul(&candidate_key, &self.curve.g);
+                if computed_point.x == target.x && computed_point.y == target.y {
+                    let solution = Solution::new(
+                        offset,
+                        *target,
+                        BigUint::from(0u64), // Placeholder distance
+                        0.0,
+                    );
+                    solutions.push(solution);
+                }
+            }
+        }
+
+        solutions
+    }
+
+    /// GPU-accelerated BSGS solve for small discrete logs
+    fn bsgs_solve_gpu(&self, delta: &Point, threshold: u64) -> Option<[u64; 4]> {
+        // This would call the CUDA backend's BSGS implementation
+        // For now, return None to indicate GPU BSGS not yet implemented
+        debug!("GPU BSGS requested but not yet implemented for threshold {}", threshold);
+        None
+    }
+
+    /// Compute delta point between trap and target
+    fn compute_delta_point(&self, trap: &Trap, target: &Point) -> Point {
+        // Simplified delta computation - in practice this would be more complex
+        // based on the specific collision detection algorithm
+        *target // Placeholder
+    }
+
+    /// Enhanced prime testing with GOLD factoring
+    pub fn step_with_gold_factor(&self, kangaroos: &mut [KangarooState]) {
+        if self.config.gold_bias_combo {
+            for kangaroo in kangaroos.iter_mut() {
+                let dist_scalar = Scalar::new(kangaroo.distance.clone());
+                if let Some((reduced, _factors)) = dist_scalar.mod_small_primes() {
+                    // Reduce distance by factoring out small primes
+                    kangaroo.distance = reduced.value;
+                    debug!("Factored kangaroo distance using GOLD combo");
+                }
+            }
+        }
+    }
+
+    /// Dispatch DP bloom checks to GPU if enabled
+    pub fn dispatch_dp_bloom_gpu(&self, points: &[Point]) -> Vec<bool> {
+        if self.config.use_bloom {
+            // Check if GPU bloom is available (would depend on backend capabilities)
+            debug!("GPU Bloom requested but not yet implemented");
+            // For now, return all false (no duplicates)
+            vec![false; points.len()]
+        } else {
+            vec![false; points.len()]
+        }
+    }
+
     #[tokio::test]
     async fn test_hybrid_manager_creation() {
-        let manager = HybridGpuManager::new(0.001, 1).await;
+        let config = Config::default();
+        let manager = HybridGpuManager::new(&config, 0.001, 1).await;
         assert!(manager.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_hybrid_bias_propagation() {
+        let mut config = Config::default();
+        config.bias_mode = BiasMode::Magic9;
+        config.gold_bias_combo = true;
+
+        let manager = HybridGpuManager::new(&config, 0.001, 1).await.unwrap();
+
+        // Test that config is properly propagated
+        assert_eq!(manager.config.bias_mode, BiasMode::Magic9);
+        assert!(manager.config.gold_bias_combo);
+    }
+
+    #[tokio::test]
+    async fn test_hybrid_bias_propagation() {
+        let mut config = Config::default();
+        config.bias_mode = BiasMode::Magic9;
+        config.gold_bias_combo = true;
+
+        let manager = HybridGpuManager::new(&config, 0.001, 1).await.unwrap();
+
+        // Test that config is properly propagated
+        assert_eq!(manager.config.bias_mode, BiasMode::Magic9);
+        assert!(manager.config.gold_bias_combo);
     }
 }
