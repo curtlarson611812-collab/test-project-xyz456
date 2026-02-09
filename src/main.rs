@@ -9,6 +9,7 @@ use log::{info, warn, error};
 
 use speedbitcrack::config::Config;
 use speedbitcrack::kangaroo::{KangarooGenerator, CollisionDetector, CollisionResult};
+use speedbitcrack::types::KangarooState;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::pubkey_loader::parse_compressed;
 use speedbitcrack::puzzles;
@@ -61,6 +62,16 @@ struct Args {
     bias_mod: u64,  // Bias modulus for jump selection (0 = no bias)
     #[arg(long)]
     magic9: bool,  // Enable magic 9 sniper mode for specific 9 pubkeys
+    #[arg(long, default_value = "uniform")]
+    bias_mode: String,  // Bias mode: uniform, magic9, primes
+    #[arg(long, default_value_t = true)]
+    use_bloom: bool,  // Enable Bloom filters for DP pre-checks
+    #[arg(long, default_value_t = true)]
+    use_hybrid_bsgs: bool,  // Enable hybrid BSGS for near-collision resolution
+    #[arg(long, default_value = "4294967296")]
+    bsgs_threshold: u64,  // BSGS threshold for mini-ECDLP
+    #[arg(long, default_value_t = true)]
+    gold_bias_combo: bool,  // Enable GOLD bias combo
     #[arg(long)]
     verbose: bool,  // Enable verbose logging
     #[arg(long)]

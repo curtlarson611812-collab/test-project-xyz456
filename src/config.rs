@@ -4,14 +4,16 @@
 //! and validation logic.
 
 use anyhow::{anyhow, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use log;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
 
 /// GPU backend selection
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum GpuBackend {
+    #[default]
     Hybrid,
     Cuda,
     Vulkan,
@@ -41,6 +43,14 @@ impl std::fmt::Display for GpuBackend {
             GpuBackend::Cpu => write!(f, "cpu"),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ValueEnum, Default)]
+pub enum BiasMode {
+    #[default]
+    Uniform,
+    Magic9,
+    Primes,
 }
 
 /// SpeedBitCrack V3 - Pollard's rho/kangaroo ECDLP solver for secp256k1
@@ -166,6 +176,26 @@ pub struct Config {
     /// GPU backend to use
     #[arg(long, default_value = "hybrid")]
     pub gpu_backend: GpuBackend,
+
+    /// Bias mode for walks (uniform, magic9 for mod9/27/81 attractors, primes for small odd factoring)
+    #[arg(long, default_value = "uniform")]
+    pub bias_mode: BiasMode,
+
+    /// Enable Bloom filters for DP pre-checks (reduces false positives)
+    #[arg(long, default_value_t = true)]
+    pub use_bloom: bool,
+
+    /// Enable hybrid BSGS for near-collision resolution
+    #[arg(long, default_value_t = true)]
+    pub use_hybrid_bsgs: bool,
+
+    /// BSGS threshold for mini-ECDLP on near-collision diffs (default 2^32)
+    #[arg(long, default_value = "4294967296")]
+    pub bsgs_threshold: u64,
+
+    /// Enable GOLD bias combo (primes + mod3/9/27/81 for instant attractor solving)
+    #[arg(long, default_value_t = true)]
+    pub gold_bias_combo: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -244,6 +274,23 @@ impl Config {
             if !(64..=160).contains(&puzzle_num) {
                 return Err(anyhow!("Puzzle number must be between 64 and 160"));
             }
+        }
+
+        // Validate bias mode (no-op, as enum ensures)
+
+        // Validate BSGS threshold
+        if self.use_hybrid_bsgs && self.bsgs_threshold == 0 {
+            return Err(anyhow!("BSGS threshold must be > 0 when enabled"));
+        }
+
+        // Warn if bloom with low dp_bits (density risk)
+        if self.use_bloom && self.dp_bits < 20 {
+            log::warn!("Bloom enabled with low dp_bits ({}); may cause high false positives", self.dp_bits);
+        }
+
+        // Validate gold combo only with magic9/primes
+        if self.gold_bias_combo && self.bias_mode == BiasMode::Uniform {
+            return Err(anyhow!("GOLD bias combo requires bias_mode magic9 or primes"));
         }
 
         Ok(())

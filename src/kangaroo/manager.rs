@@ -88,9 +88,9 @@ impl KangarooManager {
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
 
         // Create appropriate GPU backend based on configuration
-        let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend.as_str() {
-            "hybrid" => Box::new(HybridBackend::new().await?),
-            "vulkan" => {
+        let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend {
+            crate::config::GpuBackend::Hybrid => Box::new(HybridBackend::new().await?),
+            crate::config::GpuBackend::Vulkan => {
                 #[cfg(feature = "vulkano")]
                 {
                     Box::new(VulkanBackend::new().await?)
@@ -100,7 +100,7 @@ impl KangarooManager {
                     return Err(anyhow!("Vulkan backend requires 'vulkano' feature to be enabled"));
                 }
             }
-            "cuda" => {
+            crate::config::GpuBackend::Cuda => {
                 #[cfg(feature = "rustacuda")]
                 {
                     Box::new(CudaBackend::new()?)
@@ -110,8 +110,7 @@ impl KangarooManager {
                     return Err(anyhow!("CUDA backend requires 'rustacuda' feature to be enabled"));
                 }
             }
-            "cpu" => Box::new(CpuBackend::new()?),
-            _ => return Err(anyhow!("Invalid GPU backend: {}", config.gpu_backend)),
+            crate::config::GpuBackend::Cpu => Box::new(CpuBackend::new()?),
         };
         let generator = KangarooGenerator::new(&config);
         let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits); // Use standard jump table
@@ -184,7 +183,7 @@ impl KangarooManager {
 
         // Use default config for basic setup
         let config = Config {
-            gpu_backend: "hybrid".to_string(),
+            gpu_backend: crate::config::GpuBackend::Hybrid,
             dp_bits: search_config.dp_bits as usize,
             herd_size: multi_targets.len() * search_config.batch_per_target,
             ..Default::default()
@@ -253,7 +252,7 @@ impl KangarooManager {
 
             // Use GPU acceleration when available (hybrid backend with optimizations)
             let step_fut = async {
-                if self.config.gpu_backend == "hybrid" {
+                if matches!(self.config.gpu_backend, crate::config::GpuBackend::Hybrid) {
                     // Use optimized GPU dispatch for hybrid backend
                     self.step_kangaroos_gpu(&kangaroos).await
                 } else {
