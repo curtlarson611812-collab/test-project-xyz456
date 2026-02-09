@@ -189,17 +189,15 @@ impl KangarooManager {
     }
 
     /// Create new KangarooManager for multi-target solving with search config
-    pub async fn new_multi_config(multi_targets: Vec<(Point, u32)>, search_config: SearchConfig) -> Result<Self> {
+    pub async fn new_multi_config(multi_targets: Vec<(Point, u32)>, search_config: SearchConfig, config: Config) -> Result<Self> {
         // Validate search config
         search_config.validate()?;
 
-        // Use default config for basic setup
-        let config = Config {
-            gpu_backend: crate::config::GpuBackend::Hybrid,
-            dp_bits: search_config.dp_bits as usize,
-            herd_size: multi_targets.len() * search_config.batch_per_target,
-            ..Default::default()
-        };
+        // Use provided config with search-specific overrides
+        let mut config = config;
+        config.gpu_backend = crate::config::GpuBackend::Hybrid;
+        config.dp_bits = search_config.dp_bits as usize;
+        config.herd_size = multi_targets.len() * search_config.batch_per_target;
 
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));

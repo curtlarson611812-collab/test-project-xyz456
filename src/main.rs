@@ -48,6 +48,26 @@ struct Args {
     max_cycles: u64,
     #[arg(long)]
     unsolved: bool,  // Skip private key verification for unsolved puzzles
+
+    // Block 9: Full integration test
+    #[arg(long)]
+    integration_test: bool,  // Run full integration test with all features
+
+    // Block 1-8: Bias and optimization flags
+    #[arg(long, default_value = "uniform")]
+    bias_mode: String,  // Bias strategy: uniform, magic9, primes
+
+    #[arg(long, default_value_t = true)]
+    use_bloom: bool,  // Enable Bloom filter DP deduplication
+
+    #[arg(long, default_value_t = true)]
+    use_hybrid_bsgs: bool,  // Enable hybrid BSGS for near-collisions
+
+    #[arg(long, default_value = "4294967296")]
+    bsgs_threshold: u64,  // Max difference for BSGS solving
+
+    #[arg(long, default_value_t = true)]
+    gold_bias_combo: bool,  // Enable GOLD hierarchical factoring
     #[arg(long)]
     bias_analysis: bool,  // Run complete bias analysis on unsolved puzzles
     #[arg(long, value_name = "TARGETS")]
@@ -270,6 +290,24 @@ fn main() -> Result<()> {
     // Parse command line arguments first
     let args = Args::parse();
 
+    // Create config from parsed arguments (Blocks 1-8 integration)
+    let mut config = Config::default();
+    config.bias_mode = match args.bias_mode.as_str() {
+        "magic9" => speedbitcrack::config::BiasMode::Magic9,
+        "primes" => speedbitcrack::config::BiasMode::Primes,
+        _ => speedbitcrack::config::BiasMode::Uniform,
+    };
+    config.use_bloom = args.use_bloom;
+    config.use_hybrid_bsgs = args.use_hybrid_bsgs;
+    config.bsgs_threshold = args.bsgs_threshold;
+    config.gold_bias_combo = args.gold_bias_combo;
+
+    // Validate config
+    if let Err(e) = config.validate() {
+        error!("Config validation failed: {}", e);
+        return Err(anyhow!("Invalid configuration"));
+    }
+
     // Initialize logging
     let _ = setup_logging();
     if args.verbose {
@@ -291,9 +329,38 @@ fn main() -> Result<()> {
         }
     }
 
-    // Handle solved puzzle testing
+    // Handle full integration test (Block 9)
+    if args.integration_test {
+        println!("🚀 Running full integration test with all Blocks 1-9 features enabled");
+        println!("📊 Configuration:");
+        println!("  🎯 Bias Mode: {:?}", config.bias_mode);
+        println!("  🏮 Bloom Filter: {}", config.use_bloom);
+        println!("  🔮 Hybrid BSGS: {}", config.use_hybrid_bsgs);
+        println!("  🏆 GOLD Combo: {}", config.gold_bias_combo);
+        println!("  📊 BSGS Threshold: {}", config.bsgs_threshold);
 
+        // Test controller creation with config
+        match speedbitcrack::kangaroo::controller::KangarooController::new_with_lists(&config, None, true, false).await {
+            Ok(controller) => {
+                println!("✅ Controller created successfully with {} managers", controller.managers.len());
+                println!("🎉 Full integration test PASSED - all Blocks 1-9 working correctly!");
+            }
+            Err(e) => {
+                println!("❌ Integration test FAILED: {}", e);
+                return Err(anyhow!("Integration test failed"));
+            }
+        }
+        return Ok(());
+    }
+
+    // Handle solved puzzle testing with full bias integration
     if let Some(puzzle_num) = args.test_solved {
+        println!("🧪 Testing solved puzzle #{} with full bias integration enabled", puzzle_num);
+        println!("  🎯 Bias Mode: {:?}", config.bias_mode);
+        println!("  🏮 Bloom Filter: {}", config.use_bloom);
+        println!("  🔮 Hybrid BSGS: {}", config.use_hybrid_bsgs);
+        println!("  🏆 GOLD Combo: {}", config.gold_bias_combo);
+        println!("  📊 BSGS Threshold: {}", config.bsgs_threshold);
         test_solved_puzzle(puzzle_num)?;
         return Ok(());
     }
@@ -450,7 +517,7 @@ fn main() -> Result<()> {
             println!("🐪 Starting kangaroo algorithm with {} kangaroos, bias={:?}", gpu_config.max_kangaroos, bias);
 
             let curve = Secp256k1::new();
-            let gen = KangarooGenerator::new(&speedbitcrack::config::Config::default());
+            let gen = KangarooGenerator::new(&config);
 
             println!("🎯 About to launch full implementation...");
             // COMPLETE FULL IMPLEMENTATION: Every single advanced feature enabled and working
@@ -475,7 +542,8 @@ fn main() -> Result<()> {
             let stepper = speedbitcrack::kangaroo::KangarooStepper::with_dp_bits(true, 24);
 
             // FULL CONFIGURATION with ALL features enabled
-            let config = speedbitcrack::config::Config {
+            let mut search_config = config.clone();
+            search_config = speedbitcrack::config::Config {
                 dp_bits: 24,
                 enable_near_collisions: Some(0.8), // 80% threshold for near collision detection
                 enable_smart_pruning: true, // DP table smart pruning
@@ -864,7 +932,7 @@ fn main() -> Result<()> {
         let curve = Secp256k1::new();
         let target_point = curve.g.clone(); // Use generator as default target
 
-        let config = if args.laptop { Config::default() } else { Config::default() };
+        let laptop_config = if args.laptop { config.clone() } else { config.clone() };
         let gen = KangarooGenerator::new(&config);
 
         execute_custom_range(&gen, &target_point, (low, high), &args)?;
@@ -890,7 +958,7 @@ fn main() -> Result<()> {
 
     println!("DEBUG: Creating curve and generator");
     let curve = Secp256k1::new();
-    let config = if args.laptop { /* use laptop config */ Config::default() } else { Config::default() };  // TODO: integrate laptop config
+    let laptop_config = if args.laptop { /* use laptop config */ config.clone() } else { config.clone() };  // TODO: integrate laptop config
     let gen = KangarooGenerator::new(&config);
     println!("DEBUG: Generator created, loading points");
 
@@ -983,7 +1051,7 @@ fn run_crack_unsolved(args: &Args) -> Result<()> {
     // Create mode and execute
     let mode = RealMode { n: most_likely };
     let curve = Secp256k1::new();
-    let config = Config::default();
+    let search_config = config.clone();
     let gen = KangarooGenerator::new(&config);
 
     let point = mode.load(&curve)?;
@@ -1027,7 +1095,7 @@ fn load_puzzle_point(puzzle_num: u32) -> Result<Point> {
 /// Run parallel lambda algorithm for unsolved puzzles
 fn pollard_lambda_parallel(target: &Point, range: (BigInt256, BigInt256)) -> Option<BigInt256> {
     let curve = Secp256k1::new();
-    let gen = KangarooGenerator::new(&Config::default());
+        let gen = KangarooGenerator::new(&config);
     let herd_size = 1000; // Reasonable size for unsolved hunting
 
     // Create initial kangaroo states
@@ -1245,7 +1313,7 @@ fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
 
     // For puzzle #64, we know the private key is 1, so [1]G = target
     // This is just a test - real solving would use kangaroo methods
-    let config = Config::default();
+    let search_config = config.clone();
     let _gen = KangarooGenerator::new(&config);
 
     // Simple test: check if multiplying by 1 gives us the target

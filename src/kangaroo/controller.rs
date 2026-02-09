@@ -27,9 +27,9 @@ pub struct KangarooController {
 }
 
 impl KangarooController {
-    /// Create controller with specified target lists
+    /// Create controller with specified target lists and config
     pub async fn new_with_lists(
-        _config: Config,
+        config: &Config,
         load_valuable: Option<String>, // Path to valuable P2PK file
         load_test: bool,
         load_unsolved: bool,
@@ -41,7 +41,7 @@ impl KangarooController {
             let (points, search_config) = load_valuable_p2pk_keys(&path)?;
             // Convert to (Point, puzzle_id) tuples with ID 0 for P2PK
             let targets_with_ids: Vec<(Point, u32)> = points.into_iter().map(|p| (p, 0)).collect();
-            let manager = KangarooManager::new_multi_config(targets_with_ids, search_config).await?;
+            let manager = KangarooManager::new_multi_config(targets_with_ids, search_config, config.clone()).await?;
             let stats = ManagerStats {
                 name: "valuable_p2pk".to_string(),
                 targets_loaded: manager.multi_targets().len(),
@@ -55,7 +55,7 @@ impl KangarooController {
         // Load test puzzles
         if load_test {
             let (points, search_config) = load_test_puzzle_keys();
-            let manager = KangarooManager::new_multi_config(points, search_config).await?;
+            let manager = KangarooManager::new_multi_config(points, search_config, config.clone()).await?;
             let stats = ManagerStats {
                 name: "test_puzzles".to_string(),
                 targets_loaded: manager.multi_targets().len(),
@@ -69,7 +69,7 @@ impl KangarooController {
         // Load unsolved puzzles
         if load_unsolved {
             let (points, search_config) = load_unsolved_puzzle_keys();
-            let manager = KangarooManager::new_multi_config(points, search_config).await?;
+            let manager = KangarooManager::new_multi_config(points, search_config, config.clone()).await?;
             let stats = ManagerStats {
                 name: "unsolved_puzzles".to_string(),
                 targets_loaded: manager.multi_targets().len(),
