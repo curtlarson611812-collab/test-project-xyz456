@@ -147,7 +147,7 @@ mod tests {
     #[tokio::test]
     async fn test_controller_creation() {
         let config = Config {
-            gpu_backend: "cpu".to_string(), // Use CPU for testing
+            gpu_backend: crate::config::GpuBackend::Cpu, // Use CPU for testing
             ..Default::default()
         };
 

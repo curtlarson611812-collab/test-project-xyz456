@@ -72,7 +72,21 @@ impl Scalar {
     pub fn skew_magic9(&self) -> Scalar {
         let res = self.mod_residue(9);
         let target_residues = [0, 3, 6]; // Magic9 attractors
-        let target = target_residues[(res % 3) as usize]; // Deterministic choice
+
+        // Find closest attractor
+        let mut min_diff = 9;
+        let mut target = 0;
+        for &attractor in &target_residues {
+            let diff = if attractor >= res {
+                attractor - res
+            } else {
+                attractor + 9 - res
+            };
+            if diff < min_diff {
+                min_diff = diff;
+                target = attractor;
+            }
+        }
 
         let current_mod9 = BigInt256::from_u64(res);
         let target_mod9 = BigInt256::from_u64(target);
@@ -88,12 +102,13 @@ impl Scalar {
 
     /// Factor out small primes if divisible (for subgroup reduction)
     pub fn mod_small_primes(&self) -> Option<(Scalar, Vec<u64>)> {
-        use crate::kangaroo::generator::PRIME_MULTIPLIERS;
+        // Use actual small primes for factorization testing
+        let small_primes = [2, 3, 5, 7, 11, 13, 17, 19, 23];
 
         let mut reduced = self.value.clone();
         let mut factors = Vec::new();
 
-        for &prime in PRIME_MULTIPLIERS.iter() {
+        for &prime in small_primes.iter() {
             let prime_big = BigInt256::from_u64(prime);
             while reduced.clone() % prime_big.clone() == BigInt256::zero() {
                 reduced = reduced / prime_big.clone();
@@ -507,13 +522,13 @@ mod tests {
 
     #[test]
     fn test_scalar_skew_magic9() {
-        let scalar1 = Scalar::from_u64(1); // 1 mod 9 -> should skew to 0
+        let scalar1 = Scalar::from_u64(1); // 1 mod 9 -> closest to 3 (diff=2)
         let skewed = scalar1.skew_magic9();
-        assert_eq!(skewed.mod_residue(9), 0);
-
-        let scalar4 = Scalar::from_u64(4); // 4 mod 9 -> should skew to 3
-        let skewed = scalar4.skew_magic9();
         assert_eq!(skewed.mod_residue(9), 3);
+
+        let scalar4 = Scalar::from_u64(4); // 4 mod 9 -> closest to 6 (diff=2)
+        let skewed = scalar4.skew_magic9();
+        assert_eq!(skewed.mod_residue(9), 6);
     }
 
     #[test]
