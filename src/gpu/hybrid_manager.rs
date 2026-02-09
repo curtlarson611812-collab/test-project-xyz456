@@ -797,22 +797,63 @@ mod tests {
 
         // If hybrid BSGS is enabled, offload near-collision resolution to GPU
         if self.config.use_hybrid_bsgs {
-            let near_traps: Vec<&Trap> = traps.iter()
-                .filter(|trap| {
-                    // Check if this trap pair could benefit from BSGS
-                    // This is a simplified check - in practice we'd check distance differences
-                    trap.dist.bits() < 32 // Small differences suitable for BSGS
-                })
-                .collect();
+            // Convert traps to the format expected by batch_bsgs_solve
+            let deltas: Vec<[[u32; 8]; 3]> = traps.iter().map(|trap| {
+                // Compute delta = target - trap.point (simplified)
+                // In practice, this would be more complex based on collision type
+                let mut delta = [[0u32; 8]; 3];
+                // Simplified: just copy target as delta
+                for i in 0..8 {
+                    delta[0][i] = target.x[i];
+                    delta[1][i] = target.y[i];
+                    delta[2][i] = target.z[i];
+                }
+                delta
+            }).collect();
 
-            if !near_traps.is_empty() {
-                debug!("Offloading {} near-collision traps to GPU BSGS", near_traps.len());
-                let batch_solutions = self.batch_bsgs_collision_gpu(&near_traps, target);
-                solutions.extend(batch_solutions);
+            let alphas: Vec<[u32; 8]> = traps.iter().map(|trap| trap.alpha).collect();
+            let distances: Vec<[u32; 8]> = traps.iter().map(|trap| {
+                let mut dist_array = [0u32; 8];
+                let dist_bytes = trap.dist.to_bytes_le();
+                for i in 0..dist_bytes.len().min(8) {
+                    dist_array[i] = dist_bytes[i] as u32;
+                }
+                dist_array
+            }).collect();
+
+            // Call the backend's BSGS solver
+            match self.dispatch_batch_bsgs_solve(deltas, alphas, distances) {
+                Ok(bsgs_results) => {
+                    for (i, result) in bsgs_results.into_iter().enumerate() {
+                        if let Some(solution_array) = result {
+                            // Convert to Solution
+                            let private_key = solution_array.map(|x| x as u64);
+                            let solution = Solution::new(private_key, *target, 0, 0.0);
+                            solutions.push(solution);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("BSGS solving failed: {}", e);
+                }
             }
         }
 
         solutions
+    }
+
+    /// Dispatch batch BSGS solving to appropriate backend
+    fn dispatch_batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>) -> Result<Vec<Option<[u32;8]>>> {
+        // Dispatch to CUDA for BSGS solving
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            // Fallback to CPU implementation
+            self.cpu.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+        }
     }
 
     /// Batch BSGS collision solving on GPU

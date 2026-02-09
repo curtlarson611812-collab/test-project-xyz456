@@ -834,6 +834,7 @@ impl GpuBackend for CudaBackend {
         Ok((x_coords, y_coords))
     }
 
+
     // Block 4: Launch Wrapper (Add in rust cuda_backend.rs)
     // Deep Explanation: Enqueue kernel with grid/blocks (grid = num_states / WORKGROUP_SIZE +1); sync/check err. Math: Parallel scales to GPU cores (e.g., 4096 threads RTX, 100x rho speed).
 
@@ -1021,6 +1022,62 @@ impl GpuBackend for CudaBackend {
         d_flags.copy_to(&mut flags)?;
         Ok(flags)
     }
+
+    fn batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+        let batch_size = deltas.len();
+        if batch_size == 0 {
+            return Ok(vec![]);
+        }
+
+        // Flatten inputs for device memory
+        let deltas_flat: Vec<u32> = deltas.iter().flat_map(|p| p.iter().flatten()).cloned().collect();
+        let alphas_flat: Vec<u32> = alphas.iter().flatten().cloned().collect();
+        let distances_flat: Vec<u32> = distances.iter().flatten().cloned().collect();
+
+        // Allocate device memory
+        let mut d_deltas = DeviceBuffer::from_slice(&deltas_flat)?;
+        let mut d_alphas = DeviceBuffer::from_slice(&alphas_flat)?;
+        let mut d_distances = DeviceBuffer::from_slice(&distances_flat)?;
+        let mut d_solutions = unsafe { DeviceBuffer::zeroed(batch_size * 8) }?;
+
+        // Launch batch BSGS collision solve kernel
+        let bsgs_fn = self.solve_module.get_function(CStr::from_bytes_with_nul(b"launch_batch_bsgs_collision_solve\0")?)?;
+        let batch_size_i32 = batch_size as i32;
+        let bsgs_threshold = config.bsgs_threshold;
+        let stream = &self.stream;
+
+        unsafe { cuda_check!(launch!(bsgs_fn<<<((batch_size as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
+            d_deltas.as_device_ptr(),
+            d_alphas.as_device_ptr(),
+            d_distances.as_device_ptr(),
+            d_solutions.as_device_ptr(),
+            batch_size_i32,
+            bsgs_threshold
+        )), "batch_bsgs_solve launch"); }
+
+        // Synchronize and read results
+        cuda_check!(self.stream.synchronize(), "batch_bsgs_solve sync");
+        let mut solutions_flat = vec![0u32; batch_size * 8];
+        d_solutions.copy_to(&mut solutions_flat)?;
+
+        // Convert results to Option<[u32;8]>
+        let mut results = Vec::new();
+        for i in 0..batch_size {
+            let offset = i * 8;
+            let solution_slice = &solutions_flat[offset..offset + 8];
+            let solution_array: [u32; 8] = solution_slice.try_into().unwrap();
+
+            // Check if solution is valid (not all FFFFFFFF)
+            let is_valid = !solution_array.iter().all(|&x| x == 0xFFFFFFFF);
+            if is_valid {
+                results.push(Some(solution_array));
+            } else {
+                results.push(None);
+            }
+        }
+
+        Ok(results)
+    }
 }
 
 /// CPU fallback when CUDA is not available
@@ -1067,6 +1124,10 @@ impl GpuBackend for CudaBackend {
     }
 
     fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn batch_bsgs_solve(&self, _deltas: Vec<[[u32;8];3]>, _alphas: Vec<[u32;8]>, _distances: Vec<[u32;8]>, _config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("CUDA backend not available"))
     }
 }

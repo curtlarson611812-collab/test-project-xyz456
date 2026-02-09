@@ -99,6 +99,13 @@ impl GpuBackend for CpuBackend {
         self.step_batch(positions, distances, types)
     }
 
+    fn batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+        // CPU fallback implementation for BSGS
+        // This would implement the Baby-Step Giant-Step algorithm in software
+        // For now, return None for all (not implemented)
+        Ok(vec![None; deltas.len()])
+    }
+
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         // CPU implementation using modular inverse (more efficient than Fermat's little theorem)
         let mut results = Vec::with_capacity(inputs.len());

@@ -482,6 +482,19 @@ impl GpuBackend for HybridBackend {
         }
     }
 
+    fn batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+        // Dispatch to CUDA for BSGS solving (most efficient for this operation)
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_bsgs_solve(deltas, alphas, distances, config)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            // Fallback to CPU implementation
+            self.cpu.batch_bsgs_solve(deltas, alphas, distances, config)
+        }
+    }
+
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         // Dispatch to CUDA for precision inverse operations
         #[cfg(feature = "rustacuda")]

@@ -20,6 +20,110 @@ __constant__ uint32_t SECP_P[LIMBS] = {
     0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
 };
 
+// Point structure for elliptic curve operations in BSGS
+struct Point {
+    uint32_t x[LIMBS];
+    uint32_t y[LIMBS];
+    uint32_t z[LIMBS];
+};
+
+// BSGS table entry for baby steps
+struct BSGS_Entry {
+    uint32_t point_x[LIMBS];  // x-coordinate of g^i
+    uint32_t index;          // i
+};
+
+// BSGS table for giant steps (stored in global memory)
+struct BSGS_Table {
+    BSGS_Entry* baby_steps;
+    int m;  // sqrt(order) size
+};
+
+// Device function: Point addition in Jacobian coordinates (simplified)
+__device__ void point_add_jacobian(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
+    // Simplified Jacobian point addition - would need full implementation
+    // For BSGS, we mainly need scalar multiplication and equality checks
+    // This is a placeholder - real implementation would be more complex
+    for (int i = 0; i < LIMBS; i++) {
+        result->x[i] = (p1->x[i] + p2->x[i]) % mod[i];
+        result->y[i] = (p1->y[i] + p2->y[i]) % mod[i];
+        result->z[i] = 1; // Simplified
+    }
+}
+
+// Device function: Scalar multiplication by small integer
+__device__ void point_mul_small(const Point* p, uint32_t scalar, Point* result, const uint32_t* mod) {
+    // Initialize result to infinity
+    for (int i = 0; i < LIMBS; i++) {
+        result->x[i] = 0;
+        result->y[i] = 0;
+        result->z[i] = 0;
+    }
+
+    Point current = *p;
+    while (scalar > 0) {
+        if (scalar & 1) {
+            point_add_jacobian(result, &current, result, mod);
+        }
+        point_add_jacobian(&current, &current, &current, mod); // Double
+        scalar >>= 1;
+    }
+}
+
+// Device function: Check if two points are equal (x-coordinate comparison)
+__device__ bool point_equal(const Point* p1, const Point* p2) {
+    for (int i = 0; i < LIMBS; i++) {
+        if (p1->x[i] != p2->x[i]) return false;
+    }
+    return true;
+}
+
+// Device function: Build baby steps table for BSGS
+__global__ void build_baby_steps(Point* baby_table, int m, const Point* generator, const uint32_t* mod) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= m) return;
+
+    Point result;
+    point_mul_small(generator, idx, &result, mod);
+
+    for (int i = 0; i < LIMBS; i++) {
+        baby_table[idx].x[i] = result.x[i];
+        baby_table[idx].y[i] = result.y[i];
+        baby_table[idx].z[i] = result.z[i];
+    }
+}
+
+// Device function: BSGS solve kernel - find x such that g^x = target
+__global__ void bsgs_solve_kernel(
+    const Point* target,
+    const Point* generator,
+    const Point* baby_table,
+    uint32_t* results,
+    int m,
+    int batch_size,
+    const uint32_t* mod
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= batch_size) return;
+
+    // For each batch item, we would have different targets
+    // For now, assume single target per kernel launch
+    const Point* current_target = target;
+
+    // Build giant step table in shared memory or use global lookup
+    // Simplified: just check baby steps first
+    for (int i = 0; i < m; i++) {
+        if (point_equal(&baby_table[i], current_target)) {
+            results[idx] = i;
+            return;
+        }
+    }
+
+    // If not found in baby steps, would need giant step search
+    // For now, mark as not found
+    results[idx] = 0xFFFFFFFF;
+}
+
 // Device helper: Parallel big integer subtraction with borrow propagation
 __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
@@ -247,6 +351,67 @@ __global__ void batch_collision_solve(uint32_t *alpha_t, uint32_t *alpha_w, uint
     priv_out[id * LIMBS + limb_idx] = priv_temp[limb_idx];
 }
 
+// Batch BSGS collision solving for near-collisions
+__global__ void batch_bsgs_collision_solve(
+    const Point* deltas,        // Delta points (target - current)
+    const uint32_t* alphas,     // Alpha coefficients for prime inverse
+    const uint32_t* distances,  // Distance arrays for each trap
+    uint32_t* solutions,        // Output solutions
+    int batch_size,             // Number of collisions to solve
+    uint64_t bsgs_threshold,    // Max difference for BSGS
+    const uint32_t* mod         // Modulus (secp256k1 order)
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= batch_size) return;
+
+    const Point* delta = &deltas[idx];
+    const uint32_t* alpha = &alphas[idx * LIMBS];
+    const uint32_t* dist = &distances[idx * LIMBS];
+
+    // First try prime inverse approach if alpha is available
+    if (alpha[0] != 0 || alpha[1] != 0) {  // Non-zero alpha
+        // Compute inverse of alpha mod order
+        uint32_t alpha_inv[LIMBS];
+        // TODO: Implement modular inverse for alpha
+        // For now, skip to BSGS
+
+        // If inverse found, try: solution = inv(alpha) * (dist_tame - dist_wild) mod order
+        // Verify by checking if g^solution equals target
+    }
+
+    // Fallback to BSGS for small differences
+    uint64_t diff = 0;
+    for (int i = 0; i < LIMBS; i++) {
+        diff |= ((uint64_t)dist[i]) << (i * 32);
+    }
+
+    if (diff < bsgs_threshold) {
+        // Compute m = ceil(sqrt(order))
+        uint64_t order_size = 0;
+        for (int i = 0; i < LIMBS; i++) {
+            order_size |= ((uint64_t)mod[i]) << (i * 32);
+        }
+        uint64_t m = (uint64_t)sqrt((double)order_size) + 1;
+
+        // Build baby steps: g^0, g^1, ..., g^{m-1}
+        // This would require shared memory allocation
+        // For now, simplified implementation
+
+        // Giant steps: target * g^{-m*j} for j = 0 to m-1
+        // Check if any giant step matches a baby step
+
+        // Placeholder: mark as unsolved for now
+        for (int i = 0; i < LIMBS; i++) {
+            solutions[idx * LIMBS + i] = 0;
+        }
+    } else {
+        // Difference too large for BSGS, mark as unsolved
+        for (int i = 0; i < LIMBS; i++) {
+            solutions[idx * LIMBS + i] = 0xFFFFFFFF;
+        }
+    }
+}
+
 // Batch Barrett reduction kernel with hybrid Montgomery option
 __global__ void batch_barrett_reduce(uint32_t *x, uint32_t *mu, uint32_t *mod, uint32_t *out, bool use_mont, uint32_t n_prime, int batch, int limbs) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -352,4 +517,92 @@ __global__ void batch_collision_solve_fused(uint32_t *alpha_t, uint32_t *alpha_w
 
     // Fused Montgomery reduction instead of separate modulo
     montgomery_redc_par(priv_temp, n, n_prime, &priv_out[id * LIMBS]);
+}
+
+// Host function for launching BSGS collision solving
+extern "C" void launch_batch_bsgs_collision_solve(
+    Point* d_deltas,
+    uint32_t* d_alphas,
+    uint32_t* d_distances,
+    uint32_t* d_solutions,
+    int batch_size,
+    uint64_t bsgs_threshold,
+    cudaStream_t stream
+) {
+    dim3 block(256);
+    dim3 grid((batch_size + 255) / 256);
+
+    // Get secp256k1 order
+    uint32_t h_mod[LIMBS] = {
+        0xD0364141u, 0xBFD25E8Cu, 0xAF48A03Bu, 0xBAAEDCE6u,
+        0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
+    };
+
+    uint32_t* d_mod;
+    cudaMalloc(&d_mod, LIMBS * sizeof(uint32_t));
+    cudaMemcpy(d_mod, h_mod, LIMBS * sizeof(uint32_t), cudaMemcpyHostToDevice);
+
+    batch_bsgs_collision_solve<<<grid, block, 0, stream>>>(
+        d_deltas, d_alphas, d_distances, d_solutions,
+        batch_size, bsgs_threshold, d_mod
+    );
+
+    cudaFree(d_mod);
+}
+
+// Host function for building baby steps table
+extern "C" void launch_build_baby_steps(
+    Point* d_baby_table,
+    int m,
+    Point* d_generator,
+    cudaStream_t stream
+) {
+    dim3 block(256);
+    dim3 grid((m + 255) / 256);
+
+    // Get secp256k1 modulus
+    uint32_t h_mod[LIMBS] = {
+        0xFFFFFC2Fu, 0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+        0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
+    };
+
+    uint32_t* d_mod;
+    cudaMalloc(&d_mod, LIMBS * sizeof(uint32_t));
+    cudaMemcpy(d_mod, h_mod, LIMBS * sizeof(uint32_t), cudaMemcpyHostToDevice);
+
+    build_baby_steps<<<grid, block, 0, stream>>>(
+        d_baby_table, m, d_generator, d_mod
+    );
+
+    cudaFree(d_mod);
+}
+
+// Host function for launching BSGS solve
+extern "C" void launch_bsgs_solve(
+    Point* d_target,
+    Point* d_generator,
+    Point* d_baby_table,
+    uint32_t* d_results,
+    int m,
+    int batch_size,
+    cudaStream_t stream
+) {
+    dim3 block(256);
+    dim3 grid((batch_size + 255) / 256);
+
+    // Get secp256k1 modulus
+    uint32_t h_mod[LIMBS] = {
+        0xFFFFFC2Fu, 0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+        0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
+    };
+
+    uint32_t* d_mod;
+    cudaMalloc(&d_mod, LIMBS * sizeof(uint32_t));
+    cudaMemcpy(d_mod, h_mod, LIMBS * sizeof(uint32_t), cudaMemcpyHostToDevice);
+
+    bsgs_solve_kernel<<<grid, block, 0, stream>>>(
+        d_target, d_generator, d_baby_table, d_results, m, batch_size, d_mod
+    );
+
+    cudaFree(d_mod);
 }

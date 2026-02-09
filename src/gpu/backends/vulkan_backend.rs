@@ -258,6 +258,11 @@ impl GpuBackend for WgpuBackend {
         // TODO: Implement full Vulkan bias-enhanced stepping with WGSL shaders
         self.step_batch(positions, distances, types)
     }
+
+    fn batch_bsgs_solve(&self, _deltas: Vec<[[u32;8];3]>, _alphas: Vec<[u32;8]>, _distances: Vec<[u32;8]>, _config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+        // Vulkan BSGS not yet implemented
+        Err(anyhow!("Vulkan batch_bsgs_solve not implemented - use CUDA"))
+    }
 }
 
 /// CPU fallback when Vulkan/WGPU is not available
@@ -280,6 +285,10 @@ impl GpuBackend for WgpuBackend {
     }
 
     fn step_batch_bias(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>, _config: &crate::config::Config) -> Result<Vec<Trap>> {
+        Err(anyhow!("Vulkan backend not available"))
+    }
+
+    fn batch_bsgs_solve(&self, _deltas: Vec<[[u32;8];3]>, _alphas: Vec<[u32;8]>, _distances: Vec<[u32;8]>, _config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
