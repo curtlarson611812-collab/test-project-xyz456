@@ -1046,13 +1046,16 @@ impl GpuBackend for CudaBackend {
         let bsgs_threshold = config.bsgs_threshold;
         let stream = &self.stream;
 
+        let gold_combo = config.gold_bias_combo as i32;
+
         unsafe { cuda_check!(launch!(bsgs_fn<<<((batch_size as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_deltas.as_device_ptr(),
             d_alphas.as_device_ptr(),
             d_distances.as_device_ptr(),
             d_solutions.as_device_ptr(),
             batch_size_i32,
-            bsgs_threshold
+            bsgs_threshold,
+            gold_combo
         )), "batch_bsgs_solve launch"); }
 
         // Synchronize and read results

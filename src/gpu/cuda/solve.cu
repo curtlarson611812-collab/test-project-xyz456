@@ -39,6 +39,22 @@ struct BSGS_Table {
     int m;  // sqrt(order) size
 };
 
+// Device function: Point negation (y = -y mod p)
+__device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod) {
+    for (int i = 0; i < LIMBS; i++) {
+        neg->x[i] = p->x[i];
+        neg->z[i] = p->z[i];
+        neg->y[i] = mod[i] - p->y[i];  // -y = p - y mod p
+    }
+}
+
+// Device function: Point subtraction (add p1 + neg p2)
+__device__ void point_sub(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
+    Point neg_p2;
+    point_neg(p2, &neg_p2, mod);
+    point_add_jacobian(p1, &neg_p2, result, mod);
+}
+
 // Device function: Point addition in Jacobian coordinates (simplified)
 __device__ void point_add_jacobian(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
     // Simplified Jacobian point addition - would need full implementation
@@ -68,6 +84,38 @@ __device__ void point_mul_small(const Point* p, uint32_t scalar, Point* result, 
         point_add_jacobian(&current, &current, &current, mod); // Double
         scalar >>= 1;
     }
+}
+
+// Device function: Modular inverse via extended Euclid (simplified for u64 approximation)
+__device__ uint64_t mod_inverse_u64(uint64_t a, uint64_t mod) {
+    int64_t m = mod, m0 = m, t, q;
+    int64_t x0 = 0, x1 = 1;
+
+    if (m == 1) return 0;
+
+    while (a > 1) {
+        q = a / m;
+        t = m;
+        m = a % m;
+        a = t;
+        t = x0;
+        x0 = x1 - q * x0;
+        x1 = t;
+    }
+
+    if (x1 < 0) x1 += m0;
+    return x1;
+}
+
+// Device function: Factor out small primes (simplified u64)
+__device__ uint64_t factor_small_primes_u64(uint64_t val) {
+    for (int i = 0; i < 32; i++) {
+        uint64_t p = PRIME_MULTIPLIERS[i];
+        while (val % p == 0 && val >= p) {
+            val /= p;
+        }
+    }
+    return val;
 }
 
 // Device function: Check if two points are equal (x-coordinate comparison)
@@ -359,7 +407,8 @@ __global__ void batch_bsgs_collision_solve(
     uint32_t* solutions,        // Output solutions
     int batch_size,             // Number of collisions to solve
     uint64_t bsgs_threshold,    // Max difference for BSGS
-    const uint32_t* mod         // Modulus (secp256k1 order)
+    const uint32_t* mod,        // Modulus (secp256k1 order)
+    int gold_bias_combo         // Enable GOLD factoring
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size) return;
@@ -368,44 +417,134 @@ __global__ void batch_bsgs_collision_solve(
     const uint32_t* alpha = &alphas[idx * LIMBS];
     const uint32_t* dist = &distances[idx * LIMBS];
 
-    // First try prime inverse approach if alpha is available
-    if (alpha[0] != 0 || alpha[1] != 0) {  // Non-zero alpha
-        // Compute inverse of alpha mod order
-        uint32_t alpha_inv[LIMBS];
-        // TODO: Implement modular inverse for alpha
-        // For now, skip to BSGS
-
-        // If inverse found, try: solution = inv(alpha) * (dist_tame - dist_wild) mod order
-        // Verify by checking if g^solution equals target
-    }
-
-    // Fallback to BSGS for small differences
+    // Diff u64 approx (sum low limbs)
     uint64_t diff = 0;
     for (int i = 0; i < LIMBS; i++) {
-        diff |= ((uint64_t)dist[i]) << (i * 32);
+        diff += ((uint64_t)dist[i]) << (i * 32);
+    }
+
+    // GOLD factoring: reduce diff by factoring small primes
+    if (gold_bias_combo) {
+        uint64_t reduced = factor_small_primes_u64(diff);
+        if (reduced < diff) {
+            // Approximate factor count for threshold reduction
+            int factor_count = 0;
+            uint64_t temp = diff;
+            while (temp > reduced) {
+                temp = factor_small_primes_u64(temp);
+                factor_count++;
+            }
+            if (factor_count > 1) {
+                bsgs_threshold /= factor_count;  // Reduce threshold
+            }
+        }
     }
 
     if (diff < bsgs_threshold) {
-        // Compute m = ceil(sqrt(order))
-        uint64_t order_size = 0;
-        for (int i = 0; i < LIMBS; i++) {
-            order_size |= ((uint64_t)mod[i]) << (i * 32);
+        // Try prime inverse first if alpha is non-zero
+        uint32_t zero[LIMBS] = {0};
+        if (bigint_cmp_par(alpha, zero) != 0) {
+            // Use simplified u64 inverse for low limb approximation
+            uint64_t alpha_low = (uint64_t)alpha[0] | ((uint64_t)alpha[1] << 32);
+            uint64_t mod_low = (uint64_t)mod[0] | ((uint64_t)mod[1] << 32);
+
+            if (alpha_low > 0) {
+                uint64_t inv = mod_inverse_u64(alpha_low, mod_low);
+                if (inv != 0) {
+                    // k = inv * (diff + 1) mod order
+                    uint64_t k = (inv * (diff + 1)) % mod_low;
+
+                    // Store result (low 64 bits)
+                    solutions[idx * LIMBS] = k & 0xFFFFFFFFULL;
+                    solutions[idx * LIMBS + 1] = (k >> 32) & 0xFFFFFFFFULL;
+                    for (int i = 2; i < LIMBS; i++) {
+                        solutions[idx * LIMBS + i] = 0;
+                    }
+                    return;
+                }
+            }
         }
-        uint64_t m = (uint64_t)sqrt((double)order_size) + 1;
+
+        // Fallback: BSGS algorithm
+        uint64_t m = (uint64_t)sqrt((double)bsgs_threshold) + 1;
+
+        // Use shared memory for baby steps (limit to reasonable size)
+        __shared__ uint32_t baby_x_shared[1024 * LIMBS];  // x coordinates only
+        __shared__ uint32_t baby_y_shared[1024 * LIMBS];  // y coordinates only
 
         // Build baby steps: g^0, g^1, ..., g^{m-1}
-        // This would require shared memory allocation
-        // For now, simplified implementation
+        if (threadIdx.x < m) {
+            // Generator point (secp256k1 base point)
+            Point generator = {
+                {0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07,
+                 0x029BFCDB, 0x2DCE28D9, 0x59F2815B, 0x16F81798}, // x
+                {0x483ADA77, 0x26A3C465, 0x5DA4FBFC, 0x0E1108A8,
+                 0xFD17B448, 0xA6855419, 0x9C47D08F, 0xFB10D4B8}, // y
+                {1, 0, 0, 0, 0, 0, 0, 0}  // z
+            };
 
-        // Giant steps: target * g^{-m*j} for j = 0 to m-1
-        // Check if any giant step matches a baby step
+            Point baby;
+            point_mul_small(&generator, threadIdx.x, &baby, mod);
 
-        // Placeholder: mark as unsolved for now
+            // Store in shared memory (x and y only for equality check)
+            for (int i = 0; i < LIMBS; i++) {
+                baby_x_shared[threadIdx.x * LIMBS + i] = baby.x[i];
+                baby_y_shared[threadIdx.x * LIMBS + i] = baby.y[i];
+            }
+        }
+        __syncthreads();
+
+        // Giant step search
+        for (uint64_t j = 0; j < m; j++) {
+            // Compute giant step: g^{-(j*m)} * delta
+            Point generator = {
+                {0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07,
+                 0x029BFCDB, 0x2DCE28D9, 0x59F2815B, 0x16F81798},
+                {0x483ADA77, 0x26A3C465, 0x5DA4FBFC, 0x0E1108A8,
+                 0xFD17B448, 0xA6855419, 0x9C47D08F, 0xFB10D4B8},
+                {1, 0, 0, 0, 0, 0, 0, 0}
+            };
+
+            uint64_t giant_scalar = j * m;
+            Point giant_step;
+            point_mul_small(&generator, giant_scalar, &giant_step, mod);
+
+            // target = delta - giant_step
+            Point target_check;
+            point_sub(delta, &giant_step, &target_check, mod);
+
+            // Check if target matches any baby step
+            for (uint64_t b = 0; b < m; b++) {
+                bool match = true;
+                for (int i = 0; i < LIMBS; i++) {
+                    if (target_check.x[i] != baby_x_shared[b * LIMBS + i] ||
+                        target_check.y[i] != baby_y_shared[b * LIMBS + i]) {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (match) {
+                    // Found solution: x = j*m + b
+                    uint64_t solution = j * m + b;
+
+                    // Store solution (split into uint32_t array)
+                    solutions[idx * LIMBS] = solution & 0xFFFFFFFFULL;
+                    solutions[idx * LIMBS + 1] = (solution >> 32) & 0xFFFFFFFFULL;
+                    for (int k = 2; k < LIMBS; k++) {
+                        solutions[idx * LIMBS + k] = 0;
+                    }
+                    return;
+                }
+            }
+        }
+
+        // No solution found
         for (int i = 0; i < LIMBS; i++) {
-            solutions[idx * LIMBS + i] = 0;
+            solutions[idx * LIMBS + i] = 0xFFFFFFFF;
         }
     } else {
-        // Difference too large for BSGS, mark as unsolved
+        // Difference too large for BSGS
         for (int i = 0; i < LIMBS; i++) {
             solutions[idx * LIMBS + i] = 0xFFFFFFFF;
         }
@@ -527,7 +666,8 @@ extern "C" void launch_batch_bsgs_collision_solve(
     uint32_t* d_solutions,
     int batch_size,
     uint64_t bsgs_threshold,
-    cudaStream_t stream
+    cudaStream_t stream,
+    int gold_bias_combo
 ) {
     dim3 block(256);
     dim3 grid((batch_size + 255) / 256);
@@ -544,7 +684,7 @@ extern "C" void launch_batch_bsgs_collision_solve(
 
     batch_bsgs_collision_solve<<<grid, block, 0, stream>>>(
         d_deltas, d_alphas, d_distances, d_solutions,
-        batch_size, bsgs_threshold, d_mod
+        batch_size, bsgs_threshold, d_mod, gold_bias_combo
     );
 
     cudaFree(d_mod);
