@@ -329,100 +329,53 @@ impl Secp256k1 {
 
     /// Point doubling: 2P using safe fallback
     /// CRITICAL BUG: This returns input point instead of 2P for system stability
-    /// Point doubling: 2P using verified par operations (ported from CUDA)
+    /// Point doubling: 2P using affine conversion approach (like CUDA)
     pub fn double(&self, p: &Point) -> Point {
         if p.is_infinity() || p.y == [0; 4] {
             return Point::infinity();
         }
 
-        // Jacobian doubling formula: (X:Z:Y) -> (X':Z':Y')
-        // X' = (9*X^4 - 8*X*Y^2) / (4*X*Y^2) wait, no
-        // Standard formula for a=0:
-        // XX = X^2, YY = Y^2, YYYY = Y^4
-        // S = 4*X*YY
-        // M = 3*XX
-        // T = M^2 - 2*S
-        // X3 = T
-        // Y3 = M*(S - T) - 8*YYYY
-        // Z3 = 2*Y*Z
+        // Convert to affine coordinates for simpler doubling
+        let affine = self.to_affine(p);
+        let x = BigInt256::from_u64_array(affine.x);
+        let y = BigInt256::from_u64_array(affine.y);
 
-        let mut wide_temp = [0u64; 8];
-        let mut xx = [0u64; 4];
-        let mut yy = [0u64; 4];
-        let mut yyyy = [0u64; 4];
-        let mut s = [0u64; 4];
-        let mut m = [0u64; 4];
-        let mut t = [0u64; 4];
-        let mut y3 = [0u64; 4];
-        let mut z3 = [0u64; 4];
+        // Affine doubling formula: y^2 = x^3 + 7
+        // lambda = (3*x^2) / (2*y)
+        // x3 = lambda^2 - 2*x
+        // y3 = lambda*(x - x3) - y
 
-        // XX = X^2
-        BigInt256::mul_par(&p.x, &p.x, &mut wide_temp);
-        self.barrett_reduce_wide(&wide_temp, &mut xx);
+        // Calculate lambda = (3*x^2) / (2*y)
+        let x_squared = self.barrett_p.mul(&x, &x);
+        let three_x_squared = self.barrett_p.add(&x_squared, &self.barrett_p.add(&x_squared, &x_squared));
+        let two_y = self.barrett_p.add(&y, &y);
 
-        // YY = Y^2
-        BigInt256::mul_par(&p.y, &p.y, &mut wide_temp);
-        self.barrett_reduce_wide(&wide_temp, &mut yy);
+        // Use modular inverse for division
+        let inv_two_y = self.mod_inverse_method(&two_y, &self.p).unwrap();
+        let lambda = self.barrett_p.mul(&three_x_squared, &inv_two_y);
 
-        // YYYY = YY^2
-        BigInt256::mul_par(&yy, &yy, &mut wide_temp);
-        self.barrett_reduce_wide(&wide_temp, &mut yyyy);
+        // Calculate x3 = lambda^2 - 2*x
+        let lambda_squared = self.barrett_p.mul(&lambda, &lambda);
+        let two_x = self.barrett_p.add(&x, &x);
+        let x3 = self.barrett_p.sub(&lambda_squared, &two_x);
 
-        // S = 4*X*YY
-        BigInt256::mul_par(&p.x, &yy, &mut wide_temp);
-        self.barrett_reduce_wide(&wide_temp, &mut s);
-        let mut s_temp = [0u64; 4];
-        BigInt256::add_par(&s, &s, &mut s_temp);  // *2
-        BigInt256::add_par(&s_temp, &s_temp, &mut s);  // *4
+        // Calculate y3 = lambda*(x - x3) - y
+        let x_minus_x3 = self.barrett_p.sub(&x, &x3);
+        let lambda_times_diff = self.barrett_p.mul(&lambda, &x_minus_x3);
+        let y3 = self.barrett_p.sub(&lambda_times_diff, &y);
 
-        // M = 3*XX
-        let mut m_temp = [0u64; 4];
-        BigInt256::add_par(&xx, &xx, &mut m_temp);  // *2
-        BigInt256::add_par(&m_temp, &xx, &mut m);   // *3
-
-        // T = M^2 - 2*S
-        BigInt256::mul_par(&m, &m, &mut wide_temp);
-        self.barrett_reduce_wide(&wide_temp, &mut t);
-        let mut two_s = [0u64; 4];
-        BigInt256::add_par(&s, &s, &mut two_s);
-        let mut t_temp = [0u64; 4];
-        BigInt256::sub_par(&t, &two_s, &mut t_temp);
-        t = t_temp;
-
-        // Y3 = M*(S - T) - 8*YYYY
-        let mut s_minus_t = [0u64; 4];
-        BigInt256::sub_par(&s, &t, &mut s_minus_t);
-        let mut m_times_diff = [0u64; 8];
-        BigInt256::mul_par(&m, &s_minus_t, &mut m_times_diff);
-        self.barrett_reduce_wide(&m_times_diff, &mut y3);
-        let mut eight_yyyy = [0u64; 4];
-        BigInt256::add_par(&yyyy, &yyyy, &mut eight_yyyy);  // *2
-        let mut eight_temp = [0u64; 4];
-        BigInt256::add_par(&eight_yyyy, &eight_yyyy, &mut eight_temp);  // *4
-        BigInt256::add_par(&eight_temp, &eight_temp, &mut eight_yyyy);  // *8
-        let mut y3_temp = [0u64; 4];
-        BigInt256::sub_par(&y3, &eight_yyyy, &mut y3_temp);
-        y3 = y3_temp;
-
-        // Z3 = 2*Y*Z
-        BigInt256::mul_par(&p.y, &p.z, &mut wide_temp);
-        self.barrett_reduce_wide(&wide_temp, &mut z3);
-        let mut z3_temp = [0u64; 4];
-        BigInt256::add_par(&z3, &z3, &mut z3_temp);
-        z3 = z3_temp;
-
+        // Result is already in affine coordinates (Z=1)
         let result = Point {
-            x: t,  // X3 = T
-            y: y3,
-            z: z3,
+            x: x3.to_u64_array(),
+            y: y3.to_u64_array(),
+            z: [1, 0, 0, 0], // Z=1 for affine
         };
 
         // Verify result is on curve
-        let affine = self.to_affine(&result);
-        let on_curve = self.is_on_curve(&affine);
+        let on_curve = self.is_on_curve(&result);
 
         if !on_curve {
-            eprintln!("WARNING: CPU double with par ops still off-curve - fallback to input");
+            eprintln!("WARNING: CPU double still off-curve - fallback to input");
             return *p;
         }
 

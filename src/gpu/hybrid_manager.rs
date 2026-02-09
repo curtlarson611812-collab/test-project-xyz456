@@ -858,6 +858,7 @@ impl HybridGpuManager {
     }
 
     /// GPU-accelerated BSGS solve for small discrete logs
+    #[allow(dead_code)] // Future GPU implementation
     fn bsgs_solve_gpu(&self, _delta: &Point, threshold: u64) -> Option<[u64; 4]> {
         // This would call the CUDA backend's BSGS implementation
         // For now, return None to indicate GPU BSGS not yet implemented
@@ -866,6 +867,7 @@ impl HybridGpuManager {
     }
 
     /// Compute delta point between trap and target
+    #[allow(dead_code)] // Future GPU implementation
     fn compute_delta_point(&self, _trap: &Trap, target: &Point) -> Point {
         // Simplified delta computation - in practice this would be more complex
         // based on the specific collision detection algorithm
