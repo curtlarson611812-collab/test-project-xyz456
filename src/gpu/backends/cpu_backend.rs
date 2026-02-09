@@ -92,7 +92,7 @@ impl GpuBackend for CpuBackend {
         Ok(vec![])
     }
 
-    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, _config: &crate::config::Config) -> Result<Vec<Trap>> {
         // CPU implementation with bias support
         // For now, delegate to regular step_batch but apply bias logic in software
         // TODO: Implement full bias-aware CPU stepping

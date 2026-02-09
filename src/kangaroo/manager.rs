@@ -386,6 +386,7 @@ impl KangarooManager {
     }
 
     /// Add DP entry asynchronously with bloom filter check
+    #[allow(dead_code)]
     async fn add_dp_async(&mut self, dp: crate::types::DpEntry) -> Result<()> {
         let curve = Secp256k1::new();
         let affine_point = dp.point.to_affine(&curve);

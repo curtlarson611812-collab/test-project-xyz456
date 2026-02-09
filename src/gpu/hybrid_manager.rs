@@ -789,7 +789,7 @@ impl HybridGpuManager {
         // If hybrid BSGS is enabled, offload near-collision resolution to GPU
         if self.config.use_hybrid_bsgs {
             // Convert traps to the format expected by batch_bsgs_solve
-            let deltas: Vec<[[u32; 8]; 3]> = traps.iter().map(|trap| {
+            let deltas: Vec<[[u32; 8]; 3]> = traps.iter().map(|_trap| {
                 // Compute delta = target - trap.point (simplified)
                 // In practice, this would be more complex based on collision type
                 let mut delta = [[0u32; 8]; 3];
@@ -825,7 +825,7 @@ impl HybridGpuManager {
             // Call the backend's BSGS solver
             match self.dispatch_batch_bsgs_solve(deltas, alphas, distances) {
                 Ok(bsgs_results) => {
-                    for (i, result) in bsgs_results.into_iter().enumerate() {
+                    for (_i, result) in bsgs_results.into_iter().enumerate() {
                         if let Some(solution_array) = result {
                             // Convert to Solution
                             let private_key = solution_array.map(|x| x as u64);
@@ -858,7 +858,7 @@ impl HybridGpuManager {
     }
 
     /// GPU-accelerated BSGS solve for small discrete logs
-    fn bsgs_solve_gpu(&self, delta: &Point, threshold: u64) -> Option<[u64; 4]> {
+    fn bsgs_solve_gpu(&self, _delta: &Point, threshold: u64) -> Option<[u64; 4]> {
         // This would call the CUDA backend's BSGS implementation
         // For now, return None to indicate GPU BSGS not yet implemented
         debug!("GPU BSGS requested but not yet implemented for threshold {}", threshold);
@@ -866,7 +866,7 @@ impl HybridGpuManager {
     }
 
     /// Compute delta point between trap and target
-    fn compute_delta_point(&self, trap: &Trap, target: &Point) -> Point {
+    fn compute_delta_point(&self, _trap: &Trap, target: &Point) -> Point {
         // Simplified delta computation - in practice this would be more complex
         // based on the specific collision detection algorithm
         *target // Placeholder
