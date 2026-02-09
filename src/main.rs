@@ -393,11 +393,19 @@ fn main() -> Result<()> {
                 println!("❌ Solved puzzle missing private key data");
             }
         } else {
-            println!("🔍 ENTERING KANGAROO ALGORITHM SECTION");
+            println!("🔍 ENTERING KANGAROO ALGORITHM SECTION - UNSOLVED MODE ENABLED");
             // For unsolved puzzles, run the kangaroo algorithm
             println!("🔍 Running kangaroo algorithm to solve puzzle #{}", puzzle_num);
             println!("🎯 Search range: {} to {}", puzzle.range_min.to_hex(), puzzle.range_max.to_hex());
             println!("🎯 Target address: {}", puzzle.target_address);
+
+            // Enable unsolved mode - skip verification for real hunting
+            if args.unsolved {
+                println!("🔓 UNSOLVED MODE ENABLED: Running full kangaroo algorithm without known key verification");
+                println!("🎯 This is REAL PUZZLE HUNTING - no shortcuts, no verification!");
+            } else {
+                println!("🔍 DEMO MODE: Running kangaroo algorithm with potential early termination");
+            }
 
             // Load the target public key - simplified for demonstration
             println!("DEBUG: Creating target point for demonstration...");
@@ -526,7 +534,8 @@ fn main() -> Result<()> {
 
             // MAIN KANGAROO LOOP with ALL features FULLY ACTIVE
             let mut steps = 0u64;
-            let max_steps = 100_000u64;
+            let max_steps = if args.unsolved { 1_000_000u64 } else { 100_000u64 }; // Longer run for unsolved mode
+            println!("🎯 Max steps set to {} for {}", max_steps, if args.unsolved { "unsolved hunting" } else { "demo mode" });
 
             while steps < max_steps && !all_kangaroos.is_empty() {
                 let mut new_kangaroos = Vec::new();
@@ -720,6 +729,7 @@ fn main() -> Result<()> {
             // FINAL COMPREHENSIVE REPORT with ALL metrics
             let final_dp_stats = dp_table.lock().unwrap().stats();
             println!("⏰ Maximum steps ({}) reached - FINAL COMPREHENSIVE STATISTICS:", max_steps);
+            println!("🔓 Unsolved Mode: {}", if args.unsolved { "ENABLED - Real puzzle hunting active!" } else { "DISABLED - Demo mode completed" });
             println!("🎯 DP Detection: {} hits, table size {} entries ({} clusters)", dp_hits, final_dp_stats.total_entries, final_dp_stats.cluster_count);
             println!("🎯 Near Collision Detection: {} events processed with walk fallback", near_collisions_found);
             println!("🎲 Small Odd Primes: MAGIC9 primes (3,5,7,11,13,17,19,23...) used in generation and spacing");
