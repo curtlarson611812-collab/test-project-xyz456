@@ -37,6 +37,78 @@ impl Default for RhoState {
     }
 }
 
+/// Scalar value for elliptic curve operations (modulo n)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Scalar {
+    /// 256-bit scalar value
+    pub value: BigInt256,
+}
+
+impl Scalar {
+    /// Create new scalar from BigInt256
+    pub fn new(value: BigInt256) -> Self {
+        Scalar { value }
+    }
+
+    /// Create scalar from u64
+    pub fn from_u64(value: u64) -> Self {
+        Scalar { value: BigInt256::from_u64(value) }
+    }
+
+    /// Get residue modulo given modulus (for bias calculations)
+    pub fn mod_residue(&self, modulus: u64) -> u64 {
+        let mod_big = BigInt256::from_u64(modulus);
+        let result = self.value.clone() % mod_big;
+        result.low_u64()
+    }
+
+    /// Check if scalar has Magic9 bias (residue 0, 3, or 6 mod 9)
+    pub fn has_magic9_bias(&self) -> bool {
+        let res = self.mod_residue(9);
+        matches!(res, 0 | 3 | 6)
+    }
+
+    /// Apply GOLD bias skewing (nudge toward attractor residues)
+    pub fn skew_magic9(&self) -> Scalar {
+        let res = self.mod_residue(9);
+        let target_residues = [0, 3, 6]; // Magic9 attractors
+        let target = target_residues[(res % 3) as usize]; // Deterministic choice
+
+        let current_mod9 = BigInt256::from_u64(res);
+        let target_mod9 = BigInt256::from_u64(target);
+        let diff = if target_mod9 >= current_mod9 {
+            target_mod9 - current_mod9
+        } else {
+            target_mod9 + BigInt256::from_u64(9) - current_mod9
+        };
+
+        let nudged = self.value.clone() + diff;
+        Scalar::new(nudged)
+    }
+
+    /// Factor out small primes if divisible (for subgroup reduction)
+    pub fn mod_small_primes(&self) -> Option<(Scalar, Vec<u64>)> {
+        use crate::kangaroo::generator::PRIME_MULTIPLIERS;
+
+        let mut reduced = self.value.clone();
+        let mut factors = Vec::new();
+
+        for &prime in PRIME_MULTIPLIERS.iter() {
+            let prime_big = BigInt256::from_u64(prime);
+            while reduced.clone() % prime_big.clone() == BigInt256::zero() {
+                reduced = reduced / prime_big.clone();
+                factors.push(prime);
+            }
+        }
+
+        if factors.is_empty() {
+            None // No small prime factors
+        } else {
+            Some((Scalar::new(reduced), factors))
+        }
+    }
+}
+
 /// secp256k1 point representation (Jacobian coordinates)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Point {
@@ -156,6 +228,20 @@ impl Point {
             y: y_aff.to_u64_array(),
             z: [1, 0, 0, 0], // Z=1 for affine
         }
+    }
+
+    /// Get residue of x-coordinate modulo given modulus (for bias calculations)
+    pub fn mod_residue(&self, modulus: u64) -> u64 {
+        let x_big = BigInt256::from_u64_array(self.x);
+        let mod_big = BigInt256::from_u64(modulus);
+        let result = x_big % mod_big;
+        result.low_u64()
+    }
+
+    /// Check if point has Magic9 bias based on x-coordinate (residues 0, 3, 6 mod 9)
+    pub fn has_magic9_bias(&self) -> bool {
+        let res = self.mod_residue(9);
+        matches!(res, 0 | 3 | 6)
     }
 
     /// Scalar multiplication with k256::Scalar
@@ -391,5 +477,95 @@ impl Target {
             address: None,
             value_btc: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::secp::Secp256k1;
+
+    #[test]
+    fn test_scalar_mod_residue() {
+        let scalar = Scalar::from_u64(42);
+        assert_eq!(scalar.mod_residue(10), 2);
+        assert_eq!(scalar.mod_residue(9), 6);
+    }
+
+    #[test]
+    fn test_scalar_has_magic9_bias() {
+        let scalar0 = Scalar::from_u64(0); // 0 mod 9
+        let scalar3 = Scalar::from_u64(3); // 3 mod 9
+        let scalar6 = Scalar::from_u64(6); // 6 mod 9
+        let scalar1 = Scalar::from_u64(1); // 1 mod 9 (no bias)
+
+        assert!(scalar0.has_magic9_bias());
+        assert!(scalar3.has_magic9_bias());
+        assert!(scalar6.has_magic9_bias());
+        assert!(!scalar1.has_magic9_bias());
+    }
+
+    #[test]
+    fn test_scalar_skew_magic9() {
+        let scalar1 = Scalar::from_u64(1); // 1 mod 9 -> should skew to 0
+        let skewed = scalar1.skew_magic9();
+        assert_eq!(skewed.mod_residue(9), 0);
+
+        let scalar4 = Scalar::from_u64(4); // 4 mod 9 -> should skew to 3
+        let skewed = scalar4.skew_magic9();
+        assert_eq!(skewed.mod_residue(9), 3);
+    }
+
+    #[test]
+    fn test_scalar_mod_small_primes() {
+        // Test with 42 = 2 * 3 * 7
+        let scalar = Scalar::from_u64(42);
+        let (reduced, factors) = scalar.mod_small_primes().unwrap();
+        assert_eq!(reduced.value.low_u64(), 1); // 42 / (2*3*7) = 1
+        assert!(factors.contains(&2));
+        assert!(factors.contains(&3));
+        assert!(factors.contains(&7));
+
+        // Test with prime number (should return None)
+        let prime_scalar = Scalar::from_u64(179);
+        assert!(prime_scalar.mod_small_primes().is_none());
+    }
+
+    #[test]
+    fn test_point_mod_residue() {
+        let point = Point::from_affine(
+            BigInt256::from_u64(42).to_u64_array(),
+            BigInt256::from_u64(24).to_u64_array(),
+        );
+        assert_eq!(point.mod_residue(10), 2);
+        assert_eq!(point.mod_residue(9), 6);
+    }
+
+    #[test]
+    fn test_point_has_magic9_bias() {
+        let point0 = Point::from_affine(
+            BigInt256::from_u64(0).to_u64_array(), // 0 mod 9
+            BigInt256::from_u64(1).to_u64_array(),
+        );
+        let point1 = Point::from_affine(
+            BigInt256::from_u64(1).to_u64_array(), // 1 mod 9
+            BigInt256::from_u64(1).to_u64_array(),
+        );
+
+        assert!(point0.has_magic9_bias());
+        assert!(!point1.has_magic9_bias());
+    }
+
+    #[test]
+    fn test_point_validate_with_subgroup() {
+        let curve = Secp256k1::new();
+
+        // Test generator point (should be valid)
+        let g = curve.g;
+        assert!(g.validate(&curve).is_ok());
+
+        // Test point at infinity (should be valid)
+        let infinity = Point::infinity();
+        assert!(infinity.validate(&curve).is_ok());
     }
 }

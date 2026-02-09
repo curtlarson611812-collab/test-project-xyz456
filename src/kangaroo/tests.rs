@@ -39,4 +39,15 @@ mod tests {
         let detector = CollisionDetector::new_with_config(&config);
         assert_eq!(detector.near_g_thresh, 1 << 18);
     }
+
+    #[test]
+    fn test_bloom_filter_dp() {
+        let mut config = Config::default();
+        config.use_bloom = true;
+        config.dp_bits = 20;
+
+        // This test would require a full KangarooManager instance
+        // For now, we just verify the config validation works
+        assert!(config.validate().is_ok());
+    }
 }

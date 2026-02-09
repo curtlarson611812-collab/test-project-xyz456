@@ -21,6 +21,8 @@ use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
 use crate::math::bigint::BigInt256;
 use anyhow::anyhow;
+use bloomfilter::Bloom;
+use zerocopy::IntoBytes;
 
 /// Concise Block: Precompute Small k*G Table for Nearest Adjust
 // struct NearMissTable {
@@ -61,6 +63,7 @@ pub struct KangarooManager {
     wild_states: Vec<TaggedKangarooState>, // Tagged wild kangaroos per target
     tame_states: Vec<KangarooState>,     // Shared tame kangaroos
     dp_table: Arc<Mutex<DpTable>>,
+    bloom: Option<Bloom<[u8; 32]>>,      // Bloom filter for DP pre-checks (optional)
     gpu_backend: Box<dyn GpuBackend>,
     generator: KangarooGenerator,
     stepper: KangarooStepper,
@@ -86,6 +89,14 @@ impl KangarooManager {
 
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
+
+        // Initialize bloom filter if enabled
+        let bloom = if config.use_bloom {
+            let expected_dps = (config.herd_size as f64 * config.max_ops as f64) / 2f64.powi(config.dp_bits as i32);
+            Some(Bloom::new_for_fp_rate(expected_dps as usize, 0.01))
+        } else {
+            None
+        };
 
         // Create appropriate GPU backend based on configuration
         let gpu_backend: Box<dyn GpuBackend> = match config.gpu_backend {
@@ -125,6 +136,7 @@ impl KangarooManager {
             wild_states: Vec::new(),
             tame_states: Vec::new(),
             dp_table,
+            bloom,
             gpu_backend,
             generator,
             stepper,
@@ -191,6 +203,14 @@ impl KangarooManager {
 
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
+
+        // Initialize bloom filter if enabled
+        let bloom = if config.use_bloom {
+            let expected_dps = (config.herd_size as f64 * config.max_ops as f64) / 2f64.powi(config.dp_bits as i32);
+            Some(Bloom::new_for_fp_rate(expected_dps as usize, 0.01))
+        } else {
+            None
+        };
         let generator = KangarooGenerator::new(&config).with_search_config(search_config.clone());
         let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits);
         let collision_detector = CollisionDetector::new();
@@ -223,6 +243,7 @@ impl KangarooManager {
             wild_states,
             tame_states,
             dp_table,
+            bloom,
             gpu_backend,
             generator,
             stepper,
@@ -334,6 +355,11 @@ impl KangarooManager {
     fn find_distinguished_points(&self, kangaroos: &[KangarooState]) -> Result<Vec<crate::types::DpEntry>> {
         let mut dp_candidates = Vec::new();
         for kangaroo in kangaroos {
+            let curve = Secp256k1::new();
+            let affine_point = kangaroo.position.to_affine(&curve);
+            let point_x_bytes = affine_point.x.as_bytes();
+            let point_x: [u8; 32] = point_x_bytes.try_into().unwrap(); // [u8;32] LE
+            // Skip bloom check for now - will be handled at DP table level
             if self.is_distinguished_point(&kangaroo.position) {
                 let x_low_bits = kangaroo.position.x[0] & ((1u64 << self.config.dp_bits) - 1);
                 let cluster_id = (kangaroo.position.x[3] >> 16) as u32; // x-coord high bits
@@ -347,6 +373,30 @@ impl KangarooManager {
             }
         }
         Ok(dp_candidates)
+    }
+
+    /// Add DP entry asynchronously with bloom filter check
+    async fn add_dp_async(&mut self, dp: crate::types::DpEntry) -> Result<()> {
+        let curve = Secp256k1::new();
+        let affine_point = dp.point.to_affine(&curve);
+        let point_x_bytes = affine_point.x.as_bytes();
+        let point_x: [u8; 32] = point_x_bytes.try_into().unwrap();
+
+        if let Some(bloom) = &self.bloom {
+            if bloom.check(&point_x) {
+                return Ok(()); // Dup
+            }
+        }
+
+        {
+            let mut table = self.dp_table.lock().await;
+            table.add_dp(dp)?;
+        }
+
+        if let Some(bloom) = &mut self.bloom {
+            bloom.set(&point_x);
+        }
+        Ok(())
     }
 
     /// Check if point is distinguished (trailing dp_bits of x-coordinate are zero)
@@ -381,6 +431,19 @@ impl KangarooManager {
                 warn!("DP pruning failed: {}", e);
             } else {
                 debug!("DP table pruned successfully");
+            }
+        }
+
+        // Sync bloom filter after pruning
+        if let Some(bloom) = &mut self.bloom {
+            bloom.clear();
+            let dp_table = self.dp_table.lock().await;
+            let curve = Secp256k1::new();
+            for dp in dp_table.entries().values() {
+                let affine_point = dp.point.to_affine(&curve);
+                let point_x_bytes = affine_point.x.as_bytes();
+                let point_x: [u8; 32] = point_x_bytes.try_into().unwrap();
+                bloom.set(&point_x);
             }
         }
 
