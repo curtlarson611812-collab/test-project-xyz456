@@ -100,15 +100,15 @@ impl Scalar {
         Scalar::new(nudged)
     }
 
-    /// Factor out small primes if divisible (for subgroup reduction)
+    /// Factor out SmallOddPrime multipliers if divisible (for subgroup reduction)
+    /// Uses sacred 32 primes >128 from SmallOddPrime_Precise_code.rs
     pub fn mod_small_primes(&self) -> Option<(Scalar, Vec<u64>)> {
-        // Use actual small primes for factorization testing
-        let small_primes = [2, 3, 5, 7, 11, 13, 17, 19, 23];
+        use crate::kangaroo::generator::PRIME_MULTIPLIERS;
 
         let mut reduced = self.value.clone();
         let mut factors = Vec::new();
 
-        for &prime in small_primes.iter() {
+        for &prime in PRIME_MULTIPLIERS.iter() {
             let prime_big = BigInt256::from_u64(prime);
             while reduced.clone() % prime_big.clone() == BigInt256::zero() {
                 reduced = reduced / prime_big.clone();
@@ -117,7 +117,7 @@ impl Scalar {
         }
 
         if factors.is_empty() {
-            None // No small prime factors
+            None // No SmallOddPrime factors
         } else {
             Some((Scalar::new(reduced), factors))
         }
@@ -533,16 +533,15 @@ mod tests {
 
     #[test]
     fn test_scalar_mod_small_primes() {
-        // Test with 42 = 2 * 3 * 7
-        let scalar = Scalar::from_u64(42);
+        // Test with 179 * 257 = 46003 (product of two SmallOddPrimes)
+        let scalar = Scalar::from_u64(46003);
         let (reduced, factors) = scalar.mod_small_primes().unwrap();
-        assert_eq!(reduced.value.low_u64(), 1); // 42 / (2*3*7) = 1
-        assert!(factors.contains(&2));
-        assert!(factors.contains(&3));
-        assert!(factors.contains(&7));
+        assert_eq!(reduced.value.low_u64(), 1); // 46003 / (179*257) = 1
+        assert!(factors.contains(&179));
+        assert!(factors.contains(&257));
 
-        // Test with prime number (should return None)
-        let prime_scalar = Scalar::from_u64(179);
+        // Test with prime number NOT in SmallOddPrimes (should return None)
+        let prime_scalar = Scalar::from_u64(283); // 283 is prime but not in PRIME_MULTIPLIERS
         assert!(prime_scalar.mod_small_primes().is_none());
     }
 
