@@ -14,6 +14,7 @@ rayon = "1.10"                    # Parallel CPU tasks (pruning, buckets)
 tokio = { version = "1", features = ["full"] }  # Async pruning, I/O
 clap = { version = "4", features = ["derive"] } # CLI parsing
 cuckoofilter = "0.5"              # Bloom + Cuckoo for DP table
+bloomfilter = "1.0"                # Additional bloom filter for DP pre-checks
 log = "0.4"                       # Structured logging
 env_logger = "0.11"               # Simple logger setup
 anyhow = "1.0"                    # Error handling
