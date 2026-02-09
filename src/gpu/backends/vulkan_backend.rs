@@ -252,6 +252,12 @@ impl GpuBackend for WgpuBackend {
     fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
         Err(anyhow!("Vulkan batch_to_affine not implemented - use CUDA"))
     }
+
+    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+        // For now, delegate to regular step_batch
+        // TODO: Implement full Vulkan bias-enhanced stepping with WGSL shaders
+        self.step_batch(positions, distances, types)
+    }
 }
 
 /// CPU fallback when Vulkan/WGPU is not available
@@ -270,6 +276,10 @@ impl GpuBackend for WgpuBackend {
     }
 
     fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
+        Err(anyhow!("Vulkan backend not available"))
+    }
+
+    fn step_batch_bias(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>, _config: &crate::config::Config) -> Result<Vec<Trap>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 

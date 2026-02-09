@@ -92,6 +92,13 @@ impl GpuBackend for CpuBackend {
         Ok(vec![])
     }
 
+    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+        // CPU implementation with bias support
+        // For now, delegate to regular step_batch but apply bias logic in software
+        // TODO: Implement full bias-aware CPU stepping
+        self.step_batch(positions, distances, types)
+    }
+
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         // CPU implementation using modular inverse (more efficient than Fermat's little theorem)
         let mut results = Vec::with_capacity(inputs.len());

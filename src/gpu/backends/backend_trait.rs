@@ -20,6 +20,10 @@ pub trait GpuBackend {
     /// Updates positions/distances, returns collision traps
     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>>;
 
+    /// Execute bias-enhanced batch kangaroo stepping with config parameters
+    /// Supports Magic9 skewing, Primes factoring, and GOLD hierarchical nudging
+    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>>;
+
     /// Batch modular inverse for discrete logarithm denominator calculation
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>>;
 

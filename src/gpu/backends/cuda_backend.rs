@@ -396,6 +396,174 @@ impl GpuBackend for CudaBackend {
         Ok(traps)
     }
 
+    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+        let batch_size = positions.len();
+        if batch_size == 0 {
+            return Ok(vec![]);
+        }
+
+        // Convert distances to uint64 for the bias kernel
+        let mut distances_u64: Vec<[u64; 4]> = distances.iter().map(|d| {
+            let mut result = [0u64; 4];
+            for i in 0..4 {
+                result[i] = (d[i * 2] as u64) | ((d[i * 2 + 1] as u64) << 32);
+            }
+            result
+        }).collect();
+
+        // Flatten inputs for device memory
+        let positions_flat: Vec<u32> = positions.iter().flat_map(|p| p.iter().flatten()).cloned().collect();
+        let distances_flat_u64: Vec<u64> = distances_u64.iter().flat_map(|d| d.iter()).cloned().collect();
+
+        // Allocate device memory and copy data
+        let mut d_positions = DeviceBuffer::from_slice(&positions_flat)?;
+        let mut d_distances = DeviceBuffer::from_slice(&distances_flat_u64)?;
+        let mut d_types = DeviceBuffer::from_slice(&types)?;
+        let mut d_traps = unsafe { DeviceBuffer::zeroed(batch_size * 9)? };
+
+        // Convert config to kernel parameters
+        let bias_mode = match config.bias_mode {
+            crate::config::BiasMode::Uniform => 0,
+            crate::config::BiasMode::Magic9 => 1,
+            crate::config::BiasMode::Primes => 2,
+        };
+        let gold_bias_combo = if config.gold_bias_combo { 1 } else { 0 };
+        let mod_level = 9u64; // Start with mod 9, kernel handles escalation
+
+        // Launch bias-enhanced kangaroo stepping kernel
+        let step_fn = self.step_module.get_function(CStr::from_bytes_with_nul(b"launch_kangaroo_step_bias\0")?)?;
+        let batch_u32 = batch_size as u32;
+        let dp_bits = config.dp_bits as u32;
+        let steps_per_thread = 1u32; // Default for now
+        let stream = &self.stream;
+
+        unsafe { cuda_check!(launch!(step_fn<<<((batch_size as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
+            d_positions.as_device_ptr(),
+            d_distances.as_device_ptr(),
+            d_types.as_device_ptr(),
+            std::ptr::null(), // jumps table (simplified)
+            d_traps.as_device_ptr(),
+            batch_u32,
+            32u32, // num_jumps
+            dp_bits,
+            steps_per_thread,
+            bias_mode,
+            gold_bias_combo,
+            mod_level
+        )), "step_batch_bias launch"); }
+
+        // Synchronize and read results
+        stream.synchronize()?;
+
+        let mut traps_flat = vec![0u32; batch_size * 9];
+        d_traps.copy_to(&mut traps_flat)?;
+
+        let mut traps = Vec::new();
+        for i in 0..batch_size {
+            let trap_offset = i * 9;
+            let trap_type = traps_flat[trap_offset];
+            if trap_type != 0 {
+                // Trap found - parse the data
+                let mut x = [0u64; 4];
+                for j in 0..4 {
+                    x[j] = (traps_flat[trap_offset + 1 + j * 2] as u64) |
+                           ((traps_flat[trap_offset + 1 + j * 2 + 1] as u64) << 32);
+                }
+                let dist_biguint = BigUint::from_slice(&traps_flat[trap_offset + 1..trap_offset + 9].iter().rev().map(|&u| u).collect::<Vec<_>>());
+
+                // Extract is_tame from trap data
+                let is_tame = traps_flat[trap_offset] == 0; // 0 = tame, 1 = wild
+                traps.push(Trap { x, dist: dist_biguint, is_tame, alpha: [0; 4] }); // alpha not used in GPU traps
+            }
+        }
+
+        Ok(traps)
+    }
+
+    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+        let batch_size = positions.len();
+        if batch_size == 0 {
+            return Ok(vec![]);
+        }
+
+        // Convert distances to uint64 for the bias kernel
+        let mut distances_u64: Vec<[u64; 4]> = distances.iter().map(|d| {
+            let mut result = [0u64; 4];
+            for i in 0..4 {
+                result[i] = (d[i * 2] as u64) | ((d[i * 2 + 1] as u64) << 32);
+            }
+            result
+        }).collect();
+
+        // Flatten inputs for device memory
+        let positions_flat: Vec<u32> = positions.iter().flat_map(|p| p.iter().flatten()).cloned().collect();
+        let distances_flat_u64: Vec<u64> = distances_u64.iter().flat_map(|d| d.iter()).cloned().collect();
+
+        // Allocate device memory and copy data
+        let mut d_positions = DeviceBuffer::from_slice(&positions_flat)?;
+        let mut d_distances = DeviceBuffer::from_slice(&distances_flat_u64)?;
+        let mut d_types = DeviceBuffer::from_slice(&types)?;
+        let mut d_traps = unsafe { DeviceBuffer::zeroed(batch_size * 9)? };
+
+        // Convert config to kernel parameters
+        let bias_mode = match config.bias_mode {
+            crate::config::BiasMode::Uniform => 0,
+            crate::config::BiasMode::Magic9 => 1,
+            crate::config::BiasMode::Primes => 2,
+        };
+        let gold_bias_combo = if config.gold_bias_combo { 1 } else { 0 };
+        let mod_level = 9u64; // Start with mod 9, kernel handles escalation
+
+        // Launch bias-enhanced kangaroo stepping kernel
+        let step_fn = self.step_module.get_function(CStr::from_bytes_with_nul(b"launch_kangaroo_step_bias\0")?)?;
+        let batch_u32 = batch_size as u32;
+        let dp_bits = config.dp_bits as u32;
+        let steps_per_thread = 1u32; // Default for now
+        let stream = &self.stream;
+
+        unsafe { cuda_check!(launch!(step_fn<<<((batch_size as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
+            d_positions.as_device_ptr(),
+            d_distances.as_device_ptr(),
+            d_types.as_device_ptr(),
+            std::ptr::null(), // jumps table (simplified)
+            d_traps.as_device_ptr(),
+            batch_u32,
+            32u32, // num_jumps
+            dp_bits,
+            steps_per_thread,
+            bias_mode,
+            gold_bias_combo,
+            mod_level
+        )), "step_batch_bias launch"); }
+
+        // Synchronize and read results
+        stream.synchronize()?;
+
+        let mut traps_flat = vec![0u32; batch_size * 9];
+        d_traps.copy_to(&mut traps_flat)?;
+
+        let mut traps = Vec::new();
+        for i in 0..batch_size {
+            let trap_offset = i * 9;
+            let trap_type = traps_flat[trap_offset];
+            if trap_type != 0 {
+                // Trap found - parse the data
+                let mut x = [0u64; 4];
+                for j in 0..4 {
+                    x[j] = (traps_flat[trap_offset + 1 + j * 2] as u64) |
+                           ((traps_flat[trap_offset + 1 + j * 2 + 1] as u64) << 32);
+                }
+                let dist_biguint = BigUint::from_slice(&traps_flat[trap_offset + 1..trap_offset + 9].iter().rev().map(|&u| u).collect::<Vec<_>>());
+
+                // Extract is_tame from trap data
+                let is_tame = traps_flat[trap_offset] == 0; // 0 = tame, 1 = wild
+                traps.push(Trap { x, dist: dist_biguint, is_tame, alpha: [0; 4] }); // alpha not used in GPU traps
+            }
+        }
+
+        Ok(traps)
+    }
+
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         let batch_size = inputs.len() as i32;
         if batch_size == 0 {
@@ -871,6 +1039,10 @@ impl GpuBackend for CudaBackend {
     }
 
     fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn step_batch_bias(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>, _config: &crate::config::Config) -> Result<Vec<Trap>> {
         Err(anyhow!("CUDA backend not available"))
     }
 

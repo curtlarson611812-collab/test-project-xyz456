@@ -32,6 +32,14 @@ __constant__ uint32_t P[8] = {
     0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141
 };
 
+// Sacred small primes array for bias factoring (from generator.rs PRIME_MULTIPLIERS)
+__constant__ uint64_t PRIME_MULTIPLIERS[32] = {
+    179, 257, 281, 349, 379, 419, 457, 499,
+    541, 599, 641, 709, 761, 809, 853, 911,
+    967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
+    1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583
+};
+
 // Helper functions for modular arithmetic
 
 // Modular multiplication: c = (a * b) mod m
@@ -440,7 +448,93 @@ __device__ Point jacobian_mul(uint64_t k[4], Point p1) {
     return result;
 }
 
-// Optimized kangaroo stepping kernel with shared memory and tuning
+// Device function for Magic9 bias skewing (nudge to closest attractor {0,3,6})
+__device__ uint64_t skew_magic9(uint64_t val) {
+    uint64_t res = val % 9;
+    uint64_t attractors[3] = {0, 3, 6};
+    uint64_t closest = attractors[0];
+    uint64_t min_diff = (res >= closest) ? res - closest : closest - res;
+
+    for (int i = 1; i < 3; i++) {
+        uint64_t attractor = attractors[i];
+        uint64_t diff = (res >= attractor) ? res - attractor : attractor - res;
+        if (diff < min_diff) {
+            min_diff = diff;
+            closest = attractor;
+        }
+    }
+
+    if (min_diff > 0) {
+        uint64_t nudge = (res > closest) ? (9 - (res - closest)) : (closest - res);
+        return val + nudge;
+    }
+    return val;
+}
+
+// Device function for small primes factoring (reduce by dividing sacred primes)
+__device__ uint64_t mod_small_primes(uint64_t val) {
+    for (int i = 0; i < 32; i++) {
+        uint64_t prime = PRIME_MULTIPLIERS[i];
+        while (val % prime == 0 && val >= prime) {
+            val /= prime;
+        }
+    }
+    return val;
+}
+
+// Device function for GOLD attractor checking (hierarchical mod 9/27/81)
+__device__ bool is_gold_attractor(uint64_t x_low, uint64_t mod_level) {
+    uint64_t res = x_low % mod_level;
+    if (mod_level == 9) {
+        return (res == 0 || res == 3 || res == 6);
+    } else if (mod_level == 27) {
+        return (res % 9 == 0 || res % 9 == 3 || res % 9 == 6);
+    } else if (mod_level == 81) {
+        return (res % 9 == 0 || res % 9 == 3 || res % 9 == 6);
+    }
+    return false;
+}
+
+// Device function for GOLD nudge (min diff to closest attractor)
+__device__ uint64_t gold_nudge_distance(uint64_t x_low, uint64_t mod_level) {
+    uint64_t res = x_low % mod_level;
+    uint64_t attractors[27] = {
+        0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51,54,57,60,63,66,69,72,75,78
+    };
+    int num_attractors = (mod_level == 9) ? 3 : (mod_level == 27) ? 9 : 27;
+
+    uint64_t closest = attractors[0];
+    uint64_t min_diff = (res >= closest) ? res - closest : (closest - res) + mod_level;
+
+    for (int i = 1; i < num_attractors; i++) {
+        uint64_t attractor = attractors[i];
+        uint64_t diff = (res >= attractor) ? res - attractor : (attractor - res) + mod_level;
+        if (diff < min_diff) {
+            min_diff = diff;
+            closest = attractor;
+        }
+    }
+
+    return min_diff;
+}
+
+// Device function for small scalar multiplication (optimized for nudge values < 2^32)
+__device__ Point ec_mul_small(Point p, uint64_t scalar) {
+    Point result = {{0}, {0}, {1}}; // Point at infinity (z=1)
+
+    // Convert scalar to bits and add p for each bit set
+    for (int bit = 0; bit < 64 && scalar > 0; bit++) {
+        if (scalar & 1) {
+            result = jacobian_add(result, p);
+        }
+        p = jacobian_double(p);
+        scalar >>= 1;
+    }
+
+    return result;
+}
+
+// Optimized kangaroo stepping kernel with shared memory and bias support
 __global__ void kangaroo_step_opt(
     Point* positions,           // Input/output positions
     uint64_t* distances,        // Input/output distances (64-bit for larger ranges)
@@ -450,7 +544,10 @@ __global__ void kangaroo_step_opt(
     uint32_t num_kangaroos,     // Number of kangaroos
     uint32_t num_jumps,         // Size of jump table
     uint32_t dp_bits,           // Distinguished point bits
-    uint32_t steps_per_thread   // Steps per thread for occupancy
+    uint32_t steps_per_thread,  // Steps per thread for occupancy
+    int bias_mode,              // 0=uniform, 1=magic9, 2=primes
+    int gold_bias_combo,        // 1=enable GOLD hierarchical nudging
+    uint64_t mod_level          // Starting mod level for GOLD (9/27/81)
 ) {
     uint32_t kangaroo_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -488,8 +585,16 @@ __global__ void kangaroo_step_opt(
     // Process multiple steps per thread for better occupancy
     for (uint32_t step = 0; step < steps_per_thread; ++step) {
         // Compute jump index using fast hash of position
-        uint32_t hash = position.x[0] ^ position.y[0] ^ position.z[0];
-        uint32_t jump_idx = hash % min(32u, num_jumps);
+        uint64_t base_jump = (uint64_t)position.x[0] ^ (uint64_t)position.y[0] ^ (uint64_t)position.z[0];
+
+        // Apply bias mode to jump calculation
+        if (bias_mode == 1) {  // Magic9
+            base_jump = skew_magic9(base_jump);
+        } else if (bias_mode == 2) {  // Primes
+            base_jump = mod_small_primes(base_jump);
+        }
+
+        uint32_t jump_idx = (uint32_t)(base_jump % min(32u, (uint32_t)num_jumps));
 
         // Get jump point from shared memory
         Point jump_point = shared_jumps[jump_idx];
@@ -498,7 +603,26 @@ __global__ void kangaroo_step_opt(
         point_add_opt(&position, &jump_point, shared_modulus, shared_n_prime);
 
         // Update distance (simplified - would add actual jump distance)
-        distance += jump_idx + 1; // Placeholder distance increment
+        distance += (uint64_t)jump_idx + 1; // Placeholder distance increment
+
+        // Apply GOLD bias combo nudging if enabled
+        if (gold_bias_combo) {
+            uint64_t current_mod = mod_level;
+            while (current_mod <= 81ULL) {
+                uint64_t x_low = (uint64_t)position.x[0]; // Low 32 bits
+                if (!is_gold_attractor(x_low, current_mod)) {
+                    uint64_t nudge = gold_nudge_distance(x_low, current_mod);
+                    if (nudge > 0 && nudge < 1000000) { // Reasonable nudge limit
+                        Point nudge_point = ec_mul_small(jump_point, nudge);
+                        point_add_opt(&position, &nudge_point, shared_modulus, shared_n_prime);
+                        distance += nudge;
+                    }
+                } else {
+                    break; // Reached attractor, stop escalating
+                }
+                current_mod *= 3ULL; // Escalate: 9 -> 27 -> 81
+            }
+        }
 
         // Check for distinguished point
         uint32_t x_low = position.x[0]; // Low 32 bits of x-coordinate
@@ -527,7 +651,33 @@ __global__ void kangaroo_step_opt(
     distances[kangaroo_idx] = distance;
 }
 
-// Host function for launching the kernel
+// Host function for launching the bias-enhanced kernel
+extern "C" void launch_kangaroo_step_bias(
+    Point* d_positions,
+    uint64_t* d_distances,
+    uint32_t* d_types,
+    Point* d_jumps,
+    Trap* d_traps,
+    uint32_t num_kangaroos,
+    uint32_t num_jumps,
+    uint32_t dp_bits,
+    uint32_t steps_per_thread,
+    int bias_mode,
+    int gold_bias_combo,
+    uint64_t mod_level,
+    cudaStream_t stream
+) {
+    dim3 block(256);
+    dim3 grid((num_kangaroos + 255) / 256);
+
+    kangaroo_step_opt<<<grid, block, 0, stream>>>(
+        d_positions, d_distances, d_types, d_jumps, d_traps,
+        num_kangaroos, num_jumps, dp_bits, steps_per_thread,
+        bias_mode, gold_bias_combo, mod_level
+    );
+}
+
+// Legacy host function for backward compatibility
 extern "C" void launch_kangaroo_step_batch(
     Point* d_positions,
     uint32_t* d_distances,
@@ -541,8 +691,9 @@ extern "C" void launch_kangaroo_step_batch(
     dim3 block(256);
     dim3 grid((num_kangaroos + 255) / 256);
 
-    kangaroo_step_batch<<<grid, block, 0, stream>>>(
-        d_positions, d_distances, d_types, d_jumps, d_traps,
-        num_kangaroos, num_jumps
+    // Call with default bias parameters (uniform, no GOLD)
+    kangaroo_step_opt<<<grid, block, 0, stream>>>(
+        d_positions, (uint64_t*)d_distances, d_types, d_jumps, d_traps,
+        num_kangaroos, num_jumps, 20, 1, 0, 0, 9ULL
     );
 }

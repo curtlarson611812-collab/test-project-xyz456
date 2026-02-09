@@ -470,6 +470,18 @@ impl GpuBackend for HybridBackend {
         }
     }
 
+    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+        // Dispatch to Vulkan for bias-enhanced bulk stepping operations
+        #[cfg(feature = "wgpu")]
+        {
+            self.vulkan.step_batch_bias(positions, distances, types, config)
+        }
+        #[cfg(not(feature = "wgpu"))]
+        {
+            self.cpu.step_batch_bias(positions, distances, types, config)
+        }
+    }
+
     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         // Dispatch to CUDA for precision inverse operations
         #[cfg(feature = "rustacuda")]
