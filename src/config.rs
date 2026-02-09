@@ -7,6 +7,41 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::str::FromStr;
+
+/// GPU backend selection
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum GpuBackend {
+    Hybrid,
+    Cuda,
+    Vulkan,
+    Cpu,
+}
+
+impl FromStr for GpuBackend {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "hybrid" => Ok(GpuBackend::Hybrid),
+            "cuda" => Ok(GpuBackend::Cuda),
+            "vulkan" => Ok(GpuBackend::Vulkan),
+            "cpu" => Ok(GpuBackend::Cpu),
+            _ => Err(anyhow!("Invalid GPU backend: {}. Must be one of: hybrid, cuda, vulkan, cpu", s)),
+        }
+    }
+}
+
+impl std::fmt::Display for GpuBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GpuBackend::Hybrid => write!(f, "hybrid"),
+            GpuBackend::Cuda => write!(f, "cuda"),
+            GpuBackend::Vulkan => write!(f, "vulkan"),
+            GpuBackend::Cpu => write!(f, "cpu"),
+        }
+    }
+}
 
 /// SpeedBitCrack V3 - Pollard's rho/kangaroo ECDLP solver for secp256k1
 #[derive(Parser, Debug, Clone, Serialize, Deserialize, Default)]
@@ -128,9 +163,9 @@ pub struct Config {
     #[arg(long, default_value = "info")]
     pub log_level: String,
 
-    /// GPU backend to use (cuda, vulkan, hybrid, cpu)
+    /// GPU backend to use
     #[arg(long, default_value = "hybrid")]
-    pub gpu_backend: String,
+    pub gpu_backend: GpuBackend,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -187,10 +222,8 @@ impl Config {
             return Err(anyhow!("Jump mean must be > 0"));
         }
 
-        // Validate GPU backend
-        if !["hybrid", "cuda", "vulkan", "cpu"].contains(&self.gpu_backend.as_str()) {
-            return Err(anyhow!("Invalid GPU backend: {}. Must be one of: hybrid, cuda, vulkan, cpu", self.gpu_backend));
-        }
+        // GPU backend is now validated by FromStr enum, always valid
+        // No additional validation needed
 
         // Validate near collision threshold
         if let Some(threshold) = self.enable_near_collisions {
@@ -211,11 +244,6 @@ impl Config {
             if !(64..=160).contains(&puzzle_num) {
                 return Err(anyhow!("Puzzle number must be between 64 and 160"));
             }
-        }
-
-        // Validate GPU backend
-        if !["hybrid", "cuda", "vulkan", "cpu"].contains(&self.gpu_backend.as_str()) {
-            return Err(anyhow!("Invalid GPU backend: {}. Must be one of: hybrid, cuda, vulkan, cpu", self.gpu_backend));
         }
 
         Ok(())
