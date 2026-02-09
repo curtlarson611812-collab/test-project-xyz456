@@ -104,6 +104,57 @@ __device__ void sub_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const
     }
 }
 
+#define DEBUG 1
+__device__ void print_limbs(const uint32_t* limbs, int num) {
+    for (int i=num-1; i>=0; i--) printf("%08x", limbs[i]);
+    printf("\n");
+}
+
+// Device function for point to affine conversion
+__device__ void point_to_affine(const Point* p, Point* affine, const uint32_t* mod) {
+    if (is_infinity(p)) {
+        set_infinity(affine);
+        return;
+    }
+
+    // Special case: Z=1 (already affine)
+    bool z_is_one = (p->z[0] == 1);
+    for (int i = 1; i < 8; i++) {
+        if (p->z[i] != 0) z_is_one = false;
+    }
+
+    if (z_is_one) {
+        *affine = *p;
+        affine->z[0] = 1;
+        for (int i = 1; i < 8; i++) affine->z[i] = 0;
+        return;
+    }
+
+    // General case: compute affine coordinates
+    uint32_t z_inv[8];
+    bigint_inv_mod(p->z, mod, z_inv);
+    uint32_t z2[8], z3[8];
+    bigint_mul_par(z_inv, z_inv, z2);      // z^-2
+    bigint_mul_par(z2, z_inv, z3);         // z^-3
+    bigint_mul_par(p->x, z2, affine->x);   // x * z^-2
+    bigint_mul_par(p->y, z3, affine->y);   // y * z^-3
+
+    affine->z[0] = 1;
+    for (int i = 1; i < 8; i++) affine->z[i] = 0;
+}
+
+// Device function for on-curve check in affine coordinates
+__device__ int is_on_curve_affine(const uint32_t x[8], const uint32_t y[8], const uint32_t* mod) {
+    uint32_t y2[8], x2[8], x3[8], rhs[8];
+    bigint_mul_par(y, y, y2);              // y^2
+    bigint_mul_par(x, x, x2);              // x^2
+    bigint_mul_par(x2, x, x3);             // x^3
+    uint32_t seven[8] = {7, 0, 0, 0, 0, 0, 0, 0};
+    bigint_add_par(x3, seven, rhs);        // x^3 + 7
+
+    return bigint_cmp_par(y2, rhs) == 0;
+}
+
 // Device function for Jacobian point doubling (complete EC arithmetic)
 // P3 = 2*P1 in Jacobian coordinates
 // Returns P3 in Jacobian coordinates
@@ -117,72 +168,58 @@ __device__ Point jacobian_double(Point p1) {
     }
     if (p1_inf) return p1;
 
-    uint32_t a = 0; // secp256k1 a = 0
+    // Standard Jacobian doubling formula for a=0
+    uint32_t xx[8], yy[8], yyyy[8], s[8], m[8], t[8], x3[16], y3[16], z3[8];
 
-    // Y^2
-    uint32_t y_squared[8] = {0};
-    mul_mod(p1.y, p1.y, y_squared, P);
+    // XX = X^2
+    bigint_mul_par(p1.x, p1.x, xx);
 
-    // 4*Y^2
-    uint32_t four_y_squared[8] = {0};
-    uint32_t four[8] = {4, 0, 0, 0, 0, 0, 0, 0};
-    mul_mod(y_squared, four, four_y_squared, P);
+    // YY = Y^2, YYYY = Y^4
+    bigint_mul_par(p1.y, p1.y, yy);
+    bigint_mul_par(yy, yy, yyyy);
 
-    // X^2
-    uint32_t x_squared[8] = {0};
-    mul_mod(p1.x, p1.x, x_squared, P);
+    // S = 4*X*Y^2
+    bigint_mul_par(p1.x, yy, s);
+    bigint_add_par(s, s, s);  // 2
+    bigint_add_par(s, s, s);  // 4
 
-    // 3*X^2 + a*Z^4 (a=0 for secp256k1)
-    uint32_t three[8] = {3, 0, 0, 0, 0, 0, 0, 0};
-    uint32_t three_x_squared[8] = {0};
-    mul_mod(x_squared, three, three_x_squared, P);
+    // M = 3*X^2
+    bigint_add_par(xx, xx, m);  // 2*XX
+    bigint_add_par(m, xx, m);   // 3*XX
 
-    // Z^2, Z^4
-    uint32_t z_squared[8] = {0}, z_fourth[8] = {0};
-    mul_mod(p1.z, p1.z, z_squared, P);
-    mul_mod(z_squared, z_squared, z_fourth, P);
+    // T = M^2 - 2*S
+    uint32_t m_sq[16], two_s[8];
+    bigint_mul_par(m, m, m_sq);     // M^2 (wide)
+    bigint_add_par(s, s, two_s);    // 2*S
+    bigint_sub_par(m_sq, two_s, x3); // X3 = M^2 - 2*S
 
-    // M = 3*X^2 + a*Z^4
-    uint32_t m[8] = {0};
-    for (int i = 0; i < 8; i++) m[i] = three_x_squared[i]; // a*Z^4 = 0
+    // Y3 = M*(S - X3) - 8*Y^4
+    uint32_t s_minus_x3[8], m_times_diff[16], eight_yyyy[8];
+    bigint_sub_par(s, x3, s_minus_x3);
+    bigint_mul_par(m, s_minus_x3, m_times_diff);
+    bigint_add_par(yyyy, yyyy, eight_yyyy);  // 2
+    bigint_add_par(eight_yyyy, eight_yyyy, eight_yyyy);  // 4
+    bigint_add_par(eight_yyyy, eight_yyyy, eight_yyyy);  // 8
+    bigint_sub_par(m_times_diff, eight_yyyy, y3);
 
     // Z3 = 2*Y*Z
-    uint32_t yz[8] = {0}, z3[8] = {0};
-    uint32_t two[8] = {2, 0, 0, 0, 0, 0, 0, 0};
-    mul_mod(p1.y, p1.z, yz, P);
-    mul_mod(yz, two, z3, P);
+    uint32_t yz[8];
+    bigint_mul_par(p1.y, p1.z, yz);
+    bigint_add_par(yz, yz, z3);
 
-    // X3 = M^2 - 2*X*4*Y^2
-    uint32_t m_squared[8] = {0};
-    mul_mod(m, m, m_squared, P);
+    // Debug output
+    #if DEBUG
+    printf("Debug double intermediates CUDA:\n");
+    printf("XX: "); print_limbs(xx, 8);
+    printf("YYYY: "); print_limbs(yyyy, 8);
+    printf("S: "); print_limbs(s, 8);
+    printf("M: "); print_limbs(m, 8);
+    printf("X3: "); print_limbs(x3, 8);
+    printf("Y3: "); print_limbs(y3, 8);
+    printf("Z3: "); print_limbs(z3, 8);
+    #endif
 
-    uint32_t two_x[8] = {0};
-    mul_mod(p1.x, two, two_x, P);
-
-    uint32_t two_x_four_y_squared[8] = {0};
-    mul_mod(two_x, four_y_squared, two_x_four_y_squared, P);
-
-    uint32_t x3[8] = {0};
-    sub_mod(m_squared, two_x_four_y_squared, x3, P);
-
-    // Y3 = M*(X*4*Y^2 - X3) - 8*Y^4
-    uint32_t x_four_y_squared[8] = {0};
-    mul_mod(p1.x, four_y_squared, x_four_y_squared, P);
-
-    uint32_t x_four_y_squared_minus_x3[8] = {0};
-    sub_mod(x_four_y_squared, x3, x_four_y_squared_minus_x3, P);
-
-    uint32_t m_times_diff[8] = {0};
-    mul_mod(m, x_four_y_squared_minus_x3, m_times_diff, P);
-
-    uint32_t eight[8] = {8, 0, 0, 0, 0, 0, 0, 0};
-    uint32_t eight_y_fourth[8] = {0};
-    mul_mod(four_y_squared, two, eight_y_fourth, P); // 4*Y^2 * 2 = 8*Y^4
-
-    uint32_t y3[8] = {0};
-    sub_mod(m_times_diff, eight_y_fourth, y3, P);
-
-    // Copy results
+    // Copy results (truncate wide results to 8 limbs)
     for (int i = 0; i < 8; i++) {
         result.x[i] = x3[i];
         result.y[i] = y3[i];

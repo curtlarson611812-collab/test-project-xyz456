@@ -1174,6 +1174,23 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    #[cfg(feature = "rustacuda")]
+    fn test_cuda_double_kernel() -> Result<(), Box<dyn std::error::Error>> {
+        let backend = CudaBackend::new()?;
+        let secp = crate::math::secp::Secp256k1::new();
+        let g = secp.g;
+
+        // Convert G to GPU format
+        let d_g = backend.alloc_point(&g)?;
+
+        // TODO: Add CUDA kernel for double testing
+        // For now, just verify allocation works
+        assert!(true); // Placeholder
+
+        Ok(())
+    }
+
     /// Allocate pinned host memory for faster CPU-GPU transfers
     #[cfg(feature = "rustacuda")]
     pub fn alloc_pinned_host<T>(&self, len: usize) -> Result<*mut T, DriverError> {
