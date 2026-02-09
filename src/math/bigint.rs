@@ -636,6 +636,66 @@ impl BigInt256 {
             (self.limbs[limb_idx] & (1u64 << bit_idx)) != 0
         }
     }
+
+    /// Parallel addition with carry propagation (port from CUDA)
+    pub fn add_par(a: &[u64; 4], b: &[u64; 4], result: &mut [u64; 4]) {
+        let mut carry = 0u128;
+        for i in 0..4 {
+            let sum = (a[i] as u128) + (b[i] as u128) + carry;
+            result[i] = (sum & 0xFFFFFFFFFFFFFFFF) as u64;
+            carry = sum >> 64;
+        }
+        // Note: For secp256k1 intermediates, carry should be 0 or 1, handled by reduction
+    }
+
+    /// Parallel subtraction with borrow propagation (port from CUDA)
+    pub fn sub_par(a: &[u64; 4], b: &[u64; 4], result: &mut [u64; 4]) {
+        let mut borrow = 0u128;
+        for i in 0..4 {
+            let diff = (a[i] as u128).wrapping_sub(b[i] as u128).wrapping_sub(borrow);
+            result[i] = (diff & 0xFFFFFFFFFFFFFFFF) as u64;
+            borrow = ((diff >> 127) & 1) ^ 1; // 1 if borrow occurred (diff negative)
+        }
+    }
+
+    /// Parallel multiplication producing wide result (port from CUDA)
+    pub fn mul_par(a: &[u64; 4], b: &[u64; 4], result: &mut [u64; 8]) {
+        // Initialize result
+        for i in 0..8 {
+            result[i] = 0;
+        }
+
+        // Schoolbook multiplication
+        for i in 0..4 {
+            let mut carry = 0u128;
+            for j in 0..4 {
+                let prod = (a[i] as u128) * (b[j] as u128) + (result[i + j] as u128) + carry;
+                result[i + j] = (prod & 0xFFFFFFFFFFFFFFFF) as u64;
+                carry = prod >> 64;
+            }
+            // Propagate remaining carry
+            let mut k = i + 4;
+            while carry > 0 && k < 8 {
+                let sum = (result[k] as u128) + carry;
+                result[k] = (sum & 0xFFFFFFFFFFFFFFFF) as u64;
+                carry = sum >> 64;
+                k += 1;
+            }
+        }
+    }
+
+    /// Parallel comparison (port from CUDA)
+    pub fn cmp_par(a: &[u64; 4], b: &[u64; 4]) -> i32 {
+        for i in (0..4).rev() {
+            if a[i] > b[i] {
+                return 1;
+            }
+            if a[i] < b[i] {
+                return -1;
+            }
+        }
+        0
+    }
 }
 
 impl Drop for BigInt256 {
