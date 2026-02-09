@@ -194,7 +194,7 @@ pub struct Config {
     pub bsgs_threshold: u64,
 
     /// Enable GOLD bias combo (primes + mod3/9/27/81 for instant attractor solving)
-    #[arg(long, default_value_t = true)]
+    #[arg(long)]
     pub gold_bias_combo: bool,
 }
 

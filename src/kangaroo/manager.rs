@@ -322,7 +322,7 @@ impl KangarooManager {
             };
 
             // Check for distinguished points
-            let dp_candidates = self.find_distinguished_points(&stepped_kangaroos)?;
+            let dp_candidates = self.find_distinguished_points(&stepped_kangaroos).await?;
 
             // Add to DP table (async)
             {
@@ -352,14 +352,21 @@ impl KangarooManager {
 
 
     /// Find distinguished points in kangaroo batch
-    fn find_distinguished_points(&self, kangaroos: &[KangarooState]) -> Result<Vec<crate::types::DpEntry>> {
+    async fn find_distinguished_points(&mut self, kangaroos: &[KangarooState]) -> Result<Vec<crate::types::DpEntry>> {
         let mut dp_candidates = Vec::new();
         for kangaroo in kangaroos {
             let curve = Secp256k1::new();
             let affine_point = kangaroo.position.to_affine(&curve);
             let point_x_bytes = affine_point.x.as_bytes();
             let point_x: [u8; 32] = point_x_bytes.try_into().unwrap(); // [u8;32] LE
-            // Skip bloom check for now - will be handled at DP table level
+
+            // Bloom pre-check for duplicates
+            if let Some(bloom) = &mut self.bloom {
+                if bloom.check(&point_x) {
+                    continue; // Probable duplicate, skip
+                }
+            }
+
             if self.is_distinguished_point(&kangaroo.position) {
                 let x_low_bits = kangaroo.position.x[0] & ((1u64 << self.config.dp_bits) - 1);
                 let cluster_id = (kangaroo.position.x[3] >> 16) as u32; // x-coord high bits
@@ -370,6 +377,11 @@ impl KangarooManager {
                     cluster_id,
                 );
                 dp_candidates.push(dp_entry);
+
+                // Insert to Bloom after confirming it's a new DP
+                if let Some(bloom) = &mut self.bloom {
+                    bloom.set(&point_x);
+                }
             }
         }
         Ok(dp_candidates)

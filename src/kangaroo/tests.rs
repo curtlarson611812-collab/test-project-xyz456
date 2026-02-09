@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::config::Config;
+    use crate::config::{Config, BiasMode};
     use crate::kangaroo::collision::Trap;
     use crate::math::BigInt256;
     use crate::kangaroo::CollisionDetector;
@@ -45,9 +45,16 @@ mod tests {
         let mut config = Config::default();
         config.use_bloom = true;
         config.dp_bits = 20;
+        config.herd_size = 1000; // Set required field
+        config.jump_mean = 1000; // Set required field
+        // Set valid bias mode for gold_bias_combo (which defaults to false now)
+        config.bias_mode = BiasMode::Magic9;
+        config.gold_bias_combo = true;
 
         // This test would require a full KangarooManager instance
         // For now, we just verify the config validation works
-        assert!(config.validate().is_ok());
+        if let Err(e) = config.validate() {
+            panic!("Config validation failed: {}", e);
+        }
     }
 }
