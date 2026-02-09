@@ -2,8 +2,8 @@
 //!
 //! Strict tame/wild start logic — fixed primes for wild, G-based tame, no entropy unless flagged
 
-use crate::config::Config;
-use crate::types::{KangarooState, Point, TaggedKangarooState, RhoState};
+use crate::config::{Config, BiasMode};
+use crate::types::{KangarooState, Point, TaggedKangarooState, RhoState, Scalar};
 use crate::math::{Secp256k1, bigint::{BigInt256, BigInt512}};
 use crate::kangaroo::{SearchConfig, collision::CollisionDetector};
 use crate::dp::DpTable;
@@ -28,6 +28,14 @@ pub const PRIME_MULTIPLIERS: [u64; 32] = [
     967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
     1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
 ];
+
+// Empirical GOLD attractors (from bias_analysis.log patterns)
+pub const GOLD_ATTRACTORS_9: [u64; 3] = [0, 3, 6];
+pub const GOLD_ATTRACTORS_27: [u64; 9] = [0, 3, 6, 9, 12, 15, 18, 21, 24];  // Extend 3^k
+pub const GOLD_ATTRACTORS_81: [u64; 27] = [
+    0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45,
+    48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78
+];  // Full 3^4 clusters
 
 // Sacred kangaroo start initialization from SmallOddPrime_Precise_code.rs
 // wild_start = prime_i * target_pubkey - allows inversion in collision solving
@@ -374,23 +382,61 @@ impl KangarooGenerator {
         Ok(all_kangaroos)
     }
 
-    /// Wild kangaroos — EXACT SmallOddPrime spacing (multiplicative offset)
+    /// Wild kangaroos — EXACT SmallOddPrime spacing (multiplicative offset) with bias integration
     fn generate_wild_for_target(&self, target: &Point, count: usize) -> Result<Vec<KangarooState>> {
         use crate::math::constants::PRIME_MULTIPLIERS;
 
         let mut wilds = Vec::new();
 
         for i in 0..count {
-            // Use SmallOddPrime start: prime * target
-            let start_pos = self.initialize_wild_start(target, i);
-
             let prime_idx = i % PRIME_MULTIPLIERS.len();
             let prime = PRIME_MULTIPLIERS[prime_idx];
+            let mut scalar = Scalar::from_u64(prime);
+
+            // Apply bias_mode
+            match self.config.bias_mode {
+                BiasMode::Magic9 => scalar = scalar.skew_magic9(),
+                BiasMode::Primes => {
+                    if let Some((reduced, _factors)) = scalar.mod_small_primes() {
+                        scalar = reduced;  // Factor out sacred primes
+                    }
+                }
+                _ => {},  // Uniform no-op
+            }
+
+            // Multiplicative wild start: prime * target (sacred SmallOddPrime spacing)
+            let start_pos = self.curve.mul(&scalar.value, target);
+
+            // For GOLD combo: Nudge if not in attractor (start with mod9, escalate to 27/81)
+            let mut final_pos = start_pos;
+            if self.config.gold_bias_combo {
+                let mut mod_level = 9u64;
+                while mod_level <= 81 {
+                    if !final_pos.has_magic9_bias() {  // Uses types.rs method
+                        let res = final_pos.mod_residue(mod_level);
+                        let closest_attractor = match mod_level {
+                            9 => GOLD_ATTRACTORS_9.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                            27 => GOLD_ATTRACTORS_27.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                            _ => GOLD_ATTRACTORS_81.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                        };
+                        let diff = if *closest_attractor >= res {
+                            *closest_attractor - res
+                        } else {
+                            *closest_attractor + mod_level - res
+                        };
+                        let nudge_scalar = Scalar::from_u64(diff);
+                        final_pos = self.curve.mul(&nudge_scalar.value, &final_pos);  // Nudge mul
+                    } else {
+                        break;  // In attractor, done
+                    }
+                    mod_level *= 3;  // Escalate 9->27->81
+                }
+            }
 
             let state = KangarooState::new(
-                start_pos,
-                prime as u64,           // initial distance = prime (invertible)
-                [prime, 0, 0, 0],       // alpha starts with prime offset
+                final_pos,
+                scalar.value.low_u64(),  // initial distance = biased prime
+                scalar.value.to_u64_array(),  // alpha starts with biased prime offset
                 [1, 0, 0, 0],           // beta placeholder (updated during stepping)
                 false,                  // is_tame
                 false,                  // is_dp
@@ -398,36 +444,107 @@ impl KangarooGenerator {
             );
 
             wilds.push(state);
-
-            // TODO: Apply negation map symmetry check here if flagged (rule #6)
-            // Check both P and -P for DP hits to double effectiveness
         }
         Ok(wilds)
     }
 
-    /// Tame kangaroos — deterministic from G
+    /// Tame kangaroos — deterministic additive from G with bias integration
     fn generate_tame_kangaroos(&self, count: usize) -> Result<Vec<KangarooState>> {
         let mut tames = Vec::new();
-        let offset = self.config.attractor_start.unwrap_or(0) as u64;
 
         for i in 0..count {
-            // Use k256 Scalar for native EC operations
-            let scalar = k256::Scalar::from(i as u64 + offset);
-            let position = self.curve.g.mul_scalar(&scalar, &self.curve); // Generator point multiplication
+            let prime_idx = i % PRIME_MULTIPLIERS.len();
+            let prime = PRIME_MULTIPLIERS[prime_idx];
+            let mut scalar = Scalar::from_u64(prime);
+
+            // Apply bias_mode (factor for Primes, skew for Magic9)
+            match self.config.bias_mode {
+                BiasMode::Magic9 => scalar = scalar.skew_magic9(),
+                BiasMode::Primes => {
+                    if let Some((reduced, _)) = scalar.mod_small_primes() {
+                        scalar = reduced;
+                    }
+                }
+                _ => {},
+            }
+
+            // Additive tame start: G + biased_prime * G (uniform coverage, not multiplicative)
+            let prime_point = self.curve.mul(&scalar.value, &self.curve.g);
+            let position = self.curve.add(&self.curve.g, &prime_point);
+
+            // GOLD combo nudge similar to wild (check has_magic9_bias, escalate mod)
+            let mut final_pos = position;
+            if self.config.gold_bias_combo {
+                let mut mod_level = 9u64;
+                while mod_level <= 81 {
+                    if !final_pos.has_magic9_bias() {
+                        let res = final_pos.mod_residue(mod_level);
+                        let closest_attractor = match mod_level {
+                            9 => GOLD_ATTRACTORS_9.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                            27 => GOLD_ATTRACTORS_27.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                            _ => GOLD_ATTRACTORS_81.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                        };
+                        let diff = if *closest_attractor >= res {
+                            *closest_attractor - res
+                        } else {
+                            *closest_attractor + mod_level - res
+                        };
+                        let nudge_scalar = Scalar::from_u64(diff);
+                        let nudge_point = self.curve.mul(&nudge_scalar.value, &self.curve.g);
+                        final_pos = self.curve.add(&final_pos, &nudge_point);  // Additive nudge
+                    } else {
+                        break;  // In attractor, done
+                    }
+                    mod_level *= 3;  // Escalate 9->27->81
+                }
+            }
 
             let state = KangarooState::new(
-                position,
-                i as u64 + offset,
-                [i as u64 + offset, 0, 0, 0],  // alpha = distance for tame
-                [0, 0, 0, 0],                   // beta for tame usually 0 or 1
-                true,
-                false, // is_dp
+                final_pos,
+                scalar.value.low_u64(),  // distance = biased prime
+                [0, 0, 0, 0],           // alpha = 0 for tame (deterministic from G)
+                [1, 0, 0, 0],           // beta = 1 for tame
+                true,                   // is_tame
+                false,                  // is_dp
                 i as u64,
             );
 
             tames.push(state);
         }
         Ok(tames)
+    }
+
+    /// Generate bias-aware jump scalar for kangaroo movement
+    pub fn generate_bias_aware_jump(&self, current_distance: u64, state: &KangarooState) -> BigInt256 {
+        let base_jump = BigInt256::from_u64(current_distance ^ state.position.x[0]);
+        let mut jump_scalar = base_jump.clone();
+
+        match self.config.bias_mode {
+            BiasMode::Magic9 => {
+                let scalar = Scalar::new(base_jump);
+                jump_scalar = scalar.skew_magic9().value;
+            },
+            BiasMode::Primes => {
+                let scalar = Scalar::new(base_jump);
+                if let Some((reduced, _)) = scalar.mod_small_primes() {
+                    jump_scalar = reduced.value;
+                }
+            },
+            _ => {}, // Uniform - no bias
+        }
+
+        // GOLD combo: Check projected point and nudge if needed
+        if self.config.gold_bias_combo {
+            // Simplified: nudge jump scalar toward attractors
+            let res = jump_scalar.low_u64() % 9;
+            if res != 0 && res != 3 && res != 6 {
+                let closest = if res <= 1 { 0 } else if res <= 4 { 3 } else { 6 };
+                let diff = if closest >= res { closest - res } else { closest + 9 - res };
+                jump_scalar = jump_scalar + BigInt256::from_u64(diff);
+            }
+        }
+
+        jump_scalar
     }
 
     /// Entropy primes — only when flag enabled (real RNG, odd primes only)
