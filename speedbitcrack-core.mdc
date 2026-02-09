@@ -13,7 +13,7 @@ This is the **STRICT CORE RULES** for ALL code generation, suggestions, and chan
 
 - High-performance, multi-target **Pollard's rho/kangaroo ECDLP solver** for secp256k1.
 - Primary goal: recover private keys from early unspent P2PK outputs (blocks 1–500k, >1 BTC) and exposed Bitcoin puzzle addresses.
-- Built with **Rust + hybrid GPU** (Vulkan/wgpu bulk compute, CUDA precision math).
+- Built with **Rust + hybrid GPU** (Vulkan/wgpu bulk compute + CUDA precision math) - **HYBRID MODE IS SACRED #1 METHOD**.
 
 ## Core Development Philosophy
 
@@ -70,51 +70,120 @@ Every file/folder has a clear, non-negotiable purpose. No placeholders, no skipp
 
 Project Root:
 ├── Cargo.toml                  # Dependencies, workspace config, build profile overrides
-├── build.rs                    # Optional: compile-time shader validation or SPIR-V generation
-├── .cursor/
-│   └── rules.md                # This file — must be referenced in every Grok/Cursor session
+├── Cargo.lock                  # Dependency lock file
+├── build.rs                    # Compile-time shader validation or SPIR-V generation
+├── speedbitcrack-core.mdc      # This rules file — must be referenced in every Grok/Cursor session
+├── valuable_p2pk_pubkeys.txt   # Full list of valuable P2PK pubkeys (blocks 1-500k, >1 BTC)
+├── puzzles.txt                 # Bitcoin puzzle definitions and solved keys
 ├── src/
 │   ├── main.rs                 # Thin entry point: parse CLI → load config → init KangarooManager → run main loop (step → check → solve → log)
 │   ├── lib.rs                  # Re-exports public types/functions if used as lib (currently minimal)
 │   ├── config.rs               # clap::Parser struct, default values (dp-bits=24, primes list, jump_mean, etc.), validation
 │   ├── types.rs                # Shared structs/enums: DpEntry, KangarooState, AlphaBeta, Point coords, SearchMode enum
+│   ├── security.rs             # Security hardening and constant-time operations
+│   ├── puzzles.rs              # Puzzle data structures and validation
 │   ├── math/
 │   │   ├── mod.rs              # Public re-exports
 │   │   ├── secp.rs             # secp256k1 curve ops, point add/double/mult, Barrett+Montgomery hybrid reductions (non-negotiable)
-│   │   └── bigint.rs           # Custom 256-bit integer helpers if k256 insufficient for GPU interop
+│   │   ├── bigint.rs           # Custom 256-bit integer helpers if k256 insufficient for GPU interop
+│   │   ├── constants.rs        # Mathematical constants and precomputed values
+│   │   └── tests.rs            # Math unit tests and validation
 │   ├── kangaroo/
 │   │   ├── mod.rs
 │   │   ├── manager.rs          # Central orchestrator: herd management, stepping batches, DP table interaction, async pruning trigger, multi-GPU dispatch
-│   │   ├── generator.rs       # Strict tame/wild start logic — fixed primes for wild, G-based tame, no entropy unless flagged
+│   │   ├── generator.rs        # Strict tame/wild start logic — fixed primes for wild, G-based tame, no entropy unless flagged
 │   │   ├── stepper.rs          # Round-based stepping logic, jump table selection, per-kangaroo alpha/beta update, negation handling
-│   │   └── collision.rs       # Collision detection (full & near), solving formula, modular inverse, walk-backs/forwards, G-Link application
+│   │   ├── collision.rs        # Collision detection (full & near), solving formula, modular inverse, walk-backs/forwards, G-Link application
+│   │   ├── controller.rs       # Multi-target execution coordination
+│   │   ├── config.rs           # Kangaroo-specific configuration
+│   │   ├── search_config.rs    # Search parameters and modes
+│   │   └── tests.rs            # Kangaroo unit tests
 │   ├── gpu/
 │   │   ├── mod.rs
-│   │   ├── backend.rs         # Hybrid dispatch abstraction: trait for Vulkan/CUDA, async buffer mapping, overlap logic
+│   │   ├── backend.rs          # Hybrid dispatch abstraction: trait for Vulkan/CUDA, async buffer mapping, overlap logic
+│   │   ├── hybrid_manager.rs   # Refined hybrid GPU manager with drift mitigation
+│   │   ├── shared.rs           # Shared memory buffers for GPU operations
+│   │   ├── backends/
+│   │   │   ├── mod.rs
+│   │   │   ├── backend_trait.rs # GPU backend trait definitions
+│   │   │   ├── cpu_backend.rs   # CPU fallback implementation
+│   │   │   ├── cuda_backend.rs  # CUDA precision operations backend
+│   │   │   ├── hybrid_backend.rs # Intelligent Vulkan/CUDA dispatch
+│   │   │   └── vulkan_backend.rs # Vulkan bulk operations backend
 │   │   ├── vulkan/
 │   │   │   ├── mod.rs
-│   │   │   ├── pipeline.rs    # wgpu device/queue/pipeline creation, bind group layouts, push constants
+│   │   │   ├── pipeline.rs      # wgpu device/queue/pipeline creation, bind group layouts, push constants
 │   │   │   └── shaders/
-│   │   │       ├── kangaroo.wgsl       # Main compute shader: kangaroo stepping kernel
-│   │   │       ├── jump_table.wgsl     # Jump selection & application logic
-│   │   │       ├── dp_check.wgsl       # DP candidate detection (mask + hash)
-│   │   │       └── utils.wgsl          # EC helpers: add, double, mul, field ops
-│   │   └── cuda/                       # CUDA kernels (.cu or nvrtc sources) — modular inverse, batch solve, precision math
+│   │   │       ├── kangaroo.wgsl    # Main compute shader: kangaroo stepping kernel
+│   │   │       ├── jump_table.wgsl  # Jump selection & application logic
+│   │   │       ├── dp_check.wgsl    # DP candidate detection (mask + hash)
+│   │   │       └── utils.wgsl       # EC helpers: add, double, mul, field ops
+│   │   └── cuda/                   # CUDA kernels (.cu or nvrtc sources) — modular inverse, batch solve, precision math
+│   │       ├── mod.rs
+│   │       ├── barrett_kernel_optimized.cu
+│   │       ├── bias_bank_conflict_free.cu
+│   │       ├── bias_check_kernel.cu
+│   │       ├── bias_kernel_optimized.cu
+│   │       ├── bigint_mul.cu
+│   │       ├── carry_propagation.ptx
+│   │       ├── custom_fft.ptx
+│   │       ├── fft_mul.cu
+│   │       ├── fused_mul_redc.ptx
+│   │       ├── gold_cluster.cu
+│   │       ├── hybrid.cu
+│   │       ├── inverse.cu
+│   │       ├── mod27_kernel.cu
+│   │       ├── mod81_kernel.cu
+│   │       ├── mod9_kernel.cu
+│   │       ├── prime_test_kernel.cu
+│   │       ├── refine_kernel.cu
+│   │       ├── rho_kernel.cu
+│   │       ├── rho_kernel_optimized.cu
+│   │       ├── solve.cu
+│   │       ├── step.cu
+│   │       ├── texture_jump_kernel.cu
+│   │       └── texture_jump_optimized.cu
 │   ├── dp/
 │   │   ├── mod.rs
 │   │   ├── table.rs            # SmartDpTable impl: Cuckoo/Bloom filter + value-based scoring + clustering tags
-│   │   └── pruning.rs         # Async incremental pruning (value-based + cluster preference), chunked eviction, metrics logging
+│   │   └── pruning.rs          # Async incremental pruning (value-based + cluster preference), chunked eviction, metrics logging
 │   ├── parity/
-│   │   └── checker.rs         # 10M-step parity verification harness (CPU vs GPU bit-for-bit)
+│   │   ├── mod.rs
+│   │   └── checker.rs          # 10M-step parity verification harness (CPU vs GPU bit-for-bit)
 │   ├── targets/
 │   │   ├── mod.rs
-│   │   └── loader.rs          # Load & parse valuable_p2pk_publickey.txt + puzzles.txt, validate pubkeys
-│   └── utils/
-│       ├── mod.rs
-│       ├── logging.rs         # Structured logs: attractors, convergence, pruning stats, checkpoint summaries
-│       └── hash.rs            # Fast, deterministic hashes for jumps & DP keys (murmur3 variant)
-└── tests/
-    └── puzzle.rs              # Tier 1 validators: load solved puzzle pubkey/range, run solve, assert privkey match
+│   │   └── loader.rs           # Load & parse valuable_p2pk_publickey.txt + puzzles.txt, validate pubkeys
+│   ├── utils/
+│   │   ├── mod.rs
+│   │   ├── logging.rs          # Structured logs: attractors, convergence, pruning stats, checkpoint summaries
+│   │   ├── hash.rs             # Fast, deterministic hashes for jumps & DP keys
+│   │   ├── bias.rs             # Bias analysis and chain computation
+│   │   ├── output.rs           # Real-time output formatting
+│   │   └── pubkey_loader.rs    # Public key parsing and validation
+│   ├── test_basic.rs           # Basic functionality tests
+│   ├── simple_test.rs          # Simplified test cases
+│   └── SHA256SUMS              # Integrity verification files
+├── tests/                      # Integration tests directory
+│   ├── bias_validation.rs      # Bias analysis validation
+│   ├── config.rs               # Configuration testing
+│   ├── fuzz_targets.rs         # Fuzz testing targets
+│   ├── kangaroo.rs             # Kangaroo algorithm tests
+│   ├── magic9.rs               # Magic9 bias testing
+│   ├── math.rs                 # Mathematical operations testing
+│   └── puzzle.rs               # Puzzle solving validation
+├── benches/                    # Performance benchmarking
+│   └── kangaroo.rs             # Kangaroo performance benchmarks
+├── docs/                       # Documentation
+│   ├── nsight_profiling.md     # Nsight profiling guide
+│   └── profiling.md            # General profiling documentation
+├── profiling_output/           # Profiling output directory
+│   └── ncu_output.log          # Nsight Compute output logs
+└── scripts/                    # Utility scripts
+    ├── commit_phase10.sh       # Git commit automation
+    ├── custom_mod_efficiency_rule.py  # Nsight rule customization
+    ├── custom_nsight_rules.py  # Nsight profiling rules
+    ├── profile_and_analyze.sh  # Profiling and analysis script
+    └── setup_profiling.sh      # Profiling environment setup
 
 **File Rules**
 - main.rs must remain thin (<200 lines ideal)
@@ -136,7 +205,7 @@ Project Root:
 
 6. **Jump Table & Stepping** — Round-based (one jump per round per kangaroo), 8 deterministic ops base (G ± kG, Target ± kTarget). Expandable only via --expanded-jump-table. Include negation map for symmetry (check P and -P).
 
-7. **Backend** — Hybrid CUDA/Vulkan: CUDA for critical math (EC adds/muls, modular inverse, alpha/beta tracking, collision solving). Vulkan (wgpu) for bulk stepping, kangaroo generation, memory tables. Goal: 2.5–3B ops/sec per RTX 5090, full utilization, <0.6s batches, async syncs.
+7. **Backend** — **HYBRID MODE IS SACRED #1 METHOD**: Vulkan for non-drift-critical, non-long-jump bulk operations (stepping batches, kangaroo generation, memory tables). CUDA for all ECDLP operations requiring exact outputs (EC adds/muls, modular inverse, alpha/beta tracking, collision solving, precision math). Goal: 2.5–3B ops/sec per RTX 5090, full utilization, <0.6s batches, async syncs.
 
 8. **Parity & Drift Prevention** — Integrated CPU/GPU 10M-step parity passes mandatory after any change. Bit-for-bit match required. Log attractor convergence (e.g., Magic 9: 30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38).
 
@@ -192,10 +261,10 @@ Project Root:
    - Avoid full EC compare in shader; defer to CPU.
    - For smart pruning: GPU generates candidate DPs → CPU async prunes (rayon/tokio) → no stall.
 
-6. **Hybrid-Specific Wins**
-   - Vulkan/wgpu (stepping/generation): Async queues for compute + copy. Use push constants for per-dispatch params (dp_bits, jump_mean).
-   - CUDA (math-critical): Use for modular inverse (extended gcd or Fermat, but better precompute for batch), alpha/beta solve. Call via extern "C" from Rust or nvrtc dynamic kernels.
-   - Overlap: Vulkan steps while CUDA solves rare collisions.
+6. **Hybrid-Specific Wins (Vulkan bulk + CUDA precision)**
+   - **Vulkan/wgpu**: Non-drift-critical, non-long-jump operations (stepping batches, kangaroo generation, memory tables, bulk compute).
+   - **CUDA**: All ECDLP operations requiring exact outputs (modular inverse, alpha/beta solve, collision solving, precision math).
+   - Overlap: Vulkan bulk processing while CUDA handles precision ECDLP operations.
 
 7. **Profiling & Tuning Tools**
    - Nsight Compute/Graphics for kernel metrics (occupancy, mem bandwidth, warp stalls).
