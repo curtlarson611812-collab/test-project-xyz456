@@ -99,7 +99,7 @@ impl GpuBackend for CpuBackend {
         self.step_batch(positions, distances, types)
     }
 
-    fn batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, _alphas: Vec<[u32;8]>, _distances: Vec<[u32;8]>, _config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
         // CPU fallback implementation for BSGS
         // This would implement the Baby-Step Giant-Step algorithm in software
         // For now, return None for all (not implemented)

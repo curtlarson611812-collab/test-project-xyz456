@@ -27,6 +27,11 @@ pub struct KangarooController {
 }
 
 impl KangarooController {
+    /// Get number of managers
+    pub fn len(&self) -> usize {
+        self.managers.len()
+    }
+
     /// Create controller with specified target lists and config
     pub async fn new_with_lists(
         config: &Config,
@@ -153,7 +158,7 @@ mod tests {
 
         // Test with test puzzles only (no file I/O)
         let controller = KangarooController::new_with_lists(
-            config,
+            &config,
             None,    // No valuable P2PK
             true,    // Load test puzzles
             false,   // No unsolved puzzles

@@ -8,25 +8,22 @@ use clap::Parser;
 use log::{info, warn, error};
 
 use speedbitcrack::config::Config;
-use speedbitcrack::kangaroo::{KangarooGenerator, CollisionDetector, CollisionResult};
+use speedbitcrack::kangaroo::{KangarooGenerator, CollisionDetector};
 use speedbitcrack::types::KangarooState;
 use speedbitcrack::utils::logging::setup_logging;
-use speedbitcrack::utils::pubkey_loader::parse_compressed;
 use speedbitcrack::puzzles;
 use speedbitcrack::utils::bias;
 use speedbitcrack::gpu::HybridGpuManager;
-use speedbitcrack::utils::output::{start_real_time_output, DisplayArgs, DisplayConfig};
+use speedbitcrack::types::RhoState;
 use speedbitcrack::test_basic::run_basic_test;
 use speedbitcrack::simple_test::run_simple_test;
-use std::ops::{Add, Sub};
-use std::sync::{Arc, Mutex};
-use speedbitcrack::math::secp::Secp256k1;
-use speedbitcrack::math::bigint::BigInt256;
-use speedbitcrack::types::{Point, RhoState};
 use std::process::Command;
 use std::fs::read_to_string;
 use regex::Regex;
-use rand;
+use std::ops::{Add, Sub};
+use speedbitcrack::math::secp::Secp256k1;
+use speedbitcrack::math::bigint::BigInt256;
+use speedbitcrack::types::Point;
 
 // Chunk: Laptop Flag Parse (main.rs)
 /// Command line arguments
@@ -68,6 +65,22 @@ struct Args {
 
     #[arg(long, default_value_t = true)]
     gold_bias_combo: bool,  // Enable GOLD hierarchical factoring
+
+    // Additional Block 1 flags
+    #[arg(long)]
+    enable_stagnant_restart: bool,  // Enable stagnant herd auto-restart booster
+    #[arg(long)]
+    enable_adaptive_jumps: bool,  // Enable adaptive jump table booster
+    #[arg(long, value_name = "THRESHOLD")]
+    enable_near_collisions: Option<f64>,  // Enable near collision detection with threshold
+    #[arg(long, value_name = "STEPS")]
+    enable_walk_backs: Option<u64>,  // Enable walk backs with max steps
+    #[arg(long)]
+    enable_smart_pruning: bool,  // Enable smart pruning
+    #[arg(long, default_value_t = false)]
+    prime_entropy: bool,  // Add entropy to prime spacing
+    #[arg(long, default_value_t = false)]
+    expanded_primes: bool,  // Use expanded prime list
     #[arg(long)]
     bias_analysis: bool,  // Run complete bias analysis on unsolved puzzles
     #[arg(long, value_name = "TARGETS")]
@@ -82,16 +95,6 @@ struct Args {
     bias_mod: u64,  // Bias modulus for jump selection (0 = no bias)
     #[arg(long)]
     magic9: bool,  // Enable magic 9 sniper mode for specific 9 pubkeys
-    #[arg(long, default_value = "uniform")]
-    bias_mode: String,  // Bias mode: uniform, magic9, primes
-    #[arg(long, default_value_t = true)]
-    use_bloom: bool,  // Enable Bloom filters for DP pre-checks
-    #[arg(long, default_value_t = true)]
-    use_hybrid_bsgs: bool,  // Enable hybrid BSGS for near-collision resolution
-    #[arg(long, default_value = "4294967296")]
-    bsgs_threshold: u64,  // BSGS threshold for mini-ECDLP
-    #[arg(long, default_value_t = true)]
-    gold_bias_combo: bool,  // Enable GOLD bias combo
     #[arg(long)]
     verbose: bool,  // Enable verbose logging
     #[arg(long)]
@@ -286,12 +289,18 @@ fn crack_loop(_target: &BigInt256, _range: (BigInt256, BigInt256), config: &mut 
     None
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Parse command line arguments first
     let args = Args::parse();
 
+    // Initialize logging
+    let _ = setup_logging();
+
     // Create config from parsed arguments (Blocks 1-8 integration)
     let mut config = Config::default();
+    // Ensure proper defaults for clap-overridden fields
+    config.dp_bits = 24;
     config.bias_mode = match args.bias_mode.as_str() {
         "magic9" => speedbitcrack::config::BiasMode::Magic9,
         "primes" => speedbitcrack::config::BiasMode::Primes,
@@ -301,6 +310,20 @@ fn main() -> Result<()> {
     config.use_hybrid_bsgs = args.use_hybrid_bsgs;
     config.bsgs_threshold = args.bsgs_threshold;
     config.gold_bias_combo = args.gold_bias_combo;
+    config.enable_stagnant_restart = args.enable_stagnant_restart;
+    config.enable_adaptive_jumps = args.enable_adaptive_jumps;
+    config.enable_near_collisions = args.enable_near_collisions;
+    config.enable_walk_backs = args.enable_walk_backs;
+    config.enable_smart_pruning = args.enable_smart_pruning;
+    config.prime_spacing_with_entropy = args.prime_entropy;
+    config.expanded_prime_spacing = args.expanded_primes;
+
+    // Special configuration for integration test
+    if args.integration_test {
+        // Configure for full feature testing
+        config.bias_mode = speedbitcrack::config::BiasMode::Magic9;
+        config.gold_bias_combo = true;
+    }
 
     // Validate config
     if let Err(e) = config.validate() {
@@ -308,8 +331,30 @@ fn main() -> Result<()> {
         return Err(anyhow!("Invalid configuration"));
     }
 
-    // Initialize logging
-    let _ = setup_logging();
+    // Handle full integration test (Block 9)
+    if args.integration_test {
+
+        println!("🚀 Running full integration test with all Blocks 1-9 features enabled");
+        println!("📊 Configuration:");
+        println!("  🎯 Bias Mode: {:?}", config.bias_mode);
+        println!("  🏮 Bloom Filter: {}", config.use_bloom);
+        println!("  🔮 Hybrid BSGS: {}", config.use_hybrid_bsgs);
+        println!("  🏆 GOLD Combo: {}", config.gold_bias_combo);
+        println!("  📊 BSGS Threshold: {}", config.bsgs_threshold);
+
+        // Test controller creation with config
+        match speedbitcrack::kangaroo::controller::KangarooController::new_with_lists(&config, None, true, false).await {
+            Ok(controller) => {
+                println!("✅ Controller created successfully with {} managers", controller.len());
+                println!("🎉 Full integration test PASSED - all Blocks 1-9 working correctly!");
+            }
+            Err(e) => {
+                println!("❌ Integration test FAILED: {}", e);
+                return Err(anyhow!("Integration test failed"));
+            }
+        }
+        return Ok(());
+    }
     if args.verbose {
         log::set_max_level(log::LevelFilter::Debug);
     }
@@ -329,29 +374,6 @@ fn main() -> Result<()> {
         }
     }
 
-    // Handle full integration test (Block 9)
-    if args.integration_test {
-        println!("🚀 Running full integration test with all Blocks 1-9 features enabled");
-        println!("📊 Configuration:");
-        println!("  🎯 Bias Mode: {:?}", config.bias_mode);
-        println!("  🏮 Bloom Filter: {}", config.use_bloom);
-        println!("  🔮 Hybrid BSGS: {}", config.use_hybrid_bsgs);
-        println!("  🏆 GOLD Combo: {}", config.gold_bias_combo);
-        println!("  📊 BSGS Threshold: {}", config.bsgs_threshold);
-
-        // Test controller creation with config
-        match speedbitcrack::kangaroo::controller::KangarooController::new_with_lists(&config, None, true, false).await {
-            Ok(controller) => {
-                println!("✅ Controller created successfully with {} managers", controller.managers.len());
-                println!("🎉 Full integration test PASSED - all Blocks 1-9 working correctly!");
-            }
-            Err(e) => {
-                println!("❌ Integration test FAILED: {}", e);
-                return Err(anyhow!("Integration test failed"));
-            }
-        }
-        return Ok(());
-    }
 
     // Handle solved puzzle testing with full bias integration
     if let Some(puzzle_num) = args.test_solved {
@@ -517,7 +539,7 @@ fn main() -> Result<()> {
             println!("🐪 Starting kangaroo algorithm with {} kangaroos, bias={:?}", gpu_config.max_kangaroos, bias);
 
             let curve = Secp256k1::new();
-            let gen = KangarooGenerator::new(&config);
+            let gen = KangarooGenerator::new(&Config::default());
 
             println!("🎯 About to launch full implementation...");
             // COMPLETE FULL IMPLEMENTATION: Every single advanced feature enabled and working
@@ -538,11 +560,11 @@ fn main() -> Result<()> {
 
             // Create the COMPLETE FULL kangaroo system with ALL components
             let dp_table = std::sync::Arc::new(std::sync::Mutex::new(speedbitcrack::dp::DpTable::new(24)));
-            let collision_detector = speedbitcrack::kangaroo::CollisionDetector::new();
+            let collision_detector = speedbitcrack::kangaroo::CollisionDetector::new_with_config(&config);
             let stepper = speedbitcrack::kangaroo::KangarooStepper::with_dp_bits(true, 24);
 
             // FULL CONFIGURATION with ALL features enabled
-            let mut search_config = config.clone();
+            let mut search_config = Config::default();
             search_config = speedbitcrack::config::Config {
                 dp_bits: 24,
                 enable_near_collisions: Some(0.8), // 80% threshold for near collision detection
@@ -933,7 +955,7 @@ fn main() -> Result<()> {
         let target_point = curve.g.clone(); // Use generator as default target
 
         let laptop_config = if args.laptop { config.clone() } else { config.clone() };
-        let gen = KangarooGenerator::new(&config);
+        let gen = KangarooGenerator::new(&Config::default());
 
         execute_custom_range(&gen, &target_point, (low, high), &args)?;
         return Ok(());
@@ -1051,8 +1073,8 @@ fn run_crack_unsolved(args: &Args) -> Result<()> {
     // Create mode and execute
     let mode = RealMode { n: most_likely };
     let curve = Secp256k1::new();
-    let search_config = config.clone();
-    let gen = KangarooGenerator::new(&config);
+    let search_config = Config::default();
+    let gen = KangarooGenerator::new(&Config::default());
 
     let point = mode.load(&curve)?;
     mode.execute(&gen, &point, args)?;
@@ -1095,7 +1117,7 @@ fn load_puzzle_point(puzzle_num: u32) -> Result<Point> {
 /// Run parallel lambda algorithm for unsolved puzzles
 fn pollard_lambda_parallel(target: &Point, range: (BigInt256, BigInt256)) -> Option<BigInt256> {
     let curve = Secp256k1::new();
-        let gen = KangarooGenerator::new(&config);
+        let gen = KangarooGenerator::new(&Config::default());
     let herd_size = 1000; // Reasonable size for unsolved hunting
 
     // Create initial kangaroo states
@@ -1129,7 +1151,8 @@ fn pollard_lambda_parallel(target: &Point, range: (BigInt256, BigInt256)) -> Opt
     );
 
     // Run collision detection
-    let detector = CollisionDetector::new();
+    let config = Config::default();
+    let detector = CollisionDetector::new_with_config(&config);
     let dp_table = std::sync::Arc::new(std::sync::Mutex::new(speedbitcrack::dp::DpTable::new(24)));
 
     // Simple iteration - in production would use async GPU acceleration
@@ -1313,8 +1336,8 @@ fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
 
     // For puzzle #64, we know the private key is 1, so [1]G = target
     // This is just a test - real solving would use kangaroo methods
-    let search_config = config.clone();
-    let _gen = KangarooGenerator::new(&config);
+    let search_config = Config::default();
+    let _gen = KangarooGenerator::new(&Config::default());
 
     // Simple test: check if multiplying by 1 gives us the target
     let one = BigInt256::from_u64(1);

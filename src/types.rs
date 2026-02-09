@@ -169,6 +169,11 @@ impl Point {
         BigInt256 { limbs: self.y }
     }
 
+    /// Get z coordinate as BigInt256
+    pub fn z_bigint(&self) -> BigInt256 {
+        BigInt256 { limbs: self.z }
+    }
+
     /// Get low 32 bits of x coordinate
     pub fn x_low_u32(&self) -> u32 {
         self.x[0] as u32

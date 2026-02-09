@@ -54,7 +54,7 @@ pub enum BiasMode {
 }
 
 /// SpeedBitCrack V3 - Pollard's rho/kangaroo ECDLP solver for secp256k1
-#[derive(Parser, Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(author, version, about, long_about = None)]
 pub struct Config {
     /// Search mode: full-range (default for P2PK/Magic 9) or interval=low-high (for puzzles)
@@ -196,6 +196,48 @@ pub struct Config {
     /// Enable GOLD bias combo (primes + mod3/9/27/81 for instant attractor solving)
     #[arg(long)]
     pub gold_bias_combo: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            mode: SearchMode::FullRange,
+            p2pk_file: "valuable_p2pk_pubkeys.txt".into(),
+            puzzles_file: "puzzles.txt".into(),
+            puzzle_mode: false,
+            test_mode: false,
+            dp_bits: 24,
+            herd_size: 100000,
+            jump_mean: 1000,
+            near_threshold: 1000,
+            enable_stagnant_restart: false,
+            enable_adaptive_jumps: false,
+            enable_multi_herd_merge: false,
+            enable_dp_feedback: false,
+            near_g_thresh: 1048576,
+            max_ops: 1000000000000,
+            wild_primes: vec![179, 257, 347, 461, 577, 691, 797, 919],
+            prime_spacing_with_entropy: false,
+            expanded_prime_spacing: false,
+            expanded_jump_table: false,
+            attractor_start: None,
+            enable_near_collisions: None,
+            enable_walk_backs: None,
+            enable_smart_pruning: false,
+            enable_target_eviction: false,
+            validate_puzzle: None,
+            force_continue: false,
+            output_dir: "output".into(),
+            checkpoint_interval: 4294967296,
+            log_level: "info".into(),
+            gpu_backend: GpuBackend::Hybrid,
+            bias_mode: BiasMode::Uniform,
+            use_bloom: true,
+            use_hybrid_bsgs: true,
+            bsgs_threshold: 4294967296,
+            gold_bias_combo: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

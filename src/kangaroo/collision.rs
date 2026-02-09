@@ -865,7 +865,7 @@ impl CollisionDetector {
         &self,
         trap_i: &Trap,
         trap_j: &Trap,
-        threshold: u64,
+        _threshold: u64,
     ) -> Option<BigInt256> {
         let diff = if trap_i.dist > trap_j.dist {
             &trap_i.dist - &trap_j.dist

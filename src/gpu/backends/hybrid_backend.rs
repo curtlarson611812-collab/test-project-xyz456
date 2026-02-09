@@ -190,7 +190,7 @@ impl HybridBackend {
         let mut all_traps = Vec::new();
 
         #[cfg(feature = "rustacuda")]
-        if cuda_ratio > 0.0 {
+        if _cuda_ratio > 0.0 {
             let cuda_batch = ((batch_size as f32) * cuda_ratio) as usize;
             if cuda_batch > 0 {
                 // Split data for CUDA processing

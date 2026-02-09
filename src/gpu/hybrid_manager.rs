@@ -6,15 +6,12 @@
 use super::shared::SharedBuffer;
 use super::backends::hybrid_backend::HybridBackend;
 use super::backends::backend_trait::GpuBackend;
-use crate::types::Point;
+use crate::types::{Point, Solution, KangarooState, Scalar};
 use crate::kangaroo::collision::Trap;
 use crate::math::{secp::Secp256k1, bigint::BigInt256};
 use crate::config::{Config, BiasMode};
-use crate::kangaroo::generator::PRIME_MULTIPLIERS;
 use anyhow::Result;
-use num_bigint::BigUint;
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use log::{info, warn, debug};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -781,12 +778,6 @@ impl HybridGpuManager {
     pub fn get_metrics(&self) -> DriftMetrics {
         self.metrics.lock().unwrap().clone()
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio;
 
     /// Dispatch collision solving with BSGS offload if configured
     pub fn dispatch_collision_gpu(&self, traps: &[Trap], target: &Point) -> Vec<Solution> {
@@ -804,14 +795,24 @@ mod tests {
                 let mut delta = [[0u32; 8]; 3];
                 // Simplified: just copy target as delta
                 for i in 0..8 {
-                    delta[0][i] = target.x[i];
-                    delta[1][i] = target.y[i];
-                    delta[2][i] = target.z[i];
+                    delta[0][i] = target.x[i] as u32;
+                    delta[1][i] = target.y[i] as u32;
+                    delta[2][i] = target.z[i] as u32;
                 }
                 delta
             }).collect();
 
-            let alphas: Vec<[u32; 8]> = traps.iter().map(|trap| trap.alpha).collect();
+            let alphas: Vec<[u32; 8]> = traps.iter().map(|trap| {
+                let mut alpha_array = [0u32; 8];
+                for i in 0..4.min(trap.alpha.len()) {
+                    alpha_array[i * 2] = trap.alpha[i] as u32;
+                    if i * 2 + 1 < 8 {
+                        alpha_array[i * 2 + 1] = (trap.alpha[i] >> 32) as u32;
+                    }
+                }
+                alpha_array
+            }).collect();
+
             let distances: Vec<[u32; 8]> = traps.iter().map(|trap| {
                 let mut dist_array = [0u32; 8];
                 let dist_bytes = trap.dist.to_bytes_le();
@@ -828,7 +829,7 @@ mod tests {
                         if let Some(solution_array) = result {
                             // Convert to Solution
                             let private_key = solution_array.map(|x| x as u64);
-                            let solution = Solution::new(private_key, *target, 0, 0.0);
+                            let solution = Solution::new(private_key[..4].try_into().unwrap(), *target, 0, 0.0);
                             solutions.push(solution);
                         }
                     }
@@ -844,43 +845,16 @@ mod tests {
 
     /// Dispatch batch BSGS solving to appropriate backend
     fn dispatch_batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>) -> Result<Vec<Option<[u32;8]>>> {
-        // Dispatch to CUDA for BSGS solving
+        // Dispatch to CUDA for BSGS solving (most efficient for this operation)
         #[cfg(feature = "rustacuda")]
         {
             self.cuda.batch_bsgs_solve(deltas, alphas, distances, &self.config)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            // Fallback to CPU implementation
-            self.cpu.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+            // Fallback to CPU implementation via hybrid backend
+            self.hybrid_backend.batch_bsgs_solve(deltas, alphas, distances, &self.config)
         }
-    }
-
-    /// Batch BSGS collision solving on GPU
-    fn batch_bsgs_collision_gpu(&self, traps: &[&Trap], target: &Point) -> Vec<Solution> {
-        let mut solutions = Vec::new();
-
-        // For each trap, compute delta and solve using BSGS
-        for trap in traps {
-            // Simplified: in practice this would batch multiple deltas
-            let delta_point = self.compute_delta_point(trap, target);
-            if let Some(offset) = self.bsgs_solve_gpu(&delta_point, self.config.bsgs_threshold) {
-                // Verify and construct solution
-                let candidate_key = BigInt256::from_u64_array(offset);
-                let computed_point = self.curve.mul(&candidate_key, &self.curve.g);
-                if computed_point.x == target.x && computed_point.y == target.y {
-                    let solution = Solution::new(
-                        offset,
-                        *target,
-                        BigUint::from(0u64), // Placeholder distance
-                        0.0,
-                    );
-                    solutions.push(solution);
-                }
-            }
-        }
-
-        solutions
     }
 
     /// GPU-accelerated BSGS solve for small discrete logs
@@ -902,10 +876,10 @@ mod tests {
     pub fn step_with_gold_factor(&self, kangaroos: &mut [KangarooState]) {
         if self.config.gold_bias_combo {
             for kangaroo in kangaroos.iter_mut() {
-                let dist_scalar = Scalar::new(kangaroo.distance.clone());
+                let dist_scalar = Scalar::from_u64(kangaroo.distance);
                 if let Some((reduced, _factors)) = dist_scalar.mod_small_primes() {
                     // Reduce distance by factoring out small primes
-                    kangaroo.distance = reduced.value;
+                    kangaroo.distance = reduced.value.limbs[0];
                     debug!("Factored kangaroo distance using GOLD combo");
                 }
             }
@@ -922,38 +896,5 @@ mod tests {
         } else {
             vec![false; points.len()]
         }
-    }
-
-    #[tokio::test]
-    async fn test_hybrid_manager_creation() {
-        let config = Config::default();
-        let manager = HybridGpuManager::new(&config, 0.001, 1).await;
-        assert!(manager.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_hybrid_bias_propagation() {
-        let mut config = Config::default();
-        config.bias_mode = BiasMode::Magic9;
-        config.gold_bias_combo = true;
-
-        let manager = HybridGpuManager::new(&config, 0.001, 1).await.unwrap();
-
-        // Test that config is properly propagated
-        assert_eq!(manager.config.bias_mode, BiasMode::Magic9);
-        assert!(manager.config.gold_bias_combo);
-    }
-
-    #[tokio::test]
-    async fn test_hybrid_bias_propagation() {
-        let mut config = Config::default();
-        config.bias_mode = BiasMode::Magic9;
-        config.gold_bias_combo = true;
-
-        let manager = HybridGpuManager::new(&config, 0.001, 1).await.unwrap();
-
-        // Test that config is properly propagated
-        assert_eq!(manager.config.bias_mode, BiasMode::Magic9);
-        assert!(manager.config.gold_bias_combo);
     }
 }

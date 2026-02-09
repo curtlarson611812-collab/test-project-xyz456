@@ -7,6 +7,11 @@ use speedbitcrack::kangaroo::KangarooManager;
 use speedbitcrack::types::Solution;
 use std::collections::HashMap;
 
+/// Score bias effectiveness (product of square roots for combined speedup)
+fn score_bias(biases: &HashMap<u32, f64>) -> f64 {
+    biases.values().fold(1.0, |acc, &w| acc * w.sqrt())
+}
+
 /// Known solved puzzle data for validation
 /// Format: (puzzle_number, pubkey_hex, private_key_hex)
 const SOLVED_PUZZLES: &[(&str, &str, &str)] = &[
@@ -517,7 +522,7 @@ fn test_deeper_mod9_subgroup_analysis() {
     let curve = Secp256k1::new();
     let points = load_test_puzzle_keys(&curve);
 
-    let (b_mod9, max_r9, b_mod27, max_r27) = super::deeper_mod9_subgroup(&points);
+    let (b_mod9, max_r9, b_mod27, max_r27) = speedbitcrack::utils::pubkey_loader::deeper_mod9_subgroup(&points);
 
     // Basic sanity checks
     assert!(b_mod9 >= 1.0); // Bias should be at least uniform
@@ -531,7 +536,7 @@ fn test_iterative_mod9_slice_analysis() {
     let curve = Secp256k1::new();
     let points = load_test_puzzle_keys(&curve);
 
-    let b_prod = super::iterative_mod9_slice(&points, 3);
+    let b_prod = speedbitcrack::utils::pubkey_loader::iterative_mod9_slice(&points, 3);
 
     // Bias product should be reasonable
     assert!(b_prod >= 1.0);
@@ -543,7 +548,7 @@ fn test_iterative_pos_slice_analysis() {
     let curve = Secp256k1::new();
     let points = load_test_puzzle_keys(&curve);
 
-    let (b_prod, min_range, max_range) = super::iterative_pos_slice(&points, 3);
+    let (b_prod, min_range, max_range) = speedbitcrack::utils::pubkey_loader::iterative_pos_slice(&points, 3);
 
     // Basic sanity checks
     assert!(b_prod >= 1.0);
@@ -680,7 +685,7 @@ fn test_load_magic9_pubkeys() {
 
     // Verify all points are valid on the curve
     for (i, point) in pubkeys.iter().enumerate() {
-        assert!(point.validate_curve(&curve),
+        assert!(point.validate_curve(&curve as &speedbitcrack::math::secp::Secp256k1),
                 "Magic 9 pubkey {} is not on secp256k1 curve", i);
     }
 
@@ -777,7 +782,8 @@ fn test_magic9_sniper_integration() {
     for (i, pubkey) in pubkeys.iter().enumerate() {
         use speedbitcrack::kangaroo::generator::compute_pubkey_biases;
         let pubkey_affine = curve.to_affine(pubkey);
-        let biases = compute_pubkey_biases(&pubkey_affine.x);
+        let x_bigint = speedbitcrack::math::bigint::BigInt256::from_u64_array(pubkey_affine.x);
+        let biases = compute_pubkey_biases(&x_bigint);
 
         // Verify biases are reasonable (0-8 for mod9, etc.)
         assert!(biases.0 <= 8, "mod9 bias should be 0-8 for pubkey {}", i);
