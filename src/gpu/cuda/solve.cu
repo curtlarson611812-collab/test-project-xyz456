@@ -9,6 +9,18 @@
 #define LIMBS 8
 #define WIDE_LIMBS 16
 
+// BigInt256 struct for unified CPU/GPU arithmetic (matches CPU BigInt256)
+typedef struct {
+    uint64_t limbs[4];  // LSB in limbs[0], MSB in limbs[3] - exact match to CPU BigInt256
+} bigint256;
+
+// BigInt256 Point structure for elliptic curve operations
+typedef struct {
+    bigint256 x;
+    bigint256 y;
+    bigint256 z;
+} Point256;
+
 // secp256k1 order (n) and secp256k1 prime (p) constants
 __constant__ uint32_t SECP_N[LIMBS] = {
     0xD0364141u, 0xBFD25E8Cu, 0xAF48A03Bu, 0xBAAEDCE6u,
@@ -746,3 +758,36 @@ extern "C" void launch_bsgs_solve(
 
     cudaFree(d_mod);
 }
+
+// BigInt256 batch scalar multiplication kernel
+__global__ void batch_scalar_mul(Point256 *results, Point256 *bases, bigint256 *scalars, int batch_size, bigint256 mod_p, bigint256 mu, bigint256 curve_a) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= batch_size) return;
+    Point256 res = {bigint256_zero(), bigint256_one(), bigint256_zero()}; // infinity
+    Point256 cur = bases[idx];
+    bigint256 k = scalars[idx];
+    for (int bit = 0; bit < 256; bit++) {
+        uint64_t bit_mask = 1ULL << (bit % 64);
+        if ((k.limbs[bit / 64] & bit_mask) != 0) {
+            res = ec_add(res, cur, mod_p, mu);
+        }
+        cur = jacobian_double(cur, mod_p, mu, curve_a);
+    }
+    results[idx] = res;  // To affine later if needed
+}
+
+// Forward declarations for BigInt256 functions (defined in other .cu files)
+__device__ bigint256 bigint256_zero();
+__device__ bigint256 bigint256_one();
+__device__ bigint256 bigint256_add(bigint256 a, bigint256 b);
+__device__ bigint256 bigint256_sub(bigint256 a, bigint256 b);
+__device__ bigint256 bigint256_mul(bigint256 a, bigint256 b);
+__device__ bigint256 bigint256_shr(bigint256 x, uint32_t bits);
+__device__ int bigint256_cmp(bigint256 a, bigint256 b);
+__device__ bool bigint256_ge(bigint256 a, bigint256 b);
+__device__ bigint256 barrett_reduce(bigint256 x, bigint256 p, bigint256 mu);
+__device__ bigint256 mont_mul(bigint256 a, bigint256 b, bigint256 p, bigint256 inv);
+__device__ Point256 jacobian_double(Point256 p, bigint256 mod_p, bigint256 mu, bigint256 curve_a);
+__device__ Point256 ec_add(Point256 p1, Point256 p2, bigint256 mod_p, bigint256 mu);
+__device__ bool is_infinity(Point256 p);
+__device__ bool is_zero(bigint256 val);

@@ -1,9 +1,89 @@
 // bigint_mul.cu - CUDA kernel for big integer multiplication
 // Implements batch 256-bit multiplication: out[batch*16] = a[batch*8] * b[batch*8]
 // Uses schoolbook multiplication with carry propagation
+// Extended with BigInt256 operations for unified CPU/GPU arithmetic
 
 #include <cuda_runtime.h>
 #include <stdint.h>
+
+// BigInt256 struct for unified CPU/GPU arithmetic (matches CPU BigInt256)
+typedef struct {
+    uint64_t limbs[4];  // LSB in limbs[0], MSB in limbs[3] - exact match to CPU BigInt256
+} bigint256;
+
+// BigInt256 helper functions
+__device__ bigint256 bigint256_zero() {
+    bigint256 res;
+    res.limbs[0] = 0; res.limbs[1] = 0; res.limbs[2] = 0; res.limbs[3] = 0;
+    return res;
+}
+
+__device__ bigint256 bigint256_one() {
+    bigint256 res = bigint256_zero();
+    res.limbs[0] = 1;
+    return res;
+}
+
+__device__ bigint256 bigint256_add(const bigint256 a, const bigint256 b) {
+    bigint256 res;
+    uint64_t carry = 0;
+    for (int i = 0; i < 4; i++) {
+        __uint128_t sum = (__uint128_t)a.limbs[i] + b.limbs[i] + carry;
+        res.limbs[i] = (uint64_t)sum;
+        carry = (uint64_t)(sum >> 64);
+    }
+    return res;  // No wrap; reduce later - matches CPU no-overflow assumption
+}
+
+__device__ bigint256 bigint256_sub(const bigint256 a, const bigint256 b) {
+    bigint256 res;
+    int64_t borrow = 0;
+    for (int i = 0; i < 4; i++) {
+        __int128_t diff = (__int128_t)a.limbs[i] - b.limbs[i] - borrow;
+        res.limbs[i] = (diff < 0) ? (uint64_t)(diff + (1LL << 64)) : (uint64_t)diff;
+        borrow = (diff < 0) ? 1 : 0;
+    }
+    return res;
+}
+
+__device__ bigint256 bigint256_mul(const bigint256 a, const bigint256 b) {
+    bigint256 res = bigint256_zero();
+    for (int i = 0; i < 4; i++) {
+        uint64_t carry = 0;
+        for (int j = 0; j < 4; j++) {
+            __uint128_t prod = (__uint128_t)a.limbs[i] * b.limbs[j] + res.limbs[i + j] + carry;
+            res.limbs[i + j] = (uint64_t)prod;
+            carry = (uint64_t)(prod >> 64);
+        }
+        // If carry remains and i+4 <4? Discard for 256-bit; use bigint512 if needed for t
+    }
+    return res;
+}
+
+__device__ bigint256 bigint256_shr(const bigint256 x, uint32_t bits) {
+    bigint256 res = x;
+    uint32_t full_shifts = bits / 64;
+    uint32_t rem_bits = bits % 64;
+    if (full_shifts >= 4) return bigint256_zero();
+    for (int i = 3; i >= (int)full_shifts; i--) {
+        res.limbs[i] = (x.limbs[i - full_shifts] >> rem_bits) |
+                       ((i - full_shifts > 0) ? (x.limbs[i - full_shifts - 1] << (64 - rem_bits)) : 0ULL);
+    }
+    for (uint32_t i = 0; i < full_shifts; i++) res.limbs[i] = 0;
+    return res;
+}
+
+__device__ int bigint256_cmp(const bigint256 a, const bigint256 b) {
+    for (int i = 3; i >= 0; i--) {
+        if (a.limbs[i] > b.limbs[i]) return 1;
+        if (a.limbs[i] < b.limbs[i]) return -1;
+    }
+    return 0;
+}
+
+__device__ bool bigint256_ge(const bigint256 a, const bigint256 b) {
+    return bigint256_cmp(a, b) >= 0;
+}
 
 // Schoolbook multiplication kernel for 256-bit integers
 // Each thread handles one multiplication: a[8] * b[8] -> result[16]

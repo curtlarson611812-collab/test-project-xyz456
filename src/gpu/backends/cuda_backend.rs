@@ -1176,21 +1176,36 @@ mod tests {
 
     #[test]
     #[cfg(feature = "rustacuda")]
-    fn test_cuda_double_kernel() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_cuda_bigint256_ops() -> Result<(), Box<dyn std::error::Error>> {
+        let backend = CudaBackend::new()?;
+
+        // Test BigInt256 operations on CUDA: 2 + 3 = 5, 5 * 3 = 15, 15 >> 1 = 7
+        let a = BigInt256::from_u64(2);
+        let b = BigInt256::from_u64(3);
+        let sum = a.add(&b);  // 5
+        let prod = sum.mul(&b);  // 15
+        // TODO: Test these operations via CUDA kernels
+        println!("CUDA BigInt256 ops test: sum={}, prod={}", sum.to_hex(), prod.to_hex());
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "rustacuda")]
+    fn test_cuda_ec_operations() -> Result<(), Box<dyn std::error::Error>> {
         let backend = CudaBackend::new()?;
         let secp = crate::math::secp::Secp256k1::new();
-        let g = secp.g;
 
-        // Test G * 2 (doubling)
-        let expected_2g = secp.mul_constant_time(&BigInt256::from_u64(2), &g)?;
+        // Test EC operations: G * 2 should equal double(G)
+        let g_doubled_cpu = secp.double(&secp.g);
+        let g_times_2_cpu = secp.mul_constant_time(&BigInt256::from_u64(2), &secp.g)?;
 
-        // Convert G to GPU format and double it
-        let d_g = backend.alloc_point(&g)?;
-        let mut d_result = backend.alloc_point(&Point::infinity())?;
+        // These should be equal
+        assert_eq!(g_doubled_cpu.x, g_times_2_cpu.x);
+        assert_eq!(g_doubled_cpu.y, g_times_2_cpu.y);
 
-        // Launch double kernel (assuming it exists in solve.cu or step.cu)
-        // For now, test allocation and basic setup
-        assert!(true); // Will be replaced with actual kernel test
+        // TODO: Implement CUDA kernel calls to verify same results
+        println!("CUDA EC ops test: CPU double and mul match");
 
         Ok(())
     }

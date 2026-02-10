@@ -4,7 +4,19 @@
 
 #include <cuda_runtime.h>
 
-// Point structure for elliptic curve points (Jacobian coordinates)
+// BigInt256 struct for unified CPU/GPU arithmetic (matches CPU BigInt256)
+typedef struct {
+    uint64_t limbs[4];  // LSB in limbs[0], MSB in limbs[3] - exact match to CPU BigInt256
+} bigint256;
+
+// Point structure for elliptic curve points (Jacobian coordinates) - BigInt256 version
+typedef struct {
+    bigint256 x;
+    bigint256 y;
+    bigint256 z;
+} Point256;
+
+// Legacy Point structure (uint32_t version) for backward compatibility
 struct Point {
     uint32_t x[8];  // X coordinate (256-bit)
     uint32_t y[8];  // Y coordinate (256-bit)
@@ -25,6 +37,59 @@ struct Trap {
     uint32_t type;      // Kangaroo type
     uint32_t valid;     // 1 if trap is valid
 };
+
+// BigInt256 EC operation helper functions
+__device__ Point256 point256_infinity() {
+    return {bigint256_zero(), bigint256_one(), bigint256_zero()};  // Convention: z=0 for infinity
+}
+
+__device__ bool is_infinity(const Point256 p) {
+    return bigint256_cmp(p.z, bigint256_zero()) == 0;
+}
+
+__device__ bool is_zero(const bigint256 val) {
+    return bigint256_cmp(val, bigint256_zero()) == 0;
+}
+
+// Jacobian double for BigInt256 points
+__device__ Point256 jacobian_double(const Point256 p, const bigint256 mod_p, const bigint256 mu, const bigint256 curve_a) {
+    if (is_zero(p.y) || is_infinity(p)) return point256_infinity();
+    bigint256 yy = mont_mul(p.y, p.y, mod_p, mu);
+    bigint256 yyyy = mont_mul(yy, yy, mod_p, mu);
+    bigint256 zz = mont_mul(p.z, p.z, mod_p, mu);
+    bigint256 zzzz = mont_mul(zz, zz, mod_p, mu);
+    bigint256 xx = mont_mul(p.x, p.x, mod_p, mu);
+    bigint256 m = mont_mul(bigint256{3,0,0,0}, xx, mod_p, mu);
+    m = bigint256_add(m, mont_mul(curve_a, zzzz, mod_p, mu));  // curve_a = -3 mod p
+    bigint256 s = mont_mul(bigint256{2,0,0,0}, mont_mul(p.x, yy, mod_p, mu), mod_p, mu);
+    bigint256 x3 = bigint256_sub(mont_mul(m, m, mod_p, mu), mont_mul(bigint256{2,0,0,0}, s, mod_p, mu));
+    bigint256 y3 = bigint256_sub(mont_mul(m, bigint256_sub(s, x3), mod_p, mu), mont_mul(bigint256{8,0,0,0}, yyyy, mod_p, mu));
+    bigint256 z3 = mont_mul(mont_mul(bigint256{2,0,0,0}, p.y, mod_p, mu), p.z, mod_p, mu);
+    return {barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu)};
+}
+
+// EC add for BigInt256 points
+__device__ Point256 ec_add(const Point256 p1, const Point256 p2, const bigint256 mod_p, const bigint256 mu) {
+    if (is_infinity(p1)) return p2;
+    if (is_infinity(p2)) return p1;
+    bigint256 z1z1 = mont_mul(p1.z, p1.z, mod_p, mu);
+    bigint256 z2z2 = mont_mul(p2.z, p2.z, mod_p, mu);
+    bigint256 u1 = mont_mul(p1.y, mont_mul(p2.z, z2z2, mod_p, mu), mod_p, mu);
+    bigint256 u2 = mont_mul(p2.y, mont_mul(p1.z, z1z1, mod_p, mu), mod_p, mu);
+    bigint256 h = bigint256_sub(mont_mul(p2.x, z1z1, mod_p, mu), mont_mul(p1.x, z2z2, mod_p, mu));
+    if (is_zero(h)) {
+        if (bigint256_cmp(u1, u2) == 0) return jacobian_double(p1, mod_p, mu, bigint256{0xFFFFFFFEFFFFFC2E, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}); // curve_a = -3
+        return point256_infinity();
+    }
+    bigint256 i = mont_mul(bigint256{4,0,0,0}, mont_mul(h, h, mod_p, mu), mod_p, mu);
+    bigint256 j = mont_mul(h, i, mod_p, mu);
+    bigint256 r = mont_mul(bigint256{2,0,0,0}, bigint256_sub(u2, u1), mod_p, mu);
+    bigint256 v = mont_mul(p1.x, i, mod_p, mu);
+    bigint256 x3 = bigint256_sub(bigint256_sub(mont_mul(r, r, mod_p, mu), j), mont_mul(bigint256{2,0,0,0}, v, mod_p, mu));
+    bigint256 y3 = bigint256_sub(mont_mul(r, bigint256_sub(v, x3), mod_p, mu), mont_mul(bigint256{2,0,0,0}, mont_mul(u1, j, mod_p, mu), mod_p, mu));
+    bigint256 z3 = mont_mul(mont_mul(bigint256_sub(mont_mul(p1.z, p2.z, mod_p, mu), h), h, mod_p, mu), h, mod_p, mu);
+    return {barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu)};
+}
 
 // secp256k1 prime modulus (2^256 - 2^32 - 977)
 __constant__ uint32_t P[8] = {
