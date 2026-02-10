@@ -1259,17 +1259,35 @@ impl Point {
     }
 
     /// Convert from k256 ProjectivePoint to our Point structure
-    pub fn from_k256(_k_point: &k256::ProjectivePoint) -> Self {
-        // TEMPORARY: Return generator point for compatibility testing
-        // TODO: Implement full k256 ↔ Point conversion when needed for production
-        Secp256k1::new().g
+    pub fn from_k256(k_point: &k256::ProjectivePoint) -> Self {
+        let affine = k_point.to_affine();
+        let x_bytes: [u8; 32] = affine.x().into();
+        let y_bytes: [u8; 32] = affine.y().into();
+        let x = BigInt256::from_bytes_be(&x_bytes);
+        let y = BigInt256::from_bytes_be(&y_bytes);
+        Point {
+            x: x.limbs,
+            y: y.limbs,
+            z: [1, 0, 0, 0], // z=1 for affine to Jacobian
+        }
     }
 
     /// Convert our Point to k256 ProjectivePoint
     pub fn to_k256(&self) -> k256::ProjectivePoint {
-        // TEMPORARY: Return k256 generator for compatibility testing
-        // TODO: Implement full Point ↔ k256 conversion when needed for production
-        k256::ProjectivePoint::GENERATOR
+        let affine = self.to_affine();
+        let x_bigint = BigInt256 { limbs: affine.x };
+        let y_bigint = BigInt256 { limbs: affine.y };
+        let x_bytes = x_bigint.to_bytes_be();
+        let y_bytes = y_bigint.to_bytes_be();
+
+        // Create uncompressed point bytes: 0x04 + x + y
+        let mut uncompressed_bytes = [0u8; 65];
+        uncompressed_bytes[0] = 0x04; // uncompressed prefix
+        uncompressed_bytes[1..33].copy_from_slice(&x_bytes);
+        uncompressed_bytes[33..65].copy_from_slice(&y_bytes);
+
+        let affine_point = k256::AffinePoint::from_bytes(&uncompressed_bytes).unwrap();
+        affine_point.to_projective()
     }
 
 }
