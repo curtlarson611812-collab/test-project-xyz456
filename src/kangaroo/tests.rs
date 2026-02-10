@@ -152,11 +152,15 @@ mod tests {
             assert!(point.is_valid(&curve));
         }
 
-        // Basic verification - due to k256 conversion simplifications,
-        // we verify the function works and produces valid points
-        assert!(!herds.is_empty());
-        assert_eq!(herds.len(), 3);
+        // Verify accumulation: sum 179+257+281 = 717 * G for last
+        let expected_sum = BigInt256::from_u64(179 + 257 + 281);
+        let expected_last = curve.mul_constant_time(&expected_sum, &curve.g).unwrap();
+        let expected_affine = curve.to_affine(&expected_last);
+        let actual_affine = curve.to_affine(&herds[2]);
+        assert_eq!(expected_affine.x, actual_affine.x);
+        assert_eq!(expected_affine.y, actual_affine.y);
     }
+
 
     // === Phase 5: Integration Testing Stepping and Bucket ===
 
@@ -185,7 +189,7 @@ mod tests {
         // Test tame kangaroo step
         let tame_state = KangarooState::new(
             curve.g.clone(),
-            0u64,   // distance as u64
+            BigInt256::zero(),   // distance as BigInt256
             [0u64; 4], // alpha
             [0u64; 4], // beta
             true,   // is_tame
@@ -198,12 +202,13 @@ mod tests {
 
         // Tame should have moved position and increased distance (additive)
         assert_ne!(new_tame_state.position, tame_state.position);
-        assert!(new_tame_state.distance > tame_state.distance);
+        // Distance comparison for BigInt256 - check if greater than zero
+        assert!(!new_tame_state.distance.is_zero());
 
         // Test wild kangaroo step
         let wild_state = KangarooState::new(
             curve.g.clone(),
-            0u64,   // distance as u64
+            BigInt256::zero(),   // distance as BigInt256
             [0u64; 4], // alpha
             [0u64; 4], // beta
             false,  // is_tame
