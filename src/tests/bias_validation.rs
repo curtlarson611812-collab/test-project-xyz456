@@ -17,10 +17,26 @@ mod tests {
     }
 
     #[test]
+    fn test_prime_multipliers_integrity() {
+        assert_eq!(sop::PRIME_MULTIPLIERS.len(), 32); // Sacred length
+        assert_eq!(sop::PRIME_MULTIPLIERS[0], 179); // First
+        assert_eq!(sop::PRIME_MULTIPLIERS[31], 1583); // Last
+        let hamming_first = sop::PRIME_MULTIPLIERS[0].count_ones();
+        assert_eq!(hamming_first, 5); // Low Hamming weight verify (179=10110111b)
+    }
+
+    #[test]
     fn test_get_biased_prime() {
         assert_eq!(sop::get_biased_prime(0, 81), 179); // Cycle 0
         assert_eq!(sop::get_biased_prime(32, 81), 179); // %32 cycle
         assert_eq!(sop::get_biased_prime(80, 81), sop::PRIME_MULTIPLIERS[80 % 81 % 32]); // Mod81
+    }
+
+    #[test]
+    fn test_get_biased_prime_cycle() {
+        assert_eq!(sop::get_biased_prime(0, 81), 179); // Cycle 0
+        assert_eq!(sop::get_biased_prime(32, 81), 179); // %32
+        assert_eq!(sop::get_biased_prime(1000000000, 81), sop::PRIME_MULTIPLIERS[1000000000 % 81 % 32]); // Large cycle
     }
 
     #[test]

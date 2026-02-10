@@ -118,46 +118,34 @@ mod tests {
 
     #[test]
     fn test_multiplicative_wild_herds() {
+        let config = SearchConfig { batch_per_target: 3, ..Default::default() };
         let curve = Secp256k1::new();
-        let mut config = SearchConfig::default();
-        config.batch_per_target = 3; // Set explicitly
-        let target = curve.g; // Use generator as test target
-
+        let target = curve.g;
         let herds = generate_wild_herds(&target, &config, "magic9");
         assert_eq!(herds.len(), 3);
-
-        // Verify all points are on curve
-        for point in &herds {
-            assert!(point.is_valid(&curve));
+        let expected_first = curve.mul_constant_time(&BigInt256::from_u64(179), &target).unwrap();
+        assert_eq!(herds[0], expected_first);
+        for herd in &herds {
+            assert!(herd.is_valid(&curve)); // From secp.rs
         }
-
-        // Verify first wild kangaroo is 179 * G (first prime multiplier)
-        // Note: Due to k256 conversion simplifications, we just verify basic properties
-        assert!(!herds.is_empty());
-        assert_eq!(herds.len(), 3);
     }
 
     #[test]
     fn test_additive_tame_herds() {
+        let config = SearchConfig { batch_per_target: 3, ..Default::default() };
         let curve = Secp256k1::new();
-        let mut config = SearchConfig::default();
-        config.batch_per_target = 3; // Set explicitly
-
         let herds = generate_tame_herds(&config, "magic9");
         assert_eq!(herds.len(), 3);
-
-        // Verify all points are on curve
-        for point in &herds {
-            assert!(point.is_valid(&curve));
-        }
-
-        // Verify accumulation: sum 179+257+281 = 717 * G for last
-        let expected_sum = BigInt256::from_u64(179 + 257 + 281);
-        let expected_last = curve.mul_constant_time(&expected_sum, &curve.g).unwrap();
+        // Verify accumulation: 179 + 257 + 281 = 717 * G for last
+        let expected_sum = 179 + 257 + 281;
+        let expected_last = curve.mul_constant_time(&BigInt256::from_u64(expected_sum), &curve.g).unwrap();
         let expected_affine = curve.to_affine(&expected_last);
         let actual_affine = curve.to_affine(&herds[2]);
         assert_eq!(expected_affine.x, actual_affine.x);
         assert_eq!(expected_affine.y, actual_affine.y);
+        for herd in &herds {
+            assert!(herd.is_valid(&curve));
+        }
     }
 
 
