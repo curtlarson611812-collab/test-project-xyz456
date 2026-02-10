@@ -649,17 +649,17 @@ impl HybridGpuManager {
             // Execute computation using hybrid backend
             {
                 // Convert to Vec for backend API
-                let mut positions_vec: Vec<[[u32; 8]; 3]> = shared_points.as_slice().iter().map(|p| [
+                let positions_vec: Vec<[[u32; 8]; 3]> = shared_points.as_slice().iter().map(|p| [
                     p.x.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
                     p.y.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
                     p.z.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
                 ]).collect();
 
-                let mut distances_vec: Vec<[u32; 8]> = shared_distances.as_slice().iter().map(|&d| [
+                let distances_vec: Vec<[u32; 8]> = shared_distances.as_slice().iter().map(|&d| [
                     d as u32, (d >> 32) as u32, 0, 0, 0, 0, 0, 0
                 ]).collect();
 
-                let types_vec: Vec<u32> = vec![1; batch_size]; // Simplified - all tame
+                let _types_vec: Vec<u32> = vec![1; batch_size]; // Simplified - all tame
 
                 // Execute step batch using GpuBackend trait
                 // TEMPORARILY DISABLED: GPU stepping uses inconsistent EC math

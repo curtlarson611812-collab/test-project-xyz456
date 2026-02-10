@@ -2,7 +2,7 @@
 // Based on the original code that discovered Magic 9 attractor convergence
 // Uses k256 for secp256k1 operations with locked multiplicative wild starts
 
-use k256::{ProjectivePoint, Scalar, AffinePoint, elliptic_curve::point::AffineCoordinates};
+use k256::{ProjectivePoint, Scalar};
 
 // Sacred 32 small odd primes (>128, odd, low hamming weight for fast mul).
 // Cycle via index % 32 — provides unique starts per kangaroo without bias.
@@ -38,7 +38,7 @@ pub fn initialize_tame_start() -> ProjectivePoint {
 }
 
 // Sacred bucket selection — tame deterministic, wild state-mixed
-pub fn select_bucket(point: &ProjectivePoint, dist: &Scalar, seed: u32, step: u32, is_tame: bool) -> u32 {
+pub fn select_bucket(_point: &ProjectivePoint, _dist: &Scalar, seed: u32, step: u32, is_tame: bool) -> u32 {
     const WALK_BUCKETS: u32 = 32;
 
     if is_tame {

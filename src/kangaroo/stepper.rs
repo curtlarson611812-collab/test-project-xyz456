@@ -12,7 +12,7 @@ use anyhow::Result;
 #[derive(Clone)]
 pub struct KangarooStepper {
     curve: Secp256k1,
-    jump_table: Vec<Point>, // Precomputed jump points
+    _jump_table: Vec<Point>, // Precomputed jump points
     // expanded_mode: bool, // TODO: Implement expanded jump mode
     dp_bits: usize, // DP bits for negation check
     step_count: u32, // Global step counter for tame kangaroo bucket selection
@@ -31,7 +31,7 @@ impl KangarooStepper {
 
         KangarooStepper {
             curve,
-            jump_table,
+            _jump_table: jump_table,
             dp_bits,
             step_count: 0,
         }
@@ -141,7 +141,7 @@ impl KangarooStepper {
     /// Select bias-aware jump operation with configurable modulus preference
     /// bias_mod = 0 means no bias (uniform), bias_mod > 0 means prefer jumps where hash % bias_mod == 0
     /// Select bucket using SmallOddPrime sacred logic
-    pub fn select_sop_bucket(&self, kangaroo: &KangarooState, target: Option<&Point>, bias_mod: u64) -> u32 {
+    pub fn select_sop_bucket(&self, kangaroo: &KangarooState, _target: Option<&Point>, _bias_mod: u64) -> u32 {
         if kangaroo.is_tame {
             // Tame: deterministic based on step count
             self.step_count % 32
@@ -214,17 +214,17 @@ impl KangarooStepper {
     }
 
     /// Apply jump operation and return position/coefficient updates
-    fn apply_jump(&self, kangaroo: &KangarooState, jump_op: JumpOp, target: Option<&Point>) -> (Point, [u64; 4], [u64; 4]) {
+    fn _apply_jump(&self, kangaroo: &KangarooState, jump_op: JumpOp, target: Option<&Point>) -> (Point, [u64; 4], [u64; 4]) {
         match jump_op {
             JumpOp::AddG => {
-                let jump_point = &self.jump_table[0]; // G
+                let jump_point = &self._jump_table[0]; // G
                 let new_pos = self.curve.add(&kangaroo.position, jump_point);
                 let alpha_update = [1, 0, 0, 0]; // +1 * G coefficient
                 let beta_update = [0, 0, 0, 0];
                 (new_pos, alpha_update, beta_update)
             }
             JumpOp::SubG => {
-                let jump_point = &self.jump_table[0]; // G
+                let jump_point = &self._jump_table[0]; // G
                 let neg_g = jump_point.negate(&self.curve);
                 let new_pos = self.curve.add(&kangaroo.position, &neg_g);
                 let alpha_update = [0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]; // -1 mod n
@@ -240,7 +240,7 @@ impl KangarooStepper {
                     (new_pos, alpha_update, beta_update)
                 } else {
                     // Fallback to AddG if no target
-                    self.apply_jump(kangaroo, JumpOp::AddG, target)
+                    self._apply_jump(kangaroo, JumpOp::AddG, target)
                 }
             }
             JumpOp::SubKG => {
@@ -252,7 +252,7 @@ impl KangarooStepper {
                     (new_pos, alpha_update, beta_update)
                 } else {
                     // Fallback to SubG if no target
-                    self.apply_jump(kangaroo, JumpOp::SubG, target)
+                    self._apply_jump(kangaroo, JumpOp::SubG, target)
                 }
             }
         }
@@ -314,12 +314,12 @@ mod tests {
 
         let kangaroo = KangarooState::new(
             initial_pos,
-            0,
+            BigInt256::zero(),
             [0; 4], // alpha
             [0; 4], // beta
             true,   // tame
             false,  // is_dp
-            0,      // id
+            0,                       // id
         );
 
         let stepped = stepper.step_kangaroo(&kangaroo, None);
@@ -327,7 +327,7 @@ mod tests {
         // Position should have changed
         assert_ne!(stepped.position.x, kangaroo.position.x);
         assert_ne!(stepped.position.y, kangaroo.position.y);
-        assert_eq!(stepped.distance, 1);
+        assert_eq!(stepped.distance, BigInt256::one());
         assert_eq!(stepped.id, kangaroo.id);
         assert_eq!(stepped.is_tame, kangaroo.is_tame);
     }
@@ -373,10 +373,10 @@ mod tests {
     #[test]
     fn test_jump_table() {
         let stepper = KangarooStepper::new(false);
-        assert_eq!(stepper.jump_table.len(), 16);
+        assert_eq!(stepper._jump_table.len(), 16);
 
         let expanded_stepper = KangarooStepper::new(true);
-        assert_eq!(expanded_stepper.jump_table.len(), 32);
+        assert_eq!(expanded_stepper._jump_table.len(), 32);
     }
 
     /// Test batch stepping
@@ -386,7 +386,7 @@ mod tests {
         // Create test kangaroo states
         let state1 = KangarooState::new(
             stepper.curve.g.clone(),
-            0,
+            BigInt256::zero(),
             [0; 4],
             [0; 4],
             true,
@@ -395,7 +395,7 @@ mod tests {
         );
         let state2 = KangarooState::new(
             stepper.curve.g.clone(),
-            0,
+            BigInt256::zero(),
             [0; 4],
             [0; 4],
             true,

@@ -229,7 +229,7 @@ impl CollisionDetector {
         Some(Solution {
             private_key: solution.clone().to_u64_array(),
             target_point: entry1.point.clone(),
-            total_ops: 0,
+            total_ops: BigInt256::zero(),
             time_seconds: 0.0,
             verified: true,
         })
@@ -342,7 +342,7 @@ impl CollisionDetector {
         let solution = Solution::new(
             priv_array,
             Point { x: tame.x, y: [0; 4], z: [1; 4] },
-            (&tame.dist + &wild.dist).to_u64_digits().first().copied().unwrap_or(0),
+            BigInt256::from_u64((tame.dist.clone() + wild.dist.clone()).to_u64_digits().first().copied().unwrap_or(0)),
             0.0,
         );
 
@@ -826,9 +826,9 @@ impl CollisionDetector {
         // d_tame - d_wild (distance difference)
         let tame_dist = tame.distance.clone();
         let wild_dist = wild.distance.clone();
-        let diff = tame_dist - wild_dist;
+        let _diff = tame_dist.clone() - wild_dist.clone();
 
-        self.solve_collision_inversion(prime, tame_dist.clone(), wild_dist.clone(), &CURVE_ORDER_BIGINT)
+        self.solve_collision_inversion(prime, tame_dist, wild_dist, &CURVE_ORDER_BIGINT)
     }
 
     /// Solve collision with inversion: k = inv(prime) * (d_tame - d_wild) mod n

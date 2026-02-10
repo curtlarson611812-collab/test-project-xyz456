@@ -109,7 +109,7 @@ mod tests {
         // Test that Barrett and Montgomery reducers produce same results
         let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").unwrap();
         let barrett = crate::math::bigint::BarrettReducer::new(&modulus);
-        let montgomery = crate::math::bigint::MontgomeryReducer::new(&modulus);
+        let _montgomery = crate::math::bigint::MontgomeryReducer::new(&modulus);
 
         let test_val = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").unwrap();
         let wide_val = crate::math::bigint::BigInt512::from_bigint256(&test_val);
@@ -229,7 +229,7 @@ mod tests {
         // Create test states
         let tame_state = crate::types::KangarooState::new(
             curve.g.clone(),
-            0u64, // distance as u64
+            BigInt256::zero(), // distance
             [0; 4],
             [0; 4],
             true, // tame
@@ -239,7 +239,7 @@ mod tests {
 
         let wild_state = crate::types::KangarooState::new(
             curve.g.clone(),
-            0u64, // distance as u64
+            BigInt256::zero(), // distance
             [0; 4],
             [0; 4],
             false, // wild
@@ -254,7 +254,7 @@ mod tests {
         let stepped_wild = stepper.step_kangaroo_with_bias(&wild_state, Some(&curve.g), 81);
 
         // Verify SmallOddPrime logic: tame adds to distance, wild multiplies
-        assert!(stepped_tame.distance > 0); // u64 comparison
+        assert!(stepped_tame.distance > BigInt256::zero()); // BigInt256 comparison
         assert_ne!(stepped_wild.position.x, wild_state.position.x);
 
         // GPU integration would verify these match GPU results

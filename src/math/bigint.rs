@@ -307,6 +307,16 @@ impl BigInt256 {
         ],
     };
 
+    /// Secp256k1 order constant (n)
+    pub const N: BigInt256 = BigInt256 {
+        limbs: [
+            0xBAAEDCE6AF48A03B,
+            0xBFD25E8CD0364141,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+        ],
+    };
+
     /// Create one
     pub fn one() -> Self {
         BigInt256 { limbs: [1, 0, 0, 0] }
@@ -481,6 +491,17 @@ impl BigInt256 {
             bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
         }
         bytes
+    }
+
+    /// Get secp256k1 order constant
+    pub fn secp_n() -> Self {
+        Self::N
+    }
+
+    /// Wrapping addition (for compatibility with u64 operations)
+    pub fn wrapping_add(&self, other: u64) -> Self {
+        let other_big = Self::from_u64(other);
+        self.clone().add(other_big)
     }
 
     /// Convert to hex string
@@ -1239,14 +1260,16 @@ impl MontgomeryReducer {
 
     /// Saturating subtraction (clamp to zero)
     pub fn saturating_sub(&self, other: u64) -> BigInt256 {
-        let sub = self.sub(&BigInt256::from_u64(other));
+        let other_big = BigInt256::from_u64(other);
+        let sub = self.sub(&self.modulus, &other_big);
         // Check if result is negative (most significant bit set in MSB limb)
         if (sub.limbs[3] & (1u64 << 63)) != 0 { BigInt256::zero() } else { sub }
     }
 
     /// Saturating addition
     pub fn saturating_add(&self, other: u64) -> BigInt256 {
-        self.add(&BigInt256::from_u64(other))
+        let other_big = BigInt256::from_u64(other);
+        self.add(&self.modulus, &other_big)
     }
 
 }

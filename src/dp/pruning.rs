@@ -343,7 +343,7 @@ mod tests {
                 };
                 let state = crate::types::KangarooState::new(
                     point.clone(),
-                    i as u64 * 1000, // Vary distances
+                    BigInt256::from_u64(i as u64 * 1000), // Vary distances
                     [0; 4],
                     [0; 4],
                     true,
@@ -379,7 +379,7 @@ mod tests {
                 };
                 let state = crate::types::KangarooState::new(
                     point.clone(),
-                    i as u64 * 100,
+                    BigInt256::from_u64(i as u64 * 100),
                     [0; 4],
                     [0; 4],
                     true,

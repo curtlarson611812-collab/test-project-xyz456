@@ -13,9 +13,7 @@ use std::ops::{Add, Sub};
 use log::info;
 // k256 integration for SmallOddPrime_Precise_code.rs compatibility
 use k256;
-use k256::elliptic_curve::point::AffineCoordinates;
-use k256::elliptic_curve::sec1::FromEncodedPoint;
-use k256::elliptic_curve::group::GroupEncoding;
+use k256::elliptic_curve::sec1::{ToEncodedPoint, FromEncodedPoint};
 
 
 impl Secp256k1 {
@@ -491,7 +489,7 @@ impl Secp256k1 {
     /// Optimized GLV scalar multiplication with windowed NAF (~15% stall reduction)
     /// Uses 4-bit windowed Non-Adjacent Form to minimize point additions
     pub fn mul_glv_opt(&self, k: &BigInt256, p: &Point) -> Point {
-        use crate::math::constants::{GLV_LAMBDA_BIGINT, GLV_BETA_POINT, GLV_WINDOW_SIZE};
+        use crate::math::constants::{GLV_WINDOW_SIZE};
 
         if k.is_zero() || p.is_infinity() {
             return Point::infinity();
@@ -516,7 +514,7 @@ impl Secp256k1 {
         }
 
         // Precompute lambda*P multiples
-        let lambda_p = GLV_BETA_POINT.clone(); // lambda * G
+        let lambda_p = crate::math::constants::GLV_BETA_POINT.clone(); // lambda * G
         precomp_lambda_p[0] = lambda_p.clone();
         for i in 1..window_size {
             precomp_lambda_p[i] = self.add(&precomp_lambda_p[i-1], &lambda_p);
@@ -672,8 +670,8 @@ impl Secp256k1 {
             return Point::infinity();
         }
 
-        let mut result = Point::infinity();
-        let mut current = *p;
+        let _result = Point::infinity();
+        let _current = *p;
 
         // TEMP: For k=1, return p directly
         if k == &BigInt256::from_u64(1) {
@@ -843,7 +841,7 @@ impl Secp256k1 {
         }
 
         let z_big = BigInt256::from_u64_array(p.z);
-        let one = BigInt256::from_u64(1);
+        let _one = BigInt256::from_u64(1);
         if z_big.is_zero() {
             // Infinity point - return (0,0,0) representation
             return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
@@ -873,8 +871,8 @@ impl Secp256k1 {
         let x_aff_big = (&x_big * &z_inv_sq) % &p_big;
         let y_aff_big = (&y_big * &z_inv_cu) % &p_big;
 
-        let mut x_aff_bytes = x_aff_big.to_bytes_be();
-        let mut y_aff_bytes = y_aff_big.to_bytes_be();
+        let x_aff_bytes = x_aff_big.to_bytes_be();
+        let y_aff_bytes = y_aff_big.to_bytes_be();
         let mut x_arr = [0u8; 32];
         let mut y_arr = [0u8; 32];
         let x_start = 32 - x_aff_bytes.len();
@@ -1365,9 +1363,15 @@ impl Point {
 
     /// Convert from k256 ProjectivePoint to our Point structure
     pub fn from_k256(k_point: &k256::ProjectivePoint) -> Self {
-        let affine = k_point.to_affine();
-        let x_bytes: [u8; 32] = affine.x().into();
-        let y_bytes: [u8; 32] = affine.y().into();
+        let encoded = k_point.to_encoded_point(false); // uncompressed
+        let bytes = encoded.as_bytes();
+        if bytes.len() != 65 || bytes[0] != 0x04 {
+            panic!("Invalid uncompressed point encoding");
+        }
+
+        let x_bytes: [u8; 32] = bytes[1..33].try_into().unwrap();
+        let y_bytes: [u8; 32] = bytes[33..65].try_into().unwrap();
+
         let x = BigInt256::from_bytes_be(&x_bytes);
         let y = BigInt256::from_bytes_be(&y_bytes);
         Point {
@@ -1379,9 +1383,8 @@ impl Point {
 
     /// Convert our Point to k256 ProjectivePoint
     pub fn to_k256(&self) -> k256::ProjectivePoint {
-        let affine = self.to_affine();
-        let x_bigint = BigInt256 { limbs: affine.x };
-        let y_bigint = BigInt256 { limbs: affine.y };
+        let x_bigint = BigInt256 { limbs: self.x };
+        let y_bigint = BigInt256 { limbs: self.y };
         let x_bytes = x_bigint.to_bytes_be();
         let y_bytes = y_bigint.to_bytes_be();
 
@@ -1391,8 +1394,9 @@ impl Point {
         uncompressed_bytes[1..33].copy_from_slice(&x_bytes);
         uncompressed_bytes[33..65].copy_from_slice(&y_bytes);
 
-        let affine_point = k256::AffinePoint::from_bytes(&uncompressed_bytes).unwrap();
-        affine_point.to_projective()
+        let encoded_point = k256::EncodedPoint::from_bytes(uncompressed_bytes).unwrap();
+        let affine_point = k256::AffinePoint::from_encoded_point(&encoded_point).unwrap();
+        k256::ProjectivePoint::from(affine_point)
     }
 
 }
@@ -1598,8 +1602,8 @@ mod tests {
         assert!(result.is_infinity());
 
         // 1 * G = G
-        let one = BigInt256::from_u64(1);
-        let result = curve.mul(&one, &g);
+        let _one = BigInt256::from_u64(1);
+        let result = curve.mul(&BigInt256::one(), &g);
         assert_eq!(result.x, g.x);
         assert_eq!(result.y, g.y);
 
@@ -2153,7 +2157,7 @@ mod tests {
         // Test bytes conversion
         let bytes = b.to_bytes_le();
         assert_eq!(bytes.len(), 32);
-        let reconstructed = BigInt256::from_bytes_le(&bytes);
+        let reconstructed = BigInt256::from_bytes_be(&bytes);
         assert_eq!(b, reconstructed);
     }
 

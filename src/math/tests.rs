@@ -219,7 +219,7 @@ mod tests {
         assert!(result_zero.is_infinity());
 
         // Test infinity point
-        let inf_point = Point::infinity();
+        let inf_point = crate::types::Point::infinity();
         let result_inf = curve.mul_glv_opt(&k, &inf_point);
         assert!(result_inf.is_infinity());
 

@@ -17,7 +17,6 @@ use rayon::prelude::*;
 use rand::rngs::OsRng;
 use rand::Rng;
 use std::sync::Arc;
-use zerocopy::IntoBytes;
 // SIMD removed for stability - using regular loops instead
 
 // Sacred 32 small odd primes (>128, odd, low hamming weight for fast mul).
@@ -61,7 +60,7 @@ pub fn initialize_tame_start() -> Point {
 }
 
 // Sacred bucket selection — tame deterministic, wild state-mixed
-pub fn select_bucket(point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+pub fn select_bucket(_point: &Point, _dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
     // For now, use a simplified bucket selection since k256 Scalar conversion is complex
     // TODO: Implement proper k256 Scalar conversion for full compatibility
     const WALK_BUCKETS: u32 = 32;
@@ -76,7 +75,7 @@ pub fn select_bucket(point: &Point, dist: &BigInt256, seed: u32, step: u32, is_t
 }
 
 // Generate multiplicative wild herds using sacred SmallOddPrime_Precise_code.rs
-pub fn generate_wild_herds(target: &Point, config: &SearchConfig, bias_mode: &str) -> Vec<Point> {
+pub fn generate_wild_herds(target: &Point, config: &SearchConfig, _bias_mode: &str) -> Vec<Point> {
     let k_target = target.to_k256();
     let mut herds = vec![];
 
@@ -88,7 +87,7 @@ pub fn generate_wild_herds(target: &Point, config: &SearchConfig, bias_mode: &st
 }
 
 // Generate additive tame herds using sacred SmallOddPrime_Precise_code.rs
-pub fn generate_tame_herds(config: &SearchConfig, bias_mode: &str) -> Vec<Point> {
+pub fn generate_tame_herds(config: &SearchConfig, _bias_mode: &str) -> Vec<Point> {
     use k256::Scalar;
 
     let mut herds = vec![];
@@ -106,15 +105,15 @@ pub fn generate_tame_herds(config: &SearchConfig, bias_mode: &str) -> Vec<Point>
 }
 
 // Additive tame jump accumulation helper for stepping
-pub fn additive_tame_jump(current_scalar: &k256::Scalar, prime: u64) -> k256::Scalar {
-    current_scalar + k256::Scalar::from(prime)
+pub fn additive_tame_jump(current_distance: &BigInt256, prime: u64) -> BigInt256 {
+    current_distance.wrapping_add(prime)
 }
 
 // Multiplicative wild jump with modulo n for collision prevention
 pub fn multiplicative_wild_jump(current_scalar: &BigInt256, prime: u64) -> BigInt256 {
     let prime_big = BigInt256::from_u64(prime);
-    let secp_n = BigInt256::secp_n();
-    current_scalar.mul(&prime_big).modulo(&secp_n)
+    let secp_n = crate::math::bigint::BigInt256::secp_n();
+    (current_scalar.clone() * prime_big.clone()).div_rem(&secp_n.clone()).1
 }
 
 // Get bias-filtered subset of prime multipliers for Magic 9 optimization
@@ -471,7 +470,7 @@ impl KangarooGenerator {
 
             let state = KangarooState::new(
                 final_pos,
-                scalar.value.low_u64(),  // initial distance = biased prime
+                BigInt256::from_u64(scalar.value.low_u64()),  // initial distance = biased prime
                 scalar.value.to_u64_array(),  // alpha starts with biased prime offset
                 [1, 0, 0, 0],           // beta placeholder (updated during stepping)
                 false,                  // is_tame
@@ -537,7 +536,7 @@ impl KangarooGenerator {
 
             let state = KangarooState::new(
                 final_pos,
-                scalar.value.low_u64(),  // distance = biased prime
+                BigInt256::from_u64(scalar.value.low_u64()),  // distance = biased prime
                 [0, 0, 0, 0],           // alpha = 0 for tame (deterministic from G)
                 [1, 0, 0, 0],           // beta = 1 for tame
                 true,                   // is_tame
@@ -648,7 +647,7 @@ impl KangarooGenerator {
 
             tames.push(KangarooState::new(
                 actual_start,
-                alpha[0], // Use lowest 64 bits as distance
+                BigInt256::from_u64(alpha[0]), // Use lowest 64 bits as distance
                 alpha,
                 beta,
                 true, // is_tame = true
@@ -954,9 +953,9 @@ impl KangarooGenerator {
             }
         }
         let tames: Vec<_> = (0..wilds.len()).map(|_| {
-            let mut tame = KangarooState::new(Point::infinity(), 0, [0; 4], [0; 4], true, false, 0);
+            let mut tame = KangarooState::new(Point::infinity(), BigInt256::zero(), [0; 4], [0; 4], true, false, 0);
             tame.position = self.initialize_tame_start();
-            tame.distance = 0; // u64 distance for tame kangaroos
+            tame.distance = BigInt256::zero(); // BigInt256 distance for tame kangaroos
             tame
         }).collect();
         (wilds, tames)
@@ -1099,7 +1098,7 @@ impl KangarooGenerator {
             };
             states.push(KangarooState {
                 position: start,
-                distance: 0,
+                distance: BigInt256::zero(),
                 alpha: [0; 4],
                 beta: [0; 4],
                 is_tame: i % 2 == 0,
@@ -1177,8 +1176,8 @@ impl KangarooGenerator {
         for state in states.iter_mut() {
             for s in 0..steps {
                 // Use lambda bucket select for deterministic tame vs mixed wild
-                let bucket = self.select_bucket(&state.position, &BigInt256::from_u64(state.distance), 0, s as u32, state.is_tame);
-                let jump = self.biased_jump(&BigInt256::from_u64(state.distance), biases);
+                let bucket = self.select_bucket(&state.position, &state.distance, 0, s as u32, state.is_tame);
+                let jump = self.biased_jump(&state.distance, biases);
                 let jump_point = self.curve.mul(&jumps[bucket as usize % jumps.len()], &self.curve.g);
                 state.position = self.curve.point_add(&state.position, &jump_point);
                 state.distance = state.distance.wrapping_add(jump.low_u64());

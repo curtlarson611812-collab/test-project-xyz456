@@ -58,9 +58,17 @@ impl CpuBackend {
 
     // Batch modular inverse using Montgomery reduction
     pub fn mod_inverse_batch(&self, a: &[crate::math::bigint::BigInt256], modulus: &crate::math::bigint::BigInt256) -> Vec<crate::math::bigint::BigInt256> {
-        use crate::math::bigint::MontgomeryReducer;
-        let reducer = MontgomeryReducer::new(modulus);
-        a.iter().map(|x| reducer.mod_inverse(x, modulus).unwrap()).collect()
+        use num_bigint::BigUint;
+        a.iter().map(|x| {
+            let x_big = BigUint::from_bytes_be(&x.to_bytes_be());
+            let modulus_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+            let inv = x_big.modinv(&modulus_big).unwrap();
+            let inv_bytes = inv.to_bytes_be();
+            let mut padded = [0u8; 32];
+            let start = 32usize.saturating_sub(inv_bytes.len());
+            padded[start..].copy_from_slice(&inv_bytes);
+            crate::math::bigint::BigInt256::from_bytes_be(&padded)
+        }).collect()
     }
 }
 
@@ -357,7 +365,7 @@ impl GpuBackend for CpuBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::bigint::{BigInt256, MontgomeryReducer};
+    use crate::math::bigint::BigInt256;
 
     #[test]
     fn test_gpu_backend_inverse() -> Result<(), anyhow::Error> {
@@ -369,9 +377,12 @@ mod tests {
         assert_eq!(inv_batch.len(), 1);
 
         // Verify: inv * 3 ≡ 1 mod p
-        let reducer = MontgomeryReducer::new(&modulus);
-        let product = reducer.mul(&a[0], &inv_batch[0]);
-        assert_eq!(product, BigInt256::one());
+        use num_bigint::BigUint;
+        let a_big = BigUint::from_bytes_be(&a[0].to_bytes_be());
+        let inv_big = BigUint::from_bytes_be(&inv_batch[0].to_bytes_be());
+        let modulus_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+        let product_big = (a_big * inv_big) % modulus_big;
+        assert_eq!(product_big, BigUint::from(1u64));
 
         Ok(())
     }
