@@ -74,7 +74,7 @@ impl ParityChecker {
                     y: [(i * 987654321) as u64; 4],
                     z: [1; 4],
                 },
-                i as u64 * 1000, // Deterministic distance
+                BigInt256::from_u64(i * 1000), // Deterministic distance
                 [i as u64; 4],   // Deterministic alpha
                 [i as u64; 4],   // Deterministic beta
                 i % 2 == 0,      // Alternate tame/wild

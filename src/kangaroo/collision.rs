@@ -278,13 +278,13 @@ impl CollisionDetector {
                     // Try resolve_near_collision before walk
                     let trap1 = Trap {
                         x: entry1.point.x,
-                        dist: BigUint::from(entry1.state.distance),
+                        dist: BigUint::from_bytes_le(&entry1.state.distance.to_bytes_le()),
                         is_tame: entry1.state.is_tame,
                         alpha: entry1.state.alpha,
                     };
                     let trap2 = Trap {
                         x: entry2.point.x,
-                        dist: BigUint::from(entry2.state.distance),
+                        dist: BigUint::from_bytes_le(&entry2.state.distance.to_bytes_le()),
                         is_tame: entry2.state.is_tame,
                         alpha: entry2.state.alpha,
                     };
@@ -852,8 +852,8 @@ impl CollisionDetector {
         let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
 
         // Extended Euclidean algorithm for solving: prime * x ≡ (d_tame - d_wild) mod n
-        let tame_dist = BigInt256::from_u64(tame.distance);
-        let wild_dist = BigInt256::from_u64(wild.distance);
+        let tame_dist = tame.distance.clone();
+        let wild_dist = wild.distance.clone();
         let diff = tame_dist - wild_dist;
 
         // Find x such that prime * x ≡ diff mod n

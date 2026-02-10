@@ -1236,6 +1236,30 @@ impl MontgomeryReducer {
     //
     //     Some(t as u64)
     // }
+
+    /// Convert to u64 (low 64 bits only)
+    pub fn to_u64(&self) -> u64 {
+        self.limbs[0]
+    }
+
+    /// Convert to f64 approximation (for scoring/metrics)
+    pub fn to_f64_approx(&self) -> f64 {
+        (self.limbs[0] as f64) +
+        (self.limbs[1] as f64) * (2u64.pow(64) as f64) +
+        (self.limbs[2] as f64) * (2u64.pow(128) as f64) +
+        (self.limbs[3] as f64) * (2u64.pow(192) as f64)
+    }
+
+    /// Saturating subtraction (clamp to zero)
+    pub fn saturating_sub(&self, other: u64) -> BigInt256 {
+        let sub = self.sub(&BigInt256::from_u64(other));
+        if sub.is_negative() { BigInt256::zero() } else { sub }
+    }
+
+    /// Saturating addition
+    pub fn saturating_add(&self, other: u64) -> BigInt256 {
+        self.add(&BigInt256::from_u64(other))
+    }
 }
 
 // Basic arithmetic implementations

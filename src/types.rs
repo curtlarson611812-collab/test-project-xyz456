@@ -403,7 +403,7 @@ pub struct Solution {
     /// Target point that was solved
     pub target_point: Point,
     /// Total operations performed
-    pub total_ops: u64,
+    pub total_ops: BigInt256,
     /// Time taken (seconds)
     pub time_seconds: f64,
     /// Verification status
@@ -412,7 +412,7 @@ pub struct Solution {
 
 impl Solution {
     /// Create new solution
-    pub fn new(private_key: [u64; 4], target_point: Point, total_ops: u64, time_seconds: f64) -> Self {
+    pub fn new(private_key: [u64; 4], target_point: Point, total_ops: BigInt256, time_seconds: f64) -> Self {
         Solution {
             private_key,
             target_point,

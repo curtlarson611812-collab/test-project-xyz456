@@ -528,7 +528,7 @@ impl KangarooManager {
 
         let mut distances: Vec<[u32; 8]> = kangaroos.iter()
             .map(|k| [
-                k.distance as u32, (k.distance >> 32) as u32, 0, 0, 0, 0, 0, 0
+                k.distance.to_u64() as u32, (k.distance.to_u64() >> 32) as u32, 0, 0, 0, 0, 0, 0
             ])
             .collect();
 
@@ -569,7 +569,7 @@ impl KangarooManager {
 
                 KangarooState::new(
                     position,
-                    distance as u64,
+                    distance.clone(),
                     kangaroos[i].alpha,
                     kangaroos[i].beta,
                     kangaroos[i].is_tame,
@@ -610,7 +610,7 @@ impl KangarooManager {
             // Create kangaroo state for the trap
             let trap_state = KangarooState::new(
                 trap_point,
-                trap_distance,
+                BigInt256::from_u64(trap_distance),
                 [0; 4], // alpha not provided
                 [0; 4], // beta not provided
                 trap.is_tame,
@@ -675,7 +675,7 @@ impl KangarooManager {
                     // Found distinguished point - add to DP table
                     let kangaroo_state = KangarooState::new(
                         point,
-                        distance,
+                        BigInt256::from_u64(distance),
                         [0; 4], // alpha (would be tracked)
                         [0; 4], // beta (would be tracked)
                         true,   // is_tame (simplified)
@@ -795,7 +795,7 @@ impl KangarooManager {
         info!("🔄 Activating stagnant herd auto-restart booster");
 
         // Restart herds that haven't made progress in recent cycles
-        let stagnation_threshold = 10000u64;
+        let stagnation_threshold = BigInt256::from_u64(10000u64);
 
         for state in near_states {
             if state.distance < stagnation_threshold {

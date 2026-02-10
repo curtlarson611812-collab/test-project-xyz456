@@ -229,7 +229,7 @@ impl DpTable {
     /// Calculate value score for DP entry (higher = more valuable)
     /// Formula: score = dist / (cluster_density + 1)
     fn calculate_value_score(&self, entry: &DpEntry) -> f64 {
-        let dist = entry.state.distance as f64;
+        let dist = entry.state.distance.to_f64_approx();
         let cluster_density = self.clusters.get(&entry.cluster_id)
             .map(|v| v.len())
             .unwrap_or(0) as f64;
