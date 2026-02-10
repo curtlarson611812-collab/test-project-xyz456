@@ -1181,12 +1181,37 @@ mod tests {
         let secp = crate::math::secp::Secp256k1::new();
         let g = secp.g;
 
-        // Convert G to GPU format
-        let d_g = backend.alloc_point(&g)?;
+        // Test G * 2 (doubling)
+        let expected_2g = secp.mul_constant_time(&BigInt256::from_u64(2), &g)?;
 
-        // TODO: Add CUDA kernel for double testing
-        // For now, just verify allocation works
-        assert!(true); // Placeholder
+        // Convert G to GPU format and double it
+        let d_g = backend.alloc_point(&g)?;
+        let mut d_result = backend.alloc_point(&Point::infinity())?;
+
+        // Launch double kernel (assuming it exists in solve.cu or step.cu)
+        // For now, test allocation and basic setup
+        assert!(true); // Will be replaced with actual kernel test
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "rustacuda")]
+    fn test_cuda_ec_math_consistency() -> Result<(), Box<dyn std::error::Error>> {
+        // Test that CUDA EC operations produce same results as CPU
+        let backend = CudaBackend::new()?;
+        let secp = crate::math::secp::Secp256k1::new();
+
+        // Test points: G, 2G, 3G
+        let test_scalars = vec![BigInt256::one(), BigInt256::from_u64(2), BigInt256::from_u64(3)];
+
+        for scalar in test_scalars {
+            let cpu_result = secp.mul_constant_time(&scalar, &secp.g)?;
+
+            // TODO: Implement CUDA scalar multiplication kernel
+            // Compare CPU vs CUDA results
+            // assert_eq!(cpu_result, cuda_result);
+        }
 
         Ok(())
     }

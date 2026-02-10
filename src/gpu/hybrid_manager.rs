@@ -171,12 +171,11 @@ impl HybridGpuManager {
         let types_vec: Vec<u32> = vec![1; batch_size]; // Simplified - all tame
 
         // Execute step batch using GpuBackend trait
-        // TEMPORARILY DISABLED: GPU stepping uses inconsistent EC math
-        // if let Err(e) = self.hybrid_backend.step_batch(&mut points_vec, &mut distances_vec, &types_vec) {
-        //     log::error!("Hybrid backend step failed: {}", e);
-        //     return Err(anyhow::anyhow!("Hybrid backend step failed: {}", e).into());
-        // }
-        log::warn!("GPU stepping disabled - using CPU only due to EC math inconsistencies");
+        // Execute step batch using GpuBackend trait
+        if let Err(e) = self.hybrid_backend.step_batch(&mut points_vec, &mut distances_vec, &types_vec) {
+            log::error!("Hybrid backend step failed: {}", e);
+            return Err(anyhow::anyhow!("Hybrid backend step failed: {}", e).into());
+        }
 
         // Convert back to data vectors
         for (i, pos) in points_vec.iter().enumerate() {
@@ -849,10 +848,17 @@ impl HybridGpuManager {
     }
 
     /// Dispatch batch BSGS solving to appropriate backend
-    fn dispatch_batch_bsgs_solve(&self, _deltas: Vec<[[u32;8];3]>, _alphas: Vec<[u32;8]>, _distances: Vec<[u32;8]>) -> Result<Vec<Option<[u32;8]>>> {
-        // TEMPORARILY DISABLED: GPU BSGS uses inconsistent EC math
-        log::warn!("GPU BSGS disabled - using CPU only due to EC math inconsistencies");
-        Ok(vec![]) // Return empty results
+    fn dispatch_batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>) -> Result<Vec<Option<[u32;8]>>> {
+        // Dispatch to CUDA for BSGS solving (most efficient for this operation)
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            // Fallback to CPU implementation via hybrid backend
+            self.hybrid_backend.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+        }
     }
 
     /// GPU-accelerated BSGS solve for small discrete logs

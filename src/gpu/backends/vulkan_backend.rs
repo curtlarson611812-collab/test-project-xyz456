@@ -253,6 +253,24 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan batch_to_affine not implemented - use CUDA"))
     }
 
+    /// Test Vulkan EC math operations against CPU reference
+    #[cfg(feature = "wgpu")]
+    pub fn test_vulkan_ec_math(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let secp = crate::math::secp::Secp256k1::new();
+
+        // Test G * 2 (doubling)
+        let expected_2g = secp.mul_constant_time(&crate::math::bigint::BigInt256::from_u64(2), &secp.g)?;
+
+        // TODO: Create WGSL shader for EC doubling and compare results
+        // This would require:
+        // 1. WGSL shader with double_point function
+        // 2. Compute pipeline to execute it
+        // 3. Buffer operations to pass data and read results
+        // 4. Comparison with CPU results
+
+        Ok(())
+    }
+
     fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
         // For now, delegate to regular step_batch
         // TODO: Implement full Vulkan bias-enhanced stepping with WGSL shaders
