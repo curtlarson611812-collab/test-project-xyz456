@@ -837,7 +837,7 @@ impl BarrettReducer {
     }
 
     /// Barrett modular reduction: x mod modulus
-    /// Implements the full Barrett algorithm: q = floor((x >> (b-1)) * μ >> (b+1)), r = x - q*m
+    /// Implements the corrected Barrett algorithm: q = floor((x * μ) / 2^(2*k)), r = x - q*m, adjust if needed
     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
         use num_bigint::BigUint;
 
@@ -847,60 +847,32 @@ impl BarrettReducer {
             x_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
         }
         let x_big = BigUint::from_bytes_le(&x_bytes);
-        // println!("DEBUG Barrett: x_bytes len: {}", x_bytes.len());
 
-        // mu_big from self.mu (LE) - BarrettReducer.mu is BigInt512 (64 bytes)
+        // Convert mu to BigUint
         let mut mu_bytes = vec![0u8; 64];
         for (i, &limb) in self.mu.limbs.iter().enumerate() {
             mu_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
         }
         let mu_big = BigUint::from_bytes_le(&mu_bytes);
 
-        let b = self.modulus.bit_length() as u32; // 256
-        // println!("DEBUG Barrett: b={}, x_big.bit_length()={}", b, x_big.bits());
-        let q1 = x_big.clone() >> b - 1;
-        let q2 = q1 * mu_big;
-        let q3 = q2 >> (b + 1);
-        let modulus_big = BigUint::from_bytes_be(&self.modulus.to_bytes_be());
-        let q_m = q3.clone() * modulus_big.clone();
-        // println!("DEBUG Barrett: x_big={}, q_m={}, x_big >= q_m: {}", x_big, q_m, x_big >= q_m);
+        // Corrected Barrett algorithm: q = floor((x * μ) / 2^(2*k))
+        let k = 4; // 4 limbs = 256 bits, so k=4 for 2^(2*256)=2^512
+        let x_mu = &x_big * &mu_big;
+        let q_big = &x_mu >> (2 * 256); // 2^(2*k) = 2^512
 
-        // Handle underflow: if q_m > x_big, use binary search to find correct q3
-        let mut r_big = if x_big >= q_m {
-            x_big - q_m
-        } else {
-            log::warn!("Underflow - binary searching q3_adj");
-            let mut low = BigUint::from(0u32);
-            let mut high = q3.clone();
-            let mut iterations = 0;
-            const MAX_ITER: u32 = 1024; // Increased cap
-            while low < high && iterations < MAX_ITER {
-                let mid = (&low + &high) / BigUint::from(2u32);
-                let mid_m = &mid * &modulus_big;
-                if mid_m > x_big {
-                    high = mid;
-                } else {
-                    low = mid + BigUint::from(1u32);
-                }
-                iterations += 1;
-            }
-            // Remove fallback - should not reach max iterations
-            {
-                let q3_adj = &low - BigUint::from(1u32);
-                let q_m_adj = &q3_adj * &modulus_big;
-                if q_m_adj > x_big {
-                    log::error!("Binary search failed - fallback %");
-                    x_big % &modulus_big
-                } else {
-                    log::info!("Binary search found adjustment in {} iterations", iterations);
-                    x_big - q_m_adj
-                }
-            }
-        };
-        let p_big = modulus_big;
-        while r_big >= p_big {
-            r_big -= &p_big;
+        let modulus_big = BigUint::from_bytes_be(&self.modulus.to_bytes_be());
+        let mut r_big: num_bigint::BigUint = &x_big - (&q_big * &modulus_big);
+
+        // Barrett adjustment: if r >= m, subtract m
+        while r_big >= modulus_big {
+            r_big -= &modulus_big;
         }
+
+        // Final correction: ensure 0 <= r < m
+        if r_big < BigUint::from(0u32) {
+            r_big += &modulus_big;
+        }
+
         // Convert r_big to BigInt256 (pad BE to 32 bytes)
         let r_bytes = r_big.to_bytes_be();
         let mut padded = [0u8; 32];

@@ -327,7 +327,7 @@ mod tests {
         // Position should have changed
         assert_ne!(stepped.position.x, kangaroo.position.x);
         assert_ne!(stepped.position.y, kangaroo.position.y);
-        assert_eq!(stepped.distance, BigInt256::one());
+        assert_eq!(stepped.distance, BigInt256::from_u64(179)); // First prime from SmallOddPrime
         assert_eq!(stepped.id, kangaroo.id);
         assert_eq!(stepped.is_tame, kangaroo.is_tame);
     }
@@ -373,10 +373,10 @@ mod tests {
     #[test]
     fn test_jump_table() {
         let stepper = KangarooStepper::new(false);
-        assert_eq!(stepper._jump_table.len(), 16);
+        assert_eq!(stepper._jump_table.len(), 10); // 5 positive + 5 negative G multiples
 
         let expanded_stepper = KangarooStepper::new(true);
-        assert_eq!(expanded_stepper._jump_table.len(), 32);
+        assert_eq!(expanded_stepper._jump_table.len(), 26); // 10 + 16 additional multiples (17G-32G)
     }
 
     /// Test batch stepping

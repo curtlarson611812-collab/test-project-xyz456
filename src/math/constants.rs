@@ -65,8 +65,8 @@ pub fn jump_table() -> Vec<BigInt256> {
 }
 
 // GLV (Gallant-Lambert-Vanstone) constants for endomorphism optimization
-// lambda = (p^2 - 1)/4 where p is secp256k1 order, enabling ~15% stall reduction
-pub const GLV_LAMBDA: &str = "5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72cd";
+// lambda = sqrt(-3) mod p for secp256k1, enabling ~15% stall reduction
+pub const GLV_LAMBDA: &str = "5b2b3e9c8b278c34d3763265d4f1630aa667c87bdd43a382d18a4ed82eabccb";
 
 // beta = lambda * G (generator point), precomputed for GLV decomposition
 pub const GLV_BETA_X: &str = "128ec4256487a122a0f79ae3f4b4bd8ca4f8c6b47b4f7b6b1e3b1c0e8b7b6b1e3";

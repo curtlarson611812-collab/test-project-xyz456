@@ -188,15 +188,15 @@ impl Secp256k1 {
         };
 
         let mut g_multiples = Vec::new();
-        // Temporarily reduce to smaller k values to avoid hang during debugging
-        let ks = [1u64, 2];
+        // Precomputed G multiples for kangaroo jump table synergy: [2G, 3G, 4G, 8G, 16G, -G, -2G, -3G, -4G, -8G, -16G]
+        let ks = [2u64, 3, 4, 8, 16];
         for &k in &ks {
             let k_big = BigInt256::from_u64(k);
             let multiple = temp_curve.mul_constant_time(&k_big, &g).expect("valid k");
             g_multiples.push(multiple);
         }
-        // Adjust for reduced ks array (only 2 elements now)
-        for i in 0..2 {
+        // Add negative multiples
+        for i in 0..5 {
             let neg = g_multiples[i].negate(&temp_curve);
             g_multiples.push(neg);
         }
@@ -2195,4 +2195,5 @@ impl Secp256k1 {
             result[i] = u64::from_le_bytes(bytes);
         }
     }
+
 }

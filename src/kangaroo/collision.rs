@@ -60,7 +60,7 @@ impl CollisionDetector {
     pub fn optimal_near_g_threshold(range_width: &BigInt256, dp_bits: u32) -> u64 {
         let prob_based = 1u64 << (dp_bits / 2);           // Balance with probability 2^(-dp_bits/2)
         let cost_based = range_width.limbs[0] / 1000;     // Cost feasibility: range/1000 (low 64 bits)
-        prob_based.min(cost_based).max(4096)              // Minimum sensible floor of 4096
+        prob_based.min(cost_based)                         // Take minimum of probability and cost based
     }
 
     /// Create new CollisionDetector with configurable near threshold
@@ -821,27 +821,48 @@ impl CollisionDetector {
         use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
 
         let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
-        let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
+        let prime_u64 = PRIME_MULTIPLIERS[prime_idx];
 
         // d_tame - d_wild (distance difference)
         let tame_dist = tame.distance.clone();
         let wild_dist = wild.distance.clone();
         let _diff = tame_dist.clone() - wild_dist.clone();
 
-        self.solve_collision_inversion(prime, tame_dist, wild_dist, &CURVE_ORDER_BIGINT)
+        self.solve_collision_inversion(prime_u64, tame_dist, wild_dist, &CURVE_ORDER_BIGINT)
     }
 
     /// Solve collision with inversion: k = inv(prime) * (d_tame - d_wild) mod n
-    pub fn solve_collision_inversion(&self, prime: BigInt256, d_tame: BigInt256, d_wild: BigInt256, n: &BigInt256) -> Option<BigInt256> {
-        let prime_big = BigUint::from_bytes_be(&prime.to_bytes_be());
+    pub fn solve_collision_inversion(&self, prime: u64, d_tame: BigInt256, d_wild: BigInt256, n: &BigInt256) -> Option<BigInt256> {
+        use num_bigint::BigUint;
+        use num_integer::Integer;
+
+        // Convert all to BigUint for reliable modular arithmetic
+        let prime_big = BigUint::from(prime);
         let n_big = BigUint::from_bytes_be(&n.to_bytes_be());
+
+        // Check if prime and n are coprime
+        if prime_big.gcd(&n_big) != BigUint::from(1u32) {
+            return None;
+        }
+
+        // Calculate modular inverse
         let inv_prime = prime_big.modinv(&n_big)?;
 
-        let one = BigUint::from(1u64);
-        let inner = one + BigUint::from_bytes_be(&(d_tame - d_wild).to_bytes_be());
-        let result = (inv_prime * inner) % &n_big;
+        // Handle modular subtraction: (d_tame - d_wild) mod n
+        let d_tame_big = BigUint::from_bytes_be(&d_tame.to_bytes_be());
+        let d_wild_big = BigUint::from_bytes_be(&d_wild.to_bytes_be());
 
-        let result_bytes = result.to_bytes_be();
+        let diff_big = if d_tame_big >= d_wild_big {
+            (d_tame_big - d_wild_big) % &n_big
+        } else {
+            (&n_big - (d_wild_big - d_tame_big) % &n_big) % &n_big
+        };
+
+        // Compute result: inv_prime * diff mod n
+        let result_big = (inv_prime * diff_big) % &n_big;
+
+        // Convert back to BigInt256
+        let result_bytes = result_big.to_bytes_be();
         let mut padded = [0u8; 32];
         let start = 32usize.saturating_sub(result_bytes.len());
         padded[start..].copy_from_slice(&result_bytes);
@@ -1000,7 +1021,12 @@ mod tests {
 
     #[test]
     fn test_exact_collision() {
-        let detector = CollisionDetector::new();
+        let mut detector = CollisionDetector::new();
+        // Set target to 50 * G (expected private key result)
+        let expected_key = BigInt256::from_u64(50);
+        let target = detector.curve.mul(&expected_key, &detector.curve.g);
+        detector = detector.with_target(target);
+
         let traps = vec![
             Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true, alpha: [0; 4] },
             Trap { x: [1, 2, 3, 4], dist: BigUint::from(50u64), is_tame: false, alpha: [0; 4] },
