@@ -1,11 +1,118 @@
 // src/gpu/vulkan/shaders/utils.wgsl
+// BigInt256 operations for unified CPU/GPU arithmetic
+struct BigInt256 {
+    limbs: array<u32, 8>,  // LSB in [0], MSB in [7] - matches legacy Point
+}
+
+fn bigint256_zero() -> BigInt256 {
+    return BigInt256(array<u32,8>(0u,0u,0u,0u,0u,0u,0u,0u));
+}
+
+fn bigint256_one() -> BigInt256 {
+    var v = bigint256_zero();
+    v.limbs[0] = 1u;
+    return v;
+}
+
+fn bigint256_two() -> BigInt256 {
+    var v = bigint256_zero();
+    v.limbs[0] = 2u;
+    return v;
+}
+
+fn bigint256_three() -> BigInt256 {
+    var v = bigint256_zero();
+    v.limbs[0] = 3u;
+    return v;
+}
+
+fn bigint256_add(a: BigInt256, b: BigInt256) -> BigInt256 {
+    var res = bigint256_zero();
+    var carry: u32 = 0u;
+    for (var i: u32 = 0u; i < 8u; i = i + 1u) {
+        let sum = u64(a.limbs[i]) + u64(b.limbs[i]) + u64(carry);
+        res.limbs[i] = u32(sum & 0xFFFFFFFFu);
+        carry = u32(sum >> 32u);
+    }
+    return res;
+}
+
+fn bigint256_sub(a: BigInt256, b: BigInt256) -> BigInt256 {
+    var res = bigint256_zero();
+    var borrow: u32 = 0u;
+    for (var i: u32 = 0u; i < 8u; i = i + 1u) {
+        let diff = i64(a.limbs[i]) - i64(b.limbs[i]) - i64(borrow);
+        res.limbs[i] = u32(diff & 0xFFFFFFFFu);
+        borrow = u32((diff < 0i64) ? 1u : 0u);
+    }
+    return res;
+}
+
+fn bigint256_mul(a: BigInt256, b: BigInt256) -> BigInt256 {
+    var res = bigint256_zero();
+    for (var i: u32 = 0u; i < 8u; i = i + 1u) {
+        var carry: u64 = 0u;
+        for (var j: u32 = 0u; j < 8u; j = j + 1u) {
+            let prod = u64(a.limbs[i]) * u64(b.limbs[j]) + u64(res.limbs[i+j]) + carry;
+            res.limbs[i+j] = u32(prod & 0xFFFFFFFFu);
+            carry = prod >> 32u;
+        }
+    }
+    return res;
+}
+
+fn bigint256_shr(x: BigInt256, bits: u32) -> BigInt256 {
+    var res = x;
+    let full_shifts = bits / 32u;
+    let rem_bits = bits % 32u;
+    if (full_shifts >= 8u) { return bigint256_zero(); }
+    for (var i: u32 = 7u; i >= full_shifts; i = i - 1u) {
+        res.limbs[i] = (x.limbs[i - full_shifts] >> rem_bits) |
+                       ((i > full_shifts) ? (x.limbs[i - full_shifts - 1u] << (32u - rem_bits)) : 0u);
+    }
+    for (var i: u32 = 0u; i < full_shifts; i = i + 1u) {
+        res.limbs[i] = 0u;
+    }
+    return res;
+}
+
+fn bigint256_cmp(a: BigInt256, b: BigInt256) -> i32 {
+    for (var i: u32 = 7u; i >= 0u; i = i - 1u) {
+        if (a.limbs[i] > b.limbs[i]) { return 1i; }
+        if (a.limbs[i] < b.limbs[i]) { return -1i; }
+    }
+    return 0i;
+}
+
+fn bigint256_ge(a: BigInt256, b: BigInt256) -> bool {
+    return bigint256_cmp(a, b) >= 0i;
+}
+
+fn barrett_reduce(x: BigInt256, p: BigInt256, mu: BigInt256) -> BigInt256 {
+    var high = bigint256_shr(x, 128u);
+    var q = bigint256_mul(high, mu);
+    q = bigint256_shr(q, 256u);
+    var r = bigint256_sub(x, bigint256_mul(q, p));
+    if (bigint256_ge(r, p)) { r = bigint256_sub(r, p); }
+    if (bigint256_ge(r, p)) { r = bigint256_sub(r, p); }
+    return r;
+}
+
+fn mont_mul(a: BigInt256, b: BigInt256, p: BigInt256, inv: BigInt256) -> BigInt256 {
+    var t = bigint256_mul(a, b);
+    var m = bigint256_mul(t, inv);
+    var u = bigint256_add(t, bigint256_mul(m, p));
+    var res = bigint256_shr(u, 256u);
+    if (bigint256_ge(res, p)) { res = bigint256_sub(res, p); }
+    return res;
+}
+
+// Legacy barrett_mod for backward compatibility
 fn barrett_mod(x: array<u32,8>, m: u32, mu: u32) -> u32 {
-    // Simplified Barrett for m=81 (pre-mu = floor(2^32 / 81))
-    // Use low 32 bits for mod 81 calculation
     let low_32 = x[0];
-    let q = (low_32 * mu) >> 32u;  // High limb approx
-    let rem = low_32 - q * m;  // Low limb
-    return rem % m;  // Fallback exact
+    let q = (low_32 * mu) >> 32u;
+    let rem = low_32 - q * m;
+    return rem % m;
 }
 
 fn trailing_zeros(d: array<u32,8>) -> u32 {

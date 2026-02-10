@@ -119,6 +119,15 @@ __device__ bool bigint256_ge(const bigint256 a, const bigint256 b) {
     return bigint256_cmp(a, b) >= 0;
 }
 
+// Test kernels for validation
+__global__ void test_bigint_add(bigint256 *a, bigint256 *b, bigint256 *result) {
+    result[0] = bigint256_add(a[0], b[0]);
+}
+
+__global__ void test_bigint_mul(bigint256 *a, bigint256 *b, bigint256 *result) {
+    result[0] = bigint256_mul(a[0], b[0]);
+}
+
 // Schoolbook multiplication kernel for 256-bit integers
 // Each thread handles one multiplication: a[8] * b[8] -> result[16]
 __global__ void bigint_mul_kernel(void *a_void, void *b_void, void *result_void, uint32_t batch) {

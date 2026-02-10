@@ -95,6 +95,11 @@ __device__ Point256 ec_add(const Point256 p1, const Point256 p2, const bigint256
     return {barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu)};
 }
 
+// Test kernel for point doubling
+__global__ void test_jacobian_double(Point256 *input, Point256 *output, bigint256 mod_p, bigint256 mu, bigint256 curve_a) {
+    output[0] = jacobian_double(input[0], mod_p, mu, curve_a);
+}
+
 // secp256k1 prime modulus (2^256 - 2^32 - 977)
 __constant__ uint32_t P[8] = {
     0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE,
