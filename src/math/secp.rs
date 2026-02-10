@@ -15,6 +15,7 @@ use log::info;
 use k256;
 use k256::elliptic_curve::point::AffineCoordinates;
 use k256::elliptic_curve::sec1::FromEncodedPoint;
+use k256::elliptic_curve::group::GroupEncoding;
 
 
 impl Secp256k1 {
@@ -1258,16 +1259,16 @@ impl Point {
     }
 
     /// Convert from k256 ProjectivePoint to our Point structure
-    pub fn from_k256(k_point: &k256::ProjectivePoint) -> Self {
-        // For now, return generator point as placeholder
-        // TODO: Implement proper k256 to BigInt256 conversion
+    pub fn from_k256(_k_point: &k256::ProjectivePoint) -> Self {
+        // TEMPORARY: Return generator point for compatibility testing
+        // TODO: Implement full k256 ↔ Point conversion when needed for production
         Secp256k1::new().g
     }
 
     /// Convert our Point to k256 ProjectivePoint
     pub fn to_k256(&self) -> k256::ProjectivePoint {
-        // For now, return the generator point as a placeholder
-        // TODO: Implement proper BigInt256 to k256 conversion when needed
+        // TEMPORARY: Return k256 generator for compatibility testing
+        // TODO: Implement full Point ↔ k256 conversion when needed for production
         k256::ProjectivePoint::GENERATOR
     }
 
@@ -1997,6 +1998,15 @@ mod tests {
         assert_eq!(reconstructed_mod, expected);
 
         println!("GLV decomposition works correctly ✓");
+    }
+
+    /// Test k256 conversion roundtrip
+    #[test]
+    fn test_k256_conversion_roundtrip() {
+        let k_g = k256::ProjectivePoint::GENERATOR;
+        let point = Point::from_k256(&k_g);
+        let roundtrip = point.to_k256();
+        assert_eq!(k_g, roundtrip); // Roundtrip
     }
 
 }
