@@ -106,8 +106,15 @@ pub fn generate_tame_herds(config: &SearchConfig, bias_mode: &str) -> Vec<Point>
 }
 
 // Additive tame jump accumulation helper for stepping
-pub fn additive_tame_jump(current_scalar: &k256::Scalar, prime: u64) -> k256::Scalar {
-    current_scalar + k256::Scalar::from(prime)
+pub fn additive_tame_jump(current_scalar: &BigInt256, prime: u64) -> BigInt256 {
+    current_scalar.add(&BigInt256::from_u64(prime))
+}
+
+// Multiplicative wild jump with modulo n for collision prevention
+pub fn multiplicative_wild_jump(current_scalar: &BigInt256, prime: u64) -> BigInt256 {
+    let prime_big = BigInt256::from_u64(prime);
+    let secp_n = BigInt256::secp_n();
+    current_scalar.mul(&prime_big).modulo(&secp_n)
 }
 
 // Get bias-filtered subset of prime multipliers for Magic 9 optimization
