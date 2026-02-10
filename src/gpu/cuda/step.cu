@@ -59,17 +59,19 @@ __device__ Point256 jacobian_double(const Point256 p, const bigint256 mod_p, con
     bigint256 zz = mont_mul(p.z, p.z, mod_p, mu);
     bigint256 zzzz = mont_mul(zz, zz, mod_p, mu);
     bigint256 xx = mont_mul(p.x, p.x, mod_p, mu);
-    bigint256 m = mont_mul(bigint256{3,0,0,0}, xx, mod_p, mu);
-    m = bigint256_add(m, mont_mul(curve_a, zzzz, mod_p, mu));  // curve_a = -3 mod p
-    bigint256 s = mont_mul(bigint256{2,0,0,0}, mont_mul(p.x, yy, mod_p, mu), mod_p, mu);
-    bigint256 x3 = bigint256_sub(mont_mul(m, m, mod_p, mu), mont_mul(bigint256{2,0,0,0}, s, mod_p, mu));
+    bigint256 three = {3,0,0,0}; // Use constant for better performance
+    bigint256 m = mont_mul(three, xx, mod_p, mu);
+    m = bigint256_add(m, mont_mul(curve_a, zzzz, mod_p, mu));
+    bigint256 two = {2,0,0,0};
+    bigint256 s = mont_mul(two, mont_mul(p.x, yy, mod_p, mu), mod_p, mu);
+    bigint256 x3 = bigint256_sub(mont_mul(m, m, mod_p, mu), mont_mul(two, s, mod_p, mu));
     bigint256 y3 = bigint256_sub(mont_mul(m, bigint256_sub(s, x3), mod_p, mu), mont_mul(bigint256{8,0,0,0}, yyyy, mod_p, mu));
-    bigint256 z3 = mont_mul(mont_mul(bigint256{2,0,0,0}, p.y, mod_p, mu), p.z, mod_p, mu);
+    bigint256 z3 = mont_mul(mont_mul(two, p.y, mod_p, mu), p.z, mod_p, mu);
     return {barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu)};
 }
 
 // EC add for BigInt256 points
-__device__ Point256 ec_add(const Point256 p1, const Point256 p2, const bigint256 mod_p, const bigint256 mu) {
+__device__ Point256 ec_add(const Point256 p1, const Point256 p2, const bigint256 mod_p, const bigint256 mu, const bigint256 curve_a) {
     if (is_infinity(p1)) return p2;
     if (is_infinity(p2)) return p1;
     bigint256 z1z1 = mont_mul(p1.z, p1.z, mod_p, mu);
@@ -78,15 +80,17 @@ __device__ Point256 ec_add(const Point256 p1, const Point256 p2, const bigint256
     bigint256 u2 = mont_mul(p2.y, mont_mul(p1.z, z1z1, mod_p, mu), mod_p, mu);
     bigint256 h = bigint256_sub(mont_mul(p2.x, z1z1, mod_p, mu), mont_mul(p1.x, z2z2, mod_p, mu));
     if (is_zero(h)) {
-        if (bigint256_cmp(u1, u2) == 0) return jacobian_double(p1, mod_p, mu, bigint256{0xFFFFFFFEFFFFFC2E, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}); // curve_a = -3
+        if (bigint256_cmp(u1, u2) == 0) return jacobian_double(p1, mod_p, mu, curve_a);
         return point256_infinity();
     }
-    bigint256 i = mont_mul(bigint256{4,0,0,0}, mont_mul(h, h, mod_p, mu), mod_p, mu);
+    bigint256 four = {4,0,0,0};
+    bigint256 two = {2,0,0,0};
+    bigint256 i = mont_mul(four, mont_mul(h, h, mod_p, mu), mod_p, mu);
     bigint256 j = mont_mul(h, i, mod_p, mu);
-    bigint256 r = mont_mul(bigint256{2,0,0,0}, bigint256_sub(u2, u1), mod_p, mu);
+    bigint256 r = mont_mul(two, bigint256_sub(u2, u1), mod_p, mu);
     bigint256 v = mont_mul(p1.x, i, mod_p, mu);
-    bigint256 x3 = bigint256_sub(bigint256_sub(mont_mul(r, r, mod_p, mu), j), mont_mul(bigint256{2,0,0,0}, v, mod_p, mu));
-    bigint256 y3 = bigint256_sub(mont_mul(r, bigint256_sub(v, x3), mod_p, mu), mont_mul(bigint256{2,0,0,0}, mont_mul(u1, j, mod_p, mu), mod_p, mu));
+    bigint256 x3 = bigint256_sub(bigint256_sub(mont_mul(r, r, mod_p, mu), j), mont_mul(two, v, mod_p, mu));
+    bigint256 y3 = bigint256_sub(mont_mul(r, bigint256_sub(v, x3), mod_p, mu), mont_mul(two, mont_mul(u1, j, mod_p, mu), mod_p, mu));
     bigint256 z3 = mont_mul(mont_mul(bigint256_sub(mont_mul(p1.z, p2.z, mod_p, mu), h), h, mod_p, mu), h, mod_p, mu);
     return {barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu)};
 }

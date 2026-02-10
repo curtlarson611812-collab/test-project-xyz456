@@ -769,7 +769,7 @@ __global__ void batch_scalar_mul(Point256 *results, Point256 *bases, bigint256 *
     for (int bit = 0; bit < 256; bit++) {
         uint64_t bit_mask = 1ULL << (bit % 64);
         if ((k.limbs[bit / 64] & bit_mask) != 0) {
-            res = ec_add(res, cur, mod_p, mu);
+            res = ec_add(res, cur, mod_p, mu, curve_a);
         }
         cur = jacobian_double(cur, mod_p, mu, curve_a);
     }
@@ -788,6 +788,6 @@ __device__ bool bigint256_ge(bigint256 a, bigint256 b);
 __device__ bigint256 barrett_reduce(bigint256 x, bigint256 p, bigint256 mu);
 __device__ bigint256 mont_mul(bigint256 a, bigint256 b, bigint256 p, bigint256 inv);
 __device__ Point256 jacobian_double(Point256 p, bigint256 mod_p, bigint256 mu, bigint256 curve_a);
-__device__ Point256 ec_add(Point256 p1, Point256 p2, bigint256 mod_p, bigint256 mu);
+__device__ Point256 ec_add(Point256 p1, Point256 p2, bigint256 mod_p, bigint256 mu, bigint256 curve_a);
 __device__ bool is_infinity(Point256 p);
 __device__ bool is_zero(bigint256 val);

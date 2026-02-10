@@ -24,6 +24,40 @@ __device__ bigint256 bigint256_one() {
     return res;
 }
 
+__device__ bigint256 bigint256_two() {
+    bigint256 res = bigint256_zero();
+    res.limbs[0] = 2;
+    return res;
+}
+
+__device__ bigint256 bigint256_three() {
+    bigint256 res = bigint256_zero();
+    res.limbs[0] = 3;
+    return res;
+}
+
+__device__ bigint256 bigint256_four() {
+    bigint256 res = bigint256_zero();
+    res.limbs[0] = 4;
+    return res;
+}
+
+__device__ bigint256 bigint256_eight() {
+    bigint256 res = bigint256_zero();
+    res.limbs[0] = 8;
+    return res;
+}
+
+// secp256k1 curve parameter a = -3
+__device__ bigint256 secp256k1_curve_a() {
+    // a = -3 mod p = p - 3
+    bigint256 p_minus_3 = bigint256_sub(
+        {0xFFFFFFFEFFFFFC2F, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF},
+        bigint256_three()
+    );
+    return p_minus_3;
+}
+
 __device__ bigint256 bigint256_add(const bigint256 a, const bigint256 b) {
     bigint256 res;
     uint64_t carry = 0;
