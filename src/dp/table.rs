@@ -3,6 +3,7 @@
 //! Cuckoo/Bloom filter + value-based scoring + clustering tags + rocksdb disk overflow
 
 use crate::types::DpEntry;
+use crate::math::bigint::BigInt256;
 use cuckoofilter::CuckooFilter;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;

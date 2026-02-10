@@ -278,20 +278,20 @@ impl CollisionDetector {
                     // Try resolve_near_collision before walk
                     let trap1 = Trap {
                         x: entry1.point.x,
-                        dist: BigUint::from_bytes_le(&entry1.state.distance.to_bytes_le()),
+                        dist: BigUint::from_bytes_le(&entry1.state.distance.to_bytes_le()[..]),
                         is_tame: entry1.state.is_tame,
                         alpha: entry1.state.alpha,
                     };
                     let trap2 = Trap {
                         x: entry2.point.x,
-                        dist: BigUint::from_bytes_le(&entry2.state.distance.to_bytes_le()),
+                        dist: BigUint::from_bytes_le(&entry2.state.distance.to_bytes_le()[..]),
                         is_tame: entry2.state.is_tame,
                         alpha: entry2.state.alpha,
                     };
 
                     if let Some(offset) = self.resolve_near_collision(&trap1, &trap2, dp_bit_threshold) {
                         // Construct solution from resolved offset
-                        let solution = Solution::new(offset.to_u64_array(), entry1.point, entry1.state.distance + entry2.state.distance, 0.0);
+                        let solution = Solution::new(offset.to_u64_array(), entry1.point, entry1.state.distance.clone() + entry2.state.distance, 0.0);
                         return Ok(CollisionResult::Full(solution));
                     }
 

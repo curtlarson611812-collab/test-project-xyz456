@@ -7,8 +7,9 @@ use super::shared::SharedBuffer;
 use super::backends::hybrid_backend::HybridBackend;
 use super::backends::backend_trait::GpuBackend;
 use crate::types::{Point, Solution, KangarooState, Scalar};
+use crate::math::bigint::BigInt256;
 use crate::kangaroo::collision::Trap;
-use crate::math::{secp::Secp256k1, bigint::BigInt256};
+use crate::math::secp::Secp256k1;
 use crate::config::{Config, BiasMode};
 use anyhow::Result;
 use std::sync::{Arc, Mutex};
@@ -833,7 +834,7 @@ impl HybridGpuManager {
                         if let Some(solution_array) = result {
                             // Convert to Solution
                             let private_key = solution_array.map(|x| x as u64);
-                            let solution = Solution::new(private_key[..4].try_into().unwrap(), *target, 0, 0.0);
+                            let solution = Solution::new(private_key[..4].try_into().unwrap(), *target, BigInt256::zero(), 0.0);
                             solutions.push(solution);
                         }
                     }

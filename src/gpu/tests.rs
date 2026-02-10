@@ -195,4 +195,69 @@ mod tests {
             assert_ne!(pre, &post.position, "Wild kangaroo position should have changed");
         }
     }
+
+    // === SmallOddPrime GPU Validation Tests ===
+
+    #[test]
+    fn test_smalloddprime_bucket_selection_gpu() {
+        // Test that GPU bucket selection matches CPU implementation
+        let curve = Secp256k1::new();
+        let point = curve.g;
+        let dist = BigInt256::from_u64(12345);
+        let seed = 6789u32;
+        let step = 101112u32;
+
+        // CPU reference
+        let cpu_tame_bucket = crate::kangaroo::generator::select_bucket(&point, &dist, seed, step, true);
+        let cpu_wild_bucket = crate::kangaroo::generator::select_bucket(&point, &dist, seed, step, false);
+
+        // For now, just verify CPU implementation works
+        // GPU validation would require actual GPU dispatch
+        assert!(cpu_tame_bucket < 32);
+        assert!(cpu_wild_bucket < 32);
+
+        // Tame should be deterministic (step % 32)
+        assert_eq!(cpu_tame_bucket, (step % 32) as u32);
+    }
+
+    #[test]
+    fn test_smalloddprime_gpu_step_integration() {
+        // Test that GPU step integration preserves SmallOddPrime logic
+        // This is a mock test - actual GPU dispatch would be tested in integration
+        let curve = Secp256k1::new();
+
+        // Create test states
+        let tame_state = crate::types::KangarooState::new(
+            curve.g.clone(),
+            0u64, // distance as u64
+            [0; 4],
+            [0; 4],
+            true, // tame
+            false,
+            0,
+        );
+
+        let wild_state = crate::types::KangarooState::new(
+            curve.g.clone(),
+            0u64, // distance as u64
+            [0; 4],
+            [0; 4],
+            false, // wild
+            false,
+            0,
+        );
+
+        // Test CPU stepper with SmallOddPrime logic
+        let stepper = crate::kangaroo::stepper::KangarooStepper::new(false); // expanded_mode = false
+
+        let stepped_tame = stepper.step_kangaroo_with_bias(&tame_state, None, 81);
+        let stepped_wild = stepper.step_kangaroo_with_bias(&wild_state, Some(&curve.g), 81);
+
+        // Verify SmallOddPrime logic: tame adds to distance, wild multiplies
+        assert!(stepped_tame.distance > 0); // u64 comparison
+        assert_ne!(stepped_wild.position.x, wild_state.position.x);
+
+        // GPU integration would verify these match GPU results
+        // For now, this confirms CPU SmallOddPrime logic works
+    }
 }

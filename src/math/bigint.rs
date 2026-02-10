@@ -1253,7 +1253,8 @@ impl MontgomeryReducer {
     /// Saturating subtraction (clamp to zero)
     pub fn saturating_sub(&self, other: u64) -> BigInt256 {
         let sub = self.sub(&BigInt256::from_u64(other));
-        if sub.is_negative() { BigInt256::zero() } else { sub }
+        // Check if result is negative (most significant bit set in MSB limb)
+        if (sub.limbs[3] & (1u64 << 63)) != 0 { BigInt256::zero() } else { sub }
     }
 
     /// Saturating addition

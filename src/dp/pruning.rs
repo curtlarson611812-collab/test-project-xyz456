@@ -3,6 +3,7 @@
 //! Value-based + cluster preference pruning, chunked eviction, metrics logging
 
 use crate::dp::table::DpTable;
+use crate::math::bigint::BigInt256;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use anyhow::Result;

@@ -19,7 +19,6 @@ use crate::kangaroo::stepper::KangarooStepper;
 use crate::kangaroo::collision::{CollisionDetector, CollisionResult};
 use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
-use crate::math::bigint::BigInt256;
 use anyhow::anyhow;
 use bloomfilter::Bloom;
 use zerocopy::IntoBytes;

@@ -72,4 +72,24 @@ if [[ -n "$KERNEL_TIME" ]] && (( $(echo "$KERNEL_TIME > 0" | bc -l) )); then
     echo "Estimated ops/sec: $OPS_PER_SEC Mops/sec" >> "$OUTPUT_DIR/analysis_report.txt"
 fi
 
+# SmallOddPrime-specific optimizations
+echo "" >> "$OUTPUT_DIR/analysis_report.txt"
+echo "=== SmallOddPrime Optimization Analysis ===" >> "$OUTPUT_DIR/analysis_report.txt"
+
+# Check for SmallOddPrime kernel efficiency
+if grep -q "sm_efficiency" "$OUTPUT_DIR/ncu_detailed.csv"; then
+    SOP_EFF=$(grep "sm_efficiency" "$OUTPUT_DIR/ncu_detailed.csv" | grep -i "sop\|bucket\|jump" | tail -1 | cut -d',' -f2 | sed 's/%//')
+    if [[ -n "$SOP_EFF" ]] && (( $(echo "$SOP_EFF < $MIN_EFFICIENCY" | bc -l) )); then
+        echo "WARNING: SmallOddPrime bucket/jump efficiency is $SOP_EFF% (below threshold)" >> "$OUTPUT_DIR/analysis_report.txt"
+        echo "RECOMMENDATION: Precompute PRIME_MULTIPLIERS in shared memory" >> "$OUTPUT_DIR/analysis_report.txt"
+        echo "RECOMMENDATION: Optimize select_bucket mixing for better divergence" >> "$OUTPUT_DIR/analysis_report.txt"
+    else
+        echo "SmallOddPrime efficiency: $SOP_EFF% (acceptable)" >> "$OUTPUT_DIR/analysis_report.txt"
+    fi
+fi
+
+# Check for herd size optimization
+echo "RECOMMENDATION: Monitor herd convergence - if stuck on attractors, adjust bias_mod" >> "$OUTPUT_DIR/analysis_report.txt"
+echo "RECOMMENDATION: Profile tame vs wild herd performance separately" >> "$OUTPUT_DIR/analysis_report.txt"
+
 echo "Analysis complete. Check $OUTPUT_DIR/analysis_report.txt for recommendations."

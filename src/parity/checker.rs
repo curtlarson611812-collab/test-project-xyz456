@@ -3,6 +3,7 @@
 //! CPU vs GPU bit-for-bit verification
 
 use crate::types::{KangarooState, Point};
+use crate::math::bigint::BigInt256;
 use crate::kangaroo::stepper::KangarooStepper;
 use crate::gpu::{GpuBackend, CpuBackend};
 use anyhow::Result;
@@ -103,7 +104,7 @@ impl ParityChecker {
         for _step in 0..self.test_steps {
             for kangaroo in &mut result {
                 // Simple CPU stepping - just increment distance for testing
-                kangaroo.distance += 1;
+                kangaroo.distance = kangaroo.distance.saturating_add(1);
             }
         }
 
