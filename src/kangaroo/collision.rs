@@ -405,6 +405,16 @@ impl CollisionDetector {
                     };
 
                     if dist_diff < BigUint::from(self.near_threshold) {
+                        // Check if hybrid BSGS is enabled for near collision solving
+                        if self.config.use_hybrid_bsgs {
+                            // Try to solve near collision using BSGS
+                            let solution = self.solve_near_collision_with_bsgs(&traps[i], &traps[j]);
+                            if let Some(sol) = solution {
+                                // TODO: Handle the solution - perhaps return it or store it
+                                info!("🎯 Near collision solved with BSGS: {:?}", sol.private_key);
+                            }
+                        }
+
                         // Add both kangaroos as potential near collision pair
                         near_collisions.push(kangaroos[i].clone());
                         near_collisions.push(kangaroos[j].clone());
@@ -414,6 +424,14 @@ impl CollisionDetector {
         }
 
         near_collisions
+    }
+
+    /// Solve near collision using hybrid BSGS approach
+    fn solve_near_collision_with_bsgs(&self, _trap1: &Trap, _trap2: &Trap) -> Option<Solution> {
+        // TODO: Implement BSGS solving for near collisions
+        // This would dispatch to the hybrid backend's batch_bsgs_solve
+        // For now, return None to indicate not implemented yet
+        None
     }
 
     /// Walk back/forward near collision detection - retrace paths 10k-50k steps on near hits
@@ -1033,7 +1051,7 @@ fn test_resolve_near_collision() {
         bsgs_threshold: 10000,
         ..Default::default()
     };
-    let mut detector = CollisionDetector::new_with_config(&config).with_target(Point::infinity());
+    let detector = CollisionDetector::new_with_config(&config).with_target(Point::infinity());
 
     // Create test traps with small difference
     let tame_trap = Trap {

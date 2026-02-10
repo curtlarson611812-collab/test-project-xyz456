@@ -1,18 +1,20 @@
 // src/gpu/vulkan/shaders/utils.wgsl
-fn barrett_mod(x: array<u32,4>, m: u32, mu: u32) -> u32 {
+fn barrett_mod(x: array<u32,8>, m: u32, mu: u32) -> u32 {
     // Simplified Barrett for m=81 (pre-mu = floor(2^32 / 81))
-    let q = (x[3] * mu) >> 32u;  // High limb approx
-    let rem = x[0] - q * m;  // Low limb
+    // Use low 32 bits for mod 81 calculation
+    let low_32 = x[0];
+    let q = (low_32 * mu) >> 32u;  // High limb approx
+    let rem = low_32 - q * m;  // Low limb
     return rem % m;  // Fallback exact
 }
 
-fn trailing_zeros(d: array<u32,4>) -> u32 {
-    for (var i = 0u; i < 4u; i++) {
+fn trailing_zeros(d: array<u32,8>) -> u32 {
+    for (var i = 0u; i < 8u; i++) {
         if (d[i] != 0u) {
             return countTrailingZeros(d[i]) + i*32u;
         }
     }
-    return 128u;
+    return 256u;
 }
 
 fn ec_add_jacobian(px: ptr<storage, array<u32,4>>, py: ptr<storage, array<u32,4>>, jump: array<u32,4>) {

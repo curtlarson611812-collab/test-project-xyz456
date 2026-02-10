@@ -1135,6 +1135,7 @@ mod tests {
 
 /// Load the 9 specific Magic 9 sniper pubkeys by 0-based indices
 /// Indices: [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567]
+#[allow(dead_code)]
 pub fn load_magic9_pubkeys(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
     let content = std::fs::read_to_string("valuable_p2pk_pubkeys.txt")
         .map_err(|e| format!("Failed to read valuable_p2pk_pubkeys.txt: {}", e))?;
@@ -1167,11 +1168,13 @@ pub fn load_magic9_pubkeys(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std:
 }
 
 /// Load valuable P2PK pubkeys from file
+#[allow(dead_code)]
 pub fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
     load_from_file("valuable_p2pk_pubkeys.txt", curve)
 }
 
 /// Load test puzzles (known solved puzzles for validation)
+#[allow(dead_code)]
 pub fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
     // Hardcoded test puzzles with known solutions
     let test_hex = vec![
@@ -1194,6 +1197,7 @@ pub fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::e
 }
 
 /// Load a specific real unsolved puzzle
+#[allow(dead_code)]
 pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point, Box<dyn std::error::Error>> {
     let hex = match n {
         135 => "02145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16",
@@ -1218,6 +1222,7 @@ pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point, Box<dyn std:
 }
 
 /// Generic file loader for compressed pubkey files
+#[allow(dead_code)]
 pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
     use std::io::BufReader;
     let file = File::open(path)?;
@@ -1260,6 +1265,7 @@ pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<d
 // Chunk: AVX Bias Check (pubkey_loader.rs)
 // Temporarily disabled SIMD code due to feature gate issues
 // use std::simd::prelude::*;
+#[allow(dead_code)]
 pub fn simd_bias_check(res: u32, high_residues: &[u32]) -> bool {
     // Scalar fallback - SIMD temporarily disabled
     high_residues.contains(&res)

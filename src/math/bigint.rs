@@ -297,6 +297,16 @@ impl BigInt256 {
         BigInt256 { limbs: [0; 4] }
     }
 
+    /// Secp256k1 modulus constant
+    pub const P: BigInt256 = BigInt256 {
+        limbs: [
+            0xFFFFFFFEFFFFFC2F,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+        ],
+    };
+
     /// Create one
     pub fn one() -> Self {
         BigInt256 { limbs: [1, 0, 0, 0] }
@@ -393,13 +403,13 @@ impl BigInt256 {
     pub fn from_bytes_be(bytes: &[u8; 32]) -> Self {
         let mut limbs = [0u64; 4];
         for i in 0..4 {
-            limbs[i] = u64::from_be_bytes([
+            limbs[3 - i] = u64::from_be_bytes([
                 bytes[i * 8], bytes[i * 8 + 1], bytes[i * 8 + 2], bytes[i * 8 + 3],
                 bytes[i * 8 + 4], bytes[i * 8 + 5], bytes[i * 8 + 6], bytes[i * 8 + 7],
             ]);
         }
-        // limbs[0] is most significant (big-endian), convert to little-endian
-        BigInt256 { limbs: [limbs[3], limbs[2], limbs[1], limbs[0]] }
+        // bytes[0..8] is most significant, goes to limbs[3] (most significant in little-endian)
+        BigInt256 { limbs }
     }
 
     // Chunk: Limbs Accessor (math/bigint.rs)
@@ -656,6 +666,15 @@ impl BigInt256 {
             result[i] = (diff & 0xFFFFFFFFFFFFFFFF) as u64;
             borrow = ((diff >> 127) & 1) ^ 1; // 1 if borrow occurred (diff negative)
         }
+
+        // Ensure positive result (mod p)
+        let zero = [0u64; 4];
+        if Self::cmp_par(result, &zero) < 0 {
+            let mut temp = [0u64; 4];
+            Self::add_par(result, &Self::P.limbs, &mut temp);
+            result.copy_from_slice(&temp);
+        }
+
     }
 
     /// Parallel multiplication producing wide result (port from CUDA)
@@ -833,7 +852,7 @@ impl BarrettReducer {
             let mut low = BigUint::from(0u32);
             let mut high = q3.clone();
             let mut iterations = 0;
-            const MAX_ITER: u32 = 512; // Safe cap
+            const MAX_ITER: u32 = 1024; // Increased cap
             while low < high && iterations < MAX_ITER {
                 let mid = (&low + &high) / BigUint::from(2u32);
                 let mid_m = &mid * &modulus_big;
@@ -844,10 +863,8 @@ impl BarrettReducer {
                 }
                 iterations += 1;
             }
-            if iterations == MAX_ITER {
-                log::error!("Binary max iter - fallback %");
-                x_big % &modulus_big
-            } else {
+            // Remove fallback - should not reach max iterations
+            {
                 let q3_adj = &low - BigUint::from(1u32);
                 let q_m_adj = &q3_adj * &modulus_big;
                 if q_m_adj > x_big {
@@ -887,6 +904,27 @@ impl BarrettReducer {
     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
         let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
         self.reduce(&prod).expect("Mul reduce fail")
+    }
+
+    /// Reduce a 512-bit wide product modulo a given modulus
+    pub fn reduce_wide_mod(wide: &[u64; 8], result: &mut [u64; 4], modulus: &BigInt256) {
+        // Simple reduction: wide % modulus
+        // For now, convert to BigUint for accurate reduction
+        use num_bigint::BigUint;
+        let mut wide_bytes = vec![0u8; 64];
+        for i in 0..8 {
+            let limb_bytes = wide[7 - i].to_be_bytes(); // Big-endian
+            wide_bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
+        }
+        let wide_big = BigUint::from_bytes_be(&wide_bytes);
+        let mod_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+        let reduced_big = &wide_big % &mod_big;
+        let reduced_bytes = reduced_big.to_bytes_be();
+        let mut reduced_bytes_padded = [0u8; 32];
+        let start = 32usize.saturating_sub(reduced_bytes.len());
+        reduced_bytes_padded[start..].copy_from_slice(&reduced_bytes);
+        let reduced = BigInt256::from_bytes_be(&reduced_bytes_padded);
+        result.copy_from_slice(&reduced.limbs);
     }
 }
 
@@ -1355,7 +1393,6 @@ impl Rem for BigInt256 {
 mod tests {
     use super::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
     use std::ops::Sub;
-    use std::time::Instant;
 
     /// secp256k1 prime modulus
     const SECP256K1_P: &str = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F";

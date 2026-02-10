@@ -392,6 +392,7 @@ mod tests {
 
         // Prune clusters
         let stats = pruner.prune_advanced_clusters(10).await.unwrap();
+        log::info!("Prune stats: {:?}", stats);
         // Should have removed some entries from small clusters
         // May be 0 if clustering doesn't identify clear outliers
     }

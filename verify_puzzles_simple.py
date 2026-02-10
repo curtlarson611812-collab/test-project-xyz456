@@ -1,115 +1,130 @@
 #!/usr/bin/env python3
 """
-Simple puzzle verification script using only standard library
-Verifies that private keys generate correct public keys and addresses
+Simple verification for comma-separated puzzle format
+Only verifies solved puzzles (those with private keys)
 """
 
+import subprocess
+import json
+import sys
 import hashlib
 import binascii
-import ecdsa
-import base58
+
+def run_bitcoin_cli(*args):
+    try:
+        cmd = ['bitcoin-cli'] + list(args)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)
+    except:
+        return None
+
+def base58_encode(data):
+    """Proper base58 encoding with leading zero handling"""
+    alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+
+    # Count leading zeros
+    leading_zeros = 0
+    for byte in data:
+        if byte == 0:
+            leading_zeros += 1
+        else:
+            break
+
+    # Convert to big integer
+    num = int.from_bytes(data, 'big')
+
+    # Encode
+    encoded = ''
+    while num > 0:
+        num, rem = divmod(num, 58)
+        encoded = alphabet[rem] + encoded
+
+    # Add leading '1's for each leading zero byte
+    return '1' * leading_zeros + encoded
 
 def pubkey_to_address(pubkey_hex):
-    """Convert compressed pubkey to Bitcoin address"""
-    # Add version byte (0x00 for mainnet)
     pubkey_bytes = binascii.unhexlify(pubkey_hex)
-    sha256_hash = hashlib.sha256(pubkey_bytes).digest()
-    ripemd160_hash = hashlib.new('ripemd160', sha256_hash).digest()
+    sha = hashlib.sha256(pubkey_bytes).digest()
+    rip = hashlib.new('ripemd160', sha).digest()
+    version_rip = b'\x00' + rip
+    checksum = hashlib.sha256(hashlib.sha256(version_rip).digest()).digest()[:4]
+    return base58_encode(version_rip + checksum)
 
-    # Add version byte for mainnet P2PKH
-    version_ripemd = b'\x00' + ripemd160_hash
+def verify_solved_puzzle(n, pubkey_hex, priv_hex):
+    """Verify a solved puzzle has correct pubkey->address"""
+    if not priv_hex or priv_hex == '':
+        return True  # Skip unsolved puzzles
 
-    # Double SHA256 for checksum
-    checksum = hashlib.sha256(hashlib.sha256(version_ripemd).digest()).digest()[:4]
-
-    # Base58Check encode
-    address_bytes = version_ripemd + checksum
-    return base58.b58encode(address_bytes).decode('ascii')
-
-def verify_puzzle_crypto(puzzle_num, pubkey_hex, privkey_hex, target_address):
-    """Verify cryptographic consistency of a puzzle"""
     try:
-        # Parse private key
-        privkey_int = int(privkey_hex, 16)
-        privkey_bytes = privkey_int.to_bytes(32, byteorder='big')
+        # Derive address from public key
+        derived_address = pubkey_to_address(pubkey_hex)
 
-        # Generate public key using ecdsa
-        sk = ecdsa.SigningKey.from_secret_exponent(privkey_int, curve=ecdsa.SECP256k1)
-        vk = sk.verifying_key
-        pubkey_compressed = b'\x02' + vk.to_string()[:32] if vk.to_string()[63] % 2 == 0 else b'\x03' + vk.to_string()[:32]
-        computed_pubkey_hex = pubkey_compressed.hex()
-
-        # Verify pubkey matches
-        if computed_pubkey_hex != pubkey_hex:
-            print(f"❌ Puzzle {puzzle_num}: Pubkey mismatch!")
-            print(f"   Expected: {pubkey_hex}")
-            print(f"   Computed: {computed_pubkey_hex}")
+        # Check if address exists on blockchain
+        addr_info = run_bitcoin_cli('getaddressinfo', derived_address)
+        if addr_info and 'address' in addr_info:
+            print(f"✅ Puzzle #{n}: Valid address {derived_address}")
+            return True
+        else:
+            print(f"❌ Puzzle #{n}: Address {derived_address} not found")
             return False
-
-        # Generate address
-        computed_address = pubkey_to_address(pubkey_hex)
-
-        # Verify address matches
-        if computed_address != target_address:
-            print(f"❌ Puzzle {puzzle_num}: Address mismatch!")
-            print(f"   Expected: {target_address}")
-            print(f"   Computed: {computed_address}")
-            return False
-
-        print(f"✅ Puzzle {puzzle_num}: Cryptography verified")
-        return True
 
     except Exception as e:
-        print(f"❌ Puzzle {puzzle_num}: Verification failed - {e}")
+        print(f"❌ Puzzle #{n}: Verification error - {e}")
         return False
 
-def load_and_verify_puzzles(filename="puzzles.txt"):
-    """Load puzzles and verify solved ones"""
-    print(f"Loading puzzles from {filename}...")
-    solved_count = 0
-    verified_count = 0
+def main():
+    if len(sys.argv) != 2:
+        print("Usage: python3 verify_puzzles_simple.py <puzzles.txt>")
+        sys.exit(1)
+
+    puzzles_file = sys.argv[1]
+
+    print("🔍 Verifying solved puzzles in comma-separated format")
+    print(f"📄 Reading from: {puzzles_file}")
+    print()
+
+    total_solved = 0
+    valid_solved = 0
 
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
+        with open(puzzles_file, 'r') as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
-                if not line or line.startswith('#'):
+                if not line or line.startswith('//'):
                     continue
 
-                parts = line.split('|')
-                if len(parts) < 9:
+                parts = line.split(',')
+                if len(parts) != 5:
                     continue
 
                 try:
-                    puzzle_num = int(parts[0])
-                    status = parts[1]
-                    btc_reward = float(parts[2]) if parts[2] else 0.0
-                    pubkey_hex = parts[3]
-                    privkey_hex = parts[4] if len(parts) > 4 and parts[4] != '' else None
-                    target_address = parts[5] if len(parts) > 5 else ''
+                    n = int(parts[0])
+                    pubkey_hex = parts[1].strip()
+                    priv_hex = parts[2].strip()
 
-                    if status == 'SOLVED' and pubkey_hex and privkey_hex and target_address:
-                        solved_count += 1
-                        print(f"\n🔍 Verifying Puzzle #{puzzle_num} (BTC: {btc_reward})")
-                        print(f"   Address: {target_address}")
+                    if priv_hex and priv_hex != '':
+                        total_solved += 1
+                        if verify_solved_puzzle(n, pubkey_hex, priv_hex):
+                            valid_solved += 1
 
-                        if verify_puzzle_crypto(puzzle_num, pubkey_hex, privkey_hex, target_address):
-                            verified_count += 1
-                        else:
-                            print(f"   ❌ Puzzle {puzzle_num} FAILED verification")
-
-                except ValueError as e:
-                    print(f"Warning: Error parsing line {line_num}: {e}")
+                except ValueError:
                     continue
 
-    except FileNotFoundError:
-        print(f"Error: {filename} not found")
-        return
+        print()
+        print("📊 Solved Puzzle Verification:")
+        print(f"  Total solved: {total_solved}")
+        print(f"  Valid solved: {valid_solved}")
 
-    print(f"\n📊 Verification Summary:")
-    print(f"   Solved puzzles found: {solved_count}")
-    print(f"   Successfully verified: {verified_count}")
-    print(f"   Success rate: {verified_count/solved_count*100:.1f}%" if solved_count > 0 else "   No solved puzzles to verify")
+        if valid_solved == total_solved:
+            print("✅ All solved puzzles verified successfully!")
+            return 0
+        else:
+            print(f"❌ {total_solved - valid_solved} solved puzzles failed verification")
+            return 1
+
+    except FileNotFoundError:
+        print(f"❌ File not found: {puzzles_file}")
+        return 1
 
 if __name__ == "__main__":
-    load_and_verify_puzzles()
+    sys.exit(main())

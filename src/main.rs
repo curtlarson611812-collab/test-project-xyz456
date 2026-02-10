@@ -37,7 +37,7 @@ struct Args {
     real_puzzle: Option<u32>,  // Run on specific unsolved, e.g. 150
     #[arg(long)]
     check_pubkeys: bool,  // Check all puzzle pubkey validity
-    #[arg(long)]
+    #[arg(long, default_value_t = true)]
     gpu: bool,  // Enable GPU hybrid acceleration
     #[arg(long, default_value_t = 0)]  // 0 = unlimited cycles
     max_cycles: u64,
@@ -120,6 +120,7 @@ pub fn start_thermal_log() {
 
 // Chunk: Comprehensive Auto-Tune with Metrics (src/main.rs)
 // Dependencies: std::fs::read_to_string, regex::Regex, logging::NsightMetrics
+#[allow(dead_code)]
 fn auto_tune_kangaroos(config: &mut speedbitcrack::config::GpuConfig) {
     // First try metrics-based optimization
     if let Some(metrics) = speedbitcrack::utils::logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
@@ -145,6 +146,7 @@ fn auto_tune_kangaroos(config: &mut speedbitcrack::config::GpuConfig) {
 
 /// Bitcoin Puzzle Database Structure
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct PuzzleData {
     number: u32,
     address: &'static str,
@@ -199,7 +201,7 @@ impl PuzzleMode for RealMode {
     fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>> {
         Ok(vec![load_real_puzzle(self.n, curve)?])
     }
-    fn execute(&self, gen: &KangarooGenerator, points: &[Point], args: &Args) -> Result<()> {
+    fn execute(&self, _gen: &KangarooGenerator, _points: &[Point], _args: &Args) -> Result<()> {
         // execute_real(gen, &points[0], self.n, args) // TODO: Implement
         Ok(())
     }
@@ -208,10 +210,10 @@ impl PuzzleMode for RealMode {
 /// Magic 9 sniper mode for targeting specific clustered pubkeys
 struct Magic9Mode;
 impl PuzzleMode for Magic9Mode {
-    fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>> {
+    fn load(&self, _curve: &Secp256k1) -> Result<Vec<Point>> {
         println!("DEBUG: Loading Magic 9 pubkeys...");
-        let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
-        let mut points = Vec::with_capacity(9);
+        let _indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
+        let points = Vec::with_capacity(9);
 
         // Load pubkeys from valuable_p2pk_pubkeys.txt
         // TEMP: Skip loading to avoid hex parsing issues during puzzle testing
@@ -270,6 +272,7 @@ pub fn save_checkpoint(states: &[speedbitcrack::types::RhoState], path: &std::pa
 
 // Chunk: Checkpoint Save (Rust) - Add to kangaroo/manager.rs.
 // Dependencies: bincode::{serialize_into, deserialize_from}, std::fs::File, kangaroo::manager::save_checkpoint
+#[allow(dead_code)]
 fn crack_loop(_target: &BigInt256, _range: (BigInt256, BigInt256), config: &mut speedbitcrack::config::GpuConfig) -> Option<BigInt256> {
     let states = if let Ok(file) = std::fs::File::open("checkpoint.bin") {
         bincode::deserialize_from(file).unwrap_or(vec![RhoState::default(); config.max_kangaroos])
@@ -517,7 +520,7 @@ async fn main() -> Result<()> {
             println!("DEBUG: Target point created successfully");
 
             // Set up kangaroo parameters
-            let mut gpu_config = if args.laptop {
+            let gpu_config = if args.laptop {
                 speedbitcrack::config::laptop_3070_config()
             } else {
                 speedbitcrack::config::GpuConfig {
@@ -562,8 +565,7 @@ async fn main() -> Result<()> {
             let stepper = speedbitcrack::kangaroo::KangarooStepper::with_dp_bits(true, 24);
 
             // FULL CONFIGURATION with ALL features enabled
-            let mut search_config = Config::default();
-            search_config = speedbitcrack::config::Config {
+            let _search_config = speedbitcrack::config::Config {
                 dp_bits: 24,
                 enable_near_collisions: Some(0.8), // 80% threshold for near collision detection
                 enable_smart_pruning: true, // DP table smart pruning
@@ -952,7 +954,7 @@ async fn main() -> Result<()> {
         let curve = Secp256k1::new();
         let target_point = curve.g.clone(); // Use generator as default target
 
-        let laptop_config = if args.laptop { config.clone() } else { config.clone() };
+        let _laptop_config = if args.laptop { config.clone() } else { config.clone() };
         let gen = KangarooGenerator::new(&Config::default());
 
         execute_custom_range(&gen, &target_point, (low, high), &args)?;
@@ -978,7 +980,7 @@ async fn main() -> Result<()> {
 
     println!("DEBUG: Creating curve and generator");
     let curve = Secp256k1::new();
-    let laptop_config = if args.laptop { /* use laptop config */ config.clone() } else { config.clone() };  // TODO: integrate laptop config
+    let _laptop_config = if args.laptop { /* use laptop config */ config.clone() } else { config.clone() };  // TODO: integrate laptop config
     let gen = KangarooGenerator::new(&config);
     println!("DEBUG: Generator created, loading points");
 
@@ -1071,7 +1073,7 @@ fn run_crack_unsolved(args: &Args) -> Result<()> {
     // Create mode and execute
     let mode = RealMode { n: most_likely };
     let curve = Secp256k1::new();
-    let search_config = Config::default();
+    let _search_config = Config::default();
     let gen = KangarooGenerator::new(&Config::default());
 
     let point = mode.load(&curve)?;
@@ -1113,7 +1115,7 @@ fn load_puzzle_point(puzzle_num: u32) -> Result<Point> {
 }
 
 /// Run parallel lambda algorithm for unsolved puzzles
-fn pollard_lambda_parallel(target: &Point, range: (BigInt256, BigInt256)) -> Option<BigInt256> {
+fn pollard_lambda_parallel(target: &Point, _range: (BigInt256, BigInt256)) -> Option<BigInt256> {
     let curve = Secp256k1::new();
         let gen = KangarooGenerator::new(&Config::default());
     let herd_size = 1000; // Reasonable size for unsolved hunting
@@ -1150,8 +1152,8 @@ fn pollard_lambda_parallel(target: &Point, range: (BigInt256, BigInt256)) -> Opt
 
     // Run collision detection
     let config = Config::default();
-    let detector = CollisionDetector::new_with_config(&config);
-    let dp_table = std::sync::Arc::new(std::sync::Mutex::new(speedbitcrack::dp::DpTable::new(24)));
+    let _detector = CollisionDetector::new_with_config(&config);
+    let _dp_table = std::sync::Arc::new(std::sync::Mutex::new(speedbitcrack::dp::DpTable::new(24)));
 
     // Simple iteration - in production would use async GPU acceleration
     for step in 0..10000 { // Limited steps for demo
@@ -1186,6 +1188,7 @@ fn pollard_lambda_parallel(target: &Point, range: (BigInt256, BigInt256)) -> Opt
 
 /// Structure to hold bias analysis results
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct BiasResult {
     puzzle_n: u32,
     mod9: u64,
@@ -1196,6 +1199,7 @@ struct BiasResult {
 }
 
 impl BiasResult {
+    #[allow(dead_code)]
     /// Calculate bias score (lower is better for cracking)
     fn bias_score(&self) -> f64 {
         // Combine multiple bias factors
@@ -1208,6 +1212,7 @@ impl BiasResult {
     }
 
     /// Estimate complexity after bias adjustment
+    #[allow(dead_code)]
     fn estimated_complexity(&self) -> f64 {
         let original_complexity = self.range_size.to_f64().sqrt();
         original_complexity / self.bias_score().sqrt()
@@ -1218,8 +1223,6 @@ impl BiasResult {
 /// Test solved puzzles by verifying the puzzle data can be loaded and processed
 fn test_solved_puzzle(puzzle_num: u32) -> Result<()> {
     use speedbitcrack::puzzles::{get_puzzle, PuzzleStatus};
-    use speedbitcrack::math::secp::Secp256k1;
-    use speedbitcrack::utils::pubkey_loader::parse_compressed;
 
     println!("🧪 Testing puzzle #{} loading and processing using flat file format", puzzle_num);
 
@@ -1277,6 +1280,7 @@ fn test_solved_puzzle(puzzle_num: u32) -> Result<()> {
 
 
 /// Run a specific puzzle for testing
+#[allow(dead_code)]
 fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
     use speedbitcrack::math::{secp::Secp256k1, bigint::BigInt256};
     use speedbitcrack::kangaroo::generator::KangarooGenerator;
@@ -1334,7 +1338,7 @@ fn run_puzzle_test(puzzle_num: u32) -> Result<()> {
 
     // For puzzle #64, we know the private key is 1, so [1]G = target
     // This is just a test - real solving would use kangaroo methods
-    let search_config = Config::default();
+    let _search_config = Config::default();
     let _gen = KangarooGenerator::new(&Config::default());
 
     // Simple test: check if multiplying by 1 gives us the target
@@ -1476,6 +1480,7 @@ fn analyze_pos_bias_histogram(solved_puzzles: &[(u32, BigInt256)]) -> [f64; 10] 
 
 /// Analyze positional bias from solved puzzles in the database
 /// Returns the maximum positional bias factor (how much a bin is overrepresented)
+#[allow(dead_code)]
 fn analyze_solved_positional_bias() -> f64 {
     // Commented out on 2026-02-04: Need to update for new puzzle system
     // TODO: Implement using flat file puzzle system
@@ -1602,7 +1607,7 @@ fn execute_test(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 }
 
 /// Auto bias chain detection and scoring
-fn auto_bias_chain(gen: &KangarooGenerator, puzzle: u32, point: &Point) -> std::collections::HashMap<u32, f64> {
+fn auto_bias_chain(gen: &KangarooGenerator, _puzzle: u32, point: &Point) -> std::collections::HashMap<u32, f64> {
     // Use single point for bias analysis (could be extended to multiple points)
     let points = vec![*point];
     gen.aggregate_bias(&points)
@@ -1623,7 +1628,7 @@ fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt25
     let bias_score = score_bias(&biases);
 
     // Conditional execution based on bias score
-    let effective_biases = if bias_score > 1.2 {
+    let _effective_biases = if bias_score > 1.2 {
         info!("🎯 HIGH BIAS SCORE: {:.3} > 1.2 - Running with full bias chain optimization!", bias_score);
         info!("💡 Expected {:.1}x speedup from bias exploitation", bias_score);
         biases
@@ -1658,7 +1663,7 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     }
 
     let shared_bias = bias::MAGIC9_BIASES[0]; // Universal (0,0,0,0,128) for GOLD
-    let use_hamming = !is_gold || shared_bias.4 != 128; // Disable if uniform 128
+    let _use_hamming = !is_gold || shared_bias.4 != 128; // Disable if uniform 128
 
     // Validate nested modulus relationships (GOLD cluster consistency)
     if let Err(msg) = bias::validate_mod_chain((shared_bias.0, shared_bias.1, shared_bias.2, shared_bias.3)) {
@@ -1675,15 +1680,15 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     let n_scalar = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").expect("Failed to parse n_scalar hex");
 
     // Block 2: Pre-Compute Shared D_g and Tame Paths
-    let dp_bits = 20; // For /81 space, scale to 2^20 collisions
-    let max_steps = 1_000_000u64;
+    let _dp_bits = 20; // For /81 space, scale to 2^20 collisions
+    let _max_steps = 1_000_000u64;
 
     // Pre-compute D_g (shared for entire cluster)
     let d_g = bias::get_precomputed_d_g(&attractor_x, shared_bias);
     info!("📊 Shared D_g pre-computed: {} (G to attractor distance)", d_g.to_hex());
 
     // Generate shared tame paths (backward from attractor) - placeholder for now
-    let shared_tame: std::collections::HashMap<u64, BigInt256> = std::collections::HashMap::new(); // Empty map for demonstration
+    let _shared_tame: std::collections::HashMap<u64, BigInt256> = std::collections::HashMap::new(); // Empty map for demonstration
     info!("📊 Shared tame DP map placeholder: 0 entries (framework ready for full implementation)");
 
     // Magic 9 indices for output
@@ -1697,12 +1702,12 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 
         // Get hierarchical primes (mod81=0, fallback mod27)
         let primes = bias::get_biased_primes(shared_bias.3, 81, 4);
-        let prime_scalar = BigInt256::from_u64(primes[i % primes.len()]);
+        let _prime_scalar = BigInt256::from_u64(primes[i % primes.len()]);
 
         // Get affine coordinates for verification
         let p_i_affine = curve.to_affine(p_i);
-        let p_i_x = BigInt256::from_u64_array(p_i_affine.x);
-        let p_i_y = BigInt256::from_u64_array(p_i_affine.y);
+        let _p_i_x = BigInt256::from_u64_array(p_i_affine.x);
+        let _p_i_y = BigInt256::from_u64_array(p_i_affine.y);
 
         // Block 1: Compute real D_i with biased kangaroo (stub for testing)
         // Use stub implementation that returns realistic D_i ~2^20
@@ -1767,6 +1772,7 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 }
 
 /// Generate shared tame DP map for GOLD cluster optimization
+#[allow(dead_code)]
 fn generate_shared_tame_paths(
     attractor_x: &BigInt256,
     shared_bias: (u8, u8, u8, u8, u32),
@@ -1817,10 +1823,11 @@ fn generate_shared_tame_paths(
     Ok(tame_map)
 }
 
+#[allow(dead_code)]
 /// Verify DP collision candidate
 fn verify_collision(
-    collision_point: &Point,
-    target_point: &Point,
+    _collision_point: &Point,
+    _target_point: &Point,
     _candidate_d_i: &BigInt256,
     _prime_scalar: &BigInt256,
     _curve: &Secp256k1

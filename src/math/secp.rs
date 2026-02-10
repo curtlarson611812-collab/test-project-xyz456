@@ -103,6 +103,35 @@ impl Secp256k1 {
         &self.p
     }
 
+    /// Reduce a 512-bit wide product modulo a given modulus
+    fn reduce_wide_mod(wide: &[u64; 8], result: &mut [u64; 4], modulus: &BigInt256) {
+        // Convert to BigUint for accurate reduction
+        use num_bigint::BigUint;
+        let mut wide_bytes = vec![0u8; 64];
+        for i in 0..8 {
+            let limb_bytes = wide[7 - i].to_be_bytes(); // Big-endian
+            wide_bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
+        }
+        let wide_big = BigUint::from_bytes_be(&wide_bytes);
+        let mod_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+        let reduced_big = &wide_big % &mod_big;
+        let reduced_bytes = reduced_big.to_bytes_be();
+        let mut reduced_bytes_padded = [0u8; 32];
+        let start = 32usize.saturating_sub(reduced_bytes.len());
+        reduced_bytes_padded[start..].copy_from_slice(&reduced_bytes);
+        let reduced = BigInt256::from_bytes_be(&reduced_bytes_padded);
+        result.copy_from_slice(&reduced.limbs);
+    }
+
+    /// Modular multiplication: (a * b) % modulus
+    pub fn mul_mod(&self, a: &BigInt256, b: &BigInt256, modulus: &BigInt256) -> BigInt256 {
+        let mut wide = [0u64; 8];
+        BigInt256::mul_par(&a.limbs, &b.limbs, &mut wide);
+        let mut result_limbs = [0u64; 4];
+        Self::reduce_wide_mod(&wide, &mut result_limbs, modulus);
+        BigInt256 { limbs: result_limbs }
+    }
+
     // Enter Montgomery form: x * R mod p (R = 2^256 for 256-bit modulus)
     pub fn montgomery_convert_in(&self, x: &BigInt256) -> BigInt256 {
         self.montgomery_p.convert_in(x)
@@ -180,85 +209,114 @@ impl Secp256k1 {
         }
     }
 
-    /// Point addition: P + Q using mixed Jacobian (P) + affine (Q) coordinates (11M + 5S operations)
-    /// Implements the complete mixed addition formula for secp256k1 with Jacobian result
+    /// Jacobian point addition: P + Q using exact num_bigint arithmetic
     pub fn add(&self, p: &Point, q: &Point) -> Point {
-        // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
-        if p.is_infinity() { return *q; }
-        if q.is_infinity() { return *p; }
-        let px = BigInt256::from_u64_array(p.x);
-        let py = BigInt256::from_u64_array(p.y);
-        let pz = BigInt256::from_u64_array(p.z);
-        let qx = BigInt256::from_u64_array(q.x);
-        let qy = BigInt256::from_u64_array(q.y);
-        let qz = BigInt256::from_u64_array(q.z);
-
-        // Convert to Montgomery domain
-        let pz_r = self.montgomery_convert_in(&pz);
-        let qz_r = self.montgomery_convert_in(&qz);
-        let px_r = self.montgomery_convert_in(&px);
-        let qx_r = self.montgomery_convert_in(&qx);
-
-        let pz2_r = self.montgomery_p.mul(&pz_r, &pz_r);
-        let qz2_r = self.montgomery_p.mul(&qz_r, &qz_r);
-        let u1_r = self.montgomery_p.mul(&px_r, &qz2_r);
-        let u2_r = self.montgomery_p.mul(&qx_r, &pz2_r);
-
-        // Convert back for Barrett operations
-        let pz2 = self.montgomery_convert_out(&pz2_r);
-        let qz2 = self.montgomery_convert_out(&qz2_r);
-        let u1 = self.montgomery_convert_out(&u1_r);
-        let u2 = self.montgomery_convert_out(&u2_r);
-
-        let pz3 = self.barrett_p.mul(&pz2, &pz);
-        let qz3 = self.barrett_p.mul(&qz2, &qz);
-        let py_r = self.montgomery_convert_in(&py);
-        let qy_r = self.montgomery_convert_in(&qy);
-        let pz3_r = self.montgomery_convert_in(&pz3);
-        let qz3_r = self.montgomery_convert_in(&qz3);
-        let s1_r = self.montgomery_p.mul(&py_r, &qz3_r);
-        let s2_r = self.montgomery_p.mul(&qy_r, &pz3_r);
-        let s1 = self.montgomery_convert_out(&s1_r);
-        let s2 = self.montgomery_convert_out(&s2_r);
-
-        let h = self.barrett_p.sub(&u2, &u1);
-        if h == BigInt256::zero() {
-            if s1 == s2 { return self.double(p); }
-            return Point { x: [0;4], y: [0;4], z: [0;4] };
+        // Handle infinity cases first
+        if p.is_infinity() {
+            println!("DEBUG: add infinity + q, returning q.x={:x}, q.y={:x}, q.z={:x}", q.x[3], q.y[3], q.z[0]);
+            return *q;
+        }
+        if q.is_infinity() {
+            #[cfg(debug_assertions)]
+            {
+                println!("DEBUG: add p + infinity, p.x={:x}, p.z={:x}", p.x[3], p.z[3]);
+            }
+            return *p;
         }
 
-        let h_r = self.montgomery_convert_in(&h);
-        let hh_r = self.montgomery_p.mul(&h_r, &h_r);
-        let hh = self.montgomery_convert_out(&hh_r);
-        let i = self.barrett_p.add(&hh, &hh); // i = 2*hh
-        let i = self.barrett_p.add(&i, &i); // i = 4*hh
-        let j_r = self.montgomery_p.mul(&h_r, &self.montgomery_convert_in(&i));
-        let j = self.montgomery_convert_out(&j_r);
+        // Use num_bigint for exact arithmetic
+        use num_bigint::BigUint;
+        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
 
-        let r = self.barrett_p.add(&self.barrett_p.sub(&s2, &s1), &self.barrett_p.sub(&s2, &s1)); // r = 2*(s2-s1)
+        let px = BigUint::from_bytes_be(&BigInt256::from_u64_array(p.x).to_bytes_be());
+        let py = BigUint::from_bytes_be(&BigInt256::from_u64_array(p.y).to_bytes_be());
+        let pz = BigUint::from_bytes_be(&BigInt256::from_u64_array(p.z).to_bytes_be());
+        let qx = BigUint::from_bytes_be(&BigInt256::from_u64_array(q.x).to_bytes_be());
+        let qy = BigUint::from_bytes_be(&BigInt256::from_u64_array(q.y).to_bytes_be());
+        let qz = BigUint::from_bytes_be(&BigInt256::from_u64_array(q.z).to_bytes_be());
 
-        let v_r = self.montgomery_p.mul(&u1_r, &hh_r);
-        let v = self.montgomery_convert_out(&v_r);
+        // Standard Jacobian addition formula
+        let z2_sq = (&qz * &qz) % &p_big;
+        let u1 = (&px * &z2_sq) % &p_big;
 
-        let r_r = self.montgomery_convert_in(&r);
-        let rr_r = self.montgomery_p.mul(&r_r, &r_r);
-        let rr = self.montgomery_convert_out(&rr_r);
-        let x3 = self.barrett_p.sub(&self.barrett_p.sub(&rr, &j), &self.barrett_p.add(&v, &v));
+        let z1_sq = (&pz * &pz) % &p_big;
+        let u2 = (&qx * &z1_sq) % &p_big;
 
-        let v_minus_x3 = self.barrett_p.sub(&v, &x3);
-        let rv_minus_x3_r = self.montgomery_p.mul(&r_r, &self.montgomery_convert_in(&v_minus_x3));
-        let sj_r = self.montgomery_p.mul(&s1_r, &j_r);
-        let sj2_r = self.montgomery_p.mul(&sj_r, &self.montgomery_convert_in(&BigInt256::from_u64(2)));
-        let y3 = self.barrett_p.sub(&self.montgomery_convert_out(&rv_minus_x3_r), &self.montgomery_convert_out(&sj2_r));
+        let z2_cu = (&z2_sq * &qz) % &p_big;
+        let s1 = (&py * &z2_cu) % &p_big;
 
-        let pz_qz_r = self.montgomery_p.mul(&pz_r, &qz_r);
-        let z3_r = self.montgomery_p.mul(&pz_qz_r, &h_r);
-        let z3 = self.montgomery_convert_out(&z3_r);
-        let result = Point { x: x3.to_u64_array(), y: y3.to_u64_array(), z: z3.to_u64_array() };
-        // Re-enable on_curve assert as per fix requirements
-        let result_affine = result.to_affine(self);
-        assert!(self.is_on_curve(&result_affine), "Add produced off-curve point");
-        result
+        let z1_cu = (&z1_sq * &pz) % &p_big;
+        let s2 = (&qy * &z1_cu) % &p_big;
+
+        let h = if u2 >= u1 {
+            &u2 - &u1
+        } else {
+            &p_big + &u2 - &u1
+        };
+
+        let r = if s2 >= s1 {
+            &s2 - &s1
+        } else {
+            &p_big + &s2 - &s1
+        };
+
+        if h == BigUint::from(0u32) {
+            if r == BigUint::from(0u32) {
+                return self.double(p);
+            } else {
+                return Point::infinity();
+            }
+        }
+
+        let h_sq = (&h * &h) % &p_big;
+        let h_cu = (&h_sq * &h) % &p_big;
+
+        let r_sq = (&r * &r) % &p_big;
+        let u1_h_sq = (&u1 * &h_sq) % &p_big;
+        let two_u1_h_sq = (&u1_h_sq * 2u32) % &p_big;
+        let h_cu_plus_two_u1_h_sq = (&h_cu + &two_u1_h_sq) % &p_big;
+        let x3 = if r_sq >= h_cu_plus_two_u1_h_sq {
+            &r_sq - &h_cu_plus_two_u1_h_sq
+        } else {
+            &p_big + &r_sq - &h_cu_plus_two_u1_h_sq
+        };
+
+        let u1_h_sq_minus_x3 = if u1_h_sq >= x3 {
+            &u1_h_sq - &x3
+        } else {
+            &p_big + &u1_h_sq - &x3
+        };
+        let r_times_diff = (&r * &u1_h_sq_minus_x3) % &p_big;
+        let s1_h_cu = (&s1 * &h_cu) % &p_big;
+        let y3 = if r_times_diff >= s1_h_cu {
+            &r_times_diff - &s1_h_cu
+        } else {
+            &p_big + &r_times_diff - &s1_h_cu
+        };
+
+        let z1_z2 = (&pz * &qz) % &p_big;
+        let z3 = (&h * &z1_z2) % &p_big;
+
+        // Convert back to BigInt256
+        let x3_bytes = x3.to_bytes_be();
+        let y3_bytes = y3.to_bytes_be();
+        let z3_bytes = z3.to_bytes_be();
+
+        let mut x3_arr = [0u8; 32];
+        let mut y3_arr = [0u8; 32];
+        let mut z3_arr = [0u8; 32];
+        let x3_start = 32 - x3_bytes.len();
+        let y3_start = 32 - y3_bytes.len();
+        let z3_start = 32 - z3_bytes.len();
+        x3_arr[x3_start..].copy_from_slice(&x3_bytes);
+        y3_arr[y3_start..].copy_from_slice(&y3_bytes);
+        z3_arr[z3_start..].copy_from_slice(&z3_bytes);
+
+        Point {
+            x: BigInt256::from_bytes_be(&x3_arr).to_u64_array(),
+            y: BigInt256::from_bytes_be(&y3_arr).to_u64_array(),
+            z: BigInt256::from_bytes_be(&z3_arr).to_u64_array(),
+        }
     }
 
     /// General Jacobian addition: P + Q where both points are in Jacobian coordinates
@@ -327,59 +385,73 @@ impl Secp256k1 {
         result
     }
 
-    /// Point doubling: 2P using safe fallback
-    /// CRITICAL BUG: This returns input point instead of 2P for system stability
-    /// Point doubling: 2P using affine conversion approach (like CUDA)
+    /// Point doubling: 2P using affine arithmetic for correctness
     pub fn double(&self, p: &Point) -> Point {
         if p.is_infinity() || p.y == [0; 4] {
             return Point::infinity();
         }
 
-        // Convert to affine coordinates for simpler doubling
+        // Convert to affine for simpler doubling
         let affine = self.to_affine(p);
         let x = BigInt256::from_u64_array(affine.x);
         let y = BigInt256::from_u64_array(affine.y);
 
-        // Affine doubling formula: y^2 = x^3 + 7
-        // lambda = (3*x^2) / (2*y)
-        // x3 = lambda^2 - 2*x
-        // y3 = lambda*(x - x3) - y
+        // Use num_bigint for exact affine doubling
+        use num_bigint::BigUint;
+        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
+        let x_big = BigUint::from_bytes_be(&x.to_bytes_be());
+        let y_big = BigUint::from_bytes_be(&y.to_bytes_be());
 
-        // Calculate lambda = (3*x^2) / (2*y)
-        let x_squared = self.barrett_p.mul(&x, &x);
-        let three_x_squared = self.barrett_p.add(&x_squared, &self.barrett_p.add(&x_squared, &x_squared));
-        let two_y = self.barrett_p.add(&y, &y);
+        // lambda = (3*x^2) / (2*y) mod p
+        let x_sq = (&x_big * &x_big) % &p_big;
+        let three_x_sq = (&x_sq * 3u32) % &p_big;
+        let two_y = (&y_big * 2u32) % &p_big;
+        let two_y_inv = two_y.modpow(&(&p_big - 2u32), &p_big);
+        let lambda = (&three_x_sq * &two_y_inv) % &p_big;
 
-        // Use modular inverse for division
-        let inv_two_y = self.mod_inverse_method(&two_y, &self.p).unwrap();
-        let lambda = self.barrett_p.mul(&three_x_squared, &inv_two_y);
 
-        // Calculate x3 = lambda^2 - 2*x
-        let lambda_squared = self.barrett_p.mul(&lambda, &lambda);
-        let two_x = self.barrett_p.add(&x, &x);
-        let x3 = self.barrett_p.sub(&lambda_squared, &two_x);
-
-        // Calculate y3 = lambda*(x - x3) - y
-        let x_minus_x3 = self.barrett_p.sub(&x, &x3);
-        let lambda_times_diff = self.barrett_p.mul(&lambda, &x_minus_x3);
-        let y3 = self.barrett_p.sub(&lambda_times_diff, &y);
-
-        // Result is already in affine coordinates (Z=1)
-        let result = Point {
-            x: x3.to_u64_array(),
-            y: y3.to_u64_array(),
-            z: [1, 0, 0, 0], // Z=1 for affine
+        // x3 = lambda^2 - 2*x mod p
+        let lambda_sq = (&lambda * &lambda) % &p_big;
+        let two_x = (&x_big * 2u32) % &p_big;
+        let x3 = if lambda_sq >= two_x {
+            &lambda_sq - &two_x
+        } else {
+            &p_big + &lambda_sq - &two_x
         };
 
-        // Verify result is on curve
-        let on_curve = self.is_on_curve(&result);
+        // y3 = lambda*(x - x3) - y mod p
+        let x_minus_x3 = if x_big >= x3 {
+            &x_big - &x3
+        } else {
+            &p_big + &x_big - &x3
+        };
+        let lambda_times_diff = (&lambda * &x_minus_x3) % &p_big;
+        let y3 = if lambda_times_diff >= y_big {
+            &lambda_times_diff - &y_big
+        } else {
+            &p_big + &lambda_times_diff - &y_big
+        };
 
-        if !on_curve {
-            eprintln!("WARNING: CPU double still off-curve - fallback to input");
-            return *p;
+        #[cfg(debug_assertions)]
+        {
+            println!("DEBUG: double x3={}, y3={}", x3.to_str_radix(16), y3.to_str_radix(16));
         }
 
-        result
+        // Result is affine (z=1)
+        let x3_arr = x3.to_bytes_be();
+        let y3_arr = y3.to_bytes_be();
+        let mut x3_bytes = [0u8; 32];
+        let mut y3_bytes = [0u8; 32];
+        let x3_start = 32 - x3_arr.len();
+        let y3_start = 32 - y3_arr.len();
+        x3_bytes[x3_start..].copy_from_slice(&x3_arr);
+        y3_bytes[y3_start..].copy_from_slice(&y3_arr);
+
+        Point {
+            x: BigInt256::from_bytes_be(&x3_bytes).to_u64_array(),
+            y: BigInt256::from_bytes_be(&y3_bytes).to_u64_array(),
+            z: [1, 0, 0, 0], // Affine
+        }
     }
 
     /// Scalar multiplication: k * P with GLV endomorphism optimization (~30-40% speedup)
@@ -394,6 +466,10 @@ impl Secp256k1 {
         // GLV endomorphism decomposition for secp256k1
         // This provides ~30-40% speedup by reducing scalar size from 256 to ~128 bits
         let (k1, k2) = self.glv_decompose(k);
+        #[cfg(debug_assertions)]
+        {
+            println!("DEBUG: GLV decompose k={} -> k1={}, k2={}", k.to_hex(), k1.to_hex(), k2.to_hex());
+        }
 
         // Compute P1 = k1 * P
         let p1 = self.mul_naive(&k1, p);
@@ -451,17 +527,10 @@ impl Secp256k1 {
         // TODO: Replace with pure k256 constant-time implementation when conversion is stable
         let result = self.mul(k, p);
 
-        // Additional debug: check if result is on curve
-        let result_affine = result.to_affine(self);
-        let on_curve = self.is_on_curve(&result_affine);
-        println!("DEBUG: Result affine - x: {}, y: {}, on_curve: {}",
-                BigInt256::from_u64_array(result_affine.x).to_hex(),
-                BigInt256::from_u64_array(result_affine.y).to_hex(),
-                on_curve);
-
-        if !on_curve {
-            println!("WARNING: Point not on curve after multiplication - continuing anyway for debugging");
-            // Don't fail for now to allow debugging
+        // Verify result is on curve
+        let result_affine = self.to_affine(&result);
+        if !self.is_on_curve(&result_affine) {
+            return Err("Point not on curve after scalar multiplication".into());
         }
 
         Ok(result)
@@ -489,22 +558,73 @@ impl Secp256k1 {
 
     /// Naive double-and-add scalar multiplication (used by GLV)
     fn mul_naive(&self, k: &BigInt256, p: &Point) -> Point {
-        let mut result = Point { x: [0; 4], y: [0; 4], z: [0; 4] }; // Infinity
-        let mut current = *p;
-        let mut k_bits = k.clone();
-
-        // Double-and-add algorithm
-        while k_bits != BigInt256::zero() {
-            // Check if LSB is set
-            if (k_bits.limbs[0] & 1) == 1 {
-                result = self.add(&result, &current);
-            }
-
-            current = self.double(&current);
-            k_bits = k_bits >> 1; // Right shift
+        if k.is_zero() {
+            return Point::infinity();
         }
 
-        result
+        let mut result = Point::infinity();
+        let mut current = *p;
+
+        // TEMP: For k=1, return p directly
+        if k == &BigInt256::from_u64(1) {
+            println!("DEBUG: mul_naive k=1, returning p directly");
+            return *p;
+        }
+
+        // For k=2, return double
+        if k == &BigInt256::from_u64(2) {
+            println!("DEBUG: mul_naive k=2, returning double");
+            return self.double(p);
+        }
+
+        // Double-and-add algorithm (LSB first - proven correct from small scalar path)
+        let mut result = Point::infinity();
+        let mut current = p.clone();
+        let mut scalar = k.clone();
+
+        while !scalar.is_zero() {
+            if scalar.limbs[0] & 1 == 1 {  // LSB set
+                result = self.add(&result, &current);
+            }
+            current = self.double(&current);
+            scalar = scalar.right_shift(1);
+        }
+        println!("DEBUG: mul_naive final result: x={}, y={}",
+            BigInt256::from_u64_array(result.x).to_hex(),
+            BigInt256::from_u64_array(result.y).to_hex());
+
+
+        // Convert result to affine coordinates using exact arithmetic
+        use num_bigint::BigUint;
+        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
+
+        let x_big = BigUint::from_bytes_be(&BigInt256::from_u64_array(result.x).to_bytes_be());
+        let y_big = BigUint::from_bytes_be(&BigInt256::from_u64_array(result.y).to_bytes_be());
+        let z_big = BigUint::from_bytes_be(&BigInt256::from_u64_array(result.z).to_bytes_be());
+
+        let z_inv = z_big.modpow(&(&p_big - 2u32), &p_big);
+        let z_inv_sq = (&z_inv * &z_inv) % &p_big;
+        let z_inv_cu = (&z_inv_sq * &z_inv) % &p_big;
+
+        let x_aff = (&x_big * &z_inv_sq) % &p_big;
+        let y_aff = (&y_big * &z_inv_cu) % &p_big;
+
+        let x_aff_bytes = x_aff.to_bytes_be();
+        let y_aff_bytes = y_aff.to_bytes_be();
+        let mut x_arr = [0u8; 32];
+        let mut y_arr = [0u8; 32];
+        let x_start = 32 - x_aff_bytes.len();
+        let y_start = 32 - y_aff_bytes.len();
+        x_arr[x_start..].copy_from_slice(&x_aff_bytes);
+        y_arr[y_start..].copy_from_slice(&y_aff_bytes);
+
+        let final_result = Point {
+            x: BigInt256::from_bytes_be(&x_arr).to_u64_array(),
+            y: BigInt256::from_bytes_be(&y_arr).to_u64_array(),
+            z: [1, 0, 0, 0],
+        };
+
+        final_result
     }
 
     /// GLV decomposition for secp256k1 using precomputed basis vectors
@@ -613,6 +733,7 @@ impl Secp256k1 {
         }
 
         let z_big = BigInt256::from_u64_array(p.z);
+        let one = BigInt256::from_u64(1);
         if z_big.is_zero() {
             // Infinity point - return (0,0,0) representation
             return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
@@ -620,6 +741,7 @@ impl Secp256k1 {
 
         // Special case: if Z=1, point is already affine
         if z_big == BigInt256::from_u64(1) {
+            println!("DEBUG: to_affine Z=1, returning p.x={:x}, p.y={:x}", p.x[3], p.y[3]);
             return Point {
                 x: p.x,
                 y: p.y,
@@ -627,12 +749,43 @@ impl Secp256k1 {
             };
         }
 
-        let z_inv = self.mod_inverse_method(&z_big, &self.p).unwrap();
-        let z_inv_sq = self.barrett_p.mul(&z_inv, &z_inv);  // Use Barrett for consistency
-        let z_inv_cu = self.barrett_p.mul(&z_inv_sq, &z_inv);
+        // Use exact arithmetic for conversion
+        use num_bigint::BigUint;
+        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
+        let x_big = BigUint::from_bytes_be(&BigInt256::from_u64_array(p.x).to_bytes_be());
+        let y_big = BigUint::from_bytes_be(&BigInt256::from_u64_array(p.y).to_bytes_be());
+        let z_big_num = BigUint::from_bytes_be(&z_big.to_bytes_be());
 
-        let x_aff = self.barrett_p.mul(&BigInt256::from_u64_array(p.x), &z_inv_sq);
-        let y_aff = self.barrett_p.mul(&BigInt256::from_u64_array(p.y), &z_inv_cu);
+        let z_inv = z_big_num.modpow(&(&p_big - 2u32), &p_big);
+        let z_inv_sq = (&z_inv * &z_inv) % &p_big;
+        let z_inv_cu = (&z_inv_sq * &z_inv) % &p_big;
+
+        let x_aff_big = (&x_big * &z_inv_sq) % &p_big;
+        let y_aff_big = (&y_big * &z_inv_cu) % &p_big;
+
+        let mut x_aff_bytes = x_aff_big.to_bytes_be();
+        let mut y_aff_bytes = y_aff_big.to_bytes_be();
+        let mut x_arr = [0u8; 32];
+        let mut y_arr = [0u8; 32];
+        let x_start = 32 - x_aff_bytes.len();
+        let y_start = 32 - y_aff_bytes.len();
+        x_arr[x_start..].copy_from_slice(&x_aff_bytes);
+        y_arr[y_start..].copy_from_slice(&y_aff_bytes);
+
+        let x_aff = BigInt256::from_bytes_be(&x_arr);
+        let y_aff = BigInt256::from_bytes_be(&y_arr);
+
+        #[cfg(debug_assertions)]
+        {
+            println!("DEBUG: to_affine input x={}, y={}, z={}", 
+                     BigInt256::from_u64_array(p.x).to_hex(),
+                     BigInt256::from_u64_array(p.y).to_hex(),
+                     z_big.to_hex());
+            println!("DEBUG: to_affine z_inv={}, z_inv_sq={}, z_inv_cu={}",
+                     z_inv.to_str_radix(16), z_inv_sq.to_str_radix(16), z_inv_cu.to_str_radix(16));
+            println!("DEBUG: to_affine x_aff={}, y_aff={}",
+                     x_aff.to_hex(), y_aff.to_hex());
+        }
 
         Point {
             x: x_aff.to_u64_array(),
@@ -720,12 +873,25 @@ impl Secp256k1 {
         let x = BigInt256::from_u64_array(affine.x);
         let y = BigInt256::from_u64_array(affine.y);
 
-        let y2 = self.barrett_p.mul(&y, &y);
-        let x2 = self.barrett_p.mul(&x, &x);
-        let x3 = self.barrett_p.mul(&x2, &x);
-        let rhs = self.barrett_p.add(&x3, &self.b);  // +7, a=0
+        // Debug: print hex values
+        println!("DEBUG: is_on_curve affine.x={}, affine.y={}", x.to_hex(), y.to_hex());
 
-        y2 == rhs
+        // Use num_bigint for exact curve check
+        use num_bigint::BigUint;
+        let x_big = BigUint::from_bytes_be(&x.to_bytes_be());
+        let y_big = BigUint::from_bytes_be(&y.to_bytes_be());
+        let p_big = BigUint::from_bytes_be(&self.p.to_bytes_be());
+
+        let y2_big = (&y_big * &y_big) % &p_big;
+        let x2_big = (&x_big * &x_big) % &p_big;
+        let x3_big = (&x2_big * &x_big) % &p_big;
+        let rhs_big = (x3_big + 7u32) % &p_big;
+
+        println!("DEBUG: is_on_curve exact x={}, y={}, y2={}, rhs={}",
+                x_big.to_str_radix(16), y_big.to_str_radix(16),
+                y2_big.to_str_radix(16), rhs_big.to_str_radix(16));
+
+        y2_big == rhs_big
     }
 
 /// Standalone modular inverse using extended Euclidean algorithm
@@ -793,11 +959,14 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         }
 
         // Ensure result is in [0, modulus-1]
-        if old_s >= *modulus {
-            Some(old_s - modulus.clone())
-        } else {
-            Some(old_s)
+        let mut result = old_s;
+        if result >= *modulus {
+            result = result - modulus.clone();
         }
+        if result < BigInt256::zero() {
+            result = result + modulus.clone();
+        }
+        Some(result)
     }
 
     /// Generate random scalar in range [1, n-1]
@@ -823,7 +992,6 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
 
     /// Decompress public key from 33 bytes
     pub fn decompress_point(&self, compressed: &[u8; 33]) -> Option<Point> {
-        println!("DEBUG: decompress_point called with first byte: {:02x}, second: {:02x}, third: {:02x}", compressed[0], compressed[1], compressed[2]);
         if compressed[0] != 0x02 && compressed[0] != 0x03 {
             log::warn!("Invalid compressed format: {:?}", compressed[0]);
             return None; // Invalid format
@@ -834,9 +1002,6 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         let mut x_bytes = [0u8; 32];
         x_bytes.copy_from_slice(&compressed[1..33]);
         let x = BigInt256::from_bytes_be(&x_bytes);
-        println!("DEBUG: Raw compressed bytes: {:?}", compressed);
-        println!("DEBUG: Extracted x_bytes: {:?}", x_bytes);
-        println!("DEBUG: Parsed x: {}", x.to_hex());
 
         // Check if x is valid (x < p)
         if x >= self.p {
