@@ -95,14 +95,19 @@ pub fn generate_tame_herds(config: &SearchConfig, bias_mode: &str) -> Vec<Point>
     let mut current_scalar = k256::Scalar::ZERO;
 
     for i in 0..config.batch_per_target {
-        let prime = sop::get_biased_prime(i, 81);  // mod81 for gold
-        current_scalar = current_scalar.add(&k256::Scalar::from(prime));
+        let prime = sop::get_biased_prime(i, 81); // Phase 1 fn, mod81 for gold
+        current_scalar = current_scalar + k256::Scalar::from(prime); // Additive accumulate
 
         // tame_start = current_sum * G
-        let k_tame = sop::initialize_tame_start() * current_scalar;
-        herds.push(Point::from_k256(&k_tame));
+        let k_tame = sop::initialize_tame_start() * current_scalar; // Sacred * sum
+        herds.push(Point::from_k256(&k_tame)); // Phase 2 conversion
     }
     herds
+}
+
+// Additive tame jump accumulation helper for stepping
+pub fn additive_tame_jump(current_scalar: &k256::Scalar, prime: u64) -> k256::Scalar {
+    current_scalar + k256::Scalar::from(prime)
 }
 
 // Get bias-filtered subset of prime multipliers for Magic 9 optimization

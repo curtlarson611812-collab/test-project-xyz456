@@ -150,7 +150,8 @@ mod tests {
             assert!(point.is_valid(&curve));
         }
 
-        // Basic verification - due to k256 simplifications, just check we got the right number
+        // Basic verification - due to k256 conversion simplifications,
+        // we verify the function works and produces valid points
         assert!(!herds.is_empty());
         assert_eq!(herds.len(), 3);
     }
