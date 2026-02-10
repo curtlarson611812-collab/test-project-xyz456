@@ -788,6 +788,48 @@ extern "C" void launch_kangaroo_step_bias(
     );
 }
 
+// SmallOddPrime sacred bucket selection for asymmetric tame/wild jumping
+__device__ uint32_t select_sop_bucket(const Point256 point, const bigint256 dist, uint32_t seed, uint32_t step, bool is_tame) {
+    const uint32_t WALK_BUCKETS = 32;
+
+    if (is_tame) {
+        // Tame: deterministic based on step count
+        return step % WALK_BUCKETS;
+    } else {
+        // Wild: state-mixed using point coordinates and distance
+        // Extract bytes from point.x for mixing
+        uint8_t x_bytes[32];
+        bigint256_to_bytes(point.x, x_bytes);
+
+        // Mix x coordinates (first 8 bytes)
+        uint32_t x0 = *((uint32_t*)&x_bytes[0]);
+        uint32_t x1 = *((uint32_t*)&x_bytes[4]);
+
+        // Extract bytes from distance for mixing
+        uint8_t dist_bytes[32];
+        bigint256_to_bytes(dist, dist_bytes);
+        uint32_t dist0 = *((uint32_t*)&dist_bytes[0]);
+
+        // State mixing: x0 ^ x1 ^ dist0 ^ seed ^ step
+        uint32_t mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
+        return mix % WALK_BUCKETS;
+    }
+}
+
+// SmallOddPrime biased prime getter (matches CPU logic)
+__device__ uint64_t get_biased_prime(uint32_t index, uint64_t bias_mod) {
+    // Sacred PRIME_MULTIPLIERS array (must match CPU exactly)
+    __constant__ const uint64_t PRIME_MULTIPLIERS[32] = {
+        179, 257, 281, 349, 379, 419, 457, 499,
+        541, 599, 641, 709, 761, 809, 853, 911,
+        967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
+        1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583
+    };
+
+    uint64_t cycle_index = ((uint64_t)index % bias_mod) % 32;
+    return PRIME_MULTIPLIERS[cycle_index];
+}
+
 // Legacy host function for backward compatibility
 extern "C" void launch_kangaroo_step_batch(
     Point* d_positions,

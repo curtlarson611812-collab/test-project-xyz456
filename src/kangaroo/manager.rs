@@ -66,7 +66,7 @@ pub struct KangarooManager {
     bloom: Option<Bloom<[u8; 32]>>,      // Bloom filter for DP pre-checks (optional)
     gpu_backend: Box<dyn GpuBackend>,
     generator: KangarooGenerator,
-    stepper: KangarooStepper,
+    stepper: std::cell::RefCell<KangarooStepper>,
     collision_detector: CollisionDetector,
     parity_checker: ParityChecker,
     total_ops: u64,
@@ -124,7 +124,7 @@ impl KangarooManager {
             crate::config::GpuBackend::Cpu => Box::new(CpuBackend::new()?),
         };
         let generator = KangarooGenerator::new(&config);
-        let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits); // Use standard jump table
+        let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, config.dp_bits)); // Use standard jump table
         let collision_detector = CollisionDetector::new();
         let parity_checker = ParityChecker::new();
 
@@ -210,7 +210,7 @@ impl KangarooManager {
             None
         };
         let generator = KangarooGenerator::new(&config).with_search_config(search_config.clone());
-        let stepper = KangarooStepper::with_dp_bits(false, config.dp_bits);
+        let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, config.dp_bits));
         let collision_detector = CollisionDetector::new();
         let parity_checker = ParityChecker::new();
 
@@ -276,7 +276,7 @@ impl KangarooManager {
                     self.step_kangaroos_gpu(&kangaroos).await
                 } else {
                     // Fall back to CPU stepping
-                    self.stepper.step_batch(&kangaroos, target_points.first())
+                    self.stepper.borrow_mut().step_batch(&kangaroos, target_points.first())
                 }
             };
 

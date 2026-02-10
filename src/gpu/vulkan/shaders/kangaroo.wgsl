@@ -20,6 +20,40 @@ struct Point256 {
 @group(0) @binding(8) var<uniform> secp_mu: BigInt256;  // Barrett mu
 @group(0) @binding(9) var<uniform> curve_a: BigInt256; // secp256k1 a = -3
 
+// SmallOddPrime sacred PRIME_MULTIPLIERS (must match CPU/CUDA exactly)
+const PRIME_MULTIPLIERS: array<u64, 32> = array<u64, 32>(
+    179u, 257u, 281u, 349u, 379u, 419u, 457u, 499u,
+    541u, 599u, 641u, 709u, 761u, 809u, 853u, 911u,
+    967u, 1013u, 1061u, 1091u, 1151u, 1201u, 1249u, 1297u,
+    1327u, 1381u, 1423u, 1453u, 1483u, 1511u, 1553u, 1583u
+);
+
+// SmallOddPrime sacred bucket selection
+fn select_sop_bucket(point: Point256, dist: BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+    let WALK_BUCKETS: u32 = 32u;
+
+    if (is_tame) {
+        // Tame: deterministic based on step count
+        return step % WALK_BUCKETS;
+    } else {
+        // Wild: state-mixed using point coordinates and distance
+        // Extract bytes from point.x for mixing
+        let x0 = point.x.limbs[0] ^ point.x.limbs[1];
+        let x1 = point.x.limbs[2] ^ point.x.limbs[3];
+        let dist0 = dist.limbs[0] ^ dist.limbs[1];
+
+        // State mixing: x0 ^ x1 ^ dist0 ^ seed ^ step
+        let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
+        return mix % WALK_BUCKETS;
+    }
+}
+
+// SmallOddPrime biased prime getter
+fn get_biased_prime(index: u32, bias_mod: u64) -> u64 {
+    let cycle_index = (u64(index) % bias_mod) % 32u;
+    return PRIME_MULTIPLIERS[u32(cycle_index)];
+}
+
 fn bigint256_zero() -> BigInt256 {
     return BigInt256(array<u32,8>(0u,0u,0u,0u,0u,0u,0u,0u));
 }
