@@ -2027,6 +2027,31 @@ mod tests {
         assert_eq!(k_g, roundtrip); // Roundtrip
     }
 
+    /// Test BigInt256 conversion methods
+    #[test]
+    fn test_bigint_methods() {
+        let b = BigInt256::from_u64(123);
+        assert_eq!(b.to_u64(), 123);
+        assert_eq!(b.to_f64_approx(), 123.0);
+
+        // Test saturating operations
+        let add_result = b.saturating_add(456);
+        assert_eq!(add_result.to_u64(), 579);
+
+        let sub_result = b.saturating_sub(50);
+        assert_eq!(sub_result.to_u64(), 73);
+
+        // Test zero subtraction (should clamp to zero)
+        let zero_sub = BigInt256::from_u64(50).saturating_sub(100);
+        assert!(zero_sub.is_zero());
+
+        // Test bytes conversion
+        let bytes = b.to_bytes_le();
+        assert_eq!(bytes.len(), 32);
+        let reconstructed = BigInt256::from_bytes_le(&bytes);
+        assert_eq!(b, reconstructed);
+    }
+
 }
 
 impl Secp256k1 {

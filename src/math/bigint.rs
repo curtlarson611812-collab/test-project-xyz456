@@ -1261,6 +1261,17 @@ impl MontgomeryReducer {
     pub fn saturating_add(&self, other: u64) -> BigInt256 {
         self.add(&BigInt256::from_u64(other))
     }
+
+    /// Create from little-endian bytes
+    pub fn from_bytes_le(bytes: &[u8; 32]) -> Self {
+        let mut limbs = [0u64; 4];
+        for i in 0..4 {
+            let mut limb_bytes = [0u8; 8];
+            limb_bytes.copy_from_slice(&bytes[i*8..(i+1)*8]);
+            limbs[i] = u64::from_le_bytes(limb_bytes);
+        }
+        BigInt256 { limbs }
+    }
 }
 
 // Basic arithmetic implementations
