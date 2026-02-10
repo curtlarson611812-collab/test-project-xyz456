@@ -89,14 +89,14 @@ pub fn generate_wild_herds(target: &Point, config: &SearchConfig, bias_mode: &st
 
 // Generate additive tame herds using sacred SmallOddPrime_Precise_code.rs
 pub fn generate_tame_herds(config: &SearchConfig, bias_mode: &str) -> Vec<Point> {
-    let mut herds = vec![];
+    use k256::Scalar;
 
-    // Use additive accumulation for tame herds (sum of primes * G)
-    let mut current_scalar = k256::Scalar::ZERO;
+    let mut herds = vec![];
+    let mut current_scalar = Scalar::ZERO;
 
     for i in 0..config.batch_per_target {
         let prime = sop::get_biased_prime(i, 81); // Phase 1 fn, mod81 for gold
-        current_scalar = current_scalar + k256::Scalar::from(prime); // Additive accumulate
+        current_scalar = current_scalar + Scalar::from(prime); // Additive accumulate
 
         // tame_start = current_sum * G
         let k_tame = sop::initialize_tame_start() * current_scalar; // Sacred * sum
@@ -106,8 +106,8 @@ pub fn generate_tame_herds(config: &SearchConfig, bias_mode: &str) -> Vec<Point>
 }
 
 // Additive tame jump accumulation helper for stepping
-pub fn additive_tame_jump(current_scalar: &BigInt256, prime: u64) -> BigInt256 {
-    current_scalar.add(&BigInt256::from_u64(prime))
+pub fn additive_tame_jump(current_scalar: &k256::Scalar, prime: u64) -> k256::Scalar {
+    current_scalar + k256::Scalar::from(prime)
 }
 
 // Multiplicative wild jump with modulo n for collision prevention
