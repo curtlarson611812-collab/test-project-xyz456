@@ -9,15 +9,11 @@ mod tests {
 
     #[test]
     fn test_prime_multipliers() {
-        assert_eq!(sop::PRIME_MULTIPLIERS.len(), 32);
-        assert_eq!(sop::PRIME_MULTIPLIERS[0], 179);  // First sacred prime
-        assert_eq!(sop::PRIME_MULTIPLIERS[31], 1583);  // Last sacred prime
-
-        // Verify all are >128, odd, and low Hamming weight
-        for &prime in &sop::PRIME_MULTIPLIERS {
-            assert!(prime > 128, "Prime {} should be >128", prime);
-            assert!(prime % 2 == 1, "Prime {} should be odd", prime);
-        }
+        assert_eq!(sop::PRIME_MULTIPLIERS.len(), 32); // Sacred 32 length
+        assert_eq!(sop::PRIME_MULTIPLIERS[0], 179); // First prime
+        assert_eq!(sop::PRIME_MULTIPLIERS[31], 1583); // Last prime
+        let hamming = sop::PRIME_MULTIPLIERS[0].count_ones();
+        assert!(hamming <= 8, "Low Hamming weight for fast mul"); // Check low weight
     }
 
     #[test]

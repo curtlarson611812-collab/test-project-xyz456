@@ -7,8 +7,10 @@ mod tests {
     use crate::SmallOddPrime_Precise_code as sop;
     use crate::kangaroo::generator::{generate_wild_herds, generate_tame_herds};
     use crate::kangaroo::SearchConfig;
-    use crate::types::Point;
+    use crate::types::{Point, KangarooState};
     use crate::math::Secp256k1;
+    use crate::kangaroo::generator::select_bucket;
+    use crate::kangaroo::stepper::KangarooStepper;
     use std::collections::HashSet;
 
     #[test]
@@ -154,5 +156,65 @@ mod tests {
         // we verify the function works and produces valid points
         assert!(!herds.is_empty());
         assert_eq!(herds.len(), 3);
+    }
+
+    // === Phase 5: Integration Testing Stepping and Bucket ===
+
+    #[test]
+    fn test_select_sop_bucket() {
+        let curve = Secp256k1::new();
+        let point = curve.g; // Mock point
+        let dist = BigInt256::from_u64(123);
+        let seed = 456u32;
+        let step = 789u32;
+
+        // Test tame bucket (deterministic)
+        let tame_bucket = select_bucket(&point, &dist, seed, step, true);
+        assert_eq!(tame_bucket, (step % 32) as u32); // Tame deterministic per code
+
+        // Test wild bucket (state-mixed)
+        let wild_bucket = select_bucket(&point, &dist, seed, step, false);
+        // Wild should be mixed, not necessarily different but state-dependent
+        assert!(wild_bucket < 32); // Valid bucket range
+    }
+
+    #[test]
+    fn test_step_kangaroo_with_bias() {
+        let curve = Secp256k1::new();
+
+        // Test tame kangaroo step
+        let tame_state = KangarooState::new(
+            curve.g.clone(),
+            0u64,   // distance as u64
+            [0u64; 4], // alpha
+            [0u64; 4], // beta
+            true,   // is_tame
+            false,  // is_dp
+            0,      // id
+        );
+
+        let mut stepper = KangarooStepper::new(false);
+        let new_tame_state = stepper.step_kangaroo_with_bias(&tame_state, None, 81);
+
+        // Tame should have moved position and increased distance (additive)
+        assert_ne!(new_tame_state.position, tame_state.position);
+        assert!(new_tame_state.distance > tame_state.distance);
+
+        // Test wild kangaroo step
+        let wild_state = KangarooState::new(
+            curve.g.clone(),
+            0u64,   // distance as u64
+            [0u64; 4], // alpha
+            [0u64; 4], // beta
+            false,  // is_tame
+            false,  // is_dp
+            1,      // id
+        );
+
+        let new_wild_state = stepper.step_kangaroo_with_bias(&wild_state, Some(&curve.g), 81);
+
+        // Wild should have moved position (multiplicative with target)
+        assert_ne!(new_wild_state.position, wild_state.position);
+        // Distance may or may not change depending on implementation
     }
 }

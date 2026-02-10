@@ -120,4 +120,79 @@ mod tests {
         // Verify result is reduced
         assert!(barrett_result < modulus);
     }
+
+    // === Phase 6: GPU Hardware Validation ===
+
+    #[cfg(feature = "rustacuda")]
+    #[test]
+    fn test_cuda_kangaroo_step() {
+        use crate::gpu::backends::hybrid_backend::HybridBackend;
+        use crate::kangaroo::stepper::KangarooStepper;
+        use crate::types::KangarooState;
+
+        let hybrid = HybridBackend::new().unwrap();
+        let mut stepper = KangarooStepper::new(false);
+
+        // Create mock kangaroo states
+        let secp = Secp256k1::new();
+        let tame_states = vec![
+            KangarooState::new(
+                secp.g.clone(),
+                BigInt256::zero(),
+                [0; 4], [0; 4],
+                true, false, 0
+            )
+        ];
+
+        let pre_step_positions: Vec<Point> = tame_states.iter().map(|k| k.position.clone()).collect();
+
+        // Dispatch to CUDA for stepping
+        let result = hybrid.step_kangaroos_cuda(&tame_states, &None);
+        assert!(result.is_ok());
+
+        let post_step_states = result.unwrap();
+        assert_eq!(post_step_states.len(), tame_states.len());
+
+        // Verify positions changed
+        for (pre, post) in pre_step_positions.iter().zip(post_step_states.iter()) {
+            assert_ne!(pre, &post.position, "Tame kangaroo position should have changed");
+        }
+    }
+
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn test_vulkan_kangaroo_step() {
+        use crate::gpu::backends::hybrid_backend::HybridBackend;
+        use crate::kangaroo::stepper::KangarooStepper;
+        use crate::types::KangarooState;
+
+        let hybrid = HybridBackend::new().unwrap();
+        let mut stepper = KangarooStepper::new(false);
+
+        // Create mock wild kangaroo states
+        let secp = Secp256k1::new();
+        let target = secp.g.clone();
+        let wild_states = vec![
+            KangarooState::new(
+                secp.g.clone(),
+                BigInt256::zero(),
+                [0; 4], [0; 4],
+                false, false, 0
+            )
+        ];
+
+        let pre_step_positions: Vec<Point> = wild_states.iter().map(|k| k.position.clone()).collect();
+
+        // Dispatch to Vulkan for wild herd stepping
+        let result = hybrid.step_kangaroos_vulkan(&wild_states, &Some(target));
+        assert!(result.is_ok());
+
+        let post_step_states = result.unwrap();
+        assert_eq!(post_step_states.len(), wild_states.len());
+
+        // Verify positions changed
+        for (pre, post) in pre_step_positions.iter().zip(post_step_states.iter()) {
+            assert_ne!(pre, &post.position, "Wild kangaroo position should have changed");
+        }
+    }
 }
