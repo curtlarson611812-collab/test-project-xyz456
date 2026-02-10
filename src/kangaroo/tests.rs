@@ -222,4 +222,32 @@ mod tests {
         assert_ne!(new_wild_state.position, wild_state.position);
         // Distance may or may not change depending on implementation
     }
+
+    #[test]
+    fn test_collision_inversion_large() {
+        use crate::math::constants::CURVE_ORDER_BIGINT;
+        use num_bigint::BigUint;
+
+        let detector = CollisionDetector::new();
+
+        let prime = BigInt256::from_u64(179u64);
+        let d_tame = BigInt256::from_hex("10000000000000000").expect("Invalid hex"); // Large >u64
+        let d_wild = BigInt256::from_hex("5000000000000000").expect("Invalid hex");
+        let n = CURVE_ORDER_BIGINT;
+
+        let k = detector.solve_collision_inversion(prime, d_tame.clone(), d_wild.clone(), &n).expect("Inversion failed");
+
+        // Verify: k * prime ≡ (d_tame - d_wild) mod n
+        // Expected: k = inv(prime) * (d_tame - d_wild) mod n
+        let prime_big = BigUint::from_bytes_be(&prime.to_bytes_be());
+        let n_big = BigUint::from_bytes_be(&n.to_bytes_be());
+        let inv_prime = prime_big.mod_inverse(&n_big).expect("Prime inverse failed");
+
+        let diff = d_tame - d_wild;
+        let diff_big = BigUint::from_bytes_be(&diff.to_bytes_be());
+        let expected_big = ((inv_prime * diff_big) % &n_big);
+
+        let k_big = BigUint::from_bytes_be(&k.to_bytes_be());
+        assert_eq!(k_big, expected_big);
+    }
 }

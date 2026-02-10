@@ -1237,19 +1237,6 @@ impl MontgomeryReducer {
     //     Some(t as u64)
     // }
 
-    /// Convert to u64 (low 64 bits only)
-    pub fn to_u64(&self) -> u64 {
-        self.limbs[0]
-    }
-
-    /// Convert to f64 approximation (for scoring/metrics)
-    pub fn to_f64_approx(&self) -> f64 {
-        (self.limbs[0] as f64) +
-        (self.limbs[1] as f64) * (2u64.pow(64) as f64) +
-        (self.limbs[2] as f64) * (2u64.pow(128) as f64) +
-        (self.limbs[3] as f64) * (2u64.pow(192) as f64)
-    }
-
     /// Saturating subtraction (clamp to zero)
     pub fn saturating_sub(&self, other: u64) -> BigInt256 {
         let sub = self.sub(&BigInt256::from_u64(other));
@@ -1262,16 +1249,6 @@ impl MontgomeryReducer {
         self.add(&BigInt256::from_u64(other))
     }
 
-    /// Create from little-endian bytes
-    pub fn from_bytes_le(bytes: &[u8; 32]) -> Self {
-        let mut limbs = [0u64; 4];
-        for i in 0..4 {
-            let mut limb_bytes = [0u8; 8];
-            limb_bytes.copy_from_slice(&bytes[i*8..(i+1)*8]);
-            limbs[i] = u64::from_le_bytes(limb_bytes);
-        }
-        BigInt256 { limbs }
-    }
 }
 
 // Basic arithmetic implementations
@@ -1362,6 +1339,8 @@ impl BigInt256 {
         }
         result
     }
+
+
 }
 
     /// Modular multiplication using Barrett reduction
@@ -1369,6 +1348,35 @@ impl BigInt256 {
         let reducer = BarrettReducer::new(modulus);
         reducer.mul(a, b)
     }
+
+impl BigInt256 {
+    /// Convert to u64 (low 64 bits only)
+    pub fn to_u64(&self) -> u64 {
+        self.limbs[0]
+    }
+
+    /// Convert to f64 approximation (for scoring/metrics)
+    pub fn to_f64_approx(&self) -> f64 {
+        (self.limbs[0] as f64) +
+        (self.limbs[1] as f64) * (2u64.pow(64) as f64) +
+        (self.limbs[2] as f64) * (2u64.pow(128) as f64) +
+        (self.limbs[3] as f64) * (2u64.pow(192) as f64)
+    }
+
+    /// Saturating subtraction (clamp to zero)
+    pub fn saturating_sub(&self, other: u64) -> BigInt256 {
+        let other_big = BigInt256::from_u64(other);
+        let sub = self.clone().sub(other_big);
+        // Check if result is negative (most significant bit set in MSB limb)
+        if (sub.limbs[3] & (1u64 << 63)) != 0 { BigInt256::zero() } else { sub }
+    }
+
+    /// Saturating addition
+    pub fn saturating_add(&self, other: u64) -> BigInt256 {
+        self.clone().add(BigInt256::from_u64(other))
+    }
+
+}
 
 /// Extended Euclidean algorithm for u128
 // fn extended_euclid_u128(a: u128, b: u128) -> (u128, u128, u128) {
@@ -1943,5 +1951,31 @@ mod tests {
         assert!(!prod.is_zero(), "Barrett mul returned zero");
 
         println!("Barrett puzzle range test passed ✓");
+    }
+
+    #[test]
+    fn test_bigint_methods() {
+        let b = BigInt256::from_u64(123);
+        assert_eq!(b.to_u64(), 123);
+        assert_eq!(b.to_f64_approx(), 123.0);
+
+        // Test saturating operations
+        let large = BigInt256::from_u64(1000);
+        let small = BigInt256::from_u64(500);
+        assert_eq!(large.saturating_sub(300), BigInt256::from_u64(700));
+        assert_eq!(small.saturating_sub(600), BigInt256::zero()); // Should clamp to zero
+        assert_eq!(large.saturating_add(200), BigInt256::from_u64(1200));
+
+        // Test to_bytes_le
+        let val = BigInt256::from_u64(0x123456789ABCDEF0);
+        let bytes = val.to_bytes_le();
+        assert_eq!(bytes[0], 0xF0);
+        assert_eq!(bytes[1], 0xDE);
+        assert_eq!(bytes[2], 0xBC);
+        assert_eq!(bytes[3], 0x9A);
+        assert_eq!(bytes[4], 0x78);
+        assert_eq!(bytes[5], 0x56);
+        assert_eq!(bytes[6], 0x34);
+        assert_eq!(bytes[7], 0x12);
     }
 }

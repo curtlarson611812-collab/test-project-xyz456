@@ -6,7 +6,7 @@
 use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
-use crate::math::Secp256k1;
+use crate::math::{Secp256k1, bigint::BigInt256};
 use crate::gpu::{GpuBackend, HybridBackend, CpuBackend, HybridGpuManager, shared::SharedBuffer};
 use crate::types::TaggedKangarooState;
 use crate::kangaroo::SearchConfig;
@@ -568,7 +568,7 @@ impl KangarooManager {
 
                 KangarooState::new(
                     position,
-                    distance.clone(),
+                    BigInt256::from_u64(distance),
                     kangaroos[i].alpha,
                     kangaroos[i].beta,
                     kangaroos[i].is_tame,

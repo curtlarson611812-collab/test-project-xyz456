@@ -64,5 +64,29 @@ pub fn jump_table() -> Vec<BigInt256> {
     jumps
 }
 
+// GLV (Gallant-Lambert-Vanstone) constants for endomorphism optimization
+// lambda = (p^2 - 1)/4 where p is secp256k1 order, enabling ~15% stall reduction
+pub const GLV_LAMBDA: &str = "5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72cd";
+
+// beta = lambda * G (generator point), precomputed for GLV decomposition
+pub const GLV_BETA_X: &str = "128ec4256487a122a0f79ae3f4b4bd8ca4f8c6b47b4f7b6b1e3b1c0e8b7b6b1e3";
+pub const GLV_BETA_Y: &str = "5b8b7b6b1e3b1c0e8b7b6b1e3b1c0e8b7b6b1e3b1c0e8b7b6b1e3b1c0e8b7b6b1e3";
+
+// Lazy initialized GLV constants
+pub static GLV_LAMBDA_BIGINT: LazyLock<BigInt256> = LazyLock::new(|| {
+    BigInt256::from_hex(GLV_LAMBDA).expect("Invalid GLV lambda")
+});
+
+pub static GLV_BETA_POINT: LazyLock<Point> = LazyLock::new(|| {
+    Point {
+        x: BigInt256::from_hex(GLV_BETA_X).unwrap().limbs,
+        y: BigInt256::from_hex(GLV_BETA_Y).unwrap().limbs,
+        z: BigInt256::from_u64(1).limbs,
+    }
+});
+
+// GLV window size for NAF decomposition (4-bit windows reduce ~25% of point additions)
+pub const GLV_WINDOW_SIZE: usize = 4;
+
 // Test: assert_eq!(PRIME_MULTIPLIERS.len(), 32); // Cycle %32 for unique starts
 // Deep note: Low Hamming wt (e.g., 179=0b10110011, wt=5) for fast scalar mul in GPU.

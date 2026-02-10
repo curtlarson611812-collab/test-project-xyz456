@@ -260,4 +260,80 @@ mod tests {
         // GPU integration would verify these match GPU results
         // For now, this confirms CPU SmallOddPrime logic works
     }
+
+    #[test]
+    fn test_gpu_parity_kangaroo_step() {
+        let curve = Secp256k1::new();
+
+        // Create test kangaroo states
+        let tame_state = crate::types::KangarooState::new(
+            curve.g.clone(),
+            BigInt256::from_u64(1000), // distance as BigInt256
+            [0; 4],
+            [0; 4],
+            true, // tame
+            false,
+            0,
+        );
+
+        let wild_state = crate::types::KangarooState::new(
+            curve.g.clone(),
+            BigInt256::zero(),
+            [0; 4],
+            [0; 4],
+            false, // wild
+            false,
+            1,
+        );
+
+        // CPU reference implementation
+        let stepper = crate::kangaroo::stepper::KangarooStepper::new(false);
+        let cpu_tame = stepper.step_kangaroo_with_bias(&tame_state, None, 81);
+        let cpu_wild = stepper.step_kangaroo_with_bias(&wild_state, Some(&curve.g), 81);
+
+        // GPU implementations (if available)
+        #[cfg(feature = "rustacuda")]
+        {
+            if let Ok(mut cuda_backend) = CudaBackend::new() {
+                let gpu_tame = cuda_backend.step_kangaroo(&tame_state, None, 81).unwrap();
+                let gpu_wild = cuda_backend.step_kangaroo(&wild_state, Some(&curve.g), 81).unwrap();
+
+                // Compare CPU vs GPU results
+                assert_eq!(cpu_tame.position.x, gpu_tame.position.x, "CUDA tame position X mismatch");
+                assert_eq!(cpu_tame.position.y, gpu_tame.position.y, "CUDA tame position Y mismatch");
+                assert_eq!(cpu_tame.distance, gpu_tame.distance, "CUDA tame distance mismatch");
+
+                assert_eq!(cpu_wild.position.x, gpu_wild.position.x, "CUDA wild position X mismatch");
+                assert_eq!(cpu_wild.position.y, gpu_wild.position.y, "CUDA wild position Y mismatch");
+                assert_eq!(cpu_wild.distance, gpu_wild.distance, "CUDA wild distance mismatch");
+
+                println!("CUDA SmallOddPrime parity test passed ✓");
+            }
+        }
+
+        #[cfg(feature = "wgpu")]
+        {
+            if let Ok(mut vulkan_backend) = VulkanBackend::new() {
+                let gpu_tame = vulkan_backend.step_kangaroo(&tame_state, None, 81).unwrap();
+                let gpu_wild = vulkan_backend.step_kangaroo(&wild_state, Some(&curve.g), 81).unwrap();
+
+                // Compare CPU vs GPU results
+                assert_eq!(cpu_tame.position.x, gpu_tame.position.x, "Vulkan tame position X mismatch");
+                assert_eq!(cpu_tame.position.y, gpu_tame.position.y, "Vulkan tame position Y mismatch");
+                assert_eq!(cpu_tame.distance, gpu_tame.distance, "Vulkan tame distance mismatch");
+
+                assert_eq!(cpu_wild.position.x, gpu_wild.position.x, "Vulkan wild position X mismatch");
+                assert_eq!(cpu_wild.position.y, gpu_wild.position.y, "Vulkan wild position Y mismatch");
+                assert_eq!(cpu_wild.distance, gpu_wild.distance, "Vulkan wild distance mismatch");
+
+                println!("Vulkan SmallOddPrime parity test passed ✓");
+            }
+        }
+
+        // If no GPU backends available, at least verify CPU logic works
+        assert!(cpu_tame.distance > BigInt256::zero(), "CPU tame distance should increase");
+        assert_ne!(cpu_wild.position.x, wild_state.position.x, "CPU wild position should change");
+
+        println!("SmallOddPrime CPU reference test passed ✓");
+    }
 }

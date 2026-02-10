@@ -278,20 +278,20 @@ impl CollisionDetector {
                     // Try resolve_near_collision before walk
                     let trap1 = Trap {
                         x: entry1.point.x,
-                        dist: BigUint::from_bytes_le(&entry1.state.distance.to_bytes_le()[..]),
+                        dist: entry1.state.distance.to_biguint(),
                         is_tame: entry1.state.is_tame,
                         alpha: entry1.state.alpha,
                     };
                     let trap2 = Trap {
                         x: entry2.point.x,
-                        dist: BigUint::from_bytes_le(&entry2.state.distance.to_bytes_le()[..]),
+                        dist: entry2.state.distance.to_biguint(),
                         is_tame: entry2.state.is_tame,
                         alpha: entry2.state.alpha,
                     };
 
                     if let Some(offset) = self.resolve_near_collision(&trap1, &trap2, dp_bit_threshold) {
                         // Construct solution from resolved offset
-                        let solution = Solution::new(offset.to_u64_array(), entry1.point, entry1.state.distance.clone() + entry2.state.distance, 0.0);
+                        let solution = Solution::new(offset.to_u64_array(), entry1.point, entry1.state.distance.clone() + entry2.state.distance.clone(), 0.0);
                         return Ok(CollisionResult::Full(solution));
                     }
 
@@ -316,7 +316,7 @@ impl CollisionDetector {
     pub fn find_collision(&self, tame: &KangarooState, wild: &KangarooState) -> Option<Solution> {
         (tame.position.x == wild.position.x)
             .then(|| self.solve_collision(tame, wild))?
-            .map(|pk| Solution::new(pk, tame.position, &tame.distance + &wild.distance, 0.0))
+            .map(|pk| Solution::new(pk, tame.position, tame.distance.clone() + wild.distance.clone(), 0.0))
     }
 
     fn solve_trap_collision(&self, tame: &Trap, wild: &Trap) -> Option<Solution> {
@@ -386,7 +386,7 @@ impl CollisionDetector {
         let traps: Vec<Trap> = kangaroos.iter().map(|k| {
             Trap {
                 x: k.position.x, // Assuming affine x is stored
-                dist: BigUint::from(k.distance),
+                dist: k.distance.to_biguint(),
                 is_tame: k.is_tame,
                 alpha: k.alpha,
             }
@@ -589,7 +589,7 @@ impl CollisionDetector {
         // to properly reconstruct the path by reversing operations
         let mut path = Vec::new();
         let current_pos = kangaroo.position;
-        let mut current_dist = BigUint::from(kangaroo.distance);
+        let mut current_dist = kangaroo.distance.to_biguint();
 
         // Add starting position
         path.push(current_pos);
@@ -824,24 +824,28 @@ impl CollisionDetector {
         let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
 
         // d_tame - d_wild (distance difference)
-        let tame_dist = BigInt256::from_u64(tame.distance);
-        let wild_dist = BigInt256::from_u64(wild.distance);
+        let tame_dist = tame.distance.clone();
+        let wild_dist = wild.distance.clone();
         let diff = tame_dist - wild_dist;
 
-        // k = inv(prime) * (d_tame - d_wild) mod n
+        self.solve_collision_inversion(prime, tame_dist.clone(), wild_dist.clone(), &CURVE_ORDER_BIGINT)
+    }
+
+    /// Solve collision with inversion: k = inv(prime) * (d_tame - d_wild) mod n
+    pub fn solve_collision_inversion(&self, prime: BigInt256, d_tame: BigInt256, d_wild: BigInt256, n: &BigInt256) -> Option<BigInt256> {
         let prime_big = BigUint::from_bytes_be(&prime.to_bytes_be());
-        let order_big = BigUint::from_bytes_be(&CURVE_ORDER_BIGINT.to_bytes_be());
-        if let Some(inv_prime) = self.mod_inverse_big(&prime_big, &order_big) {
-            let inv_prime_bytes = inv_prime.to_bytes_be();
-            let mut padded = [0u8; 32];
-            let start = 32usize.saturating_sub(inv_prime_bytes.len());
-            padded[start..].copy_from_slice(&inv_prime_bytes);
-            let inv_prime_bigint = BigInt256::from_bytes_be(&padded);
-            let k = diff * inv_prime_bigint;
-            Some(k)
-        } else {
-            None
-        }
+        let n_big = BigUint::from_bytes_be(&n.to_bytes_be());
+        let inv_prime = prime_big.modinv(&n_big)?;
+
+        let one = BigUint::from(1u64);
+        let inner = one + BigUint::from_bytes_be(&(d_tame - d_wild).to_bytes_be());
+        let result = (inv_prime * inner) % &n_big;
+
+        let result_bytes = result.to_bytes_be();
+        let mut padded = [0u8; 32];
+        let start = 32usize.saturating_sub(result_bytes.len());
+        padded[start..].copy_from_slice(&result_bytes);
+        Some(BigInt256::from_bytes_be(&padded))
     }
 
     /// Solve collision using prime factorization approach with Euclidean algorithm

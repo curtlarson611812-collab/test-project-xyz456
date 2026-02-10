@@ -191,4 +191,38 @@ mod tests {
         let root4 = curve.tonelli_shanks(&zero, &curve.p);
         assert_eq!(root4, Some(BigInt256::zero()), "sqrt(0) should be 0");
     }
+
+    #[test]
+    fn test_mul_glv_opt() {
+        let curve = Secp256k1::new();
+
+        // Test small scalar: 3 * G
+        let k = BigInt256::from_u64(3);
+        let result_opt = curve.mul_glv_opt(&k, &curve.g);
+        let result_naive = curve.mul(&k, &curve.g);
+
+        // Both should give same result
+        assert_eq!(result_opt.x, result_naive.x);
+        assert_eq!(result_opt.y, result_naive.y);
+
+        // Test larger scalar
+        let k_large = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0").expect("Invalid hex");
+        let result_opt_large = curve.mul_glv_opt(&k_large, &curve.g);
+        let result_naive_large = curve.mul(&k_large, &curve.g);
+
+        assert_eq!(result_opt_large.x, result_naive_large.x);
+        assert_eq!(result_opt_large.y, result_naive_large.y);
+
+        // Test zero
+        let k_zero = BigInt256::zero();
+        let result_zero = curve.mul_glv_opt(&k_zero, &curve.g);
+        assert!(result_zero.is_infinity());
+
+        // Test infinity point
+        let inf_point = Point::infinity();
+        let result_inf = curve.mul_glv_opt(&k, &inf_point);
+        assert!(result_inf.is_infinity());
+
+        println!("GLV optimized multiplication test passed ✓");
+    }
 }

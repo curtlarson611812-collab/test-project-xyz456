@@ -70,4 +70,75 @@ mod tests {
         // This confirms the SmallOddPrime system is ready for actual puzzle solving
         // Real solving would be done via command line with proper parameters
     }
+
+    #[test]
+    fn test_large_step_parity() {
+        use crate::math::bigint::BigInt256;
+        use crate::types::KangarooState;
+        use crate::kangaroo::stepper::KangarooStepper;
+
+        let curve = Secp256k1::new();
+        let stepper = KangarooStepper::new(false); // CPU reference
+
+        // Create initial kangaroo state
+        let initial_state = KangarooState::new(
+            curve.g.clone(),
+            BigInt256::from_u64(1000000), // Large initial distance
+            [0; 4], [0; 4], // alpha, beta
+            true, false, // tame, not dp
+            0, // id
+        );
+
+        // Test 10M steps (scaled down for test performance)
+        const TEST_STEPS: usize = 10000; // 10k steps for test, represents 10M in practice
+
+        let mut cpu_state = initial_state.clone();
+        for i in 0..TEST_STEPS {
+            let bias = 179 + (i % 32) * 2; // Cycle through SmallOddPrime multipliers
+            cpu_state = stepper.step_kangaroo_with_bias(&cpu_state, None, bias as u64);
+        }
+
+        // GPU parity check (if available)
+        #[cfg(any(feature = "rustacuda", feature = "wgpu"))]
+        {
+            let mut gpu_state = initial_state.clone();
+
+            #[cfg(feature = "rustacuda")]
+            if let Ok(mut cuda_backend) = crate::gpu::backends::cuda_backend::CudaBackend::new() {
+                for i in 0..TEST_STEPS {
+                    let bias = 179 + (i % 32) * 2;
+                    gpu_state = cuda_backend.step_kangaroo(&gpu_state, None, bias as u64).unwrap();
+                }
+
+                // Compare CPU vs GPU final states
+                assert_eq!(cpu_state.position.x, gpu_state.position.x, "CUDA position X mismatch after {} steps", TEST_STEPS);
+                assert_eq!(cpu_state.position.y, gpu_state.position.y, "CUDA position Y mismatch after {} steps", TEST_STEPS);
+                assert_eq!(cpu_state.distance, gpu_state.distance, "CUDA distance mismatch after {} steps", TEST_STEPS);
+
+                println!("CUDA large step parity test passed ✓ ({} steps)", TEST_STEPS);
+            }
+
+            #[cfg(feature = "wgpu")]
+            if let Ok(mut vulkan_backend) = crate::gpu::backends::vulkan_backend::VulkanBackend::new() {
+                gpu_state = initial_state.clone();
+                for i in 0..TEST_STEPS {
+                    let bias = 179 + (i % 32) * 2;
+                    gpu_state = vulkan_backend.step_kangaroo(&gpu_state, None, bias as u64).unwrap();
+                }
+
+                // Compare CPU vs GPU final states
+                assert_eq!(cpu_state.position.x, gpu_state.position.x, "Vulkan position X mismatch after {} steps", TEST_STEPS);
+                assert_eq!(cpu_state.position.y, gpu_state.position.y, "Vulkan position Y mismatch after {} steps", TEST_STEPS);
+                assert_eq!(cpu_state.distance, gpu_state.distance, "Vulkan distance mismatch after {} steps", TEST_STEPS);
+
+                println!("Vulkan large step parity test passed ✓ ({} steps)", TEST_STEPS);
+            }
+        }
+
+        // Verify CPU state changed significantly (proof of computation)
+        assert_ne!(cpu_state.position.x, initial_state.position.x, "Position should change after {} steps", TEST_STEPS);
+        assert!(cpu_state.distance > initial_state.distance, "Distance should increase after {} steps", TEST_STEPS);
+
+        println!("Large step parity test completed ✓ (CPU reference: {} steps)", TEST_STEPS);
+    }
 }
