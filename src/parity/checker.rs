@@ -31,7 +31,7 @@ impl ParityChecker {
     }
 
     /// Run parity verification test
-    pub async fn run_parity_test(&self) -> Result<ParityResult> {
+    pub async fn run_parity_test(&mut self) -> Result<ParityResult> {
         println!("Starting parity verification test ({} steps)...", self.test_steps);
 
         let start_time = Instant::now();
@@ -88,7 +88,7 @@ impl ParityChecker {
     }
 
     /// Step kangaroos on CPU
-    fn step_on_cpu(&self, mut kangaroos: Vec<KangarooState>) -> Result<Vec<KangarooState>> {
+    fn step_on_cpu(&mut self, mut kangaroos: Vec<KangarooState>) -> Result<Vec<KangarooState>> {
         for _step in 0..self.test_steps {
             kangaroos = self.cpu_stepper.step_batch(&kangaroos, None)?;
         }
@@ -156,7 +156,7 @@ impl ParityChecker {
         // Temporarily reduce test steps
         let _original_steps = self.test_steps;
         // This would require mutable self, so we'll create a temp checker
-        let quick_checker = ParityChecker {
+        let mut quick_checker = ParityChecker {
             cpu_stepper: self.cpu_stepper.clone(),
             test_steps: 1000,
         };

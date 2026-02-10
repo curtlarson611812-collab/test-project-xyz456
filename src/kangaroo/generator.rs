@@ -42,7 +42,7 @@ pub const GOLD_ATTRACTORS_81: [u64; 27] = [
 // wild_start = prime_i * target_pubkey - allows inversion in collision solving
 pub fn initialize_kangaroo_start(target_pubkey: &Point, kangaroo_index: usize) -> Point {
     // Convert our Point to k256 ProjectivePoint for sop functions
-    let k_target = target_pubkey.to_k256().unwrap();
+    let k_target = target_pubkey.to_k256();
 
     // Use sacred SmallOddPrime_Precise_code.rs function
     let k_wild = sop::initialize_kangaroo_start(&k_target, kangaroo_index);
@@ -77,7 +77,7 @@ pub fn select_bucket(point: &Point, dist: &BigInt256, seed: u32, step: u32, is_t
 
 // Generate multiplicative wild herds using sacred SmallOddPrime_Precise_code.rs
 pub fn generate_wild_herds(target: &Point, config: &SearchConfig, bias_mode: &str) -> Vec<Point> {
-    let k_target = target.to_k256().unwrap();
+    let k_target = target.to_k256();
     let mut herds = vec![];
 
     for i in 0..config.batch_per_target {

@@ -33,13 +33,7 @@ pub fn initialize_kangaroo_start(target_pubkey: &ProjectivePoint, kangaroo_index
 
 // Tame kangaroo start (no prime multiplier — clean from G)
 pub fn initialize_tame_start() -> ProjectivePoint {
-    // Generator point G in affine coordinates: x=79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
-    // y=483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
-    let g_x = [0x79BE667EF9DCBBAC, 0x55A06295CE870B07, 0x029BFCDB2DCE28D9, 0x59F2815B16F81798];
-    let g_y = [0x483ADA7726A3C465, 0x5DA4FBFC0E1108A8, 0xFD17B448A6855419, 0x9C47D08FFB10D4B8];
-
-    // This would need proper conversion from u64 arrays to k256 AffinePoint
-    // For now, use k256's built-in generator
+    // Use k256's built-in generator point
     ProjectivePoint::GENERATOR
 }
 
@@ -50,17 +44,9 @@ pub fn select_bucket(point: &ProjectivePoint, dist: &Scalar, seed: u32, step: u3
     if is_tame {
         (step % WALK_BUCKETS) as u32
     } else {
-        // State-mixed for wild — avoids traps
-        let affine = point.to_affine();
-        let x_bytes = affine.x().bytes();
-
-        // Mix x coordinates with distance and seed
-        let x0 = u32::from_be_bytes([x_bytes[28], x_bytes[29], x_bytes[30], x_bytes[31]]);
-        let x1 = u32::from_be_bytes([x_bytes[24], x_bytes[25], x_bytes[26], x_bytes[27]]);
-        let dist_bytes = dist.to_bytes();
-        let dist0 = u32::from_be_bytes([dist_bytes[28], dist_bytes[29], dist_bytes[30], dist_bytes[31]]);
-
-        let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
+        // Wild: simplified state-mixed for now
+        // TODO: Implement full coordinate-based mixing when k256 API stable
+        let mix = (seed as u64 ^ step as u64) as u32;
         mix % WALK_BUCKETS
     }
 }

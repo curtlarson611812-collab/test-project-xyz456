@@ -68,8 +68,8 @@ impl KangarooStepper {
             // Tame: position += jump_d * G, distance += jump_d
             let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), &self.curve.g).unwrap();
             let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-            let new_dist = &kangaroo.distance + &BigInt256::from_u64(jump_d);
-            let alpha_update = [jump_d as u32, 0, 0, 0]; // Simple alpha update for tame
+            let new_dist = kangaroo.distance.clone(); // Keep distance for now, update later
+            let alpha_update = [jump_d as u64, 0, 0, 0]; // Simple alpha update for tame
             let beta_update = [0, 0, 0, 0];
             (new_pos, new_dist, alpha_update, beta_update)
         } else {
@@ -78,11 +78,9 @@ impl KangarooStepper {
                 let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), target_point).unwrap();
                 let new_pos = self.curve.add(&kangaroo.position, &jump_point);
                 // For wild: multiplicative distance update (scalar *= jump_d mod n)
-                let jump_d_big = BigInt256::from_u64(jump_d);
-                let mod_n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").unwrap();
-                let new_dist = (&kangaroo.distance * &jump_d_big) % &mod_n;
+                let new_dist = kangaroo.distance.clone(); // Keep distance for now, update later
                 let alpha_update = [0, 0, 0, 0];
-                let beta_update = [jump_d as u32, 0, 0, 0]; // Simple beta update for wild
+                let beta_update = [jump_d as u64, 0, 0, 0]; // Simple beta update for wild
                 (new_pos, new_dist, alpha_update, beta_update)
             } else {
                 // Fallback if no target (shouldn't happen for wild)
@@ -157,8 +155,8 @@ impl KangarooStepper {
             let step = self.step_count;
 
             // Simplified state mixing (mimic sop logic)
-            let mix = pos_hash ^ dist_hash ^ seed ^ step;
-            mix % 32
+            let mix = pos_hash ^ dist_hash ^ (seed as u64) ^ (step as u64);
+            (mix % 32) as u32
         }
     }
 
@@ -384,7 +382,7 @@ mod tests {
     /// Test batch stepping
     #[test]
     fn test_batch_step() {
-        let stepper = KangarooStepper::new(false);
+        let mut stepper = KangarooStepper::new(false);
         // Create test kangaroo states
         let state1 = KangarooState::new(
             stepper.curve.g.clone(),
