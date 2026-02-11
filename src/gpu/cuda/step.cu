@@ -4,6 +4,29 @@
 
 #include <cuda_runtime.h>
 #include <stdint.h>
+#include <stdio.h> // For printf
+
+#define KANGS_PER_TARGET 4096
+
+// secp256k1 order (N)
+__constant__ uint32_t CURVE_N[8] = {
+    0xFFFFFFFF, 0xFFFFFFFE, 0xBAAEDCE6, 0xAF48A03B,
+    0xBFD25E8C, 0xD0364141, 0x00000000, 0x00000000
+};
+
+// Barrett mu for secp256k1 order (floor(2^512 / N))
+__constant__ uint32_t MU_N[16] = {
+    0x00000001, 0x00000000, 0x00000000, 0x00000000,
+    0x45512319, 0x50B75FC4, 0x402DA173, 0x2FBC146B,
+    0x09DDA963, 0x02FDB94D, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000
+};
+
+// Mean jump distance
+__constant__ uint32_t JUMP_SIZE[8] = {1024, 0, 0, 0, 0, 0, 0, 0};
+
+// Jump table for kangaroo hops (precomputed points)
+__constant__ Point JUMP_TABLE[256];
 
 // BigInt256 struct for unified CPU/GPU arithmetic (matches CPU BigInt256)
 typedef struct {
@@ -25,6 +48,102 @@ typedef uint32_t bigint256_u32[8]; // [u32;8] version for some operations
 // Forward declarations
 __device__ bigint256 barrett_reduce(const bigint256 x, const bigint256 mod_p, const bigint256 mu);
 __device__ bigint256 mont_mul(const bigint256 a, const bigint256 b, const bigint256 mod_p, const bigint256 mu);
+
+// MurmurHash3 simplified for GPU
+__device__ uint32_t murmur3(const bigint256* key) {
+    const uint32_t seed = 0x9747b28c;
+    uint32_t hash = seed;
+
+    for (int i = 0; i < 4; i++) {
+        uint32_t k = (uint32_t)key->limbs[i];
+        k *= 0xcc9e2d51;
+        k = (k << 15) | (k >> 17);
+        k *= 0x1b873593;
+        hash ^= k;
+        hash = (hash << 13) | (hash >> 19);
+        hash = hash * 5 + 0xe6546b64;
+    }
+
+    hash ^= 16;
+    hash ^= hash >> 16;
+    hash *= 0x85ebca6b;
+    hash ^= hash >> 13;
+    hash *= 0xc2b2ae35;
+    hash ^= hash >> 16;
+
+    return hash;
+}
+
+// Simplified Hamming weight calculation
+__device__ int hamming_weight(uint32_t x) {
+    x = x - ((x >> 1) & 0x55555555);
+    x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+    x = (x + (x >> 4)) & 0x0F0F0F0F;
+    x = x + (x >> 8);
+    x = x + (x >> 16);
+    return x & 0x3F;
+}
+
+// GLV-optimized scalar multiplication (simplified)
+__device__ Point256 mul_glv_opt(const Point256 p, const bigint256 k) {
+    // Simplified implementation - full GLV would decompose k into k1, k2
+    // For now, just return the point (placeholder)
+    return p;
+}
+
+// Bucket selection for jump table
+__device__ int select_bucket_cuda(const bigint256 dist) {
+    uint32_t hash = murmur3(&dist);
+    return hash % 256;
+}
+
+// Point addition (simplified Jacobian)
+__device__ Point256 point_add(const Point256 p1, const Point256 p2, const bigint256 mod_p, const bigint256 mu) {
+    // Simplified point addition - full implementation needed
+    Point256 result = p1;
+    // Add p2 to result using Jacobian formulas
+    return result;
+}
+
+// Safe modular difference
+__device__ void safe_diff_mod_n(const bigint256 a, const bigint256 b, const bigint256 n, bigint256* result) {
+    if (bigint256_cmp(&a, &b) >= 0) {
+        bigint256_sub(&a, &b, result);
+    } else {
+        bigint256 temp;
+        bigint256_add(&a, &n, &temp);
+        bigint256_sub(&temp, &b, result);
+    }
+}
+
+// Near distinguished point detection
+__device__ bool is_near_dp(const Point256 p) {
+    uint32_t hash = murmur3(&p.x);
+    const uint32_t DP_MASK = 0xFFFF; // Simplified DP mask
+    uint32_t masked = hash & DP_MASK;
+    if (masked == 0) return true; // Exact DP
+    return hamming_weight(masked) < 4; // Near DP (Hamming distance < 4)
+}
+
+// Convert bigint256 to byte array (big-endian)
+__device__ void bigint256_to_bytes(const bigint256 x, uint8_t* bytes) {
+    for (int i = 0; i < 4; i++) {
+        uint64_t limb = x.limbs[3 - i]; // Big-endian: MSB first
+        bytes[i * 8 + 0] = (limb >> 56) & 0xFF;
+        bytes[i * 8 + 1] = (limb >> 48) & 0xFF;
+        bytes[i * 8 + 2] = (limb >> 40) & 0xFF;
+        bytes[i * 8 + 3] = (limb >> 32) & 0xFF;
+        bytes[i * 8 + 4] = (limb >> 24) & 0xFF;
+        bytes[i * 8 + 5] = (limb >> 16) & 0xFF;
+        bytes[i * 8 + 6] = (limb >> 8) & 0xFF;
+        bytes[i * 8 + 7] = limb & 0xFF;
+    }
+}
+
+// Montgomery multiplication optimized (wrapper for now)
+__device__ void montgomery_mul_opt(const bigint256 a, const bigint256 b, const bigint256 mod_p, uint32_t n_prime, bigint256* result) {
+    *result = mont_mul(a, b, mod_p, (bigint256){n_prime, 0, 0, 0}); // Simplified
+}
 
 __device__ void bigint256_zero(bigint256* res) {
     for (int i = 0; i < 4; i++) res->limbs[i] = 0;
@@ -189,6 +308,163 @@ __device__ Point256 point256_infinity() {
     bigint256_one(&p.y);
     bigint256_zero(&p.z);
     return p;
+}
+
+// Missing uint32_t[8] helper functions
+__device__ void bigint_copy(const uint32_t* src, uint32_t* dst) {
+    for (int i = 0; i < 8; i++) dst[i] = src[i];
+}
+
+__device__ void bigint_zero_u32(uint32_t* res) {
+    for (int i = 0; i < 8; i++) res[i] = 0;
+}
+
+__device__ void bigint_one_u32(uint32_t* res) {
+    res[0] = 1;
+    for (int i = 1; i < 8; i++) res[i] = 0;
+}
+
+__device__ bool bigint_is_zero(const uint32_t* a) {
+    for (int i = 0; i < 8; i++) if (a[i] != 0) return false;
+    return true;
+}
+
+__device__ bool bigint_is_negative(const uint32_t* a) {
+    return (int32_t)a[7] < 0;
+}
+
+__device__ uint32_t bigint_to_u32(const uint32_t* a) {
+    return a[0];
+}
+
+__device__ void bigint_add_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+    uint32_t carry = 0;
+    for (int i = 0; i < 8; i++) {
+        uint64_t sum = (uint64_t)a[i] + b[i] + carry;
+        res[i] = (uint32_t)sum;
+        carry = (uint32_t)(sum >> 32);
+    }
+}
+
+__device__ void bigint_sub_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+    int32_t borrow = 0;
+    for (int i = 0; i < 8; i++) {
+        int64_t diff = (int64_t)a[i] - b[i] - borrow;
+        res[i] = (uint32_t)diff;
+        borrow = (diff < 0) ? 1 : 0;
+    }
+}
+
+__device__ void bigint_mul_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+    for (int i = 0; i < 16; i++) res[i] = 0;
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            __int128 mul = (__int128)a[i] * b[j];
+            uint32_t lo = (uint32_t)mul;
+            uint32_t hi = (uint32_t)(mul >> 32);
+            uint32_t carry = 0;
+            if (i + j < 16) {
+                uint64_t sum = (uint64_t)res[i + j] + lo + carry;
+                res[i + j] = (uint32_t)sum;
+                carry = (uint32_t)(sum >> 32);
+            }
+            if (i + j + 1 < 16) {
+                uint64_t sum = (uint64_t)res[i + j + 1] + hi + carry;
+                res[i + j + 1] = (uint32_t)sum;
+            }
+        }
+    }
+}
+
+// Extended Euclidean algorithm for modular inverse
+__device__ int extended_gcd(const uint32_t* a, const uint32_t* b, uint32_t* x, uint32_t* y) {
+    uint32_t old_r[8], r[8], old_s[8], s[8], old_t[8], t[8];
+    bigint_copy(a, old_r);
+    bigint_copy(b, r);
+    bigint_one_u32(old_s);
+    bigint_zero_u32(s);
+    bigint_zero_u32(old_t);
+    bigint_one_u32(t);
+
+    while (!bigint_is_zero(r)) {
+        uint32_t quotient[8];
+        parallel_div(old_r, r, quotient);
+        uint32_t temp[8];
+        bigint_mul_u32(quotient, r, temp);
+        bigint_sub_u32(old_r, temp, old_r);
+        bigint_mul_u32(quotient, s, temp);
+        bigint_sub_u32(old_s, temp, old_s);
+        bigint_mul_u32(quotient, t, temp);
+        bigint_sub_u32(old_t, temp, old_t);
+        bigint_copy(r, old_r);
+        bigint_copy(old_r, r);
+        bigint_copy(s, old_s);
+        bigint_copy(old_s, s);
+        bigint_copy(t, old_t);
+        bigint_copy(old_t, t);
+    }
+    bigint_copy(old_s, x);
+    bigint_copy(old_t, y);
+    return bigint_to_u32(old_r); // gcd
+}
+
+// Modular inverse using extended Euclidean algorithm
+__device__ void bigint_inv_mod(const uint32_t* a, const uint32_t* mod, uint32_t* result) {
+    uint32_t x[8], y[8];
+    int gcd = extended_gcd(a, mod, x, y);
+    if (gcd != 1) {
+        bigint_zero_u32(result);
+        return;
+    }
+    if (bigint_is_negative(x)) {
+        bigint_add_u32(x, mod, x);
+    }
+    bigint_copy(x, result);
+}
+
+// Parallel bigint operations (for legacy compatibility)
+__device__ void bigint_mul_par(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+    bigint_mul_u32(a, b, res);
+}
+
+__device__ void bigint_add_par(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+    bigint_add_u32(a, b, res);
+}
+
+__device__ void bigint_sub_par(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+    bigint_sub_u32(a, b, res);
+}
+
+__device__ int bigint_cmp_par(const uint32_t* a, const uint32_t* b) {
+    for (int i = 7; i >= 0; i--) {
+        if (a[i] > b[i]) return 1;
+        if (a[i] < b[i]) return -1;
+    }
+    return 0;
+}
+
+// Simplified parallel division (for extended Euclidean)
+__device__ void parallel_div(const uint32_t* dividend, const uint32_t* divisor, uint32_t* quotient) {
+    uint32_t temp[8];
+    bigint_copy(dividend, temp);
+    bigint_zero_u32(quotient);
+
+    for (int bit = 255; bit >= 0; bit--) {
+        // Left shift temp
+        uint32_t carry = 0;
+        for (int i = 0; i < 8; i++) {
+            uint32_t next_carry = temp[i] >> 31;
+            temp[i] = (temp[i] << 1) | carry;
+            carry = next_carry;
+        }
+
+        if (bigint_cmp_par(temp, divisor) >= 0) {
+            bigint_sub_u32(temp, divisor, temp);
+            int word_idx = bit / 32;
+            int bit_idx = bit % 32;
+            quotient[word_idx] |= (1U << bit_idx);
+        }
+    }
 }
 struct Point {
     uint32_t x[8];  // X coordinate (256-bit)

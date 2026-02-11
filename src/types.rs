@@ -297,6 +297,8 @@ pub struct KangarooState {
     pub position: Point,
     /// Distance traveled (steps) - now BigInt256 for full scalar range
     pub distance: BigInt256,
+    /// Distance in wide format for Barrett reduction input
+    pub distance_wide: [u32; 16],
     /// Alpha coefficient for collision solving
     pub alpha: [u64; 4],
     /// Beta coefficient for collision solving
@@ -307,6 +309,8 @@ pub struct KangarooState {
     pub is_dp: bool,
     /// Kangaroo ID for tracking
     pub id: u64,
+    /// Current step count for initialization and checking
+    pub step: u64,
 }
 
 /// Tagged kangaroo state for multi-target solving
@@ -328,11 +332,29 @@ impl KangarooState {
         KangarooState {
             position,
             distance,
+            distance_wide: [0; 16],
             alpha,
             beta,
             is_tame,
             is_dp,
             id,
+            step: 0,
+        }
+    }
+}
+
+impl Default for KangarooState {
+    fn default() -> Self {
+        KangarooState {
+            position: Point::infinity(),
+            distance: BigInt256::zero(),
+            distance_wide: [0; 16],
+            alpha: [0; 4],
+            beta: [0; 4],
+            is_tame: false,
+            is_dp: false,
+            id: 0,
+            step: 0,
         }
     }
 }
