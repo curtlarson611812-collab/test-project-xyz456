@@ -117,7 +117,9 @@ impl KangarooManager {
             // Use first target range as representative
             let range_min = k256::Scalar::ZERO;
             let range_width = k256::Scalar::from(2u64).pow_vartime(&[20u64]); // 2^20
-            crate::utils::bias::generate_preseed_pos(&range_min, &range_width)
+            let range_min_big = BigInt256::from_scalar(&range_min);
+            let range_width_big = BigInt256::from_scalar(&range_width);
+            crate::utils::bias::generate_preseed_pos(&range_min_big, &range_width_big)
         } else {
             vec![] // Fallback if no targets
         };
@@ -969,12 +971,24 @@ fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
             Ok(bytes) => {
                 // Convert to Point
                 // Assume bytes are compressed pubkey (33 bytes: 0x02/0x03 + 32-byte x)
-                if bytes.len() >= 33 {
-                    // For now, create a dummy point - full implementation would decompress
-                    // TODO: Implement proper compressed pubkey decompression
-                    warn!("Compressed pubkey decompression not implemented yet: {}", line);
+                if bytes.len() == 33 {
+                    match k256::EncodedPoint::from_bytes(&bytes) {
+                        Ok(encoded) => {
+                            match k256::AffinePoint::decompress(&encoded.x(), encoded.y().unwrap_or_default()) {
+                                Some(affine) => {
+                                    let point = crate::types::Point::from_affine(
+                                        affine.x.to_bytes().as_slice().try_into().unwrap_or([0u8; 32]),
+                                        affine.y.to_bytes().as_slice().try_into().unwrap_or([0u8; 32])
+                                    );
+                                    points.push(point);
+                                }
+                                None => warn!("Failed to decompress point: {}", line),
+                            }
+                        }
+                        Err(_) => warn!("Invalid compressed pubkey format: {}", line),
+                    }
                 } else {
-                    warn!("Invalid compressed pubkey length: {}", bytes.len());
+                    warn!("Invalid compressed pubkey length (expected 33): {}", bytes.len());
                 }
             }
             Err(_) => warn!("Invalid hex in priority list: {}", line),

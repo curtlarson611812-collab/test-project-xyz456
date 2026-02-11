@@ -407,6 +407,10 @@ impl GpuBackend for WgpuBackend {
     fn solve_post_walk(&self, _walk: RhoWalkResult, _targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
         Err(anyhow!("Vulkan solve_post_walk not implemented - use CUDA"))
     }
+
+    fn batch_bigint_mul(&self, _a: &Vec<[u32;8]>, _b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        Err(anyhow!("Vulkan batch_bigint_mul not implemented - use CUDA"))
+    }
 }
 
 /// CPU fallback when Vulkan/WGPU is not available

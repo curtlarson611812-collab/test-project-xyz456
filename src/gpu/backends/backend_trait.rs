@@ -24,6 +24,9 @@ pub trait GpuBackend {
     /// Returns table of base^(2*i+1) for i=0..(2^(window-1))-1 in Jacobian coordinates
     fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>>;
 
+    /// Legacy precompute jump table (primes-based)
+    fn precomp_table_glv(&self, base: [u32;8*3], window: u32) -> Result<Vec<[[u32;8];3]>>;
+
     /// Execute batch kangaroo stepping (parallel walk operations)
     /// Updates positions/distances, returns collision traps
     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>>;

@@ -787,6 +787,35 @@ impl BigInt256 {
         }
         256 // All zeros
     }
+
+    /// Convert BigInt256 to k256 Scalar
+    pub fn to_scalar(&self) -> k256::Scalar {
+        k256::Scalar::from_u64_array(self.limbs)
+    }
+
+    /// Convert k256 Scalar to BigInt256
+    pub fn from_scalar(s: &k256::Scalar) -> Self {
+        BigInt256 { limbs: s.to_u64_array() }
+    }
+
+    /// Convert BigInt256 to GPU [u32; 8] limb format
+    pub fn to_u32_limbs(&self) -> [u32; 8] {
+        let mut result = [0u32; 8];
+        for i in 0..4 {
+            result[i * 2] = self.limbs[i] as u32;
+            result[i * 2 + 1] = (self.limbs[i] >> 32) as u32;
+        }
+        result
+    }
+
+    /// Convert from GPU [u32; 8] limb format to BigInt256
+    pub fn from_u32_limbs(limbs: [u32; 8]) -> Self {
+        let mut result = [0u64; 4];
+        for i in 0..4 {
+            result[i] = (limbs[i * 2] as u64) | ((limbs[i * 2 + 1] as u64) << 32);
+        }
+        BigInt256 { limbs: result }
+    }
 }
 
 impl fmt::Display for BigInt256 {

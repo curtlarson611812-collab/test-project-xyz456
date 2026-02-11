@@ -250,13 +250,12 @@ impl GpuBackend for CpuBackend {
                 let n = num_bigint::BigUint::from_slice(&[0xFFFFFFFFu32, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE, 0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141].iter().rev().map(|&x| x).collect::<Vec<_>>());
                 let solution = (&alpha_big * &beta_inv) % &n;
 
-                // Convert back to [u64;4]
+                // Convert back to [u32;8]
                 let solution_bytes = solution.to_bytes_le();
-                let mut result = [0u64; 4];
-                for (i, chunk) in solution_bytes.chunks(8).enumerate() {
-                    if i < 4 {
-                        result[i] = u64::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0),
-                                                       chunk.get(4).copied().unwrap_or(0), chunk.get(5).copied().unwrap_or(0), chunk.get(6).copied().unwrap_or(0), chunk.get(7).copied().unwrap_or(0)]);
+                let mut result = [0u32; 8];
+                for (i, chunk) in solution_bytes.chunks(4).enumerate() {
+                    if i < 8 {
+                        result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
                     }
                 }
                 results.push(result);
@@ -636,69 +635,6 @@ impl GpuBackend for CpuBackend {
 
     fn simulate_cuda_fail(&mut self, _fail: bool) {
         // No-op for CPU
-    }
-
-    fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
-        // CPU implementation: (tame - wild) mod n, handling negative results
-        let tame_big = BigInt256 { limbs: tame };
-        let wild_big = BigInt256 { limbs: wild };
-        let n_big = BigInt256 { limbs: n };
-
-        let mut diff = tame_big.wrapping_sub(&wild_big);
-        if diff >= n_big {
-            diff = diff.wrapping_sub(&n_big);
-        }
-
-        Ok(diff.limbs)
-    }
-
-    fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
-        // CPU GLV-optimized scalar multiplication
-        self.scalar_mul_glv(p, k)
-    }
-
-    fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
-        // CPU scalar multiplication (placeholder - needs full EC arithmetic)
-        Ok([[0u32; 8]; 3])
-    }
-
-    fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
-        // CPU modular reduction to small modulus
-        let x_big = BigInt256 { limbs: x };
-        let modulus_big = BigInt256::from_u64(modulus as u64);
-        let result = x_big % modulus_big;
-        Ok(result.limbs[0])
-    }
-
-    fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
-        // CPU batch modular reduction
-        points.iter().map(|point| self.mod_small(point[0], modulus)).collect()
-    }
-
-    fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkResult> {
-        // CPU rho walk implementation (placeholder)
-        Ok(RhoWalkResult {
-            cycle_len: 42,
-            cycle_point: *tortoise,
-            cycle_dist: [0u32; 8],
-        })
-    }
-
-    fn solve_post_walk(&self, walk_result: &RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
-        // CPU post-walk solving (placeholder)
-        Ok(Some([42, 0, 0, 0, 0, 0, 0, 0]))
-    }
-
-    fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
-        Ok(crate::utils::bias::generate_preseed_pos(range_min, range_width))
-    }
-
-    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
-        Ok(crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, false))
-    }
-
-    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
-        Ok(crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins))
     }
 
 }

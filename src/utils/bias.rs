@@ -41,6 +41,12 @@ pub fn apply_biases(scalar: &BigInt256, target: (u8, u8, u8, u8, bool)) -> f64 {
         return 0.0;  // Reject zero scalars if pos bias enabled
     }
 
+    // Check for zero range width
+    if bool::from(range_width.is_zero()) {
+        warn!("Zero range width in bias analysis");
+        return 0.0;
+    }
+
     // Weighted scoring for mod9, mod27, mod81
     let mut score = 0.0f64;
     if (scalar.clone() % BigInt256::from_u64(9)).low_u32() as u8 == target.0 {
@@ -247,7 +253,8 @@ pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64
                 panic!("Off-curve pre-seed point"); // Edge: Panic on invalid curve point
             }
 
-            let x_bytes = affine.x.to_bytes();
+            let encoded = affine.to_encoded_point(true); // Compressed encoding
+            let x_bytes = encoded.x().unwrap().as_bytes();
             let x_hash = xor_hash_to_u64(&x_bytes);
             let range_width_u64 = range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64).max(1);
             let offset_u64 = x_hash % range_width_u64;

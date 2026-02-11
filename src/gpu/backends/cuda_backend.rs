@@ -1139,6 +1139,11 @@ impl GpuBackend for CudaBackend {
         Ok(Some([42, 0, 0, 0, 0, 0, 0, 0])) // Stub - needs kernel implementation
     }
 
+    fn batch_bigint_mul(&self, a: &Vec<[u32;8]>, b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        // CUDA implementation - delegate to CPU for now as stub
+        self.cpu.batch_bigint_mul(a, b)
+    }
+
     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
         crate::utils::bias::generate_preseed_pos(range_min, range_width).map_err(Into::into)
     }
