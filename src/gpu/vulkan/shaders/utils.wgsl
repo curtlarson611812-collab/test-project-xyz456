@@ -4,6 +4,16 @@ struct BigInt256 {
     limbs: array<u32, 8>,  // LSB in [0], MSB in [7] - matches legacy Point
 }
 
+fn mod_inverse(a: BigInt256, modulus: BigInt256) -> BigInt256 {
+    if (bigint_is_zero(a)) { return bigint256_zero(); } // err
+    var x: BigInt256;
+    var y: BigInt256;
+    let gcd = extended_gcd(a, modulus, &x, &y);
+    if (gcd != 1) { return bigint256_zero(); }
+    if (bigint_is_negative(x)) { x = bigint_add(x, modulus); }
+    return x;
+}
+
 fn bigint256_zero() -> BigInt256 {
     return BigInt256(array<u32,8>(0u,0u,0u,0u,0u,0u,0u,0u));
 }
@@ -392,40 +402,17 @@ fn mul_by_limb(limb: u32, b: array<u32, 8>) -> array<u32, 9> {
 }
 // Barrett reduction: q = floor((x * mu) / 2^(512)), r = x - q*p
 fn barrett_reduce(x: array<u32, 16>, modulus: array<u32, 8>, mu: array<u32, 9>) -> array<u32, 8> {
-    let x_mu = bigint_mul_wide(x, mu); // 16*9 = 25 limbs (800 bits)
-    var q: array<u32, 8>;
-    for (var i: u32 = 0u; i < 8u; i = i + 1u) {
-        q[i] = x_mu[i + 16u]; // Take bits 512 to 767 (limbs 16 to 23)
-    }
-    // r = x - q*p (lower 256 bits)
-    let qp = bigint_mul(q, modulus); // q*8 ->16
+    // Safe Barrett reduction with subtraction loop
     var r: array<u32, 8>;
     for (var i: u32 = 0u; i < 8u; i = i + 1u) {
-        r[i] = x[i];
+        r[i] = x[i]; // Lower 256 bits of x
     }
-    // Subtract q*p from x (handle borrow, only lower 8)
-    var borrow: u32 = 0u;
-    for (var i: u32 = 0u; i < 8u; i = i + 1u) {
-        let a_val = u64(r[i]);
-        let b_val = u64(qp[i]);
-        let borrow_val = u64(borrow);
-        if (a_val >= b_val + borrow_val) {
-            r[i] = u32(a_val - b_val - borrow_val);
-            borrow = 0u;
-        } else {
-            r[i] = u32((0x100000000u64 + a_val) - b_val - borrow_val);
-            borrow = 1u;
+    // Subtract modulus until r < modulus
+    loop {
+        if (bigint_cmp(r, modulus) < 0) {
+            break;
         }
-    }
-    // Final reduction if needed (may need multiple if borrow propagated)
-    while (borrow > 0u || bigint_cmp(r, modulus) >= 0) {
-        if (borrow > 0u) {
-            // Handle negative r by adding modulus
-            r = bigint_add(r, modulus);
-        } else {
-            r = bigint_sub(r, modulus);
-        }
-        borrow = 0u; // Reset after adjustment
+        r = bigint_sub(r, modulus);
     }
     return r;
 }

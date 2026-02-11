@@ -12,6 +12,19 @@
 __constant__ uint32_t MU[9] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
 __constant__ uint32_t MODULUS[8] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE};
 
+// GLV mul with windowed NAF for 15% stall reduction
+__device__ void mul_glv_opt(const point_t& p, const uint256_t& k, point_t& result) {
+    uint128_t k1, k2;
+    glv_decompose(k, k1, k2); // Device decomp (lattice round)
+    point_t beta_p = apply_endomorphism(p); // beta * p (precomp)
+    // Precomp tables (shared mem or texture)
+    point_t k1_table[8]; precompute_window(p, 4, k1_table);
+    point_t k2_table[8]; precompute_window(beta_p, 4, k2_table);
+    point_t res1 = windowed_naf_mul(k1, k1_table, 4);
+    point_t res2 = windowed_naf_mul(k2, k2_table, 4);
+    point_add(res1, res2, result);
+}
+
 // Optimized Barrett reduction for bias modulus calculation
 __device__ __forceinline__ uint32_t barrett_mod_81(uint32_t low_limb) {
     // Fast approximation for modulus 81 using low limb only

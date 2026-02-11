@@ -45,6 +45,19 @@ struct BSGS_Entry {
     uint32_t index;          // i
 };
 
+// Device function for safe diff mod N (Phase 4 GPU integration)
+__device__ void safe_diff_mod_n(const bigint256& tame_dist, const bigint256& wild_dist, const bigint256& n, bigint256& result) {
+    bigint256 diff;
+    if (bigint_compare(tame_dist, wild_dist) >= 0) {
+        bigint_sub(tame_dist, wild_dist, diff);
+    } else {
+        bigint256 temp;
+        bigint_add(tame_dist, n, temp);
+        bigint_sub(temp, wild_dist, diff);
+    }
+    bigint_mod(diff, n, result); // Use barrett if optimized
+}
+
 // BSGS table for giant steps (stored in global memory)
 struct BSGS_Table {
     BSGS_Entry* baby_steps;
@@ -727,6 +740,16 @@ extern "C" void launch_build_baby_steps(
     );
 
     cudaFree(d_mod);
+}
+
+// Collision check kernel with safe diff mod N
+__global__ void check_collisions(bigint256* tame_dists, bigint256* wild_dists, bigint256* results, int batch_size, bigint256 n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= batch_size) return;
+
+    bigint256 priv_big;
+    safe_diff_mod_n(tame_dists[idx], wild_dists[idx], n, priv_big);
+    results[idx] = priv_big;
 }
 
 // Host function for launching BSGS solve

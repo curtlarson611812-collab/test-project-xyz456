@@ -19,6 +19,44 @@ __constant__ uint32_t SECP_N[LIMBS] = {
     0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
 };
 
+// Device function for mod_inverse using extended gcd
+__device__ void mod_inverse(const uint256_t& a, const uint256_t& modulus, uint256_t& result) {
+    if (bigint_is_zero(a)) { /* set err flag */ return; }
+    uint256_t x, y;
+    int gcd = extended_gcd(a, modulus, x, y);
+    if (gcd != 1) { /* err */ return; }
+    if (bigint_is_negative(x)) { bigint_add(x, modulus, x); }
+    result = x;
+}
+
+// Extended gcd for inverse calculation
+__device__ int extended_gcd(const uint256_t& a, const uint256_t& b, uint256_t& x, uint256_t& y) {
+    // Iterative egcd implementation
+    uint256_t old_r = a, r = b;
+    uint256_t old_s = {1,0,0,0}, s = {0,0,0,0};
+    uint256_t old_t = {0,0,0,0}, t = {1,0,0,0};
+
+    while (!bigint_is_zero(r)) {
+        uint256_t quotient = bigint_div(old_r, r);
+        uint256_t temp = bigint_mul(quotient, r);
+        uint256_t new_r = bigint_sub(old_r, temp);
+
+        temp = bigint_mul(quotient, s);
+        uint256_t new_s = bigint_sub(old_s, temp);
+
+        temp = bigint_mul(quotient, t);
+        uint256_t new_t = bigint_sub(old_t, temp);
+
+        old_r = r; r = new_r;
+        old_s = s; s = new_s;
+        old_t = t; t = new_t;
+    }
+
+    x = old_s;
+    y = old_t;
+    return bigint_to_int(old_r); // gcd
+}
+
 // Forward declarations for helper functions
 __device__ void bigint_copy(const uint32_t *src, uint32_t *dst);
 __device__ void bigint_zero(uint32_t *result);
