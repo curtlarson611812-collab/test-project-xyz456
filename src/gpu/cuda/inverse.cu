@@ -911,3 +911,47 @@ __global__ void batch_affine_fused(uint32_t *pos, uint32_t *mod_, uint32_t n_pri
     // Compute y = Y * Z^{-3}
     montgomery_mul_batch(Y, zi3, &y_out[id * LIMBS], mod_, n_prime, 1, LIMBS);
 }
+
+// Extended gcd for inverse calculation
+__device__ int extended_gcd_limb(const uint32_t a[8], const uint32_t b[8], uint32_t x[8], uint32_t y[8]) {
+    uint32_t old_r[8], r[8], old_s[8], s[8], old_t[8], t[8];
+    limb_copy(a, old_r, 8);
+    limb_copy(b, r, 8);
+    limb_zero(old_s, 8); old_s[0] = 1;
+    limb_zero(s, 8);
+    limb_zero(old_t, 8);
+    limb_zero(t, 8); t[0] = 1;
+
+    while (!limb_is_zero(r, 8)) {
+        uint32_t quotient[8];
+        limb_div(old_r, r, quotient, 8);
+        uint32_t temp[8];
+        limb_mul(quotient, r, temp, 8, 8);
+        limb_sub(old_r, temp, old_r, 8);
+
+        limb_mul(quotient, s, temp, 8, 8);
+        limb_sub(old_s, temp, old_s, 8);
+
+        limb_mul(quotient, t, temp, 8, 8);
+        limb_sub(old_t, temp, old_t, 8);
+
+        limb_copy(r, old_r, 8);
+        limb_copy(old_r, r, 8);
+        limb_copy(s, old_s, 8);
+        limb_copy(old_s, s, 8);
+        limb_copy(t, old_t, 8);
+        limb_copy(old_t, t, 8);
+    }
+
+    limb_copy(old_s, x, 8);
+    limb_copy(old_t, y, 8);
+    return limb_to_int(old_r);
+}
+
+__device__ void mod_inverse_device(const uint32_t a[8], const uint32_t modulus[8], uint32_t result[8]) {
+    uint32_t x[8], y[8];
+    int gcd = extended_gcd_limb(a, modulus, x, y);
+    if (gcd != 1) { /* set err */ return; }
+    if (limb_is_negative(x)) { limb_add(x, modulus, x, 8); }
+    limb_copy(x, result, 8);
+}

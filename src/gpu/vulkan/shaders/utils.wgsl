@@ -4,13 +4,13 @@ struct BigInt256 {
     limbs: array<u32, 8>,  // LSB in [0], MSB in [7] - matches legacy Point
 }
 
-fn mod_inverse(a: BigInt256, modulus: BigInt256) -> BigInt256 {
-    if (bigint_is_zero(a)) { return bigint256_zero(); } // err
-    var x: BigInt256;
-    var y: BigInt256;
+fn mod_inverse(a: array<u32,8>, modulus: array<u32,8>) -> array<u32,8> {
+    if (limb_is_zero(a)) { return array<u32,8>(0u); }
+    var x: array<u32,8>;
+    var y: array<u32,8>;
     let gcd = extended_gcd(a, modulus, &x, &y);
-    if (gcd != 1) { return bigint256_zero(); }
-    if (bigint_is_negative(x)) { x = bigint_add(x, modulus); }
+    if (gcd != 1) { return array<u32,8>(0u); }
+    if (limb_is_negative(x)) { x = limb_add(x, modulus); }
     return x;
 }
 
@@ -402,18 +402,13 @@ fn mul_by_limb(limb: u32, b: array<u32, 8>) -> array<u32, 9> {
 }
 // Barrett reduction: q = floor((x * mu) / 2^(512)), r = x - q*p
 fn barrett_reduce(x: array<u32, 16>, modulus: array<u32, 8>, mu: array<u32, 9>) -> array<u32, 8> {
-    // Safe Barrett reduction with subtraction loop
-    var r: array<u32, 8>;
-    for (var i: u32 = 0u; i < 8u; i = i + 1u) {
-        r[i] = x[i]; // Lower 256 bits of x
-    }
-    // Subtract modulus until r < modulus
+    var r: array<u32,8>;
+    for (var i: u32 = 0u; i < 8u; i = i + 1u) { r[i] = x[i]; }
     loop {
-        if (bigint_cmp(r, modulus) < 0) {
-            break;
-        }
-        r = bigint_sub(r, modulus);
+        if (limb_compare(r, modulus) < 0i) { break; }
+        r = limb_sub(r, modulus);
     }
+    if (limb_is_negative(r)) { r = limb_add(r, modulus); }
     return r;
 }
 // Montgomery REDC: t = a*b, m = (t * n') mod R, u = (t + m*n) / R

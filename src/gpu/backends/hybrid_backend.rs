@@ -873,4 +873,52 @@ impl HybridBackend {
 
         Ok(())
     }
+
+    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+        #[cfg(feature = "rustacuda")]
+        if self.cuda_available {
+            return self.cuda.safe_diff_mod_n(tame_dist, wild_dist, n);
+        }
+        #[cfg(feature = "wgpu")]
+        if self.vulkan_available {
+            return self.vulkan.safe_diff_mod_n(tame_dist, wild_dist, n);
+        }
+        self.cpu.safe_diff_mod_n(tame_dist, wild_dist, n)
+    }
+
+    fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+        #[cfg(feature = "rustacuda")]
+        if self.cuda_available {
+            return self.cuda.barrett_reduce(x, modulus, mu);
+        }
+        #[cfg(feature = "wgpu")]
+        if self.vulkan_available {
+            return self.vulkan.barrett_reduce(x, modulus, mu);
+        }
+        self.cpu.barrett_reduce(x, modulus, mu)
+    }
+
+    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+        #[cfg(feature = "rustacuda")]
+        if self.cuda_available {
+            return self.cuda.mul_glv_opt(p, k);
+        }
+        #[cfg(feature = "wgpu")]
+        if self.vulkan_available {
+            return self.vulkan.mul_glv_opt(p, k);
+        }
+        self.cpu.mul_glv_opt(p, k)
+    }
+
+    fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+        #[cfg(feature = "rustacuda")]
+        if self.cuda_available {
+            return self.cuda.mod_inverse(a, modulus);
+        }
+        #[cfg(feature = "wgpu")]
+        if self.vulkan_available {
+            return self.vulkan.mod_inverse(a, modulus);
+        }
+        self.cpu.mod_inverse(a, modulus)
+    }
 }

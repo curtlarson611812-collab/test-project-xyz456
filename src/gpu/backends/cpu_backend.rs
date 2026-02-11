@@ -7,7 +7,7 @@ use crate::types::RhoState;
 use crate::kangaroo::collision::Trap;
 use crate::math::bigint::BigInt256;
 use crate::dp::DpTable;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 /// CPU backend for software fallback implementation
 pub struct CpuBackend;
@@ -374,6 +374,22 @@ impl GpuBackend for CpuBackend {
         }
 
         Ok((x_coords, y_coords))
+    }
+
+    fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn barrett_reduce(&self, _x: &[u32;16], _modulus: &[u32;8], _mu: &[u32;16]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn mod_inverse(&self, _a: &[u32;8], _modulus: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
     }
 }
 

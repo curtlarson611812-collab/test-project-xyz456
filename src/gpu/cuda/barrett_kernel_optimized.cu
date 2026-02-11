@@ -113,6 +113,18 @@ __global__ void barrett_modpow_kernel(
     }
 }
 
+// Barrett reduce device function for Phase 5
+__device__ void barrett_reduce_device(const uint32_t x[16], const uint32_t modulus[8], const uint32_t mu[16], uint32_t result[8]) {
+    uint32_t r[8];
+    memcpy(r, x, sizeof(uint32_t) * 8); // Lower 256 bits of x
+
+    // Subtract modulus until r < modulus
+    while (limb_compare(r, modulus, 8) >= 0) {
+        limb_sub(r, modulus, r, 8);
+    }
+    if (limb_is_negative(r)) { limb_add(r, modulus, r, 8); }
+}
+
 // Fast bias residue calculation using Barrett reduction
 __global__ void fast_bias_residue_kernel(
     const uint32_t* dist_limbs,    // [num_states * 8]

@@ -13,16 +13,16 @@ __constant__ uint32_t MU[9] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0
 __constant__ uint32_t MODULUS[8] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE};
 
 // GLV mul with windowed NAF for 15% stall reduction
-__device__ void mul_glv_opt(const point_t& p, const uint256_t& k, point_t& result) {
-    uint128_t k1, k2;
-    glv_decompose(k, k1, k2); // Device decomp (lattice round)
-    point_t beta_p = apply_endomorphism(p); // beta * p (precomp)
-    // Precomp tables (shared mem or texture)
-    point_t k1_table[8]; precompute_window(p, 4, k1_table);
-    point_t k2_table[8]; precompute_window(beta_p, 4, k2_table);
-    point_t res1 = windowed_naf_mul(k1, k1_table, 4);
-    point_t res2 = windowed_naf_mul(k2, k2_table, 4);
-    point_add(res1, res2, result);
+__device__ void mul_glv_opt_device(const point_jacob_t p, const uint32_t k[8], point_jacob_t* result) {
+    uint32_t k1[4], k2[4];
+    glv_decompose(k, k1, k2); // Lattice round
+    point_jacob_t beta_p = endomorphism_apply(p); // beta * p
+    point_jacob_t table1[8], table2[8];
+    precompute_window(p, 4, table1);
+    precompute_window(beta_p, 4, table2);
+    point_jacob_t res1 = naf_mul_window(k1, table1, 4);
+    point_jacob_t res2 = naf_mul_window(k2, table2, 4);
+    point_add_jacob(&res1, &res2, result);
 }
 
 // Optimized Barrett reduction for bias modulus calculation

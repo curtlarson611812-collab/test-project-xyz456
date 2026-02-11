@@ -46,16 +46,16 @@ struct BSGS_Entry {
 };
 
 // Device function for safe diff mod N (Phase 4 GPU integration)
-__device__ void safe_diff_mod_n(const bigint256& tame_dist, const bigint256& wild_dist, const bigint256& n, bigint256& result) {
-    bigint256 diff;
-    if (bigint_compare(tame_dist, wild_dist) >= 0) {
-        bigint_sub(tame_dist, wild_dist, diff);
+__device__ void cuda_safe_diff_mod_n(const uint32_t tame[8], const uint32_t wild[8], const uint32_t n[8], uint32_t result[8]) {
+    uint32_t diff[8], temp[8];
+    int cmp = limb_compare(tame, wild, 8);
+    if (cmp >= 0) {
+        limb_sub(tame, wild, diff, 8);
     } else {
-        bigint256 temp;
-        bigint_add(tame_dist, n, temp);
-        bigint_sub(temp, wild_dist, diff);
+        limb_add(tame, n, temp, 8);
+        limb_sub(temp, wild, diff, 8);
     }
-    bigint_mod(diff, n, result); // Use barrett if optimized
+    barrett_mod(diff, n, result, 8); // Tie to Phase 5
 }
 
 // BSGS table for giant steps (stored in global memory)

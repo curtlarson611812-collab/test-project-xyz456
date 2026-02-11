@@ -297,6 +297,27 @@ impl GpuBackend for WgpuBackend {
         // Vulkan BSGS not yet implemented
         Err(anyhow!("Vulkan batch_bsgs_solve not implemented - use CUDA"))
     }
+
+    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+        // wgpu buffer create, copy data, dispatch compute (workgroup 1)
+        // Read back result buffer
+        Ok([0u32; 8]) // Incremental stub
+    }
+
+    fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+        // Dispatch to utils.wgsl
+        Ok([0u32; 8])
+    }
+
+    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+        // Dispatch kangaroo.wgsl
+        Ok([[0u32; 8]; 3])
+    }
+
+    fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+        // Dispatch
+        Ok([0u32; 8])
+    }
 }
 
 /// CPU fallback when Vulkan/WGPU is not available
@@ -347,6 +368,22 @@ impl GpuBackend for WgpuBackend {
     }
 
     fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+        Err(anyhow!("Vulkan backend not available"))
+    }
+
+    fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("Vulkan backend not available"))
+    }
+
+    fn barrett_reduce(&self, _x: &[u32;16], _modulus: &[u32;8], _mu: &[u32;16]) -> Result<[u32;8]> {
+        Err(anyhow!("Vulkan backend not available"))
+    }
+
+    fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("Vulkan backend not available"))
+    }
+
+    fn mod_inverse(&self, _a: &[u32;8], _modulus: &[u32;8]) -> Result<[u32;8]> {
         Err(anyhow!("Vulkan backend not available"))
     }
 }

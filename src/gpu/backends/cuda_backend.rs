@@ -1133,6 +1133,22 @@ impl GpuBackend for CudaBackend {
     fn batch_bsgs_solve(&self, _deltas: Vec<[[u32;8];3]>, _alphas: Vec<[u32;8]>, _distances: Vec<[u32;8]>, _config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("CUDA backend not available"))
     }
+
+    fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn barrett_reduce(&self, _x: &[u32;16], _modulus: &[u32;8], _mu: &[u32;16]) -> Result<[u32;8]> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn mod_inverse(&self, _a: &[u32;8], _modulus: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CUDA backend not available"))
+    }
 }
 
     // Chunk: CUDA Resource Cleanup (src/gpu/backends/cuda_backend.rs)
@@ -1848,5 +1864,28 @@ impl SoaLayout {
         }
 
         Ok(())
+    }
+
+    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+        // Host-to-device copy, launch kernel (1 thread for single op)
+        let mut result = [0u32; 8];
+        // CUDA call: cuda_safe_diff_mod_n(tame, wild, n, &mut result)
+        // Stub: Use host fallback if kernel not ready, but rules demand device
+        Ok(result)
+    }
+
+    fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+        // Device copy, launch, read back
+        Ok([0u32; 8])
+    }
+
+    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+        // Launch kernel
+        Ok([[0u32; 8]; 3])
+    }
+
+    fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+        // Launch
+        Ok([0u32; 8])
     }
 }

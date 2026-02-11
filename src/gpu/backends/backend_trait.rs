@@ -44,4 +44,16 @@ pub trait GpuBackend {
 
     /// Convert Jacobian coordinates to affine for output
     fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)>;
+
+    /// Safe diff mod N for collision detection (Phase 4)
+    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]>;
+
+    /// Barrett reduction for large modular operations (Phase 5)
+    fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]>;
+
+    /// GLV optimized scalar multiplication (Phase 6)
+    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]>;
+
+    /// Modular inverse for collision solving (Phase 7)
+    fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]>;
 }

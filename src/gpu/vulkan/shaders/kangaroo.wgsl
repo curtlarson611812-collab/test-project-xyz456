@@ -29,16 +29,16 @@ const PRIME_MULTIPLIERS: array<u64, 32> = array<u64, 32>(
 );
 
 // GLV mul with windowed NAF for 15% stall reduction
-fn mul_glv_opt(p: Point256, k: BigInt256) -> Point256 {
-    var k1: BigInt256;
-    var k2: BigInt256;
+fn mul_glv_opt(p: PointJacob, k: array<u32,8>) -> PointJacob {
+    var k1: array<u32,4>;
+    var k2: array<u32,4>;
     glv_decompose(k, &k1, &k2);
     let beta_p = apply_endomorphism(p);
-    var k1_table: array<Point256, 8> = precompute_window(p, 4u);
-    var k2_table: array<Point256, 8> = precompute_window(beta_p, 4u);
-    let res1 = windowed_naf_mul(k1, k1_table, 4u);
-    let res2 = windowed_naf_mul(k2, k2_table, 4u);
-    return point_add(res1, res2);
+    var table1: array<PointJacob,8> = precompute_window(p, 4u);
+    var table2: array<PointJacob,8> = precompute_window(beta_p, 4u);
+    let res1 = naf_mul_window(k1, table1, 4u);
+    let res2 = naf_mul_window(k2, table2, 4u);
+    return point_add_jacob(res1, res2);
 }
 
 // SmallOddPrime sacred bucket selection

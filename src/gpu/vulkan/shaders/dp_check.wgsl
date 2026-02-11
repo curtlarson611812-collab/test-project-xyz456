@@ -32,15 +32,15 @@ fn dp_check_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 }
 
-fn safe_diff_mod_n(tame_dist: array<u32, 8>, wild_dist: array<u32, 8>, n: array<u32, 8>) -> array<u32, 8> {
-    var diff: array<u32, 8>;
-    if (bigint_compare(tame_dist, wild_dist) >= 0) {
-        diff = bigint_sub(tame_dist, wild_dist);
+fn safe_diff_mod_n(tame: array<u32,8>, wild: array<u32,8>, n: array<u32,8>) -> array<u32,8> {
+    var diff: array<u32,8>;
+    if (limb_compare(tame, wild) >= 0i) {
+        diff = limb_sub(tame, wild);
     } else {
-        var temp = bigint_add(tame_dist, n);
-        diff = bigint_sub(temp, wild_dist);
+        var temp = limb_add(tame, n);
+        diff = limb_sub(temp, wild);
     }
-    return bigint_mod(diff, n);
+    return barrett_mod(diff, n); // Phase 5 tie
 }
 
 fn test_dp_check() {
