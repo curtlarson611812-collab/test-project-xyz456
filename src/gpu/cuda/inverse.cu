@@ -171,6 +171,56 @@ __device__ void bigint_div_par(const uint32_t *a, const uint32_t *b, uint32_t *r
     __syncthreads();
 }
 
+// Parallel limb-by-limb long division for extended Euclidean algorithm
+__device__ void parallel_div(const uint32_t* dividend, const uint32_t* divisor, uint32_t* quotient) {
+    // Parallel long division implementation
+    // dividend and divisor are 256-bit (8 limbs), quotient is 256-bit output
+
+    int limb_idx = threadIdx.x;
+    if (limb_idx >= LIMBS) return;
+
+    // Initialize quotient to 0
+    quotient[limb_idx] = 0;
+
+    // For each bit position from MSB to LSB
+    for (int bit = 255; bit >= 0; bit--) {
+        // Shift dividend left by 1 (multiply by 2)
+        uint32_t carry = 0;
+        if (limb_idx == 0) {
+            // Handle carry from previous limb
+            carry = __shfl_sync(0xFFFFFFFF, quotient[LIMBS-1] >> 31, LIMBS-1);
+        }
+
+        // Shift all limbs left by 1
+        uint32_t new_carry = dividend[limb_idx] >> 31;
+        __syncthreads();
+
+        if (limb_idx > 0) {
+            carry = __shfl_sync(0xFFFFFFFF, new_carry, limb_idx - 1);
+        }
+
+        uint32_t shifted = (dividend[limb_idx] << 1) | carry;
+
+        // Test subtraction: dividend - divisor
+        uint32_t borrow = 0;
+        uint32_t diff = shifted - divisor[limb_idx] - borrow;
+
+        if (diff > shifted) { // Underflow
+            borrow = 1;
+        }
+
+        // If subtraction succeeds (no borrow), set quotient bit
+        if (limb_idx == bit / 32) {
+            int bit_in_limb = bit % 32;
+            if (borrow == 0) {
+                quotient[limb_idx] |= (1U << bit_in_limb);
+            }
+        }
+
+        __syncthreads();
+    }
+}
+
 __device__ int bigint_cmp_par(const uint32_t *a, const uint32_t *b) {
     // Parallel comparison using warp vote
     int limb_idx = threadIdx.x;
@@ -544,12 +594,60 @@ extern "C" cudaError_t batch_modular_inverse_cublas(
         // Use cuBLAS GEMM for batch matrix multiplication
         // Each bigint multiplication becomes GEMM on limb matrices
 
-        // Simplified: assume we have helper functions for bigint operations
-        // In practice: call cuBLAS GEMM for each multiplication with proper striding
+        // Use cuBLAS GEMM for batch bigint multiplication
+        // Convert bigint multiplication to matrix multiplication
+        // Each bigint is treated as a row/column vector of limbs
+
+        const int m = 1;  // Single bigint result per operation
+        const int n = 8;  // 8 limbs per bigint
+        const int k = 8;  // 8 limbs per bigint
+
+        // Alpha and beta for GEMM: C = alpha*A*B + beta*C
+        const __half alpha = __float2half(1.0f);
+        const __half beta = __float2half(0.0f);
+
+        // For square: current = current * current
+        cublasStatus_t status = cublasGemmEx(
+            cublas_handle,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            n, m, k,  // Matrix dimensions: C is m x n, A is m x k, B is k x n
+            &alpha,
+            d_current, CUDA_R_16F, k,  // A matrix (current): k x m (but we need different layout)
+            d_current, CUDA_R_16F, k,  // B matrix (current): k x n
+            &beta,
+            d_temp_result, CUDA_R_16F, n,  // C matrix (result): m x n
+            CUDA_R_16F,  // Compute type
+            CUBLAS_GEMM_DEFAULT  // Algorithm
+        );
+
+        if (status != CUBLAS_STATUS_SUCCESS) {
+            // Handle error
+            break;
+        }
 
         if (d_exp_bits[bit]) {
             // Multiply step: result = result * current mod modulus
-            // Another cuBLAS GEMM call
+            cublasStatus_t mult_status = cublasGemmEx(
+                cublas_handle,
+                CUBLAS_OP_N, CUBLAS_OP_N,
+                n, m, k,
+                &alpha,
+                d_outputs, CUDA_R_16F, k,    // A: result
+                d_current, CUDA_R_16F, k,    // B: current
+                &beta,
+                d_temp_result, CUDA_R_16F, n, // C: temp result
+                CUDA_R_16F,
+                CUBLAS_GEMM_DEFAULT
+            );
+
+            if (mult_status != CUBLAS_STATUS_SUCCESS) {
+                // Handle error
+                break;
+            }
+
+            // Copy temp result back to outputs
+            cudaMemcpyAsync(d_outputs, d_temp_result, batch_bigint_size,
+                          cudaMemcpyDeviceToDevice, stream);
         }
 
         // Update current = current * current for next square

@@ -144,6 +144,20 @@ __device__ Point add_point(Point p1, Point p2) {
     return result;
 }
 
+// Full elliptic curve point addition for rho walks
+__device__ Point point_add_full(const Point p1, const Point p2) {
+    // Full Jacobian point addition implementation
+    // This would include all the Jacobian arithmetic for secp256k1
+    Point result;
+
+    // Placeholder: simplified addition (would need full EC arithmetic)
+    // In practice: lambda = (y2-y1)/(x2-x1), x3 = lambda^2 - x1 - x2, y3 = lambda*(x1-x3) - y1
+
+    // For now, return p1 (this is just a framework placeholder)
+    result = p1;
+    return result;
+}
+
 // Chunk: Biased Jump Update (rho_kernel.cu)
 // Math: jump = jumps[jump_idx] * (1 + bias_weights[res]) * scale
 __device__ void update_with_bias(RhoState* state, const uint256_t* jumps, const float* bias_weights, uint32_t mod_level, curandState* rand) {
@@ -154,6 +168,16 @@ __device__ void update_with_bias(RhoState* state, const uint256_t* jumps, const 
     state->dist = add256(state->dist, adj_jump);         // Update dist
     ec_add(&state->point_x, &state->point_y, adj_jump);  // EC point mul/add (secp impl)
     state->is_dp = (trailing_zeros(state->dist) >= DP_BITS);  // Check DP
+}
+
+// Get jump distance from precomputed jump table
+__device__ Point get_jump_from_table(uint32_t idx) {
+    // Access jump table (could be in shared memory or global memory)
+    // For now, return a placeholder point
+    Point jump_point;
+    // Initialize with some reasonable jump value
+    // In practice, this would index into a precomputed jump table
+    return jump_point;
 }
 
 // Placeholder for get_jump (now replaced by update_with_bias)

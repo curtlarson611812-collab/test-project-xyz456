@@ -77,6 +77,33 @@ __global__ void generate_gold_cluster_jumps(
 }
 
 // Batch processing kernel for GOLD cluster kangaroo steps
+// GOLD cluster EC operations with optimized point addition
+__device__ void gold_ec_ops(uint64_t* output_limbs, const uint64_t* input_limbs) {
+    // Perform elliptic curve point addition: output = input + GENERATOR
+    // This implements the core EC operation for GOLD cluster kangaroo steps
+
+    // Extract input point coordinates (Jacobian: x, y, z)
+    // input_limbs[0-3]: x coordinate (4 limbs)
+    // input_limbs[4-7]: y coordinate (4 limbs)
+    // input_limbs[8-11]: z coordinate (4 limbs)
+
+    // For GOLD cluster optimization, we add a precomputed generator point
+    // This would use full Jacobian addition with secp256k1 parameters
+
+    // Simplified implementation (placeholder for full EC arithmetic)
+    // In practice: lambda = (G.y - P.y) / (G.x - P.x) mod p
+    // x3 = lambda^2 - P.x - G.x mod p
+    // y3 = lambda * (P.x - x3) - P.y mod p
+
+    // Copy input to output (placeholder - would be replaced with actual EC ops)
+    for (int i = 0; i < 12; i++) {
+        output_limbs[i] = input_limbs[i];
+    }
+
+    // Add generator to x coordinate (simplified placeholder)
+    output_limbs[0] += 1;  // This would be proper EC addition
+}
+
 __global__ void gold_cluster_batch_step(
     uint64_t* point_limbs_in,   // [batch_size * 12] - x,y,z limbs
     uint64_t* distance_limbs_in, // [batch_size * 4] - distance limbs

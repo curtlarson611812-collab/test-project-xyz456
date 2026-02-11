@@ -40,11 +40,29 @@ fn mod_inverse(a: array<u32,8>, modulus: array<u32,8>) -> array<u32,8> {
     return x;
 }
 
-fn egcd_iter(a_in: array<u32,8>, b_in: array<u32,8>, x_out: ptr<function, array<u32,8>>, y_out: ptr<function, array<u32,8>>) -> u32 {
-    // Iterative egcd: vars old_r = a, r = b, old_s=1, s=0, old_t=0, t=1
-    // While r !=0: q = old_r / r, temp = old_r - q*r, etc.
-    // Full impl ~20 lines, no recursion
-    // Stub: return 1u; // Expand in next block if needed
+fn egcd_iter(a: array<u32,8>, b: array<u32,8>, x: ptr<function, array<u32,8>>, y: ptr<function, array<u32,8>>) -> u32 {
+    var old_r = a; var r = b;
+    var old_s = array<u32,8>(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u); var s = array<u32,8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+    var old_t = array<u32,8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u); var t = array<u32,8>(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+
+    while (!limb_is_zero(r)) {
+        var quotient = limb_div(old_r, r);
+        var temp = limb_mul(quotient, r);
+        var new_r = limb_sub(old_r, temp);
+
+        temp = limb_mul(quotient, s);
+        var new_s = limb_sub(old_s, temp);
+
+        temp = limb_mul(quotient, t);
+        var new_t = limb_sub(old_t, temp);
+
+        old_r = r; r = new_r;
+        old_s = s; s = new_s;
+        old_t = t; t = new_t;
+    }
+
+    *x = old_s; *y = old_t;
+    return limb_to_u32(old_r); // gcd
 }
 
 fn glv_decompose(k: array<u32,8>, k1: ptr<function, array<u32,4>>, k2: ptr<function, array<u32,4>>) {
