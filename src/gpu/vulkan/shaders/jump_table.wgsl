@@ -1,6 +1,9 @@
 // src/gpu/vulkan/shaders/jump_table.wgsl
 @group(0) @binding(5) var<uniform> bias_table: array<f32, 81>;
 
+// Shared jump table (rules: 8 base, precomp)
+var<workgroup> jump_table: array<PointJacob, 8>;
+
 fn get_biased_jump(res: u32) -> f32 {
     return bias_table[res % 81u];  // Barrett res in kangaroo.wgsl
 }
@@ -53,6 +56,24 @@ fn jump_table_precomp(@builtin(global_invocation_id) gid: vec3<u32>) {
     // Store outputs
     jump_points[idx] = point_i;
     jump_sizes[idx] = d_i;
+}
+
+// Phase 6/8: Select and apply jump
+fn select_apply_jump(kang: ptr<function, Kangaroo>) {
+    let mix = xor_mix((*kang).point_x[0], (*kang).dist[0], seed_step);
+    let idx = mix % 8u; // Deterministic tame/wild
+    let jump_base = jump_table[idx];
+    // Phase 6: GLV mul for custom k*jump (if expanded flag)
+    if (config.expanded_jump_table) {
+        let k_jump = glv_decompose(k_small, &k1, &k2); // Phase 6
+        let scaled_jump = mul_glv_opt(jump_base, k_jump); // Call
+        (*kang).point = point_add_jacob((*kang).point, scaled_jump);
+    } else {
+        (*kang).point = point_add_jacob((*kang).point, jump_base);
+    }
+    // Phase 8: Multi-target adjust (target-specific beta update)
+    let target_beta = targets[(*kang).target_idx].beta_offset;
+    (*kang).beta = limb_add((*kang).beta, target_beta);
 }
 
 // Unit tests for precomp

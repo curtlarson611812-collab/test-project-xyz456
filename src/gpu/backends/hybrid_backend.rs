@@ -921,4 +921,5 @@ impl HybridBackend {
         }
         self.cpu.mod_inverse(a, modulus)
     }
+
 }

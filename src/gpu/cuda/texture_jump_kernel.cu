@@ -70,6 +70,11 @@ __global__ void rho_kernel_texture_jumps(
             jump_data.x, jump_data.y, jump_data.z, jump_data.w
         };
 
+        // Phase 6: GLV scale if expanded flag
+        if (expanded_jump_table) {
+            jump = mul_glv_opt(jump, small_k); // Scale jump
+        }
+
         // Apply jump to distance (simplified BigInt256 addition)
         // Real implementation would use proper EC point addition
         uint32_t carry = 0;

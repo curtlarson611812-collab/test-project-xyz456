@@ -830,6 +830,31 @@ __device__ uint64_t get_biased_prime(uint32_t index, uint64_t bias_mod) {
     return PRIME_MULTIPLIERS[cycle_index];
 }
 
+// Phase 4-8 integrated step kernel
+__global__ void step_kernel(KangarooState* states, int num_states, const Point* targets, uint32_t* primes) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= num_states) return;
+    KangarooState& kang = states[idx];
+    int t_idx = idx / KANGS_PER_TARGET;
+    // Phase 8: Multi init if first step
+    if (kang.step == 0) {
+        uint32_t prime = primes[idx % 32];
+        kang.position = mul_glv_opt(targets[t_idx], prime); // Phase 6
+        kang.beta = prime;
+    }
+    // Step: Select jump, add
+    uint32_t jump_idx = select_bucket_cuda(kang.position, kang.distance, kang.step, kang.type == 0);
+    Point jump = JUMP_TABLE[jump_idx];
+    kang.position = point_add(kang.position, jump);
+    kang.distance = bigint_add(kang.distance, JUMP_SIZE);
+    // Phase 5: Reduce dist mod N
+    barrett_reduce(kang.distance_wide, CURVE_N, MU_N, kang.distance);
+    // Phase 4: Near DP check
+    if (is_near_dp(kang.position)) {
+        safe_diff_mod_n(kang.distance, near.dist, CURVE_N, temp_diff);
+    }
+}
+
 // Legacy host function for backward compatibility
 extern "C" void launch_kangaroo_step_batch(
     Point* d_positions,

@@ -782,6 +782,32 @@ extern "C" void launch_bsgs_solve(
     cudaFree(d_mod);
 }
 
+// Phase 4/7/8 integrated collision solve kernel
+__global__ void solve_collisions(DpEntry* tames, DpEntry* wilds, Point* targets, int num_collisions, int num_targets) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= num_collisions) return;
+    DpEntry tame = tames[idx];
+    DpEntry wild = wilds[idx];
+    // Phase 4: Safe diffs
+    uint256_t diff_alpha;
+    safe_diff_mod_n(tame.alpha, wild.alpha, CURVE_ORDER, diff_alpha);
+    uint256_t diff_beta;
+    safe_diff_mod_n(wild.beta, tame.beta, CURVE_ORDER, diff_beta);
+    // Phase 7: Inv
+    uint256_t inv_beta;
+    mod_inverse(diff_beta, CURVE_ORDER, inv_beta);
+    uint256_t k;
+    bigint_mul(diff_alpha, inv_beta, k);
+    bigint_mod(k, CURVE_ORDER, k);
+    // Phase 8: Test multi targets
+    for (int t = 0; t < num_targets; ++t) {
+        Point computed = mul_glv_opt(GENERATOR, k); // Phase 6
+        if (point_equal(computed, targets[t])) {
+            atomicStore(solved_flags[t], 1); // Flag solved
+        }
+    }
+}
+
 // BigInt256 batch scalar multiplication kernel
 __global__ void batch_scalar_mul(Point256 *results, Point256 *bases, bigint256 *scalars, int batch_size, bigint256 mod_p, bigint256 mu, bigint256 curve_a) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;

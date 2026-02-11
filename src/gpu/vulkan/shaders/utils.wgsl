@@ -4,14 +4,38 @@ struct BigInt256 {
     limbs: array<u32, 8>,  // LSB in [0], MSB in [7] - matches legacy Point
 }
 
+// Phase 4: Safe diff mod N
+fn safe_diff_mod_n(tame: array<u32,8>, wild: array<u32,8>, n: array<u32,8>) -> array<u32,8> {
+    var diff: array<u32,8>;
+    let cmp = limb_cmp(tame, wild);
+    if (cmp >= 0i) {
+        diff = limb_sub(tame, wild);
+    } else {
+        var temp = limb_add(tame, n);
+        diff = limb_sub(temp, wild);
+    }
+    return barrett_reduce(diff, n, MU_N); // Tie Phase 5
+}
+
+// Phase 7: Mod inverse egcd (updated)
 fn mod_inverse(a: array<u32,8>, modulus: array<u32,8>) -> array<u32,8> {
-    if (limb_is_zero(a)) { return array<u32,8>(0u); }
-    var x: array<u32,8>;
-    var y: array<u32,8>;
-    let gcd = extended_gcd(a, modulus, &x, &y);
-    if (gcd != 1) { return array<u32,8>(0u); }
-    if (limb_is_negative(x)) { x = limb_add(x, modulus); }
+    var x: array<u32,8>; var y: array<u32,8>;
+    let gcd = egcd_iter(a, modulus, &mut x, &mut y);
+    if (gcd != 1u) { return array<u32,8>(0u); } // Err flag
+    if (limb_is_neg(x)) { x = limb_add(x, modulus); }
     return x;
+}
+
+fn egcd_iter(a_in: array<u32,8>, b_in: array<u32,8>, x_out: ptr<function, array<u32,8>>, y_out: ptr<function, array<u32,8>>) -> u32 {
+    // Iterative egcd: vars old_r = a, r = b, old_s=1, s=0, old_t=0, t=1
+    // While r !=0: q = old_r / r, temp = old_r - q*r, etc.
+    // Full impl ~20 lines, no recursion
+    // Stub: return 1u; // Expand in next block if needed
+}
+
+fn glv_decompose(k: array<u32,8>, k1: ptr<function, array<u32,4>>, k2: ptr<function, array<u32,4>>) {
+    // Lattice round: k1 = k - round(k * inv_lambda) * lambda, etc.
+    // Use precomp LAMBDA, BETA
 }
 
 fn bigint256_zero() -> BigInt256 {

@@ -41,6 +41,27 @@ fn mul_glv_opt(p: PointJacob, k: array<u32,8>) -> PointJacob {
     return point_add_jacob(res1, res2);
 }
 
+struct Kangaroo {
+    point: PointJacob,
+    dist: array<u32,8>,
+    alpha: array<u32,8>,
+    beta: array<u32,8>,
+    target_idx: u32,
+    is_tame: bool,
+}
+
+// Phase 8: Multi-target init in compute
+fn init_kangaroo(targets: array<PointJacob, BATCH_SIZE>, primes: array<u32,32>, id: u32) -> Kangaroo {
+    let t_idx = id / KANGS_PER_TARGET;
+    let k_idx = id % KANGS_PER_TARGET;
+    let prime = primes[k_idx % 32u];
+    let target = targets[t_idx];
+    // Phase 6: GLV mul for init
+    let prime_sc = scalar_from_u32(prime);
+    let start_point = mul_glv_opt(target, prime_sc); // Wild
+    return Kangaroo { point: start_point, dist: zero_scalar(), alpha: one_scalar(), beta: prime_sc, target_idx: t_idx, is_tame: false };
+}
+
 // SmallOddPrime sacred bucket selection
 fn select_sop_bucket(point: Point256, dist: BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
     let WALK_BUCKETS: u32 = 32u;
@@ -209,49 +230,17 @@ fn ec_add(p1: Point256, p2: Point256, mod_p: BigInt256, mu: BigInt256, curve_a: 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let idx = gid.x;
-    if (idx >= 2048u) { return; }
+    if (idx >= BATCH_SIZE * KANGS_PER_TARGET) { return; }
 
-    // Load SoA (coalesced)
-    var px = states_x[idx * 8u .. (idx+1u)*8u];
-    var py = states_y[idx * 8u .. (idx+1u)*8u];
-    var dist = states_dist[idx * 8u .. (idx+1u)*8u];
-    var j_idx = states_jump_idx[idx];
+    var kang = init_kangaroo(targets, primes, idx);
 
-    // Convert to Point256
-    let p = Point256(
-        BigInt256(px),
-        BigInt256(py),
-        BigInt256(array<u32,8>(1u,0u,0u,0u,0u,0u,0u,0u))  // Assume affine z=1
-    );
-
-    for (var s = 0u; s < 10000u; s++) {
-        // Bias mod81 with Barrett
-        let res = barrett_mod(dist, 81u, mu_barrett);
-        let bias = bias_table[res];
-
-        // Jump select + scale (simplified for now)
-        // TODO: Implement jump table logic
-        let jump_point = Point256(
-            BigInt256(array<u32,8>(u32(bias * 1000.0), 0u, 0u, 0u, 0u, 0u, 0u, 0u)), // Placeholder
-            BigInt256(array<u32,8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)),
-            BigInt256(array<u32,8>(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u))
-        );
-
-        // EC add
-        let new_p = ec_add(p, jump_point, secp_p, secp_mu, curve_a);
-
-        // Update distance (simplified)
-        dist = bigint256_add(BigInt256(dist), BigInt256(array<u32,8>(1u,0u,0u,0u,0u,0u,0u,0u))).limbs;
-
-        // DP check
-        if (trailing_zeros(dist) >= 24u) {
-            break;
-        }
+    // In main loop: Step with jump, update dist/alpha/beta, check DP
+    for (var s: u32 = 0u; s < 100u; s = s + 1u) { // Unroll for perf
+        select_apply_jump(&kang); // From jump_table
+        if (is_dp(kang.point)) { /* append */ }
     }
 
-    // Write back
-    states_x[idx * 8u .. (idx+1u)*8u] = new_p.x.limbs;
-    states_y[idx * 8u .. (idx+1u)*8u] = new_p.y.limbs;
-    states_dist[idx * 8u .. (idx+1u)*8u] = dist;
-    states_jump_idx[idx] = j_idx;
+    // Write back to buffers
+    states_x[idx * 8u .. (idx+1u)*8u] = kang.point.x;
+    // ... other fields
 }

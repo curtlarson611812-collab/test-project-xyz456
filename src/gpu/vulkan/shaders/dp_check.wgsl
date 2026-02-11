@@ -1,6 +1,15 @@
 // src/gpu/vulkan/shaders/dp_check.wgsl
 @group(0) @binding(7) var<storage> dp_table: array<u64>;  // Cuckoo hash table
 
+// Phase 8: Multi-target DP entry
+struct DpEntry {
+    point_x: array<u32,8>,
+    dist: array<u32,8>,
+    alpha: array<u32,8>,
+    beta: array<u32,8>,
+    target_idx: u32, // For multi
+}
+
 fn check_dp(hash: u64) -> bool {
     let slot = hash % 524288u;  // 512K table
     return subgroupAny(dp_table[slot] == hash);  // Fast any-hit
@@ -23,13 +32,16 @@ fn dp_check_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (idx >= arrayLength(&positions)) { return; }
     let aff = to_affine(positions[idx]);
     if (is_distinguished(aff[0])) {
-        let ti = atomicAdd(&trap_index, 1u);
-        if (ti < TRAP_BUFFER_SIZE) {
-            trap_xs[ti] = aff[0];
-            trap_dists[ti] = distances[idx];
-            trap_types[ti] = types[idx];
-        }
+        let entry = DpEntry(aff[0], distances[idx], alphas[idx], betas[idx], target_idxs[idx]);
+        atomic_append_output(entry); // To CPU read
     }
+    // Phase 4 near-collision (flag-gated)
+    if (config.enable_near_collisions > 0.0 && hamming_dist(hash_x(aff[0]), near_threshold) < 4u) {
+        let diff = safe_diff_mod_n(distances[idx], near_wild.dist, CURVE_N); // Phase 4 call
+        // Trigger walk if close
+    }
+    // Phase 5: Reduce dist mod small (bias mod9)
+    let mod9_res = barrett_reduce(distances_wide[idx], MOD9, MU9);
 }
 
 fn safe_diff_mod_n(tame: array<u32,8>, wild: array<u32,8>, n: array<u32,8>) -> array<u32,8> {
