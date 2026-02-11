@@ -157,6 +157,10 @@ pub struct Config {
     #[arg(long)]
     pub enable_noise: bool,
 
+    /// Path to high-priority pubkey list (from bias_analyze tool)
+    #[arg(long)]
+    pub priority_list: Option<PathBuf>,
+
     /// Enable smart DP pruning (combo:bloom-value-cluster)
     #[arg(long)]
     pub enable_smart_pruning: bool,

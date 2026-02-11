@@ -22,6 +22,7 @@ use crate::targets::TargetLoader;
 use anyhow::anyhow;
 use bloomfilter::Bloom;
 use zerocopy::IntoBytes;
+use std::path::Path;
 
 /// Concise Block: Precompute Small k*G Table for Nearest Adjust
 // struct NearMissTable {
@@ -86,6 +87,26 @@ impl KangarooManager {
         println!("DEBUG: Loaded {} targets", targets.len());
         info!("Loaded {} targets", targets.len());
 
+        // Load targets with priority support
+        let mut targets = if let Some(priority_path) = &config.priority_list {
+            info!("Loading high-priority targets from {}", priority_path.display());
+            match load_pubkeys_from_file(priority_path) {
+                Ok(priority_targets) => {
+                    info!("Loaded {} high-priority targets", priority_targets.len());
+                    if priority_targets.len() < targets.len() / 10 {
+                        warn!("Priority list very small ({}), may not be optimal", priority_targets.len());
+                    }
+                    priority_targets
+                }
+                Err(e) => {
+                    warn!("Failed to load priority list: {}, falling back to full list", e);
+                    targets
+                }
+            }
+        } else {
+            targets
+        };
+
         // Initialize POS pre-seed baseline (always active per rules)
         info!("Initializing POS pre-seed baseline for unsolved puzzles...");
         let preseed_pos = if let Some(first_target) = targets.first() {
@@ -112,8 +133,9 @@ impl KangarooManager {
         info!("Blended proxy positions: {} total", blended_pos.len());
 
         // Generate cascade histogram for POS filter tuning
-        let (hist, bias_factors) = crate::utils::bias::analyze_preseed_cascade(&blended_pos, 10);
-        info!("POS cascade analysis: max bias factor {:.2}x", bias_factors.iter().fold(0.0, |a, &b| a.max(b)));
+        let cascades = crate::utils::bias::analyze_preseed_cascade(&blended_pos, 10);
+        let max_bias = cascades.iter().map(|(_, bias)| *bias).fold(0.0, f64::max);
+        info!("POS cascade analysis: max bias factor {:.2}x", max_bias);
 
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
@@ -919,6 +941,39 @@ impl KangarooManager {
 
         groups
     }
+}
+
+/// Load pubkeys from priority list file
+fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let mut points = Vec::new();
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim();
+
+        // Skip comments and empty lines
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        match hex::decode(line) {
+            Ok(bytes) => {
+                // Convert to Point
+                match Point::from_bytes(&bytes) {
+                    Some(point) => points.push(point),
+                    None => warn!("Invalid point in priority list: {}", line),
+                }
+            }
+            Err(_) => warn!("Invalid hex in priority list: {}", line),
+        }
+    }
+
+    Ok(points)
 }
 
 
