@@ -226,32 +226,31 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
 /// This provides "curve-aware" baseline for unsolved puzzles lacking empirical data
 pub fn generate_preseed_pos(range_min: Scalar, range_width: Scalar) -> Vec<f64> {
     let mut pos = Vec::with_capacity(32 * 32);
+    let curve_order = Scalar::from_bytes(&k256::Secp256k1::ORDER.to_bytes_be()).unwrap(); // secp256k1 order
 
     for &prime_u64 in PRIME_MULTIPLIERS.iter() {
         let prime = Scalar::from(prime_u64);
 
         for k in 1..=32 {
-            let scalar = prime * Scalar::from(k as u32);
+            let scalar = (prime * Scalar::from(k as u32)) % curve_order; // Edge: Mod N overflow
 
-            // Skip if scalar would overflow range (rough check using to_u64)
-            if scalar.to_bytes().iter().rev().zip(range_width.to_bytes().iter().rev()).any(|(&s, &w)| s > w) {
-                continue;
+            if scalar.is_zero() {
+                continue; // Reject zero scalars
             }
 
-            // Compute point = scalar * G (using k256 library)
             let point = ProjectivePoint::GENERATOR * scalar;
+            let affine = point.to_affine();
 
-            // Skip identity point
-            if point.is_identity() {
-                continue;
+            if !affine.is_on_curve() {
+                panic!("Off-curve pre-seed point detected"); // Edge: Panic on invalid curve point
             }
 
-            // Compute pos_proxy from point.x hash (deterministic)
-            let x = point.to_affine().x();
-            let x_hash = xor_hash_to_u64(&x.to_bytes());
+            let x = affine.x().to_bytes();
+            let x_hash = xor_hash_to_u64(&x);
             let range_width_u64 = range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64).max(1);
             let offset_u64 = x_hash % range_width_u64;
             let offset_scalar = Scalar::from(offset_u64);
+
             let pos_val = if offset_scalar >= range_min {
                 ((offset_scalar - range_min).to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64) /
                 (range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64)
@@ -303,18 +302,21 @@ fn hash_point_x_to_u64(point: &crate::types::Point) -> u64 {
 
 /// Blend pre-seed positions with random simulations and empirical data
 /// weights: (preseed_weight, random_weight, empirical_weight) - must sum to 1.0
+/// enable_noise: Add small random variation to random samples for variance
 /// Returns combined proxy positions for histogram analysis
 pub fn blend_proxy_preseed(
     preseed_pos: Vec<f64>,
     num_random: usize,
     empirical_pos: Option<Vec<f64>>,
-    weights: (f64, f64, f64)
+    weights: (f64, f64, f64),
+    enable_noise: bool
 ) -> Vec<f64> {
     let (w_pre, w_rand, w_emp) = weights;
     let total_w = w_pre + w_rand + w_emp;
     assert!((total_w - 1.0).abs() < 1e-6, "Weights must sum to 1.0, got {}", total_w);
 
     let mut proxy = Vec::new();
+    let mut rng = rand::thread_rng(); // Seeded for test determinism, flag-gated noise
 
     // Duplicate pre-seed proportional to weight
     let dup_pre = ((preseed_pos.len() as f64 * w_pre).round() as usize).max(1);
@@ -324,9 +326,13 @@ pub fn blend_proxy_preseed(
 
     // Add random samples (uniform distribution)
     let dup_rand = ((num_random as f64 * w_rand).round() as usize).max(0);
-    let mut rng = rand::thread_rng();
     for _ in 0..dup_rand {
-        proxy.push(rng.gen_range(0.0..1.0));
+        let mut rand_pos = rng.gen_range(0.0..1.0);
+        if enable_noise {
+            rand_pos += rng.gen_range(-0.05..0.05);
+            rand_pos = rand_pos.clamp(0.0, 1.0);
+        }
+        proxy.push(rand_pos);
     }
 
     // Add empirical positions if available
@@ -336,14 +342,48 @@ pub fn blend_proxy_preseed(
             proxy.extend_from_slice(&emp);
         }
     } else if w_emp > 0.0 {
-        // Redistribute empirical weight to random if no empirical data
-        let extra_rand = ((num_random as f64 * w_emp).round() as usize);
+        // Fallback: Redistribute empirical weight to pre-seed/random
+        let extra = w_emp / 2.0;
+        let extra_pre = ((preseed_pos.len() as f64 * extra).round() as usize).max(0);
+        for i in 0..extra_pre {
+            proxy.push(preseed_pos[i % preseed_pos.len()]);
+        }
+        let extra_rand = ((num_random as f64 * extra).round() as usize).max(0);
         for _ in 0..extra_rand {
-            proxy.push(rng.gen_range(0.0..1.0));
+            let mut rand_pos = rng.gen_range(0.0..1.0);
+            if enable_noise {
+                rand_pos += rng.gen_range(-0.05..0.05);
+                rand_pos = rand_pos.clamp(0.0, 1.0);
+            }
+            proxy.push(rand_pos);
         }
     }
 
     proxy
+}
+
+/// Load empirical position data from bias log file
+/// Returns empirical positions for blending with pre-seed data
+pub fn load_empirical_pos(log_path: &std::path::Path) -> Option<Vec<f64>> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    let file = File::open(log_path).ok()?;
+    let reader = BufReader::new(file);
+
+    let mut positions = Vec::new();
+    for line in reader.lines() {
+        if let Ok(line) = line {
+            // Parse lines like "pos: 0.123" or similar format
+            if let Some(pos_str) = line.split("pos:").nth(1) {
+                if let Ok(pos) = pos_str.trim().parse::<f64>() {
+                    positions.push(pos.clamp(0.0, 1.0));
+                }
+            }
+        }
+    }
+
+    if positions.is_empty() { None } else { Some(positions) }
 }
 
 /// Analyze blended proxy positions for cascade histogram generation

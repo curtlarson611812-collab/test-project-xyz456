@@ -149,6 +149,14 @@ pub struct Config {
     #[arg(long, num_args = 3, default_values = ["0.5", "0.25", "0.25"])]
     pub preseed_pos_weights: Vec<f64>,
 
+    /// Path to bias log file for empirical position data
+    #[arg(long)]
+    pub bias_log: Option<PathBuf>,
+
+    /// Enable noise in random proxy samples for variance
+    #[arg(long)]
+    pub enable_noise: bool,
+
     /// Enable smart DP pruning (combo:bloom-value-cluster)
     #[arg(long)]
     pub enable_smart_pruning: bool,

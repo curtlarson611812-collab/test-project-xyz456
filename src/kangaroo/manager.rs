@@ -98,6 +98,23 @@ impl KangarooManager {
         };
         info!("Generated {} pre-seed POS positions", preseed_pos.len());
 
+        // Blend with empirical data if available
+        let empirical_pos = config.bias_log.as_ref()
+            .map(|log_path| crate::utils::bias::load_empirical_pos(log_path))
+            .unwrap_or(None);
+        let blended_pos = crate::utils::bias::blend_proxy_preseed(
+            preseed_pos,
+            1000, // num_random
+            empirical_pos,
+            (0.5, 0.25, 0.25), // weights
+            config.enable_noise
+        );
+        info!("Blended proxy positions: {} total", blended_pos.len());
+
+        // Generate cascade histogram for POS filter tuning
+        let (hist, bias_factors) = crate::utils::bias::analyze_preseed_cascade(&blended_pos, 10);
+        info!("POS cascade analysis: max bias factor {:.2}x", bias_factors.iter().fold(0.0, |a, &b| a.max(b)));
+
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
 

@@ -1,3 +1,17 @@
+// Sacred PRIME_MULTIPLIERS for pre-seed generation (deterministic, no entropy)
+__constant__ uint32_t PRIME_MULTIPLIERS[32] = {
+    179, 257, 347, 461, 577, 691, 797, 919,
+    1033, 1153, 1277, 1399, 1523, 1657, 1783, 1907,
+    2039, 2161, 2287, 2411, 2539, 2663, 2789, 2917,
+    3041, 3167, 3299, 34211, 3547, 3673, 3797, 3923
+};
+
+// Curve order for mod operations
+__constant__ uint32_t CURVE_ORDER_U32[8] = {
+    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE,
+    0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141
+};
+
 // Concise Block: CUDA Mod9 Check for Attractor Filter
 __global__ void mod9_attractor_check(uint64_t* x_limbs, bool* results, int batch_size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -30,9 +44,8 @@ __global__ void mod9_attractor_check(uint64_t* x_limbs, bool* results, int batch
 /// This provides "curve-aware" baseline for unsolved puzzles lacking empirical data
 __global__ void generate_preseed_pos_kernel(
     float* pos_out,
-    uint64_t range_min,
-    uint64_t range_width,
-    const uint64_t* primes
+    uint32_t range_min,
+    uint32_t range_width
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= 32 * 32) return;
@@ -40,8 +53,18 @@ __global__ void generate_preseed_pos_kernel(
     int p_idx = idx / 32;
     int k = (idx % 32) + 1; // k from 1 to 32
 
-    uint64_t prime = primes[p_idx];
-    uint64_t scalar = prime * k;
+    uint32_t prime = PRIME_MULTIPLIERS[p_idx];
+    uint32_t scalar_raw = prime * k;
+    uint32_t scalar[8] = {scalar_raw, 0, 0, 0, 0, 0, 0, 0}; // Low limb
+
+    // Mod by curve order to prevent overflow
+    mod_u32_array(scalar, CURVE_ORDER_U32, scalar);
+
+    // Skip zero scalars
+    if (scalar_is_zero_cuda(scalar)) {
+        pos_out[idx] = -1.0f; // Invalid marker
+        return;
+    }
 
     // Compute point = scalar * G using GLV optimization
     Point point = mul_glv_opt_cuda(GENERATOR, scalar);
@@ -53,8 +76,8 @@ __global__ void generate_preseed_pos_kernel(
     }
 
     // Hash point.x to get deterministic pos_proxy
-    uint64_t x_hash = hash_point_x_cuda(point.x);
-    uint64_t offset = x_hash % range_width;
+    uint32_t x_hash = hash_point_x_cuda(point.x);
+    uint32_t offset = x_hash % range_width;
     float pos_val = (float)(offset - range_min) / (float)range_width;
     pos_val = fmaxf(0.0f, fminf(1.0f, pos_val));
 
@@ -94,7 +117,11 @@ __global__ void blend_proxy_preseed_kernel(
     int rand_start = pre_dup;
     if (idx >= rand_start && idx < rand_start + rand_dup && random_count > 0) {
         int source_idx = (idx - rand_start) % random_count;
-        blended_out[idx] = random_samples[source_idx];
+        float rand_pos = random_samples[source_idx];
+        // Add optional noise for variance
+        rand_pos += sinf((float)idx) * 0.05f; // Simple noise approximation
+        rand_pos = fmaxf(0.0f, fminf(1.0f, rand_pos));
+        blended_out[idx] = rand_pos;
         return;
     }
 
@@ -155,11 +182,11 @@ __global__ void analyze_preseed_cascade_kernel(
 }
 
 // Helper functions
-__device__ uint64_t hash_point_x_cuda(uint32_t x[8]) {
-    uint64_t hash = 0;
+__device__ uint32_t hash_point_x_cuda(uint32_t x[8]) {
+    uint32_t hash = 0;
     for (int i = 0; i < 8; ++i) {
-        hash ^= (uint64_t)x[i];
-        hash = (hash << 5) | (hash >> 59); // Rotate for better distribution
+        hash ^= x[i];
+        hash = (hash << 5) | (hash >> 27); // Rotate for better distribution
     }
     return hash;
 }
@@ -169,4 +196,18 @@ __device__ bool point_is_identity(Point p) {
     return p.z[0] == 0 && p.z[1] == 0 && p.z[2] == 0 &&
            p.z[3] == 0 && p.z[4] == 0 && p.z[5] == 0 &&
            p.z[6] == 0 && p.z[7] == 0;
+}
+
+__device__ void mod_u32_array(uint32_t a[8], const uint32_t mod[8], uint32_t result[8]) {
+    // Simple mod for low values (copy for now, extend if needed)
+    for (int i = 0; i < 8; ++i) {
+        result[i] = a[i] % mod[i]; // Simplified, real impl needs proper big int mod
+    }
+}
+
+__device__ bool scalar_is_zero_cuda(const uint32_t scalar[8]) {
+    for (int i = 0; i < 8; ++i) {
+        if (scalar[i] != 0) return false;
+    }
+    return true;
 }

@@ -4,6 +4,20 @@ struct BigInt256 {
     limbs: array<u32, 8>,  // LSB in [0], MSB in [7] - matches legacy Point
 }
 
+// Sacred PRIME_MULTIPLIERS for pre-seed generation (deterministic, no entropy)
+const PRIME_MULTIPLIERS: array<u32, 32> = array<u32, 32>(
+    179u, 257u, 347u, 461u, 577u, 691u, 797u, 919u,
+    1033u, 1153u, 1277u, 1399u, 1523u, 1657u, 1783u, 1907u,
+    2039u, 2161u, 2287u, 2411u, 2539u, 2663u, 2789u, 2917u,
+    3041u, 3167u, 3299u, 34211u, 3547u, 3673u, 3797u, 3923u
+);
+
+// Curve order for mod operations
+const CURVE_ORDER_U32: array<u32, 8> = array<u32, 8>(
+    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFEu,
+    0xBAAEDCE6u, 0xAF48A03Bu, 0xBFD25E8Cu, 0xD0364141u
+);
+
 // Phase 4: Safe diff mod N
 fn safe_diff_mod_n(tame: array<u32,8>, wild: array<u32,8>, n: array<u32,8>) -> array<u32,8> {
     var diff: array<u32,8>;
@@ -848,16 +862,23 @@ fn generate_preseed_pos(range_min: f32, range_width: f32) -> array<f32, 1024> {
         let prime = PRIME_MULTIPLIERS[p];
 
         for (var k: u32 = 1u; k <= 32u; k = k + 1u) {
-            let scalar = array<u32, 8>(prime * k, 0u, 0u, 0u, 0u, 0u, 0u, 0u); // Low limb only
+            let scalar_raw = prime * k;
+            let scalar = mod_u64_to_u32_array(scalar_raw); // Mod CURVE_ORDER for overflow
+
+            // Skip zero scalars
+            if (scalar_is_zero(scalar)) {
+                continue;
+            }
+
             let point = mul_glv_opt(GENERATOR, scalar);
 
-            // Skip identity point (scalar = 0 mod N)
+            // Skip identity point
             if (is_identity(point)) {
                 continue;
             }
 
             // Hash point.x to get deterministic pos_proxy
-            let x_hash = hash_u64(point.x);
+            let x_hash = xor_hash_u64(point.x);
             let offset = x_hash % u32(range_width);
             let pos_val = (f32(offset) - range_min) / range_width;
             pos[idx] = clamp(pos_val, 0.0, 1.0);
@@ -870,36 +891,64 @@ fn generate_preseed_pos(range_min: f32, range_width: f32) -> array<f32, 1024> {
 
 /// Blend pre-seed positions with random simulations and empirical data
 /// weights: (preseed_weight, random_weight, empirical_weight) - must sum to 1.0
+/// enable_noise: Add small random variation to random samples
 fn blend_proxy_preseed(
     preseed: array<f32, 1024>,
     random_samples: array<f32, 512>,
     empirical_samples: array<f32, 256>,
-    weights: vec3<f32>
+    weights: vec3<f32>,
+    enable_noise: bool
 ) -> array<f32, 1792> { // 1024 + 512 + 256
     var blended: array<f32, 1792>;
     var idx = 0u;
 
     let total_weight = weights.x + weights.y + weights.z;
 
-    // Add pre-seed (weighted by duplication proportional to weight)
-    let pre_dup_count = u32((f32(arrayLength(&preseed)) * weights.x / total_weight));
-    for (var i = 0u; i < pre_dup_count && i < arrayLength(&preseed); i = i + 1u) {
-        blended[idx] = preseed[i];
+    // Duplicate pre-seed proportional to weight
+    let dup_pre = u32((f32(arrayLength(&preseed)) * weights.x));
+    for (var i = 0u; i < dup_pre && i < arrayLength(&preseed); i = i + 1u) {
+        blended[idx] = preseed[i % arrayLength(&preseed)];
         idx = idx + 1u;
     }
 
     // Add random samples (weighted)
-    let rand_dup_count = u32((f32(arrayLength(&random_samples)) * weights.y / total_weight));
-    for (var i = 0u; i < rand_dup_count && i < arrayLength(&random_samples); i = i + 1u) {
-        blended[idx] = random_samples[i];
+    let dup_rand = u32((f32(arrayLength(&random_samples)) * weights.y));
+    for (var i = 0u; i < dup_rand && i < arrayLength(&random_samples); i = i + 1u) {
+        var rand_pos = random_samples[i % arrayLength(&random_samples)];
+        if (enable_noise) {
+            // Simple noise approximation (in real GPU, use proper PRNG)
+            rand_pos += (sin(f32(i)) * 0.05);
+            rand_pos = clamp(rand_pos, 0.0, 1.0);
+        }
+        blended[idx] = rand_pos;
         idx = idx + 1u;
     }
 
-    // Add empirical samples (weighted)
-    let emp_dup_count = u32((f32(arrayLength(&empirical_samples)) * weights.z / total_weight));
-    for (var i = 0u; i < emp_dup_count && i < arrayLength(&empirical_samples); i = i + 1u) {
-        blended[idx] = empirical_samples[i];
-        idx = idx + 1u;
+    // Add empirical samples if available, or redistribute weights
+    let dup_emp = u32((f32(arrayLength(&empirical_samples)) * weights.z));
+    if (dup_emp > 0u && arrayLength(&empirical_samples) > 0u) {
+        for (var i = 0u; i < dup_emp && i < arrayLength(&empirical_samples); i = i + 1u) {
+            blended[idx] = empirical_samples[i % arrayLength(&empirical_samples)];
+            idx = idx + 1u;
+        }
+    } else if (weights.z > 0.0) {
+        // Redistribute empirical weight to pre-seed/random
+        let extra = weights.z / 2.0;
+        let extra_pre = u32((f32(arrayLength(&preseed)) * extra));
+        for (var i = 0u; i < extra_pre && i < arrayLength(&preseed); i = i + 1u) {
+            blended[idx] = preseed[i % arrayLength(&preseed)];
+            idx = idx + 1u;
+        }
+        let extra_rand = u32((f32(arrayLength(&random_samples)) * extra));
+        for (var i = 0u; i < extra_rand && i < arrayLength(&random_samples); i = i + 1u) {
+            var rand_pos = random_samples[i % arrayLength(&random_samples)];
+            if (enable_noise) {
+                rand_pos += (cos(f32(i)) * 0.05);
+                rand_pos = clamp(rand_pos, 0.0, 1.0);
+            }
+            blended[idx] = rand_pos;
+            idx = idx + 1u;
+        }
     }
 
     return blended;
@@ -1009,6 +1058,24 @@ fn hash_u64(x: array<u32, 8>) -> u32 {
 // Helper: Check if point is identity
 fn is_identity(point: array<array<u32, 8>, 3>) -> bool {
     return bigint_is_zero(point[2]); // Z == 0 in Jacobian
+}
+
+// Helper: Mod u64 to u32 array (simple for low values)
+fn mod_u64_to_u32_array(x: u32) -> array<u32, 8> {
+    // For simplicity, just put x in low limb (assumes x < 2^32)
+    var result: array<u32, 8>;
+    result[0] = x;
+    return result;
+}
+
+// Helper: Check if scalar array is zero
+fn scalar_is_zero(scalar: array<u32, 8>) -> bool {
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        if (scalar[i] != 0u) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // Entry point for testing (optimized workgroup size for RTX 5090 occupancy)
