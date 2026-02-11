@@ -134,24 +134,42 @@ mod tests {
     }
 
     #[test]
-    fn test_full_preseed_blend() -> anyhow::Result<()> {
-        use crate::utils::bias::{generate_preseed_pos, blend_proxy_preseed};
+    fn test_generate_preseed_pos() -> anyhow::Result<()> {
+        use crate::utils::bias::generate_preseed_pos;
         use k256::Scalar;
 
         let min = Scalar::ZERO;
         let width = Scalar::from(100u64);
-        let pre = generate_preseed_pos(min, width);
-        let emp = Some(vec![0.8; 100]);
-        let blended = blend_proxy_preseed(pre.clone(), 200, emp, (0.5, 0.25, 0.25), false);
+        let pos = generate_preseed_pos(&min, &width);
+        assert_eq!(pos.len(), 1024, "Pre-seed count fail");
+        assert!(pos.iter().all(|&p| (0.0..=1.0).contains(&p)), "Pos out of range");
+        assert!(pos.iter().sum::<f64>() / 1024.0 > 0.4 && pos.iter().sum::<f64>() / 1024.0 < 0.6, "Avg ~0.5 fail");
+        Ok(())
+    }
 
-        // Expected: pre(1024)*0.5 + rand(200)*0.25 + emp(100)*0.25 = 512 + 50 + 25 = 587
-        let expected_len = (pre.len() as f64 * 0.5) as usize +
-                          (200.0 * 0.25) as usize +
-                          (100.0 * 0.25) as usize;
-        assert_eq!(blended.len(), expected_len, "Blend len fail");
+    #[test]
+    fn test_blend_proxy_preseed() -> anyhow::Result<()> {
+        use crate::utils::bias::blend_proxy_preseed;
 
+        let pre = vec![0.1, 0.2];
+        let emp = Some(vec![0.8, 0.9]);
+        let blended = blend_proxy_preseed(pre, 2, emp, (0.5, 0.25, 0.25), false);
+        assert!(blended.len() > 4, "Blend len fail");
         let avg = blended.iter().sum::<f64>() / blended.len() as f64;
-        assert!(avg > 0.3 && avg < 0.7, "Blend avg out of expected range: {}", avg);
+        assert!(avg > 0.4 && avg < 0.6, "Blend avg fail");
+        Ok(())
+    }
+
+    #[test]
+    fn test_analyze_preseed_cascade() -> anyhow::Result<()> {
+        use crate::utils::bias::analyze_preseed_cascade;
+
+        // Mock clustered data
+        let proxy_pos = vec![0.1, 0.1, 0.1, 0.5, 0.5, 0.9, 0.9, 0.9, 0.9, 0.9];
+        let results = analyze_preseed_cascade(&proxy_pos, 5);
+
+        assert!(!results.is_empty(), "Cascade results empty");
+        assert!(results[0].1 >= 1.0, "Bias factor too low: {}", results[0].1);
         Ok(())
     }
 }

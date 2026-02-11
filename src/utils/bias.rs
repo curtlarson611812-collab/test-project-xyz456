@@ -224,40 +224,37 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
 /// Generate pre-seed positional bias points using G * (small_prime * k)
 /// Returns 32*32 = 1024 normalized positions [0,1] within the puzzle range
 /// This provides "curve-aware" baseline for unsolved puzzles lacking empirical data
-pub fn generate_preseed_pos(range_min: Scalar, range_width: Scalar) -> Vec<f64> {
+pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64> {
+    if range_width.is_zero() {
+        panic!("Zero range width"); // Edge: Prevent div by zero
+    }
+
     let mut pos = Vec::with_capacity(32 * 32);
-    let curve_order = Scalar::from_bytes(&k256::Secp256k1::ORDER.to_bytes_be()).unwrap(); // secp256k1 order
 
     for &prime_u64 in PRIME_MULTIPLIERS.iter() {
         let prime = Scalar::from(prime_u64);
 
         for k in 1..=32 {
-            let scalar = (prime * Scalar::from(k as u32)) % curve_order; // Edge: Mod N overflow
-
+            let scalar = prime * Scalar::from(k);
             if scalar.is_zero() {
-                continue; // Reject zero scalars
+                continue; // Skip zero scalars
             }
 
             let point = ProjectivePoint::GENERATOR * scalar;
             let affine = point.to_affine();
 
             if !affine.is_on_curve() {
-                panic!("Off-curve pre-seed point detected"); // Edge: Panic on invalid curve point
+                panic!("Off-curve pre-seed point"); // Edge: Panic on invalid curve point
             }
 
-            let x = affine.x().to_bytes();
-            let x_hash = xor_hash_to_u64(&x);
+            let x_bytes = affine.x.to_bytes();
+            let x_hash = xor_hash_to_u64(&x_bytes);
             let range_width_u64 = range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64).max(1);
             let offset_u64 = x_hash % range_width_u64;
             let offset_scalar = Scalar::from(offset_u64);
 
-            let pos_val = if offset_scalar >= range_min {
-                ((offset_scalar - range_min).to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64) /
-                (range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64)
-            } else {
-                0.0
-            };
-
+            let pos_val = ((offset_scalar - range_min).to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64) /
+                         (range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64);
             pos.push(pos_val.clamp(0.0, 1.0));
         }
     }
@@ -267,13 +264,7 @@ pub fn generate_preseed_pos(range_min: Scalar, range_width: Scalar) -> Vec<f64> 
 
 /// XOR-based hash for deterministic pos_proxy calculation
 fn xor_hash_to_u64(bytes: &[u8; 32]) -> u64 {
-    let mut hash = 0u64;
-    for i in 0..4 {
-        let chunk = u64::from_be_bytes(bytes[i*8..(i+1)*8].try_into().unwrap());
-        hash ^= chunk;
-        hash = hash.rotate_left(5); // Simple rotation for better distribution
-    }
-    hash
+    (0..4).fold(0u64, |acc, i| acc ^ u64::from_le_bytes(bytes[i*8..(i+1)*8].try_into().unwrap()))
 }
 
 /// Hash point x-coordinate to u64 for deterministic pos_proxy calculation
@@ -387,21 +378,47 @@ pub fn load_empirical_pos(log_path: &std::path::Path) -> Option<Vec<f64>> {
 }
 
 /// Analyze blended proxy positions for cascade histogram generation
-/// Returns histogram bins and bias factors for POS filter tuning
-pub fn analyze_preseed_cascade(proxy_pos: &[f64], bins: usize) -> (Vec<f64>, Vec<f64>) {
-    let mut hist = vec![0u64; bins];
+/// Returns (density, bias) per cascade level for POS filter tuning
+pub fn analyze_preseed_cascade(proxy_pos: &[f64], bins: usize) -> Vec<(f64, f64)> {
+    let mut current = proxy_pos.to_vec();
+    let mut results = Vec::new();
 
-    // Build histogram
-    for &pos in proxy_pos {
-        let bin = ((pos * bins as f64).floor() as usize).min(bins - 1);
-        hist[bin] += 1;
+    while !current.is_empty() {
+        let mut hist = std::collections::HashMap::new();
+        let uniform = current.len() as f64 / bins as f64;
+
+        for &pos in &current {
+            let bin = (pos * bins as f64) as usize;
+            *hist.entry(bin).or_insert(0) += 1;
+        }
+
+        let max_density = hist.values().map(|&c| c as f64 / uniform).fold(0.0, f64::max);
+        let bias = if max_density > 1.5 { max_density } else { 1.0 };
+        results.push((max_density, bias));
+
+        // Slice to high density regions for next level
+        current = slice_to_high_density(&current, &hist, 1.5);
+        if results.len() >= 5 || current.len() < 100 {
+            break; // Max 5 levels or low sample stop
+        }
     }
 
-    // Calculate bias factors (deviation from uniform)
-    let uniform_count = proxy_pos.len() as f64 / bins as f64;
-    let bias_factors: Vec<f64> = hist.iter()
-        .map(|&count| count as f64 / uniform_count)
+    results
+}
+
+/// Helper: Slice positions to high-density histogram bins
+fn slice_to_high_density(pos: &[f64], hist: &std::collections::HashMap<usize, i32>, threshold: f64) -> Vec<f64> {
+    let uniform = pos.len() as f64 / hist.len() as f64;
+    let high_bins: std::collections::HashSet<usize> = hist.iter()
+        .filter(|(_, &count)| count as f64 / uniform > threshold)
+        .map(|(&bin, _)| bin)
         .collect();
 
-    (hist.into_iter().map(|x| x as f64).collect(), bias_factors)
+    pos.iter()
+        .filter(|&&p| {
+            let bin = (p * hist.len() as f64) as usize;
+            high_bins.contains(&bin)
+        })
+        .cloned()
+        .collect()
 }

@@ -1045,6 +1045,80 @@ fn analyze_preseed_cascade(proxy_pos: array<f32, 1792>, bins: u32) -> array<f32,
     return result;
 }
 
+/// Analyze blended proxy positions for cascade histogram generation (complete version)
+/// Returns flat array [d1,b1,d2,b2,...] for density/bias per level
+fn analyze_preseed_cascade_complete(proxy: array<f32, 1792>, bins: u32) -> array<f32, 20> {
+    var result: array<f32, 20>;
+    var current: array<f32, 1792>;
+    var current_len = arrayLength(&proxy);
+
+    // Copy proxy to current
+    for (var i = 0u; i < arrayLength(&proxy); i = i + 1u) {
+        current[i] = proxy[i];
+    }
+
+    var level = 0u;
+    var result_idx = 0u;
+
+    while (current_len > 0u && level < 5u) {
+        var hist: array<u32, 10>;
+        var total_samples = 0u;
+
+        // Build histogram for current level
+        for (var i = 0u; i < current_len; i = i + 1u) {
+            let pos = current[i];
+            if (pos >= 0.0 && pos <= 1.0) {
+                let bin = min(u32(pos * f32(bins)), bins - 1u);
+                hist[bin] = hist[bin] + 1u;
+                total_samples = total_samples + 1u;
+            }
+        }
+
+        // Find max density and bias
+        var max_density = 0.0;
+        let uniform_count = f32(total_samples) / f32(bins);
+        for (var i = 0u; i < bins && i < 10u; i = i + 1u) {
+            let density = f32(hist[i]) / uniform_count;
+            if (density > max_density) {
+                max_density = density;
+            }
+        }
+
+        let bias = select(1.0, max_density, max_density > 1.5);
+
+        result[result_idx] = max_density; // density
+        result[result_idx + 1u] = bias;   // bias
+        result_idx = result_idx + 2u;
+
+        // Slice to high density for next level
+        var next_current: array<f32, 1792>;
+        var next_len = 0u;
+
+        for (var i = 0u; i < current_len; i = i + 1u) {
+            let pos = current[i];
+            let bin = min(u32(pos * f32(bins)), bins - 1u);
+            let density = f32(hist[bin]) / uniform_count;
+            if (density > 1.5) {
+                next_current[next_len] = pos;
+                next_len = next_len + 1u;
+            }
+        }
+
+        // Copy next to current
+        for (var i = 0u; i < next_len; i = i + 1u) {
+            current[i] = next_current[i];
+        }
+        current_len = next_len;
+        level = level + 1u;
+
+        if (current_len < 100u) {
+            break;
+        }
+    }
+
+    return result;
+}
+
 // Helper: Simple hash function for u64
 fn hash_u64(x: array<u32, 8>) -> u32 {
     var hash = 0u;
