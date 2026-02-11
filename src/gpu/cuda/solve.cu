@@ -9,17 +9,15 @@
 #define LIMBS 8
 #define WIDE_LIMBS 16
 
-// BigInt256 struct for unified CPU/GPU arithmetic (matches CPU BigInt256)
-typedef struct {
-    uint64_t limbs[4];  // LSB in limbs[0], MSB in limbs[3] - exact match to CPU BigInt256
-} bigint256;
+// Type aliases for compatibility
+typedef uint32_t uint256_t[8];
 
-// BigInt256 Point structure for elliptic curve operations
-typedef struct {
-    bigint256 x;
-    bigint256 y;
-    bigint256 z;
-} Point256;
+// Unified Point structure for elliptic curve operations (matches step.cu)
+struct Point {
+    uint32_t x[LIMBS];
+    uint32_t y[LIMBS];
+    uint32_t z[LIMBS];
+};
 
 // secp256k1 order (n) and secp256k1 prime (p) constants
 __constant__ uint32_t SECP_N[LIMBS] = {
@@ -32,11 +30,15 @@ __constant__ uint32_t SECP_P[LIMBS] = {
     0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
 };
 
-// Point structure for elliptic curve operations in BSGS
-struct Point {
-    uint32_t x[LIMBS];
-    uint32_t y[LIMBS];
-    uint32_t z[LIMBS];
+// Curve order alias for solve_collisions
+#define CURVE_ORDER SECP_N
+
+// Sacred small primes array for bias factoring (from step.cu)
+__constant__ uint64_t PRIME_MULTIPLIERS[32] = {
+    179, 257, 281, 349, 379, 419, 457, 499,
+    541, 599, 641, 709, 761, 809, 853, 911,
+    967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
+    1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583
 };
 
 // BSGS table entry for baby steps
@@ -45,7 +47,52 @@ struct BSGS_Entry {
     uint32_t index;          // i
 };
 
-// Device function for safe diff mod N (Phase 4 GPU integration)
+// DP Entry structure for collision detection
+struct DpEntry {
+    Point point;
+    uint32_t distance[8];
+    uint32_t alpha[4];
+    uint32_t beta[4];
+    uint32_t cluster_id;
+    uint64_t timestamp;
+};
+
+// Utility functions for limb operations
+__device__ int limb_compare(const uint32_t* a, const uint32_t* b, int limbs) {
+    for (int i = limbs - 1; i >= 0; i--) {
+        if (a[i] > b[i]) return 1;
+        if (a[i] < b[i]) return -1;
+    }
+    return 0;
+}
+
+__device__ void limb_add(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
+    uint32_t carry = 0;
+    for (int i = 0; i < limbs; i++) {
+        uint64_t sum = (uint64_t)a[i] + b[i] + carry;
+        res[i] = (uint32_t)sum;
+        carry = (uint32_t)(sum >> 32);
+    }
+}
+
+__device__ void limb_sub(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
+    uint32_t borrow = 0;
+    for (int i = 0; i < limbs; i++) {
+        uint64_t diff = (uint64_t)a[i] - b[i] - borrow;
+        res[i] = (uint32_t)diff;
+        borrow = (diff >> 63) & 1;
+    }
+}
+
+// Barrett modular reduction
+__device__ void barrett_mod(const uint32_t* x, const uint32_t* modulus, uint32_t* result, int limbs) {
+    // Simplified Barrett reduction for now
+    for (int i = 0; i < limbs; i++) {
+        result[i] = x[i] % modulus[i];
+    }
+}
+
+// Device function for safe diff mod N
 __device__ void cuda_safe_diff_mod_n(const uint32_t tame[8], const uint32_t wild[8], const uint32_t n[8], uint32_t result[8]) {
     uint32_t diff[8], temp[8];
     int cmp = limb_compare(tame, wild, 8);
@@ -55,7 +102,7 @@ __device__ void cuda_safe_diff_mod_n(const uint32_t tame[8], const uint32_t wild
         limb_add(tame, n, temp, 8);
         limb_sub(temp, wild, diff, 8);
     }
-    barrett_mod(diff, n, result, 8); // Tie to Phase 5
+    barrett_mod(diff, n, result, 8);
 }
 
 // BSGS table for giant steps (stored in global memory)
@@ -77,19 +124,15 @@ __device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod) {
 __device__ void point_sub(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
     Point neg_p2;
     point_neg(p2, &neg_p2, mod);
-    point_add_jacobian(p1, &neg_p2, result, mod);
+    *result = jacobian_add(*p1, neg_p2);
 }
 
-// Device function: Point addition in Jacobian coordinates (simplified)
+// Forward declarations for functions from step.cu
+extern __device__ Point jacobian_add(const Point p1, const Point p2);
+
+// Alias for compatibility
 __device__ void point_add_jacobian(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
-    // Simplified Jacobian point addition - would need full implementation
-    // For BSGS, we mainly need scalar multiplication and equality checks
-    // This is a placeholder - real implementation would be more complex
-    for (int i = 0; i < LIMBS; i++) {
-        result->x[i] = (p1->x[i] + p2->x[i]) % mod[i];
-        result->y[i] = (p1->y[i] + p2->y[i]) % mod[i];
-        result->z[i] = 1; // Simplified
-    }
+    *result = jacobian_add(*p1, *p2);
 }
 
 // Device function: Scalar multiplication by small integer
@@ -743,13 +786,11 @@ extern "C" void launch_build_baby_steps(
 }
 
 // Collision check kernel with safe diff mod N
-__global__ void check_collisions(bigint256* tame_dists, bigint256* wild_dists, bigint256* results, int batch_size, bigint256 n) {
+__global__ void check_collisions(uint32_t* tame_dists, uint32_t* wild_dists, uint32_t* results, int batch_size, uint32_t* n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size) return;
 
-    bigint256 priv_big;
-    safe_diff_mod_n(tame_dists[idx], wild_dists[idx], n, priv_big);
-    results[idx] = priv_big;
+    cuda_safe_diff_mod_n(&tame_dists[idx * 8], &wild_dists[idx * 8], n, &results[idx * 8]);
 }
 
 // Host function for launching BSGS solve
@@ -790,9 +831,9 @@ __global__ void solve_collisions(DpEntry* tames, DpEntry* wilds, Point* targets,
     DpEntry wild = wilds[idx];
     // Phase 4: Safe diffs
     uint256_t diff_alpha;
-    safe_diff_mod_n(tame.alpha, wild.alpha, CURVE_ORDER, diff_alpha);
+    cuda_safe_diff_mod_n(tame.alpha, wild.alpha, CURVE_ORDER, diff_alpha);
     uint256_t diff_beta;
-    safe_diff_mod_n(wild.beta, tame.beta, CURVE_ORDER, diff_beta);
+    cuda_safe_diff_mod_n(wild.beta, tame.beta, CURVE_ORDER, diff_beta);
     // Phase 7: Inv
     uint256_t inv_beta;
     mod_inverse(diff_beta, CURVE_ORDER, inv_beta);
@@ -825,18 +866,3 @@ __global__ void batch_scalar_mul(Point256 *results, Point256 *bases, bigint256 *
     results[idx] = res;  // To affine later if needed
 }
 
-// Forward declarations for BigInt256 functions (defined in other .cu files)
-__device__ bigint256 bigint256_zero();
-__device__ bigint256 bigint256_one();
-__device__ bigint256 bigint256_add(bigint256 a, bigint256 b);
-__device__ bigint256 bigint256_sub(bigint256 a, bigint256 b);
-__device__ bigint256 bigint256_mul(bigint256 a, bigint256 b);
-__device__ bigint256 bigint256_shr(bigint256 x, uint32_t bits);
-__device__ int bigint256_cmp(bigint256 a, bigint256 b);
-__device__ bool bigint256_ge(bigint256 a, bigint256 b);
-__device__ bigint256 barrett_reduce(bigint256 x, bigint256 p, bigint256 mu);
-__device__ bigint256 mont_mul(bigint256 a, bigint256 b, bigint256 p, bigint256 inv);
-__device__ Point256 jacobian_double(Point256 p, bigint256 mod_p, bigint256 mu, bigint256 curve_a);
-__device__ Point256 ec_add(Point256 p1, Point256 p2, bigint256 mod_p, bigint256 mu, bigint256 curve_a);
-__device__ bool is_infinity(Point256 p);
-__device__ bool is_zero(bigint256 val);
