@@ -86,6 +86,18 @@ impl KangarooManager {
         println!("DEBUG: Loaded {} targets", targets.len());
         info!("Loaded {} targets", targets.len());
 
+        // Initialize POS pre-seed baseline (always active per rules)
+        info!("Initializing POS pre-seed baseline for unsolved puzzles...");
+        let preseed_pos = if let Some(first_target) = targets.first() {
+            // Use first target range as representative
+            let range_min = k256::Scalar::ZERO;
+            let range_width = k256::Scalar::from(2u64).pow(&k256::Scalar::from(20u32)); // Default 2^20
+            crate::utils::bias::generate_preseed_pos(range_min, range_width)
+        } else {
+            vec![] // Fallback if no targets
+        };
+        info!("Generated {} pre-seed POS positions", preseed_pos.len());
+
         // Initialize components
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
 

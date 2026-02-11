@@ -105,4 +105,31 @@ mod tests {
         let mod9 = (res % 9) as u32;
         matches!(mod9, 0 | 3 | 6)
     }
+
+    #[test]
+    fn test_preseed_pos() -> anyhow::Result<()> {
+        use crate::utils::bias::generate_preseed_pos;
+        use k256::Scalar;
+
+        let min = Scalar::ZERO;
+        let width = Scalar::from(100u64); // Mock small range
+        let pos = generate_preseed_pos(min, width);
+        assert_eq!(pos.len(), 1024, "Pre-seed count fail");
+        assert!(pos.iter().all(|&p| (0.0..=1.0).contains(&p)), "Pos out of range");
+        assert!(pos.iter().sum::<f64>() / 1024.0 > 0.4 && pos.iter().sum::<f64>() / 1024.0 < 0.6, "Avg ~0.5 fail"); // Approx uniform check
+        Ok(())
+    }
+
+    #[test]
+    fn test_blend_proxy() -> anyhow::Result<()> {
+        use crate::utils::bias::blend_proxy_preseed;
+
+        let pre = vec![0.1, 0.2];
+        let emp = Some(vec![0.8, 0.9]);
+        let blended = blend_proxy_preseed(pre, 2, emp, (0.5, 0.25, 0.25));
+        assert!(blended.len() > 4, "Blend len fail");
+        let avg = blended.iter().sum::<f64>() / blended.len() as f64;
+        assert!(avg > 0.4 && avg < 0.6, "Blend avg fail");
+        Ok(())
+    }
 }

@@ -145,6 +145,10 @@ pub struct Config {
     #[arg(long, value_name = "STEPS")]
     pub enable_walk_backs: Option<u64>,
 
+    /// Enable pre-seeded POS baseline (always active per rules, but configurable weights)
+    #[arg(long, num_args = 3, default_values = ["0.5", "0.25", "0.25"])]
+    pub preseed_pos_weights: Vec<f64>,
+
     /// Enable smart DP pruning (combo:bloom-value-cluster)
     #[arg(long)]
     pub enable_smart_pruning: bool,

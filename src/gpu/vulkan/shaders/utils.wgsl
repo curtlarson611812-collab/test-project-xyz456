@@ -869,6 +869,70 @@ fn generate_preseed_pos(range_min: f32, range_width: f32) -> array<f32, 1024> {
 }
 
 /// Blend pre-seed positions with random simulations and empirical data
+/// weights: (preseed_weight, random_weight, empirical_weight) - must sum to 1.0
+fn blend_proxy_preseed(
+    preseed: array<f32, 1024>,
+    random_samples: array<f32, 512>,
+    empirical_samples: array<f32, 256>,
+    weights: vec3<f32>
+) -> array<f32, 1792> { // 1024 + 512 + 256
+    var blended: array<f32, 1792>;
+    var idx = 0u;
+
+    let total_weight = weights.x + weights.y + weights.z;
+
+    // Add pre-seed (weighted by duplication proportional to weight)
+    let pre_dup_count = u32((f32(arrayLength(&preseed)) * weights.x / total_weight));
+    for (var i = 0u; i < pre_dup_count && i < arrayLength(&preseed); i = i + 1u) {
+        blended[idx] = preseed[i];
+        idx = idx + 1u;
+    }
+
+    // Add random samples (weighted)
+    let rand_dup_count = u32((f32(arrayLength(&random_samples)) * weights.y / total_weight));
+    for (var i = 0u; i < rand_dup_count && i < arrayLength(&random_samples); i = i + 1u) {
+        blended[idx] = random_samples[i];
+        idx = idx + 1u;
+    }
+
+    // Add empirical samples (weighted)
+    let emp_dup_count = u32((f32(arrayLength(&empirical_samples)) * weights.z / total_weight));
+    for (var i = 0u; i < emp_dup_count && i < arrayLength(&empirical_samples); i = i + 1u) {
+        blended[idx] = empirical_samples[i];
+        idx = idx + 1u;
+    }
+
+    return blended;
+}
+
+/// Analyze blended proxy positions for cascade histogram generation
+/// Returns histogram bins and bias factors for POS filter tuning
+fn analyze_preseed_cascade(proxy_pos: array<f32, 1792>, bins: u32) -> array<f32, 20> { // bins + bias_factors
+    var hist: array<u32, 10>; // Assume bins <= 10 for simplicity
+    var total_samples = 0u;
+
+    // Build histogram
+    for (var i = 0u; i < arrayLength(&proxy_pos); i = i + 1u) {
+        let pos = proxy_pos[i];
+        if (pos >= 0.0 && pos <= 1.0) {
+            let bin = min(u32(pos * f32(bins)), bins - 1u);
+            hist[bin] = hist[bin] + 1u;
+            total_samples = total_samples + 1u;
+        }
+    }
+
+    // Calculate bias factors (deviation from uniform)
+    var result: array<f32, 20>;
+    let uniform_count = f32(total_samples) / f32(bins);
+
+    for (var i = 0u; i < bins && i < 10u; i = i + 1u) {
+        result[i] = f32(hist[i]) / uniform_count; // bias factor
+    }
+
+    return result;
+}
+
+/// Blend pre-seed positions with random simulations and empirical data
 /// weights: (preseed_weight, random_weight, empirical_weight)
 fn blend_proxy_preseed(
     preseed: array<f32, 1024>,

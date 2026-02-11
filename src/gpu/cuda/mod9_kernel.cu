@@ -62,6 +62,7 @@ __global__ void generate_preseed_pos_kernel(
 }
 
 /// Blend pre-seed positions with random simulations and empirical data
+/// weights: (preseed_weight, random_weight, empirical_weight) - must sum to 1.0
 __global__ void blend_proxy_preseed_kernel(
     float* blended_out,
     const float* preseed_pos,
@@ -81,36 +82,32 @@ __global__ void blend_proxy_preseed_kernel(
 
     float total_weight = weight_pre + weight_rand + weight_emp;
 
-    // Determine source based on weighted distribution
-    float cumulative_weight = 0.0f;
-    float rand_val = curand_uniform(&rand_state); // Assume rand_state available
-
-    // Pre-seed samples
-    int pre_target = (int)((preseed_count * weight_pre / total_weight) + 0.5f);
-    if (idx < pre_target && preseed_count > 0) {
+    // Duplicate proportional to weights
+    int pre_dup = (int)((preseed_count * weight_pre / total_weight) + 0.5f);
+    if (idx < pre_dup && preseed_count > 0) {
         int source_idx = idx % preseed_count;
         blended_out[idx] = preseed_pos[source_idx];
         return;
     }
-    cumulative_weight += weight_pre;
 
-    // Random samples
-    int rand_target = pre_target + (int)((random_count * weight_rand / total_weight) + 0.5f);
-    if (idx < rand_target && random_count > 0) {
-        int source_idx = (idx - pre_target) % random_count;
+    int rand_dup = (int)((random_count * weight_rand / total_weight) + 0.5f);
+    int rand_start = pre_dup;
+    if (idx >= rand_start && idx < rand_start + rand_dup && random_count > 0) {
+        int source_idx = (idx - rand_start) % random_count;
         blended_out[idx] = random_samples[source_idx];
         return;
     }
-    cumulative_weight += weight_rand;
 
-    // Empirical samples
-    if (empirical_count > 0) {
-        int source_idx = (idx - rand_target) % empirical_count;
+    int emp_dup = (int)((empirical_count * weight_emp / total_weight) + 0.5f);
+    int emp_start = rand_start + rand_dup;
+    if (idx >= emp_start && idx < emp_start + emp_dup && empirical_count > 0) {
+        int source_idx = (idx - emp_start) % empirical_count;
         blended_out[idx] = empirical_samples[source_idx];
     }
 }
 
 /// Analyze blended proxy positions for cascade histogram generation
+/// Returns histogram bins and bias factors for POS filter tuning
 __global__ void analyze_preseed_cascade_kernel(
     const float* proxy_pos,
     int proxy_count,
@@ -118,7 +115,7 @@ __global__ void analyze_preseed_cascade_kernel(
     float* hist_out,
     float* bias_factors_out
 ) {
-    // Use shared memory for histogram
+    // Use shared memory for histogram building
     __shared__ unsigned int shared_hist[10]; // Max 10 bins
 
     int tid = threadIdx.x;
@@ -127,7 +124,7 @@ __global__ void analyze_preseed_cascade_kernel(
     }
     __syncthreads();
 
-    // Build histogram
+    // Build histogram across all threads
     for (int i = blockIdx.x * blockDim.x + threadIdx.x;
          i < proxy_count;
          i += blockDim.x * gridDim.x) {
@@ -162,7 +159,7 @@ __device__ uint64_t hash_point_x_cuda(uint32_t x[8]) {
     uint64_t hash = 0;
     for (int i = 0; i < 8; ++i) {
         hash ^= (uint64_t)x[i];
-        hash = (hash << 5) | (hash >> 59); // Rotate
+        hash = (hash << 5) | (hash >> 59); // Rotate for better distribution
     }
     return hash;
 }

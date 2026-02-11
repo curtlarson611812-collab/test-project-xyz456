@@ -7,6 +7,7 @@ use crate::math::bigint::BigInt256;
 use log::{info, warn};
 use rand::Rng;
 use crate::kangaroo::generator::PRIME_MULTIPLIERS;
+use k256::{ProjectivePoint, Scalar};
 
 /// Compute target biases from pubkey x-coordinate with attractor cross-check
 /// Returns (mod9, mod27, mod81, pos) bias targets
@@ -223,44 +224,57 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
 /// Generate pre-seed positional bias points using G * (small_prime * k)
 /// Returns 32*32 = 1024 normalized positions [0,1] within the puzzle range
 /// This provides "curve-aware" baseline for unsolved puzzles lacking empirical data
-pub fn generate_preseed_pos(range_min: &BigInt256, range_width: &BigInt256) -> Vec<f64> {
+pub fn generate_preseed_pos(range_min: Scalar, range_width: Scalar) -> Vec<f64> {
     let mut pos = Vec::with_capacity(32 * 32);
 
     for &prime_u64 in PRIME_MULTIPLIERS.iter() {
-        let prime = BigInt256::from_u64(prime_u64);
+        let prime = Scalar::from(prime_u64);
 
         for k in 1..=32 {
-            let k_big = BigInt256::from_u64(k as u64);
-            let scalar = prime.mul(&k_big); // prime * k
+            let scalar = prime * Scalar::from(k as u32);
 
-            // Skip if scalar would overflow range (rough check)
-            if scalar >= *range_width {
+            // Skip if scalar would overflow range (rough check using to_u64)
+            if scalar.to_bytes().iter().rev().zip(range_width.to_bytes().iter().rev()).any(|(&s, &w)| s > w) {
                 continue;
             }
 
-            // Compute point = scalar * G (using secp256k1 multiplication)
-            let curve = crate::math::secp::Secp256k1::new();
-            let generator = crate::types::Point::generator();
-            let point = curve.mul(&generator, &scalar);
+            // Compute point = scalar * G (using k256 library)
+            let point = ProjectivePoint::GENERATOR * scalar;
 
-            // Skip identity point (scalar = 0 mod N)
-            if point.is_infinity() {
+            // Skip identity point
+            if point.is_identity() {
                 continue;
             }
 
             // Compute pos_proxy from point.x hash (deterministic)
-            let x_hash = hash_point_x_to_u64(&point);
-            let range_width_u64 = range_width.to_u64().max(1); // Prevent div by zero
+            let x = point.to_affine().x();
+            let x_hash = xor_hash_to_u64(&x.to_bytes());
+            let range_width_u64 = range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64).max(1);
             let offset_u64 = x_hash % range_width_u64;
-            let offset_big = BigInt256::from_u64(offset_u64);
-            let pos_big = offset_big.sub(range_min).modulo(range_width);
-            let pos_val = pos_big.to_f64_approx() / range_width.to_f64_approx();
+            let offset_scalar = Scalar::from(offset_u64);
+            let pos_val = if offset_scalar >= range_min {
+                ((offset_scalar - range_min).to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64) /
+                (range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64)
+            } else {
+                0.0
+            };
 
             pos.push(pos_val.clamp(0.0, 1.0));
         }
     }
 
     pos
+}
+
+/// XOR-based hash for deterministic pos_proxy calculation
+fn xor_hash_to_u64(bytes: &[u8; 32]) -> u64 {
+    let mut hash = 0u64;
+    for i in 0..4 {
+        let chunk = u64::from_be_bytes(bytes[i*8..(i+1)*8].try_into().unwrap());
+        hash ^= chunk;
+        hash = hash.rotate_left(5); // Simple rotation for better distribution
+    }
+    hash
 }
 
 /// Hash point x-coordinate to u64 for deterministic pos_proxy calculation
@@ -288,7 +302,7 @@ fn hash_point_x_to_u64(point: &crate::types::Point) -> u64 {
 }
 
 /// Blend pre-seed positions with random simulations and empirical data
-/// weights: (preseed_weight, random_weight, empirical_weight)
+/// weights: (preseed_weight, random_weight, empirical_weight) - must sum to 1.0
 /// Returns combined proxy positions for histogram analysis
 pub fn blend_proxy_preseed(
     preseed_pos: Vec<f64>,
@@ -297,32 +311,35 @@ pub fn blend_proxy_preseed(
     weights: (f64, f64, f64)
 ) -> Vec<f64> {
     let (w_pre, w_rand, w_emp) = weights;
-    let total_weight = w_pre + w_rand + w_emp;
-
-    if total_weight <= 0.0 {
-        return vec![];
-    }
+    let total_w = w_pre + w_rand + w_emp;
+    assert!((total_w - 1.0).abs() < 1e-6, "Weights must sum to 1.0, got {}", total_w);
 
     let mut proxy = Vec::new();
 
-    // Add pre-seed positions (weighted by duplication)
-    let pre_count = ((preseed_pos.len() as f64 * w_pre / total_weight).round() as usize).max(1);
-    for _ in 0..pre_count {
+    // Duplicate pre-seed proportional to weight
+    let dup_pre = ((preseed_pos.len() as f64 * w_pre).round() as usize).max(1);
+    for _ in 0..dup_pre {
         proxy.extend_from_slice(&preseed_pos);
     }
 
-    // Add random simulations (uniform distribution as negative samples)
-    let rand_count = ((num_random as f64 * w_rand / total_weight).round() as usize).max(0);
+    // Add random samples (uniform distribution)
+    let dup_rand = ((num_random as f64 * w_rand).round() as usize).max(0);
     let mut rng = rand::thread_rng();
-    for _ in 0..rand_count {
+    for _ in 0..dup_rand {
         proxy.push(rng.gen_range(0.0..1.0));
     }
 
-    // Add empirical positions (real solved puzzle data)
+    // Add empirical positions if available
     if let Some(emp) = empirical_pos {
-        let emp_count = ((emp.len() as f64 * w_emp / total_weight).round() as usize).max(0);
-        for _ in 0..emp_count {
+        let dup_emp = ((emp.len() as f64 * w_emp).round() as usize).max(0);
+        for _ in 0..dup_emp {
             proxy.extend_from_slice(&emp);
+        }
+    } else if w_emp > 0.0 {
+        // Redistribute empirical weight to random if no empirical data
+        let extra_rand = ((num_random as f64 * w_emp).round() as usize);
+        for _ in 0..extra_rand {
+            proxy.push(rng.gen_range(0.0..1.0));
         }
     }
 
