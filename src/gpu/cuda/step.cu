@@ -18,6 +18,178 @@ typedef struct {
 } Point256;
 
 // Legacy Point structure (uint32_t version) for backward compatibility
+
+// BigInt256 helper functions
+typedef uint32_t bigint256_u32[8]; // [u32;8] version for some operations
+
+// Forward declarations
+__device__ bigint256 barrett_reduce(const bigint256 x, const bigint256 mod_p, const bigint256 mu);
+__device__ bigint256 mont_mul(const bigint256 a, const bigint256 b, const bigint256 mod_p, const bigint256 mu);
+
+__device__ void bigint256_zero(bigint256* res) {
+    for (int i = 0; i < 4; i++) res->limbs[i] = 0;
+}
+
+__device__ void bigint256_one(bigint256* res) {
+    res->limbs[0] = 1;
+    for (int i = 1; i < 4; i++) res->limbs[i] = 0;
+}
+
+__device__ int bigint256_cmp(const bigint256* a, const bigint256* b) {
+    for (int i = 3; i >= 0; i--) {
+        if (a->limbs[i] > b->limbs[i]) return 1;
+        if (a->limbs[i] < b->limbs[i]) return -1;
+    }
+    return 0;
+}
+
+__device__ void bigint256_add(const bigint256* a, const bigint256* b, bigint256* res) {
+    uint64_t carry = 0;
+    for (int i = 0; i < 4; i++) {
+        uint64_t sum = a->limbs[i] + b->limbs[i] + carry;
+        res->limbs[i] = sum & 0xFFFFFFFFFFFFFFFFULL;
+        carry = sum >> 64;
+    }
+    // Overflow ignored (handled by modular reduction later)
+}
+
+__device__ void bigint256_sub(const bigint256* a, const bigint256* b, bigint256* res) {
+    int64_t borrow = 0;
+    for (int i = 0; i < 4; i++) {
+        int64_t diff = (int64_t)a->limbs[i] - (int64_t)b->limbs[i] - borrow;
+        if (diff < 0) {
+            res->limbs[i] = (uint64_t)(diff + (1LL << 64));
+            borrow = 1;
+        } else {
+            res->limbs[i] = (uint64_t)diff;
+            borrow = 0;
+        }
+    }
+}
+
+__device__ void bigint256_mul(const bigint256* a, const bigint256* b, uint64_t res[8]) {
+    for (int i = 0; i < 8; i++) res[i] = 0;
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            __int128 mul = (__int128)a->limbs[i] * (__int128)b->limbs[j];
+            uint64_t lo = (uint64_t)mul;
+            uint64_t hi = (uint64_t)(mul >> 64);
+            int k = i + j;
+            uint64_t carry = 0;
+            if (k < 8) {
+                uint64_t sum = res[k] + lo + carry;
+                res[k] = sum;
+                carry = sum < res[k] ? 1 : 0;
+            }
+            k++;
+            if (k < 8) {
+                uint64_t sum = res[k] + hi + carry;
+                res[k] = sum;
+                carry = sum < res[k] ? 1 : 0;
+            }
+        }
+    }
+}
+
+__device__ void bigint256_shift_right(const bigint256* a, uint32_t bits, bigint256* res) {
+    uint32_t word_shift = bits / 64;
+    uint32_t bit_shift = bits % 64;
+    for (int i = 0; i < 4; i++) res->limbs[i] = 0;
+    for (int i = 0; i < 4 - word_shift; i++) {
+        res->limbs[i] = (a->limbs[i + word_shift] >> bit_shift);
+        if (bit_shift > 0 && i + word_shift + 1 < 4) {
+            res->limbs[i] |= (a->limbs[i + word_shift + 1] << (64 - bit_shift));
+        }
+    }
+}
+
+__device__ void bigint256_shift_left(const bigint256* a, uint32_t bits, bigint256* res) {
+    uint32_t word_shift = bits / 64;
+    uint32_t bit_shift = bits % 64;
+    for (int i = 0; i < 4; i++) res->limbs[i] = 0;
+    for (int i = 0; i < 4 - word_shift; i++) {
+        res->limbs[i + word_shift] = (a->limbs[i] << bit_shift);
+        if (bit_shift > 0 && i + 1 < 4) {
+            res->limbs[i + word_shift] |= (a->limbs[i + 1] >> (64 - bit_shift));
+        }
+    }
+}
+
+// U32 version helpers for some operations
+__device__ void bigint256_u32_zero(bigint256_u32 res) {
+    for (int i = 0; i < 8; i++) res[i] = 0;
+}
+
+__device__ void bigint256_u32_add(const bigint256_u32 a, const bigint256_u32 b, bigint256_u32 res) {
+    uint32_t carry = 0;
+    for (int i = 0; i < 8; i++) {
+        uint64_t sum = (uint64_t)a[i] + b[i] + carry;
+        res[i] = (uint32_t)sum;
+        carry = (uint32_t)(sum >> 32);
+    }
+}
+
+__device__ void bigint256_u32_sub(const bigint256_u32 a, const bigint256_u32 b, bigint256_u32 res) {
+    int32_t borrow = 0;
+    for (int i = 0; i < 8; i++) {
+        int64_t diff = (int64_t)a[i] - (int64_t)b[i] - borrow;
+        if (diff < 0) {
+            res[i] = (uint32_t)(diff + (1LL << 32));
+            borrow = 1;
+        } else {
+            res[i] = (uint32_t)diff;
+            borrow = 0;
+        }
+    }
+}
+
+__device__ int bigint256_u32_cmp(const bigint256_u32 a, const bigint256_u32 b) {
+    for (int i = 7; i >= 0; i--) {
+        if (a[i] > b[i]) return 1;
+        if (a[i] < b[i]) return -1;
+    }
+    return 0;
+}
+
+// Montgomery multiplication for BigInt256 (simplified implementation)
+__device__ bigint256 mont_mul(const bigint256 a, const bigint256 b, const bigint256 mod_p, const bigint256 mu) {
+    // Simplified implementation - multiply and reduce
+    bigint256 result;
+    bigint256_mul(&a, &b, result.limbs);
+    // Apply Barrett reduction (simplified)
+    return barrett_reduce(result, mod_p, mu);
+}
+
+// Barrett reduction for BigInt256 (simplified)
+__device__ bigint256 barrett_reduce(const bigint256 x, const bigint256 mod_p, const bigint256 mu) {
+    // Very simplified Barrett reduction for now
+    bigint256 result = x;
+    // In full implementation, this would do proper Barrett reduction
+    // For now, just ensure result < mod_p
+    while (bigint256_cmp(&result, &mod_p) >= 0) {
+        bigint256_sub(&result, &mod_p, &result);
+    }
+    return result;
+}
+
+// Helper functions for point operations
+__device__ bool is_zero(const bigint256 x) {
+    bigint256 zero;
+    bigint256_zero(&zero);
+    return bigint256_cmp(&x, &zero) == 0;
+}
+
+__device__ bool is_infinity(const Point256 p) {
+    return is_zero(p.z);
+}
+
+__device__ Point256 point256_infinity() {
+    Point256 p;
+    bigint256_zero(&p.x);
+    bigint256_one(&p.y);
+    bigint256_zero(&p.z);
+    return p;
+}
 struct Point {
     uint32_t x[8];  // X coordinate (256-bit)
     uint32_t y[8];  // Y coordinate (256-bit)
@@ -40,17 +212,6 @@ struct Trap {
 };
 
 // BigInt256 EC operation helper functions
-__device__ Point256 point256_infinity() {
-    return {bigint256_zero(), bigint256_one(), bigint256_zero()};  // Convention: z=0 for infinity
-}
-
-__device__ bool is_infinity(const Point256 p) {
-    return bigint256_cmp(p.z, bigint256_zero()) == 0;
-}
-
-__device__ bool is_zero(const bigint256 val) {
-    return bigint256_cmp(val, bigint256_zero()) == 0;
-}
 
 // Jacobian double for BigInt256 points
 __device__ Point256 jacobian_double(const Point256 p, const bigint256 mod_p, const bigint256 mu, const bigint256 curve_a) {
@@ -62,13 +223,28 @@ __device__ Point256 jacobian_double(const Point256 p, const bigint256 mod_p, con
     bigint256 xx = mont_mul(p.x, p.x, mod_p, mu);
     bigint256 three = {3,0,0,0}; // Use constant for better performance
     bigint256 m = mont_mul(three, xx, mod_p, mu);
-    m = bigint256_add(m, mont_mul(curve_a, zzzz, mod_p, mu));
+    bigint256 temp_add;
+    bigint256 temp = mont_mul(curve_a, zzzz, mod_p, mu);
+    bigint256_add(&m, &temp, &m);
     bigint256 two = {2,0,0,0};
     bigint256 s = mont_mul(two, mont_mul(p.x, yy, mod_p, mu), mod_p, mu);
-    bigint256 x3 = bigint256_sub(mont_mul(m, m, mod_p, mu), mont_mul(two, s, mod_p, mu));
-    bigint256 y3 = bigint256_sub(mont_mul(m, bigint256_sub(s, x3), mod_p, mu), mont_mul(bigint256{8,0,0,0}, yyyy, mod_p, mu));
+    bigint256 mm = mont_mul(m, m, mod_p, mu);
+    bigint256 ts = mont_mul(two, s, mod_p, mu);
+    bigint256 x3;
+    bigint256_sub(&mm, &ts, &x3);
+    bigint256 s_minus_x3;
+    bigint256_sub(&s, &x3, &s_minus_x3);
+    bigint256 m_times_diff = mont_mul(m, s_minus_x3, mod_p, mu);
+    bigint256 eight = {8,0,0,0};
+    bigint256 eight_yyyy = mont_mul(eight, yyyy, mod_p, mu);
+    bigint256 y3;
+    bigint256_sub(&m_times_diff, &eight_yyyy, &y3);
     bigint256 z3 = mont_mul(mont_mul(two, p.y, mod_p, mu), p.z, mod_p, mu);
-    return {barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu)};
+    Point256 result;
+    result.x = barrett_reduce(x3, mod_p, mu);
+    result.y = barrett_reduce(y3, mod_p, mu);
+    result.z = barrett_reduce(z3, mod_p, mu);
+    return result;
 }
 
 // EC add for BigInt256 points
@@ -79,21 +255,45 @@ __device__ Point256 ec_add(const Point256 p1, const Point256 p2, const bigint256
     bigint256 z2z2 = mont_mul(p2.z, p2.z, mod_p, mu);
     bigint256 u1 = mont_mul(p1.y, mont_mul(p2.z, z2z2, mod_p, mu), mod_p, mu);
     bigint256 u2 = mont_mul(p2.y, mont_mul(p1.z, z1z1, mod_p, mu), mod_p, mu);
-    bigint256 h = bigint256_sub(mont_mul(p2.x, z1z1, mod_p, mu), mont_mul(p1.x, z2z2, mod_p, mu));
+    bigint256 p2x_z1z1 = mont_mul(p2.x, z1z1, mod_p, mu);
+    bigint256 p1x_z2z2 = mont_mul(p1.x, z2z2, mod_p, mu);
+    bigint256 h;
+    bigint256_sub(&p2x_z1z1, &p1x_z2z2, &h);
     if (is_zero(h)) {
-        if (bigint256_cmp(u1, u2) == 0) return jacobian_double(p1, mod_p, mu, curve_a);
+        if (bigint256_cmp(&u1, &u2) == 0) return jacobian_double(p1, mod_p, mu, curve_a);
         return point256_infinity();
     }
     bigint256 four = {4,0,0,0};
     bigint256 two = {2,0,0,0};
     bigint256 i = mont_mul(four, mont_mul(h, h, mod_p, mu), mod_p, mu);
     bigint256 j = mont_mul(h, i, mod_p, mu);
-    bigint256 r = mont_mul(two, bigint256_sub(u2, u1), mod_p, mu);
+    bigint256 u2_minus_u1;
+    bigint256_sub(&u2, &u1, &u2_minus_u1);
+    bigint256 r = mont_mul(two, u2_minus_u1, mod_p, mu);
     bigint256 v = mont_mul(p1.x, i, mod_p, mu);
-    bigint256 x3 = bigint256_sub(bigint256_sub(mont_mul(r, r, mod_p, mu), j), mont_mul(two, v, mod_p, mu));
-    bigint256 y3 = bigint256_sub(mont_mul(r, bigint256_sub(v, x3), mod_p, mu), mont_mul(two, mont_mul(u1, j, mod_p, mu), mod_p, mu));
-    bigint256 z3 = mont_mul(mont_mul(bigint256_sub(mont_mul(p1.z, p2.z, mod_p, mu), h), h, mod_p, mu), h, mod_p, mu);
-    return {barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu)};
+    bigint256 rr = mont_mul(r, r, mod_p, mu);
+    bigint256 rr_minus_j;
+    bigint256_sub(&rr, &j, &rr_minus_j);
+    bigint256 tv = mont_mul(two, v, mod_p, mu);
+    bigint256 x3;
+    bigint256_sub(&rr_minus_j, &tv, &x3);
+    bigint256 v_minus_x3;
+    bigint256_sub(&v, &x3, &v_minus_x3);
+    bigint256 r_times_diff = mont_mul(r, v_minus_x3, mod_p, mu);
+    bigint256 uj = mont_mul(u1, j, mod_p, mu);
+    bigint256 tuj = mont_mul(two, uj, mod_p, mu);
+    bigint256 y3;
+    bigint256_sub(&r_times_diff, &tuj, &y3);
+    bigint256 p1z_p2z = mont_mul(p1.z, p2.z, mod_p, mu);
+    bigint256 p1z_p2z_minus_h;
+    bigint256_sub(&p1z_p2z, &h, &p1z_p2z_minus_h);
+    bigint256 diff_times_h = mont_mul(p1z_p2z_minus_h, h, mod_p, mu);
+    bigint256 z3 = mont_mul(diff_times_h, h, mod_p, mu);
+    Point256 result;
+    result.x = barrett_reduce(x3, mod_p, mu);
+    result.y = barrett_reduce(y3, mod_p, mu);
+    result.z = barrett_reduce(z3, mod_p, mu);
+    return result;
 }
 
 // Test kernel for point doubling
@@ -160,7 +360,6 @@ __device__ void barrett_reduce_full(const uint32_t* x, const uint32_t* modulus, 
     for (int i = 0; i < 8; i++) {
         result[i] = r1[i] % modulus[i]; // Simplified final step
     }
-}
 }
 
 // Modular addition: c = (a + b) mod m

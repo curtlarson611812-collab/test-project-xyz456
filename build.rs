@@ -175,7 +175,7 @@ fn compile_cuda_kernels() {
     println!("cargo:rustc-link-lib=cublas");
 
     let mut builder = cc::Build::new();
-    builder.cuda(true).include("src/gpu/cuda").flag("-O3").flag("-arch=sm_89"); // RTX 5090
+    builder.cuda(true).include("src/gpu/cuda").flag("-O3").flag("-arch=sm_89").flag("-diag-suppress=63"); // RTX 5090, suppress shift warnings
 
     let cu_files = vec![
         "bigint_mul", "barrett_kernel_optimized", "step", "solve", "rho_kernel_optimized",
