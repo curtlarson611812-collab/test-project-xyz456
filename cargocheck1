@@ -1,0 +1,2409 @@
+warning: speedbitcrack@0.1.0: Successfully opened valuable_p2pk_pubkeys.txt for bias computation
+warning: speedbitcrack@0.1.0: Failed to compile bigint_mul.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile barrett_kernel_optimized.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile step.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile solve.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile rho_kernel_optimized.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile bias_check_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Compiled gold_cluster.cu -> gold_cluster.ptx
+warning: speedbitcrack@0.1.0: Failed to compile mod27_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile mod81_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile mod9_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile prime_test_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile refine_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile texture_jump_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile texture_jump_optimized.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Compiled hybrid.cu -> hybrid.ptx
+warning: speedbitcrack@0.1.0: Failed to compile inverse.cu (nvcc not found or compilation error)
+    Checking speedbitcrack v0.1.0 (/data/Projects/SpeedBitCrackV3)
+error[E0407]: method `precomp_table_glv` is not a member of trait `GpuBackend`
+   --> src/gpu/backends/cpu_backend.rs:131:5
+    |
+131 |       fn precomp_table_glv(&self, base: [u32;8*3], window: u32) -> Result<Vec<[[u32;8];3]>> {
+    |       ^  ----------------- help: there is an associated function with a similar name: `precomp_table`
+    |  _____|
+    | |
+132 | |         let num_points = 1 << (window - 1);
+133 | |         let mut table = Vec::with_capacity(num_points);
+...   |
+153 | |         Ok(table)
+154 | |     }
+    | |_____^ not a member of trait `GpuBackend`
+
+error[E0201]: duplicate definitions with name `safe_diff_mod_n`:
+   --> src/gpu/backends/cpu_backend.rs:641:5
+    |
+493 | /     fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u3...
+494 | |         // Safe modular difference: (tame_dist - wild_dist) mod n
+495 | |         let tame_big = num_bigint::BigUint::from_slice(&tame_dist);
+496 | |         let wild_big = num_bigint::BigUint::from_slice(&wild_dist);
+...   |
+516 | |         Ok(result)
+517 | |     }
+    | |_____- previous definition here
+...
+641 | /     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+642 | |         // CPU implementation: (tame - wild) mod n, handling negative results
+643 | |         let tame_big = BigInt256 { limbs: tame };
+644 | |         let wild_big = BigInt256 { limbs: wild };
+...   |
+652 | |         Ok(diff.limbs)
+653 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:57:5
+    |
+ 57 |       fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]>;
+    |       --------------------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `mul_glv_opt`:
+   --> src/gpu/backends/cpu_backend.rs:655:5
+    |
+519 | /     fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+...   |
+524 | |     }
+    | |_____- previous definition here
+...
+655 | /     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+656 | |         // CPU GLV-optimized scalar multiplication
+657 | |         self.scalar_mul_glv(p, k)
+658 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:63:5
+    |
+ 63 |       fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |       ------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `scalar_mul_glv`:
+   --> src/gpu/backends/cpu_backend.rs:660:5
+    |
+579 | /     fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+580 | |         // Scalar multiplication with GLV optimization placeholder
+581 | |         self.mul_glv_opt(p, k)
+582 | |     }
+    | |_____- previous definition here
+...
+660 | /     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+661 | |         // CPU scalar multiplication (placeholder - needs full EC arithmetic)
+662 | |         Ok([[0u32; 8]; 3])
+663 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:75:5
+    |
+ 75 |       fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |       ---------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `mod_small`:
+   --> src/gpu/backends/cpu_backend.rs:665:5
+    |
+584 | /     fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+585 | |         let x_big = num_bigint::BigUint::from_slice(&x);
+586 | |         let modulus_big = num_bigint::BigUint::from(modulus);
+...   |
+589 | |         Ok(result_big.to_u32_digits().first().copied().unwrap_or(0))
+590 | |     }
+    | |_____- previous definition here
+...
+665 | /     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
+666 | |         // CPU modular reduction to small modulus
+667 | |         let x_big = BigInt256 { limbs: x };
+668 | |         let modulus_big = BigInt256::from_u64(modulus as u64);
+669 | |         let result = x_big % modulus_big;
+670 | |         Ok(result.limbs[0])
+671 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:78:5
+    |
+ 78 |       fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32>;
+    |       ------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `batch_mod_small`:
+   --> src/gpu/backends/cpu_backend.rs:673:5
+    |
+592 | /     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+593 | |         let mut results = Vec::with_capacity(points.len());
+594 | |         let modulus_big = num_bigint::BigUint::from(modulus);
+...   |
+603 | |         Ok(results)
+604 | |     }
+    | |_____- previous definition here
+...
+673 | /     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+674 | |         // CPU batch modular reduction
+675 | |         points.iter().map(|point| self.mod_small(point[0], modulus)).collect()
+676 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:81:5
+    |
+ 81 |       fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>>;
+    |       --------------------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `rho_walk`:
+   --> src/gpu/backends/cpu_backend.rs:678:5
+    |
+606 | /     fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super...
+607 | |         // Placeholder rho walk implementation
+608 | |         // In full implementation, would perform Floyd's cycle detection
+609 | |         Ok(super::backend_trait::RhoWalkResult {
+...   |
+613 | |         })
+614 | |     }
+    | |_____- previous definition here
+...
+678 | /     fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalk...
+679 | |         // CPU rho walk implementation (placeholder)
+680 | |         Ok(RhoWalkResult {
+681 | |             cycle_len: 42,
+...   |
+684 | |         })
+685 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:84:5
+    |
+ 84 |       fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkResult>;
+    |       ------------------------------------------------------------------------------------------------------ item in trait
+
+error[E0201]: duplicate definitions with name `solve_post_walk`:
+   --> src/gpu/backends/cpu_backend.rs:687:5
+    |
+616 | /     fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[...
+617 | |         // Placeholder post-walk solve
+618 | |         Ok(None)
+619 | |     }
+    | |_____- previous definition here
+...
+687 | /     fn solve_post_walk(&self, walk_result: &RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<O...
+688 | |         // CPU post-walk solving (placeholder)
+689 | |         Ok(Some([42, 0, 0, 0, 0, 0, 0, 0]))
+690 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:87:5
+    |
+ 87 |       fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>>;
+    |       ----------------------------------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `generate_preseed_pos`:
+   --> src/gpu/backends/cpu_backend.rs:692:5
+    |
+625 | /     fn generate_preseed_pos(&self, range_min: &crate::math::BigInt256, range_width: &crate::math::...
+626 | |         Err(anyhow!("CPU backend not available"))
+627 | |     }
+    | |_____- previous definition here
+...
+692 | /     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f...
+693 | |         Ok(crate::utils::bias::generate_preseed_pos(range_min, range_width))
+694 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:96:5
+    |
+ 96 |       fn generate_preseed_pos(&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>>;
+    |       ----------------------------------------------------------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `blend_proxy_preseed`:
+   --> src/gpu/backends/cpu_backend.rs:696:5
+    |
+629 | /     fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<...
+630 | |         Err(anyhow!("CPU backend not available"))
+631 | |     }
+    | |_____- previous definition here
+...
+696 | /     fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<...
+697 | |         Ok(crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights...
+698 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:99:5
+    |
+ 99 |       fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>>;
+    |       ------------------------------------------------------------------------------------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `analyze_preseed_cascade`:
+   --> src/gpu/backends/cpu_backend.rs:700:5
+    |
+633 | /     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64...
+634 | |         Err(anyhow!("CPU backend not available"))
+635 | |     }
+    | |_____- previous definition here
+...
+700 | /     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64...
+701 | |         Ok(crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins))
+702 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:102:5
+    |
+102 |       fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)>;
+    |       -------------------------------------------------------------------------------------------------- item in trait
+
+error[E0407]: method `batch_mul` is not a member of trait `GpuBackend`
+   --> src/gpu/backends/hybrid_backend.rs:554:5
+    |
+554 | /     fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+555 | |         // Dispatch to CUDA for precision multiplication
+556 | |         #[cfg(feature = "rustacuda")]
+...   |
+564 | |     }
+    | |_____^ not a member of trait `GpuBackend`
+
+error[E0201]: duplicate definitions with name `safe_diff_mod_n`:
+   --> src/gpu/backends/hybrid_backend.rs:738:5
+    |
+578 | /     fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u3...
+579 | |         // Dispatch to CUDA for modular difference
+580 | |         #[cfg(feature = "rustacuda")]
+...   |
+588 | |     }
+    | |_____- previous definition here
+...
+738 | /     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+739 | |         // Dispatch to CUDA for precision modular arithmetic
+740 | |         #[cfg(feature = "rustacuda")]
+...   |
+748 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:57:5
+    |
+ 57 |       fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]>;
+    |       --------------------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `mul_glv_opt`:
+   --> src/gpu/backends/hybrid_backend.rs:750:5
+    |
+602 | /     fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+603 | |         // Dispatch to CUDA for GLV multiplication
+604 | |         #[cfg(feature = "rustacuda")]
+...   |
+612 | |     }
+    | |_____- previous definition here
+...
+750 | /     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+751 | |         // Dispatch to CUDA for GLV optimization
+752 | |         #[cfg(feature = "rustacuda")]
+...   |
+760 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:63:5
+    |
+ 63 |       fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |       ------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `scalar_mul_glv`:
+   --> src/gpu/backends/hybrid_backend.rs:762:5
+    |
+650 | /     fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+651 | |         // Dispatch to CUDA for scalar multiplication with GLV
+652 | |         #[cfg(feature = "rustacuda")]
+...   |
+660 | |     }
+    | |_____- previous definition here
+...
+762 | /     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+763 | |         // Dispatch to CUDA for GLV scalar multiplication
+764 | |         #[cfg(feature = "rustacuda")]
+...   |
+772 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:75:5
+    |
+ 75 |       fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |       ---------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `mod_small`:
+   --> src/gpu/backends/hybrid_backend.rs:774:5
+    |
+662 | /     fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+663 | |         // Dispatch to CPU for small modulus
+664 | |         self.cpu.mod_small(x, modulus)
+665 | |     }
+    | |_____- previous definition here
+...
+774 | /     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
+775 | |         // Dispatch to CUDA for modular reduction
+776 | |         #[cfg(feature = "rustacuda")]
+...   |
+784 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:78:5
+    |
+ 78 |       fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32>;
+    |       ------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `batch_mod_small`:
+   --> src/gpu/backends/hybrid_backend.rs:786:5
+    |
+667 | /     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+668 | |         // Dispatch to CPU for batch small modulus
+669 | |         self.cpu.batch_mod_small(points, modulus)
+670 | |     }
+    | |_____- previous definition here
+...
+786 | /     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+787 | |         // Dispatch to CUDA for batch modular reduction
+788 | |         #[cfg(feature = "rustacuda")]
+...   |
+796 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:81:5
+    |
+ 81 |       fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>>;
+    |       --------------------------------------------------------------------------------------- item in trait
+
+error[E0201]: duplicate definitions with name `rho_walk`:
+   --> src/gpu/backends/hybrid_backend.rs:798:5
+    |
+672 | /     fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super...
+673 | |         // Dispatch to CPU for rho walk (simplified)
+674 | |         self.cpu.rho_walk(tortoise, hare, max_steps)
+675 | |     }
+    | |_____- previous definition here
+...
+798 | /     fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalk...
+799 | |         // Dispatch to CUDA for rho walk
+800 | |         #[cfg(feature = "rustacuda")]
+...   |
+808 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:84:5
+    |
+ 84 |       fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkResult>;
+    |       ------------------------------------------------------------------------------------------------------ item in trait
+
+error[E0201]: duplicate definitions with name `solve_post_walk`:
+   --> src/gpu/backends/hybrid_backend.rs:810:5
+    |
+677 | /     fn solve_post_walk(&self, walk_result: &super::backend_trait::RhoWalkResult, targets: &Vec<[[u...
+678 | |         // Dispatch to CPU for post-walk solve
+679 | |         self.cpu.solve_post_walk(walk_result, targets)
+680 | |     }
+    | |_____- previous definition here
+...
+810 | /     fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u3...
+811 | |         // Dispatch to CUDA for post-walk solving
+812 | |         #[cfg(feature = "rustacuda")]
+...   |
+820 | |     }
+    | |_____^ duplicate definition
+    |
+   ::: src/gpu/backends/backend_trait.rs:87:5
+    |
+ 87 |       fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>>;
+    |       ----------------------------------------------------------------------------------------------------- item in trait
+
+error[E0425]: cannot find type `DpEntry` in module `crate::dp`
+  --> src/gpu/backends/backend_trait.rs:39:48
+   |
+39 |     fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Op...
+   |                                                ^^^^^^^ not found in `crate::dp`
+   |
+help: consider importing this struct
+   |
+ 5 + use crate::types::DpEntry;
+   |
+help: if you import `DpEntry`, refer to it directly
+   |
+39 -     fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>>;
+39 +     fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>>;
+   |
+
+error[E0425]: cannot find value `inputs` in this scope
+   --> src/gpu/backends/cpu_backend.rs:202:46
+    |
+202 |         let mut results = Vec::with_capacity(inputs.len());
+    |                                              ^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `inputs` in this scope
+   --> src/gpu/backends/cpu_backend.rs:205:22
+    |
+205 |         for input in inputs {
+    |                      ^^^^^^ not found in this scope
+
+error[E0425]: cannot find type `DpEntry` in module `crate::dp`
+   --> src/gpu/backends/cpu_backend.rs:237:48
+    |
+237 |     fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<O...
+    |                                                ^^^^^^^ not found in `crate::dp`
+    |
+help: consider importing this struct
+    |
+  5 + use crate::types::DpEntry;
+    |
+help: if you import `DpEntry`, refer to it directly
+    |
+237 -     fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+237 +     fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    |
+
+error[E0425]: cannot find value `alphas` in this scope
+   --> src/gpu/backends/cpu_backend.rs:241:30
+    |
+241 |         for (alpha, beta) in alphas.iter().zip(betas.iter()) {
+    |                              ^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `betas` in this scope
+   --> src/gpu/backends/cpu_backend.rs:241:48
+    |
+241 |         for (alpha, beta) in alphas.iter().zip(betas.iter()) {
+    |                                                ^^^^^ not found in this scope
+
+error[E0425]: cannot find value `positions` in this scope
+   --> src/gpu/backends/cpu_backend.rs:428:47
+    |
+428 |         let mut x_coords = Vec::with_capacity(positions.len());
+    |                                               ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `positions` in this scope
+   --> src/gpu/backends/cpu_backend.rs:429:47
+    |
+429 |         let mut y_coords = Vec::with_capacity(positions.len());
+    |                                               ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `modulus` in this scope
+   --> src/gpu/backends/cpu_backend.rs:431:60
+    |
+431 | ...   let modulus_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<...
+    |                                                          ^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `positions` in this scope
+   --> src/gpu/backends/cpu_backend.rs:433:22
+    |
+433 |         for point in positions {
+    |                      ^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find type `RhoWalkResult` in this scope
+   --> src/gpu/backends/cpu_backend.rs:678:92
+    |
+678 | ...3], max_steps: u32) -> Result<RhoWalkResult> {
+    |                                  ^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  5 + use crate::gpu::RhoWalkResult;
+    |
+
+error[E0422]: cannot find struct, variant or union type `RhoWalkResult` in this scope
+   --> src/gpu/backends/cpu_backend.rs:680:12
+    |
+680 |         Ok(RhoWalkResult {
+    |            ^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  5 + use crate::gpu::RhoWalkResult;
+    |
+
+error[E0425]: cannot find type `RhoWalkResult` in this scope
+   --> src/gpu/backends/cpu_backend.rs:687:45
+    |
+687 |     fn solve_post_walk(&self, walk_result: &RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Opt...
+    |                                             ^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  5 + use crate::gpu::RhoWalkResult;
+    |
+
+error[E0425]: cannot find type `DpEntry` in module `crate::dp`
+   --> src/gpu/backends/hybrid_backend.rs:518:48
+    |
+518 |     fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<O...
+    |                                                ^^^^^^^ not found in `crate::dp`
+    |
+help: consider importing this struct
+    |
+  5 + use crate::types::DpEntry;
+    |
+help: if you import `DpEntry`, refer to it directly
+    |
+518 -     fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+518 +     fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    |
+
+error[E0425]: cannot find type `RhoWalkResult` in this scope
+   --> src/gpu/backends/hybrid_backend.rs:798:92
+    |
+798 | ...3], max_steps: u32) -> Result<RhoWalkResult> {
+    |                                  ^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  5 + use crate::gpu::RhoWalkResult;
+    |
+
+error[E0425]: cannot find type `RhoWalkResult` in this scope
+   --> src/gpu/backends/hybrid_backend.rs:810:37
+    |
+810 |     fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;...
+    |                                     ^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct through its public re-export
+    |
+  5 + use crate::gpu::RhoWalkResult;
+    |
+
+warning: unused import: `std::path::Path`
+  --> src/kangaroo/manager.rs:26:5
+   |
+26 | use std::path::Path;
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::types::DpEntry`
+ --> src/gpu/backends/backend_trait.rs:6:5
+  |
+6 | use crate::types::DpEntry;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::math::bigint::BigInt256`
+ --> src/dp/table.rs:6:5
+  |
+6 | use crate::math::bigint::BigInt256;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::math::bigint::BigInt256`
+ --> src/dp/pruning.rs:6:5
+  |
+6 | use crate::math::bigint::BigInt256;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0053]: method `precomp_table` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1166:38
+     |
+1166 | ...e(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+     |                      ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `Vec<[u32; 8]>`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:25:35
+     |
+  25 |     fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>>;
+     |                                   ^^^^^^^^^^^
+     = note: expected signature `fn(&CudaBackend, [[u32; 8]; 3], u32) -> Result<Vec<[[u32; 8]; 3]>, _>`
+                found signature `fn(&CudaBackend, Vec<[u32; 8]>, [u32; 8]) -> Result<(Vec<[[u32; 8]; 3]>, Vec<[u32; 8]>), _>`
+help: change the parameter type to match the trait
+     |
+1166 -     fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+1166 +     fn precomp_table(&self, _primes: [[u32; 8]; 3], _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+     |
+
+error[E0053]: method `batch_inverse` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1178:38
+     |
+1178 |     fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+     |                                      ^^^^^^^^^^^^ expected `&Vec<[u32; 8]>`, found `Vec<[u32; 8]>`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:36:32
+     |
+  36 |     fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>>;
+     |                                ^^^^^^^^^^^^^
+     = note: expected signature `fn(&CudaBackend, &Vec<_>, _) -> Result<_, _>`
+                found signature `fn(&CudaBackend, Vec<_>, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+     |
+1178 -     fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+1178 +     fn batch_inverse(&self, _inputs: &Vec<[u32; 8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+     |
+
+error[E0050]: method `batch_to_affine` has 3 parameters but the declaration in trait `backend_trait::GpuBackend::batch_to_affine` has 2
+    --> src/gpu/backends/cuda_backend.rs:1198:24
+     |
+1198 | ...fine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8...
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 3
+     |
+    ::: src/gpu/backends/backend_trait.rs:54:24
+     |
+  54 |     fn batch_to_affine(&self, points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>>;
+     |                        -------------------------------- trait requires 2 parameters
+
+error[E0053]: method `safe_diff_mod_n` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1206:43
+     |
+1206 |     fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[...
+     |                                           ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:57:37
+     |
+  57 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]>;
+     |                                     ^^^^^^^
+     = note: expected signature `fn(&CudaBackend, _, _, _) -> Result<_, _>`
+                found signature `fn(&CudaBackend, &_, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+     |
+1206 -     fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+1206 +     fn safe_diff_mod_n(&self, _tame_dist: [u32; 8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+     |
+
+error[E0053]: method `mul_glv_opt` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1214:31
+     |
+1214 |     fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+     |                               ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:63:30
+     |
+  63 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+     |                              ^^^^^^^^^^^
+     = note: expected signature `fn(&CudaBackend, _, _) -> Result<_, _>`
+                found signature `fn(&CudaBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+     |
+1214 -     fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+1214 +     fn mul_glv_opt(&self, _p: [[u32; 8]; 3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+     |
+
+error[E0053]: method `scalar_mul_glv` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1230:34
+     |
+1230 |     fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+     |                                  ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:75:33
+     |
+  75 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+     |                                 ^^^^^^^^^^^
+     = note: expected signature `fn(&CudaBackend, _, _) -> Result<_, _>`
+                found signature `fn(&CudaBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+     |
+1230 -     fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+1230 +     fn scalar_mul_glv(&self, _p: [[u32; 8]; 3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+     |
+
+error[E0053]: method `mod_small` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1234:29
+     |
+1234 |     fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+     |                             ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:78:28
+     |
+  78 |     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32>;
+     |                            ^^^^^^^
+     = note: expected signature `fn(&CudaBackend, _, _) -> Result<_, _>`
+                found signature `fn(&CudaBackend, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+     |
+1234 -     fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+1234 +     fn mod_small(&self, _x: [u32; 8], _modulus: u32) -> Result<u32> {
+     |
+
+error[E0053]: method `rho_walk` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1242:35
+     |
+1242 |     fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<sup...
+     |                                   ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:84:34
+     |
+  84 |     fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkR...
+     |                                  ^^^^^^^^^^^
+     = note: expected signature `fn(&CudaBackend, _, _, _) -> Result<_, _>`
+                found signature `fn(&CudaBackend, &_, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+     |
+1242 -     fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+1242 +     fn rho_walk(&self, _tortoise: [[u32; 8]; 3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+     |
+
+error[E0053]: method `solve_post_walk` has an incompatible type for trait
+    --> src/gpu/backends/cuda_backend.rs:1246:45
+     |
+1246 | ...ult: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]...
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `RhoWalkResult`, found `&RhoWalkResult`
+     |
+note: type in trait
+    --> src/gpu/backends/backend_trait.rs:87:37
+     |
+  87 |     fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32...
+     |                                     ^^^^^^^^^^^^^
+     = note: expected signature `fn(&CudaBackend, RhoWalkResult, Vec<_>) -> Result<_, _>`
+                found signature `fn(&CudaBackend, &RhoWalkResult, &Vec<_>) -> Result<_, _>`
+help: change the parameter type to match the trait
+     |
+1246 -     fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+1246 +     fn solve_post_walk(&self, _walk_result: RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+     |
+
+error[E0053]: method `precomp_table` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:423:38
+    |
+423 |     fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<...
+    |                                      ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `Vec<[u32; 8]>`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:25:35
+    |
+ 25 |     fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>>;
+    |                                   ^^^^^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, [[u32; 8]; 3], u32) -> Result<Vec<[[u32; 8]; 3]>, _>`
+               found signature `fn(&WgpuBackend, Vec<[u32; 8]>, [u32; 8]) -> Result<(Vec<[[u32; 8]; 3]>, Vec<[u32; 8]>), _>`
+help: change the parameter type to match the trait
+    |
+423 -     fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+423 +     fn precomp_table(&self, _primes: [[u32; 8]; 3], _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+    |
+
+error[E0053]: method `batch_inverse` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:439:38
+    |
+439 |     fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    |                                      ^^^^^^^^^^^^ expected `&Vec<[u32; 8]>`, found `Vec<[u32; 8]>`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:36:32
+    |
+ 36 |     fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>>;
+    |                                ^^^^^^^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, &Vec<_>, _) -> Result<_, _>`
+               found signature `fn(&WgpuBackend, Vec<_>, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+439 -     fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+439 +     fn batch_inverse(&self, _inputs: &Vec<[u32; 8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    |
+
+error[E0050]: method `batch_to_affine` has 3 parameters but the declaration in trait `backend_trait::GpuBackend::batch_to_affine` has 2
+   --> src/gpu/backends/vulkan_backend.rs:459:24
+    |
+459 | ...ffine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8...
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 3
+    |
+   ::: src/gpu/backends/backend_trait.rs:54:24
+    |
+ 54 |     fn batch_to_affine(&self, points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>>;
+    |                        -------------------------------- trait requires 2 parameters
+
+error[E0053]: method `safe_diff_mod_n` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:463:43
+    |
+463 |     fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u...
+    |                                           ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:57:37
+    |
+ 57 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]>;
+    |                                     ^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, _, _, _) -> Result<_, _>`
+               found signature `fn(&WgpuBackend, &_, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+463 -     fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+463 +     fn safe_diff_mod_n(&self, _tame_dist: [u32; 8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+    |
+
+error[E0053]: method `mul_glv_opt` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:471:31
+    |
+471 |     fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |                               ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:63:30
+    |
+ 63 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |                              ^^^^^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, _, _) -> Result<_, _>`
+               found signature `fn(&WgpuBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+471 -     fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+471 +     fn mul_glv_opt(&self, _p: [[u32; 8]; 3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |
+
+error[E0053]: method `scalar_mul_glv` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:487:34
+    |
+487 |     fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |                                  ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:75:33
+    |
+ 75 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |                                 ^^^^^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, _, _) -> Result<_, _>`
+               found signature `fn(&WgpuBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+487 -     fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+487 +     fn scalar_mul_glv(&self, _p: [[u32; 8]; 3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |
+
+error[E0053]: method `mod_small` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:491:29
+    |
+491 |     fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+    |                             ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:78:28
+    |
+ 78 |     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32>;
+    |                            ^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, _, _) -> Result<_, _>`
+               found signature `fn(&WgpuBackend, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+491 -     fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+491 +     fn mod_small(&self, _x: [u32; 8], _modulus: u32) -> Result<u32> {
+    |
+
+error[E0053]: method `rho_walk` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:499:35
+    |
+499 |     fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<supe...
+    |                                   ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:84:34
+    |
+ 84 |     fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkRe...
+    |                                  ^^^^^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, _, _, _) -> Result<_, _>`
+               found signature `fn(&WgpuBackend, &_, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+499 -     fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+499 +     fn rho_walk(&self, _tortoise: [[u32; 8]; 3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    |
+
+error[E0053]: method `solve_post_walk` has an incompatible type for trait
+   --> src/gpu/backends/vulkan_backend.rs:503:45
+    |
+503 | ...sult: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]...
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `RhoWalkResult`, found `&RhoWalkResult`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:87:37
+    |
+ 87 |     fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;...
+    |                                     ^^^^^^^^^^^^^
+    = note: expected signature `fn(&WgpuBackend, RhoWalkResult, Vec<_>) -> Result<_, _>`
+               found signature `fn(&WgpuBackend, &RhoWalkResult, &Vec<_>) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+503 -     fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+503 +     fn solve_post_walk(&self, _walk_result: RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    |
+
+error[E0053]: method `precomp_table` has an incompatible type for trait
+   --> src/gpu/backends/cpu_backend.rs:105:37
+    |
+105 |     fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u...
+    |                                     ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `Vec<[u32; 8]>`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:25:35
+    |
+ 25 |     fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>>;
+    |                                   ^^^^^^^^^^^
+    = note: expected signature `fn(&cpu_backend::CpuBackend, [[u32; 8]; 3], u32) -> Result<Vec<[[u32; 8]; 3]>, _>`
+               found signature `fn(&cpu_backend::CpuBackend, Vec<[u32; 8]>, [u32; 8]) -> Result<(Vec<[[u32; 8]; 3]>, Vec<[u32; 8]>), _>`
+help: change the parameter type to match the trait
+    |
+105 -     fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+105 +     fn precomp_table(&self, primes: [[u32; 8]; 3], base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+    |
+
+error[E0053]: method `safe_diff_mod_n` has an incompatible type for trait
+   --> src/gpu/backends/cpu_backend.rs:493:42
+    |
+493 |     fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;...
+    |                                          ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:57:37
+    |
+ 57 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]>;
+    |                                     ^^^^^^^
+    = note: expected signature `fn(&cpu_backend::CpuBackend, _, _, _) -> Result<_, _>`
+               found signature `fn(&cpu_backend::CpuBackend, &_, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+493 -     fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+493 +     fn safe_diff_mod_n(&self, tame_dist: [u32; 8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+    |
+
+error[E0053]: method `mul_glv_opt` has an incompatible type for trait
+   --> src/gpu/backends/cpu_backend.rs:519:30
+    |
+519 |     fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |                              ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:63:30
+    |
+ 63 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |                              ^^^^^^^^^^^
+    = note: expected signature `fn(&cpu_backend::CpuBackend, _, _) -> Result<_, _>`
+               found signature `fn(&cpu_backend::CpuBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+519 -     fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+519 +     fn mul_glv_opt(&self, p: [[u32; 8]; 3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |
+
+error[E0053]: method `scalar_mul_glv` has an incompatible type for trait
+   --> src/gpu/backends/cpu_backend.rs:579:33
+    |
+579 |     fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |                                 ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:75:33
+    |
+ 75 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |                                 ^^^^^^^^^^^
+    = note: expected signature `fn(&cpu_backend::CpuBackend, _, _) -> Result<_, _>`
+               found signature `fn(&cpu_backend::CpuBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+579 -     fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+579 +     fn scalar_mul_glv(&self, p: [[u32; 8]; 3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |
+
+error[E0053]: method `mod_small` has an incompatible type for trait
+   --> src/gpu/backends/cpu_backend.rs:584:28
+    |
+584 |     fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+    |                            ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:78:28
+    |
+ 78 |     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32>;
+    |                            ^^^^^^^
+    = note: expected signature `fn(&cpu_backend::CpuBackend, _, _) -> Result<_, _>`
+               found signature `fn(&cpu_backend::CpuBackend, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+584 -     fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+584 +     fn mod_small(&self, x: [u32; 8], modulus: u32) -> Result<u32> {
+    |
+
+error[E0053]: method `rho_walk` has an incompatible type for trait
+   --> src/gpu/backends/cpu_backend.rs:606:34
+    |
+606 |     fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::...
+    |                                  ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:84:34
+    |
+ 84 |     fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkRe...
+    |                                  ^^^^^^^^^^^
+    = note: expected signature `fn(&cpu_backend::CpuBackend, _, _, _) -> Result<_, _>`
+               found signature `fn(&cpu_backend::CpuBackend, &_, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+606 -     fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+606 +     fn rho_walk(&self, tortoise: [[u32; 8]; 3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    |
+
+error[E0053]: method `solve_post_walk` has an incompatible type for trait
+   --> src/gpu/backends/cpu_backend.rs:616:45
+    |
+616 | ...sult: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]...
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `RhoWalkResult`, found `&RhoWalkResult`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:87:37
+    |
+ 87 |     fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;...
+    |                                     ^^^^^^^^^^^^^
+    = note: expected signature `fn(&cpu_backend::CpuBackend, RhoWalkResult, Vec<_>) -> Result<_, _>`
+               found signature `fn(&cpu_backend::CpuBackend, &RhoWalkResult, &Vec<_>) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+616 -     fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+616 +     fn solve_post_walk(&self, _walk_result: RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    |
+
+error[E0053]: method `batch_inverse` has an incompatible type for trait
+   --> src/gpu/backends/hybrid_backend.rs:506:37
+    |
+506 |     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    |                                     ^^^^^^^^^^^^ expected `&Vec<[u32; 8]>`, found `Vec<[u32; 8]>`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:36:32
+    |
+ 36 |     fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>>;
+    |                                ^^^^^^^^^^^^^
+    = note: expected signature `fn(&hybrid_backend::HybridBackend, &Vec<_>, _) -> Result<_, _>`
+               found signature `fn(&hybrid_backend::HybridBackend, Vec<_>, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+506 -     fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+506 +     fn batch_inverse(&self, inputs: &Vec<[u32; 8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    |
+
+error[E0050]: method `batch_to_affine` has 3 parameters but the declaration in trait `backend_trait::GpuBackend::batch_to_affine` has 2
+   --> src/gpu/backends/hybrid_backend.rs:566:24
+    |
+566 | ...affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]...
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 3
+    |
+   ::: src/gpu/backends/backend_trait.rs:54:24
+    |
+ 54 |     fn batch_to_affine(&self, points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>>;
+    |                        -------------------------------- trait requires 2 parameters
+
+error[E0053]: method `safe_diff_mod_n` has an incompatible type for trait
+   --> src/gpu/backends/hybrid_backend.rs:578:42
+    |
+578 |     fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;...
+    |                                          ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:57:37
+    |
+ 57 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]>;
+    |                                     ^^^^^^^
+    = note: expected signature `fn(&hybrid_backend::HybridBackend, _, _, _) -> Result<_, _>`
+               found signature `fn(&hybrid_backend::HybridBackend, &_, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+578 -     fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+578 +     fn safe_diff_mod_n(&self, tame_dist: [u32; 8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+    |
+
+error[E0053]: method `mul_glv_opt` has an incompatible type for trait
+   --> src/gpu/backends/hybrid_backend.rs:602:30
+    |
+602 |     fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |                              ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:63:30
+    |
+ 63 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |                              ^^^^^^^^^^^
+    = note: expected signature `fn(&hybrid_backend::HybridBackend, _, _) -> Result<_, _>`
+               found signature `fn(&hybrid_backend::HybridBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+602 -     fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+602 +     fn mul_glv_opt(&self, p: [[u32; 8]; 3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |
+
+error[E0053]: method `scalar_mul_glv` has an incompatible type for trait
+   --> src/gpu/backends/hybrid_backend.rs:650:33
+    |
+650 |     fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |                                 ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:75:33
+    |
+ 75 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |                                 ^^^^^^^^^^^
+    = note: expected signature `fn(&hybrid_backend::HybridBackend, _, _) -> Result<_, _>`
+               found signature `fn(&hybrid_backend::HybridBackend, &_, &_) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+650 -     fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+650 +     fn scalar_mul_glv(&self, p: [[u32; 8]; 3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |
+
+error[E0053]: method `mod_small` has an incompatible type for trait
+   --> src/gpu/backends/hybrid_backend.rs:662:28
+    |
+662 |     fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+    |                            ^^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:78:28
+    |
+ 78 |     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32>;
+    |                            ^^^^^^^
+    = note: expected signature `fn(&hybrid_backend::HybridBackend, _, _) -> Result<_, _>`
+               found signature `fn(&hybrid_backend::HybridBackend, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+662 -     fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+662 +     fn mod_small(&self, x: [u32; 8], modulus: u32) -> Result<u32> {
+    |
+
+error[E0053]: method `rho_walk` has an incompatible type for trait
+   --> src/gpu/backends/hybrid_backend.rs:672:34
+    |
+672 |     fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::...
+    |                                  ^^^^^^^^^^^^ expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:84:34
+    |
+ 84 |     fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkRe...
+    |                                  ^^^^^^^^^^^
+    = note: expected signature `fn(&hybrid_backend::HybridBackend, _, _, _) -> Result<_, _>`
+               found signature `fn(&hybrid_backend::HybridBackend, &_, &_, _) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+672 -     fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+672 +     fn rho_walk(&self, tortoise: [[u32; 8]; 3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    |
+
+error[E0053]: method `solve_post_walk` has an incompatible type for trait
+   --> src/gpu/backends/hybrid_backend.rs:677:44
+    |
+677 | ...sult: &super::backend_trait::RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `RhoWalkResult`, found `&RhoWalkResult`
+    |
+note: type in trait
+   --> src/gpu/backends/backend_trait.rs:87:37
+    |
+ 87 |     fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;...
+    |                                     ^^^^^^^^^^^^^
+    = note: expected signature `fn(&hybrid_backend::HybridBackend, RhoWalkResult, Vec<_>) -> Result<_, _>`
+               found signature `fn(&hybrid_backend::HybridBackend, &RhoWalkResult, &Vec<_>) -> Result<_, _>`
+help: change the parameter type to match the trait
+    |
+677 -     fn solve_post_walk(&self, walk_result: &super::backend_trait::RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+677 +     fn solve_post_walk(&self, walk_result: RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    |
+
+error[E0046]: not all trait items implemented, missing: `batch_bigint_mul`
+   --> src/gpu/backends/hybrid_backend.rs:444:1
+    |
+444 | impl GpuBackend for HybridBackend {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `batch_bigint_mul` in implementation
+    |
+   ::: src/gpu/backends/backend_trait.rs:51:5
+    |
+ 51 |     fn batch_bigint_mul(&self, a: &Vec<[u32;8]>, b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>>;
+    |     ---------------------------------------------------------------------------------------- `batch_bigint_mul` from trait
+
+warning: variable does not need to be mutable
+  --> src/kangaroo/manager.rs:92:13
+   |
+92 |         let mut targets = if let Some(priority_path) = &config.priority_list {
+   |             ----^^^^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+error[E0592]: duplicate definitions with name `run_gpu_steps`
+    --> src/gpu/backends/hybrid_backend.rs:1209:5
+     |
+1200 |     fn run_gpu_steps(&self, num_steps: usize, _start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+     |     ------------------------------------------------------------------------------------------------------------------------------------------------------- other definition for `run_gpu_steps`
+...
+1209 |     fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `run_gpu_steps`
+
+error[E0592]: duplicate definitions with name `generate_preseed_pos`
+    --> src/gpu/backends/hybrid_backend.rs:1260:5
+     |
+1221 |     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
+     |     -------------------------------------------------------------------------------------------------- other definition for `generate_preseed_pos`
+...
+1260 |     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `generate_preseed_pos`
+
+error[E0592]: duplicate definitions with name `blend_proxy_preseed`
+    --> src/gpu/backends/hybrid_backend.rs:1273:5
+     |
+1234 |     fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+     |     ------------------------------------------------------------------------------------------------------------------------------------------------------ other definition for `blend_proxy_preseed`
+...
+1273 |     fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `blend_proxy_preseed`
+
+error[E0592]: duplicate definitions with name `analyze_preseed_cascade`
+    --> src/gpu/backends/hybrid_backend.rs:1286:5
+     |
+1247 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+     |     ------------------------------------------------------------------------------------------------- other definition for `analyze_preseed_cascade`
+...
+1286 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `analyze_preseed_cascade`
+
+error[E0063]: missing field `priority_list` in initializer of `config::Config`
+   --> src/config.rs:219:9
+    |
+219 |         Self {
+    |         ^^^^ missing `priority_list`
+
+error[E0599]: no method named `gen_range` found for struct `ThreadRng` in the current scope
+   --> src/gpu/backends/vulkan_backend.rs:534:30
+    |
+534 |             blended.push(rng.gen_range(0.0..1.0));
+    |                              ^^^^^^^^^
+    |
+   ::: /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand-0.8.5/src/rng.rs:129:8
+    |
+129 |     fn gen_range<T, R>(&mut self, range: R) -> T
+    |        --------- the method is available for `ThreadRng` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: there is a method `gen_ratio` with a similar name, but with different arguments
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand-0.8.5/src/rng.rs:299:5
+    |
+299 |     fn gen_ratio(&mut self, numerator: u32, denominator: u32) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: trait `Rng` which provides `gen_range` is implemented but not in scope; perhaps you want to import it
+    |
+  5 + use rand::Rng;
+    |
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:113:48
+    |
+113 |             let prime_big = BigInt256 { limbs: prime };
+    |                                                ^^^^^ expected `[u64; 4]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 4]`
+               found array `[u32; 8]`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:114:47
+    |
+114 |             let base_big = BigInt256 { limbs: base };
+    |                                               ^^^^ expected `[u64; 4]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 4]`
+               found array `[u32; 8]`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:122:27
+    |
+122 |                           [0u32; 8], [0u32; 8]]); // Jacobian format (X, Y=0, Z=1)
+    |                           ^^^^^^^^^ expected `[u64; 8]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 8]`
+               found array `[u32; 8]`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:175:24
+    |
+175 |                     x: positions[i][0],
+    |                        ^^^^^^^^^^^^^^^ expected `[u64; 4]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 4]`
+               found array `[u32; 8]`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:178:29
+    |
+178 |                     alpha: [0u32; 4],
+    |                             ^^^^ expected `u64`, found `u32`
+    |
+help: change the type of the numeric literal from `u32` to `u64`
+    |
+178 -                     alpha: [0u32; 4],
+178 +                     alpha: [0u64; 4],
+    |
+
+error[E0282]: type annotations needed
+   --> src/gpu/backends/cpu_backend.rs:207:62
+    |
+207 | ...   let input_big = num_bigint::BigUint::from_slice(&input.iter().rev().map(|&x| x).collect::<Vec<...
+    |                                                        ^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> src/gpu/backends/cpu_backend.rs:243:62
+    |
+243 | ...   let alpha_big = num_bigint::BigUint::from_slice(&alpha.iter().rev().map(|&x| x).collect::<Vec<...
+    |                                                        ^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> src/gpu/backends/cpu_backend.rs:244:61
+    |
+244 | ...   let beta_big = num_bigint::BigUint::from_slice(&beta.iter().rev().map(|&x| x).collect::<Vec<_>...
+    |                                                       ^^^^ cannot infer type
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:268:12
+    |
+262 |                 results.push(result);
+    |                 -------      ------ this argument has type `[u64; 4]`...
+    |                 |
+    |                 ... which causes `results` to have type `Vec<[u64; 4]>`
+...
+268 |         Ok(results)
+    |         -- ^^^^^^^ expected `Vec<Option<[u32; 8]>>`, found `Vec<[u64; 4]>`
+    |         |
+    |         arguments to this enum variant are incorrect
+    |
+    = note: expected struct `Vec<std::option::Option<[u32; 8]>>`
+               found struct `Vec<[u64; 4]>`
+help: the type constructed contains `Vec<[u64; 4]>` due to the type of the argument passed
+   --> src/gpu/backends/cpu_backend.rs:268:9
+    |
+268 |         Ok(results)
+    |         ^^^-------^
+    |            |
+    |            this argument influences the type of `Ok`
+note: tuple variant defined here
+   --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:561:5
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:339:53
+    |
+339 |         let x_big = num_bigint::BigUint::from_slice(&x);
+    |                     ------------------------------- ^^ expected `&[u32]`, found `&&[u32; 16]`
+    |                     |
+    |                     arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 16]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:340:59
+    |
+340 |         let modulus_big = num_bigint::BigUint::from_slice(&modulus);
+    |                           ------------------------------- ^^^^^^^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                           |
+    |                           arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:341:54
+    |
+341 |         let mu_big = num_bigint::BigUint::from_slice(&mu);
+    |                      ------------------------------- ^^^ expected `&[u32]`, found `&&[u32; 16]`
+    |                      |
+    |                      arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 16]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:490:12
+    |
+490 |         Ok((x_coords, y_coords))
+    |         -- ^^^^^^^^^^^^^^^^^^^^ expected `Vec<[[u32; 8]; 2]>`, found `(Vec<[u32; 8]>, Vec<[u32; 8]>)`
+    |         |
+    |         arguments to this enum variant are incorrect
+    |
+    = note: expected struct `Vec<[[u32; 8]; 2]>`
+                found tuple `(Vec<[u32; 8]>, Vec<[u32; 8]>)`
+help: the type constructed contains `(Vec<[u32; 8]>, Vec<[u32; 8]>)` due to the type of the argument passed
+   --> src/gpu/backends/cpu_backend.rs:490:9
+    |
+490 |         Ok((x_coords, y_coords))
+    |         ^^^--------------------^
+    |            |
+    |            this argument influences the type of `Ok`
+note: tuple variant defined here
+   --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:561:5
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:495:56
+    |
+495 |         let tame_big = num_bigint::BigUint::from_slice(&tame_dist);
+    |                        ------------------------------- ^^^^^^^^^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                        |
+    |                        arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:496:56
+    |
+496 |         let wild_big = num_bigint::BigUint::from_slice(&wild_dist);
+    |                        ------------------------------- ^^^^^^^^^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                        |
+    |                        arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:497:53
+    |
+497 |         let n_big = num_bigint::BigUint::from_slice(&n);
+    |                     ------------------------------- ^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                     |
+    |                     arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:527:53
+    |
+527 |         let a_big = num_bigint::BigUint::from_slice(&a);
+    |                     ------------------------------- ^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                     |
+    |                     arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:528:59
+    |
+528 |         let modulus_big = num_bigint::BigUint::from_slice(&modulus);
+    |                           ------------------------------- ^^^^^^^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                           |
+    |                           arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:546:53
+    |
+546 |         let a_big = num_bigint::BigUint::from_slice(&a);
+    |                     ------------------------------- ^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                     |
+    |                     arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:547:53
+    |
+547 |         let b_big = num_bigint::BigUint::from_slice(&b);
+    |                     ------------------------------- ^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                     |
+    |                     arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:563:53
+    |
+563 |         let a_big = num_bigint::BigUint::from_slice(&a);
+    |                     ------------------------------- ^^ expected `&[u32]`, found `&&[u32; 16]`
+    |                     |
+    |                     arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 16]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:564:59
+    |
+564 |         let modulus_big = num_bigint::BigUint::from_slice(&modulus);
+    |                           ------------------------------- ^^^^^^^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                           |
+    |                           arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: arguments to this method are incorrect
+   --> src/gpu/backends/cpu_backend.rs:581:14
+    |
+581 |         self.mul_glv_opt(p, k)
+    |              ^^^^^^^^^^^ -  - expected `[u32; 8]`, found `&[u32; 8]`
+    |                          |
+    |                          expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:63:8
+    |
+ 63 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |        ^^^^^^^^^^^        -               -
+help: consider dereferencing the borrow
+    |
+581 |         self.mul_glv_opt(*p, k)
+    |                          +
+help: consider dereferencing the borrow
+    |
+581 |         self.mul_glv_opt(p, *k)
+    |                             +
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:585:53
+    |
+585 |         let x_big = num_bigint::BigUint::from_slice(&x);
+    |                     ------------------------------- ^^ expected `&[u32]`, found `&&[u32; 8]`
+    |                     |
+    |                     arguments to this function are incorrect
+    |
+    = note: expected reference `&[u32]`
+               found reference `&&[u32; 8]`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-bigint-0.4.6/src/biguint.rs:556:12
+    |
+556 |     pub fn from_slice(slice: &[u32]) -> BigUint {
+    |            ^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:643:43
+    |
+643 |         let tame_big = BigInt256 { limbs: tame };
+    |                                           ^^^^ expected `[u64; 4]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 4]`
+               found array `[u32; 8]`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:644:43
+    |
+644 |         let wild_big = BigInt256 { limbs: wild };
+    |                                           ^^^^ expected `[u64; 4]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 4]`
+               found array `[u32; 8]`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:645:40
+    |
+645 |         let n_big = BigInt256 { limbs: n };
+    |                                        ^ expected `[u64; 4]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 4]`
+               found array `[u32; 8]`
+
+error[E0599]: no method named `wrapping_sub` found for struct `BigInt256` in the current scope
+   --> src/gpu/backends/cpu_backend.rs:647:33
+    |
+647 |         let mut diff = tame_big.wrapping_sub(&wild_big);
+    |                                 ^^^^^^^^^^^^
+    |
+   ::: src/math/bigint.rs:14:1
+    |
+ 14 | pub struct BigInt256 {
+    | -------------------- method `wrapping_sub` not found for this struct
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following traits define an item `wrapping_sub`, perhaps you need to implement one of them:
+            candidate #1: `num_traits::ops::wrapping::WrappingSub`
+            candidate #2: `zmij::traits::UInt`
+help: there is a method `wrapping_add` with a similar name
+    |
+647 -         let mut diff = tame_big.wrapping_sub(&wild_big);
+647 +         let mut diff = tame_big.wrapping_add(&wild_big);
+    |
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:667:40
+    |
+667 |         let x_big = BigInt256 { limbs: x };
+    |                                        ^ expected `[u64; 4]`, found `[u32; 8]`
+    |
+    = note: expected array `[u64; 4]`
+               found array `[u32; 8]`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:670:12
+    |
+670 |         Ok(result.limbs[0])
+    |         -- ^^^^^^^^^^^^^^^ expected `u32`, found `u64`
+    |         |
+    |         arguments to this enum variant are incorrect
+    |
+help: the type constructed contains `u64` due to the type of the argument passed
+   --> src/gpu/backends/cpu_backend.rs:670:9
+    |
+670 |         Ok(result.limbs[0])
+    |         ^^^---------------^
+    |            |
+    |            this argument influences the type of `Ok`
+note: tuple variant defined here
+   --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:561:5
+help: you can convert a `u64` to a `u32` and panic if the converted value doesn't fit
+    |
+670 |         Ok(result.limbs[0].try_into().unwrap())
+    |                           ++++++++++++++++++++
+
+error[E0614]: type `[[u32; 8]; 3]` cannot be dereferenced
+   --> src/gpu/backends/cpu_backend.rs:682:26
+    |
+682 |             cycle_point: *tortoise,
+    |                          ^^^^^^^^^ can't be dereferenced
+
+error[E0308]: arguments to this function are incorrect
+   --> src/gpu/backends/cpu_backend.rs:693:12
+    |
+693 |         Ok(crate::utils::bias::generate_preseed_pos(range_min, range_width))
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ---------  ----------- expected `&Scalar`, found `&BigInt256`
+    |                                                     |
+    |                                                     expected `&Scalar`, found `&BigInt256`
+    |
+    = note: expected reference `&k256::Scalar`
+               found reference `&BigInt256`
+    = note: expected reference `&k256::Scalar`
+               found reference `&BigInt256`
+note: function defined here
+   --> src/utils/bias.rs:227:8
+    |
+227 | pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64> {
+    |        ^^^^^^^^^^^^^^^^^^^^ ------------------  --------------------
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cpu_backend.rs:701:12
+    |
+701 |         Ok(crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins))
+    |         -- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `(Vec<f64>, Vec<f64>)`, found `Vec<(f64, f64)>`
+    |         |
+    |         arguments to this enum variant are incorrect
+    |
+    = note: expected tuple `(Vec<f64>, Vec<f64>)`
+              found struct `Vec<(f64, f64)>`
+help: the type constructed contains `Vec<(f64, f64)>` due to the type of the argument passed
+   --> src/gpu/backends/cpu_backend.rs:701:9
+    |
+701 |         Ok(crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins))
+    |         ^^^------------------------------------------------------------^
+    |            |
+    |            this argument influences the type of `Ok`
+note: tuple variant defined here
+   --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:561:5
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid_backend.rs:514:36
+    |
+514 |             self.cpu.batch_inverse(inputs, modulus)
+    |                      ------------- ^^^^^^ expected `&Vec<[u32; 8]>`, found `Vec<[u32; 8]>`
+    |                      |
+    |                      arguments to this method are incorrect
+    |
+    = note: expected reference `&Vec<_>`
+                  found struct `Vec<_>`
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:36:8
+    |
+ 36 |     fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>>;
+    |        ^^^^^^^^^^^^^        -
+help: consider borrowing here
+    |
+514 |             self.cpu.batch_inverse(&inputs, modulus)
+    |                                    +
+
+error[E0599]: no method named `batch_mul` found for struct `cpu_backend::CpuBackend` in the current scope
+   --> src/gpu/backends/hybrid_backend.rs:562:22
+    |
+562 |             self.cpu.batch_mul(a, b)
+    |                      ^^^^^^^^^
+    |
+   ::: src/gpu/backends/cpu_backend.rs:14:1
+    |
+ 14 | pub struct CpuBackend;
+    | --------------------- method `batch_mul` not found for this struct
+    |
+help: there is a method `batch_bigint_mul` with a similar name
+    |
+562 |             self.cpu.batch_bigint_mul(a, b)
+    |                            +++++++
+
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+   --> src/gpu/backends/hybrid_backend.rs:574:22
+    |
+574 |             self.cpu.batch_to_affine(positions, modulus)
+    |                      ^^^^^^^^^^^^^^^            ------- unexpected argument #2 of type `[u32; 8]`
+    |
+note: expected `&Vec<[[u32; 8]; 3]>`, found `Vec<[[u32; 8]; 3]>`
+   --> src/gpu/backends/hybrid_backend.rs:574:38
+    |
+574 |             self.cpu.batch_to_affine(positions, modulus)
+    |                                      ^^^^^^^^^
+    = note: expected reference `&Vec<_>`
+                  found struct `Vec<_>`
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:54:8
+    |
+ 54 |     fn batch_to_affine(&self, points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>>;
+    |        ^^^^^^^^^^^^^^^        ------
+help: consider borrowing here
+    |
+574 |             self.cpu.batch_to_affine(&positions, modulus)
+    |                                      +
+help: remove the extra argument
+    |
+574 -             self.cpu.batch_to_affine(positions, modulus)
+574 +             self.cpu.batch_to_affine(/* &Vec<[[u32; 8]; 3]> */)
+    |
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid_backend.rs:574:13
+    |
+566 | ...tch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+    |                                                                           ------------------------------------ expected `Result<(Vec<[u32; 8]>, Vec<[u32; 8]>), anyhow::Error>` because of return type
+...
+574 | ...   self.cpu.batch_to_affine(positions, modulus)
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<(Vec<[u32; 8]>, ...), ...>`, found `Result<Vec<[[u32; 8]; 2]>, Error>`
+    |
+    = note: expected enum `Result<(Vec<[u32; 8]>, Vec<[u32; 8]>), _>`
+               found enum `Result<Vec<[[u32; 8]; 2]>, _>`
+
+error[E0308]: arguments to this method are incorrect
+   --> src/gpu/backends/hybrid_backend.rs:586:22
+    |
+586 |             self.cpu.safe_diff_mod_n(tame_dist, wild_dist, n)
+    |                      ^^^^^^^^^^^^^^^ ---------  ---------  - expected `[u32; 8]`, found `&[u32; 8]`
+    |                                      |          |
+    |                                      |          expected `[u32; 8]`, found `&[u32; 8]`
+    |                                      expected `[u32; 8]`, found `&[u32; 8]`
+    |
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:57:8
+    |
+ 57 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]>;
+    |        ^^^^^^^^^^^^^^^        ----           ----           -
+help: consider dereferencing the borrow
+    |
+586 |             self.cpu.safe_diff_mod_n(*tame_dist, wild_dist, n)
+    |                                      +
+help: consider dereferencing the borrow
+    |
+586 |             self.cpu.safe_diff_mod_n(tame_dist, *wild_dist, n)
+    |                                                 +
+help: consider dereferencing the borrow
+    |
+586 |             self.cpu.safe_diff_mod_n(tame_dist, wild_dist, *n)
+    |                                                            +
+
+error[E0308]: arguments to this method are incorrect
+   --> src/gpu/backends/hybrid_backend.rs:610:22
+    |
+610 |             self.cpu.mul_glv_opt(p, k)
+    |                      ^^^^^^^^^^^ -  - expected `[u32; 8]`, found `&[u32; 8]`
+    |                                  |
+    |                                  expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:63:8
+    |
+ 63 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |        ^^^^^^^^^^^        -               -
+help: consider dereferencing the borrow
+    |
+610 |             self.cpu.mul_glv_opt(*p, k)
+    |                                  +
+help: consider dereferencing the borrow
+    |
+610 |             self.cpu.mul_glv_opt(p, *k)
+    |                                     +
+
+error[E0308]: arguments to this method are incorrect
+   --> src/gpu/backends/hybrid_backend.rs:658:22
+    |
+658 |             self.cpu.scalar_mul_glv(p, k)
+    |                      ^^^^^^^^^^^^^^ -  - expected `[u32; 8]`, found `&[u32; 8]`
+    |                                     |
+    |                                     expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:75:8
+    |
+ 75 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+    |        ^^^^^^^^^^^^^^        -               -
+help: consider dereferencing the borrow
+    |
+658 |             self.cpu.scalar_mul_glv(*p, k)
+    |                                     +
+help: consider dereferencing the borrow
+    |
+658 |             self.cpu.scalar_mul_glv(p, *k)
+    |                                        +
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid_backend.rs:664:28
+    |
+664 |         self.cpu.mod_small(x, modulus)
+    |                  --------- ^ expected `[u32; 8]`, found `&[u32; 8]`
+    |                  |
+    |                  arguments to this method are incorrect
+    |
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:78:8
+    |
+ 78 |     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32>;
+    |        ^^^^^^^^^        -
+help: consider dereferencing the borrow
+    |
+664 |         self.cpu.mod_small(*x, modulus)
+    |                            +
+
+error[E0308]: arguments to this method are incorrect
+   --> src/gpu/backends/hybrid_backend.rs:674:18
+    |
+674 |         self.cpu.rho_walk(tortoise, hare, max_steps)
+    |                  ^^^^^^^^ --------  ---- expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |                           |
+    |                           expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+    |
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:84:8
+    |
+ 84 |     fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkRe...
+    |        ^^^^^^^^        --------               ----
+help: consider dereferencing the borrow
+    |
+674 |         self.cpu.rho_walk(*tortoise, hare, max_steps)
+    |                           +
+help: consider dereferencing the borrow
+    |
+674 |         self.cpu.rho_walk(tortoise, *hare, max_steps)
+    |                                     +
+
+error[E0308]: arguments to this method are incorrect
+   --> src/gpu/backends/hybrid_backend.rs:679:18
+    |
+679 |         self.cpu.solve_post_walk(walk_result, targets)
+    |                  ^^^^^^^^^^^^^^^ ----------- expected `RhoWalkResult`, found `&RhoWalkResult`
+    |
+note: expected `Vec<[[u32; 8]; 3]>`, found `&Vec<[[u32; 8]; 3]>`
+   --> src/gpu/backends/hybrid_backend.rs:679:47
+    |
+679 |         self.cpu.solve_post_walk(walk_result, targets)
+    |                                               ^^^^^^^
+    = note: expected struct `Vec<_>`
+            found reference `&Vec<_>`
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:87:8
+    |
+ 87 |     fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;...
+    |        ^^^^^^^^^^^^^^^        ----                 -------
+help: consider using clone here
+    |
+679 |         self.cpu.solve_post_walk(walk_result.clone(), targets)
+    |                                             ++++++++
+help: try using a conversion method
+    |
+679 |         self.cpu.solve_post_walk(walk_result, targets.to_vec())
+    |                                                      +++++++++
+
+error[E0308]: arguments to this method are incorrect
+    --> src/gpu/backends/hybrid_backend.rs:1140:18
+     |
+1140 |         self.cpu.mul_glv_opt(p, k)
+     |                  ^^^^^^^^^^^ -  - expected `[u32; 8]`, found `&[u32; 8]`
+     |                              |
+     |                              expected `[[u32; 8]; 3]`, found `&[[u32; 8]; 3]`
+     |
+note: method defined here
+    --> src/gpu/backends/backend_trait.rs:63:8
+     |
+  63 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]>;
+     |        ^^^^^^^^^^^        -               -
+help: consider dereferencing the borrow
+     |
+1140 |         self.cpu.mul_glv_opt(*p, k)
+     |                              +
+help: consider dereferencing the borrow
+     |
+1140 |         self.cpu.mul_glv_opt(p, *k)
+     |                                 +
+
+error[E0277]: the trait bound `[u32; 8]: From<[u32; 4]>` is not satisfied
+    --> src/gpu/backends/hybrid_backend.rs:1178:143
+     |
+1178 | ...(|b| b as u32).into(), &compute_mu_small(modulus))?;
+     |                   ^^^^ the trait `From<[u32; 4]>` is not implemented for `[u32; 8]`
+     |
+help: the following other types implement trait `From<T>`
+     |
+    ::: /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/x86_64/mod.rs:239:1
+     |
+ 239 |   impl_into!(vec256_storage, [u32; 8], u32x8);
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `[u32; 8]` implements `From<ppv_lite86::x86_64::vec256_storage>`
+     |
+    ::: /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/safe_arch-0.7.4/src/x86_x64/m256i_.rs:139:1
+     |
+ 139 |   impl From<m256i> for [u32; 8] {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `[u32; 8]` implements `From<safe_arch::x86_x64::m256i_::m256i>`
+     |
+    ::: /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wide-0.7.33/src/lib.rs:486:1
+     |
+ 486 | / impl_from_a_for_b_with_cast! {
+ 487 | |   ([f32;8], f32x8),
+ 488 | |   ([f32;4], f32x4), ([f64;4], f64x4), ([f64;2], f64x2),
+ 489 | |   ([i8;32], i8x32), ([i8;16], i8x16), ([i16;8], i16x8), ([i16;16], i16x16), ([i32;8], i32x8), ([i...
+ 490 | |   ([u8;32], u8x32), ([u8;16], u8x16), ([u16;8], u16x8), ([u16;16], u16x16), ([u32;8], u32x8), ([u...
+ 491 | | }
+     | |_^ `[u32; 8]` implements `From<wide::u32x8_::u32x8>`
+    --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simba-0.6.0/src/simd/auto_simd_impl.rs:1496:1
+     |
+1496 | / impl_uint_simd!(
+1497 | |     [u128; 1], u128, 1, AutoBoolx1, _0;
+1498 | |     [u128; 2], u128, 2, AutoBoolx2, _0, _1;
+1499 | |     [u128; 4], u128, 4, AutoBoolx4, _0, _1, _2, _3;
+...    |
+1520 | |     [usize; 8], usize, 8, AutoBoolx8, _0, _1, _2, _3, _4, _5, _6, _7;
+1521 | | );
+     | |_^ `[u32; 8]` implements `From<simba::simd::auto_simd_impl::AutoSimd<[u32; 8]>>`
+     = note: required for `[u32; 4]` to implement `Into<[u32; 8]>`
+     = note: this error originates in the macro `impl_uint_simd` which comes from the expansion of the macro `impl_into` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0609]: no field `cuda_available` on type `&mut hybrid_backend::HybridBackend`
+    --> src/gpu/backends/hybrid_backend.rs:1206:14
+     |
+1206 |         self.cuda_available = !fail;
+     |              ^^^^^^^^^^^^^^ unknown field
+     |
+     = note: available field is: `cpu`
+
+error[E0277]: the trait bound `&k256::Scalar: TryFrom<BigInt256>` is not satisfied
+    --> src/gpu/backends/hybrid_backend.rs:1231:68
+     |
+1231 | ...n.clone().try_into().unwrap(), range_width.clone().try_into().unwrap())
+     |              ^^^^^^^^ the trait `From<BigInt256>` is not implemented for `&k256::Scalar`
+     |
+     = help: the following other types implement trait `From<T>`:
+               `k256::Scalar` implements `From<&ScalarPrimitive<k256::Secp256k1>>`
+               `k256::Scalar` implements `From<ScalarPrimitive<k256::Secp256k1>>`
+               `k256::Scalar` implements `From<u128>`
+               `k256::Scalar` implements `From<u32>`
+               `k256::Scalar` implements `From<u64>`
+     = note: required for `BigInt256` to implement `Into<&k256::Scalar>`
+     = note: required for `&k256::Scalar` to implement `TryFrom<BigInt256>`
+     = note: required for `BigInt256` to implement `TryInto<&k256::Scalar>`
+
+error[E0277]: the trait bound `&k256::Scalar: TryFrom<BigInt256>` is not satisfied
+    --> src/gpu/backends/hybrid_backend.rs:1231:109
+     |
+1231 | ...h.clone().try_into().unwrap())
+     |              ^^^^^^^^ the trait `From<BigInt256>` is not implemented for `&k256::Scalar`
+     |
+     = help: the following other types implement trait `From<T>`:
+               `k256::Scalar` implements `From<&ScalarPrimitive<k256::Secp256k1>>`
+               `k256::Scalar` implements `From<ScalarPrimitive<k256::Secp256k1>>`
+               `k256::Scalar` implements `From<u128>`
+               `k256::Scalar` implements `From<u32>`
+               `k256::Scalar` implements `From<u64>`
+     = note: required for `BigInt256` to implement `Into<&k256::Scalar>`
+     = note: required for `&k256::Scalar` to implement `TryFrom<BigInt256>`
+     = note: required for `BigInt256` to implement `TryInto<&k256::Scalar>`
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid_backend.rs:1231:9
+     |
+1221 | ...n generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
+     |                                                                                     ---------------- expected `Result<Vec<f64>, anyhow::Error>` because of return type
+...
+1231 | ...   crate::utils::bias::generate_preseed_pos(range_min.clone().try_into().unwrap(), range_width.clone().try_into().unwrap())
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<Vec<f64>, Error>`, found `Vec<f64>`
+     |
+     = note: expected enum `Result<Vec<_>, anyhow::Error>`
+              found struct `Vec<_>`
+help: try wrapping the expression in `Ok`
+     |
+1231 |         Ok(crate::utils::bias::generate_preseed_pos(range_min.clone().try_into().unwrap(), range_width.clone().try_into().unwrap()))
+     |         +++                                                                                                                        +
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid_backend.rs:1244:9
+     |
+1234 | ...n blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+     |                                                                                                                                         ---------------- expected `Result<Vec<f64>, anyhow::Error>` because of return type
+...
+1244 | ...   crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, false)
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<Vec<f64>, Error>`, found `Vec<f64>`
+     |
+     = note: expected enum `Result<Vec<_>, anyhow::Error>`
+              found struct `Vec<_>`
+help: try wrapping the expression in `Ok`
+     |
+1244 |         Ok(crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, false))
+     |         +++                                                                                               +
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid_backend.rs:1257:9
+     |
+1247 | ...n analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+     |                                                                        ---------------------------- expected `Result<(Vec<f64>, Vec<f64>), anyhow::Error>` because of return type
+...
+1257 | ...   crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins)
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<(Vec<f64>, Vec<f64>), Error>`, found `Vec<(f64, f64)>`
+     |
+     = note: expected enum `Result<(Vec<f64>, Vec<f64>), anyhow::Error>`
+              found struct `Vec<(f64, f64)>`
+
+error[E0308]: arguments to this function are incorrect
+    --> src/gpu/backends/hybrid_backend.rs:1270:9
+     |
+1270 |         crate::utils::bias::generate_preseed_pos(range_min, range_width)
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ---------  ----------- expected `&Scalar`, found `&BigInt256`
+     |                                                  |
+     |                                                  expected `&Scalar`, found `&BigInt256`
+     |
+     = note: expected reference `&k256::Scalar`
+                found reference `&BigInt256`
+     = note: expected reference `&k256::Scalar`
+                found reference `&BigInt256`
+note: function defined here
+    --> src/utils/bias.rs:227:8
+     |
+ 227 | pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64> {
+     |        ^^^^^^^^^^^^^^^^^^^^ ------------------  --------------------
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid_backend.rs:1270:9
+     |
+1260 | ...n generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
+     |                                                                                     ---------------- expected `Result<Vec<f64>, anyhow::Error>` because of return type
+...
+1270 | ...   crate::utils::bias::generate_preseed_pos(range_min, range_width)
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<Vec<f64>, Error>`, found `Vec<f64>`
+     |
+     = note: expected enum `Result<Vec<_>, anyhow::Error>`
+              found struct `Vec<_>`
+help: try wrapping the expression in `Ok`
+     |
+1270 |         Ok(crate::utils::bias::generate_preseed_pos(range_min, range_width))
+     |         +++                                                                +
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+    --> src/gpu/backends/hybrid_backend.rs:1283:9
+     |
+1283 |         crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights)
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^------------------------------------------------- argument #5 of type `bool` is missing
+     |
+note: function defined here
+    --> src/utils/bias.rs:298:8
+     |
+ 298 | pub fn blend_proxy_preseed(
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+ 303 |     enable_noise: bool
+     |     ------------------
+help: provide the argument
+     |
+1283 |         crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, /* bool */)
+     |                                                                                                ++++++++++++
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid_backend.rs:1283:9
+     |
+1273 | ...n blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+     |                                                                                                                                         ---------------- expected `Result<Vec<f64>, anyhow::Error>` because of return type
+...
+1283 | ...   crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights)
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<Vec<f64>, Error>`, found `Vec<f64>`
+     |
+     = note: expected enum `Result<Vec<_>, anyhow::Error>`
+              found struct `Vec<_>`
+help: try wrapping the expression in `Ok`
+     |
+1283 |         Ok(crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights))
+     |         +++                                                                                        +
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid_backend.rs:1296:9
+     |
+1286 | ...n analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+     |                                                                        ---------------------------- expected `Result<(Vec<f64>, Vec<f64>), anyhow::Error>` because of return type
+...
+1296 | ...   crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins)
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<(Vec<f64>, Vec<f64>), Error>`, found `Vec<(f64, f64)>`
+     |
+     = note: expected enum `Result<(Vec<f64>, Vec<f64>), anyhow::Error>`
+              found struct `Vec<(f64, f64)>`
+
+error[E0599]: no method named `is_on_curve` found for struct `AffinePoint` in the current scope
+   --> src/utils/bias.rs:246:35
+    |
+246 |             if !bool::from(affine.is_on_curve()) {
+    |                                   ^^^^^^^^^^^
+    |
+help: there is a method `to_curve` with a similar name
+    |
+246 -             if !bool::from(affine.is_on_curve()) {
+246 +             if !bool::from(affine.to_curve()) {
+    |
+
+error[E0616]: field `x` of struct `AffinePoint` is private
+   --> src/utils/bias.rs:250:34
+    |
+250 |             let x_bytes = affine.x.to_bytes();
+    |                                  ^ private field
+
+error[E0599]: no associated item named `Affine` found for struct `Point` in the current scope
+   --> src/utils/bias.rs:275:30
+    |
+275 |         crate::types::Point::Affine(p) => {
+    |                              ^^^^^^ associated item not found in `Point`
+    |
+   ::: src/types.rs:129:1
+    |
+129 | pub struct Point {
+    | ---------------- associated item `Affine` not found for this struct
+
+error[E0599]: no associated item named `Projective` found for struct `Point` in the current scope
+   --> src/utils/bias.rs:286:30
+    |
+286 |         crate::types::Point::Projective(_) => {
+    |                              ^^^^^^^^^^ associated item not found in `Point`
+    |
+   ::: src/types.rs:129:1
+    |
+129 | pub struct Point {
+    | ---------------- associated item `Projective` not found for this struct
+
+error[E0282]: type annotations needed
+   --> src/utils/bias.rs:281:25
+    |
+281 |                 bytes[..chunk.len()].copy_from_slice(chunk);
+    |                         ^^^^^ cannot infer type
+
+error[E0689]: can't call method `clamp` on ambiguous numeric type `{float}`
+   --> src/utils/bias.rs:324:33
+    |
+324 |             rand_pos = rand_pos.clamp(0.0, 1.0);
+    |                                 ^^^^^
+    |
+help: you must specify a type for this binding, like `f32`
+    |
+321 |         let mut rand_pos: f32 = rng.gen_range(0.0..1.0);
+    |                         +++++
+
+error[E0689]: can't call method `clamp` on ambiguous numeric type `{float}`
+   --> src/utils/bias.rs:347:37
+    |
+347 |                 rand_pos = rand_pos.clamp(0.0, 1.0);
+    |                                     ^^^^^
+    |
+help: you must specify a type for this binding, like `f32`
+    |
+344 |             let mut rand_pos: f32 = rng.gen_range(0.0..1.0);
+    |                             +++++
+
+warning: unused variable: `mu_big`
+   --> src/math/bigint.rs:864:13
+    |
+864 |         let mu_big = BigUint::from_bytes_le(&mu_bytes);
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_mu_big`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `first_target`
+   --> src/kangaroo/manager.rs:116:39
+    |
+116 |         let preseed_pos = if let Some(first_target) = targets.first() {
+    |                                       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_first_target`
+
+warning: variable does not need to be mutable
+   --> src/kangaroo/manager.rs:958:9
+    |
+958 |     let mut points = Vec::new();
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/gpu/backends/cpu_backend.rs:93:13
+   |
+93 |         let mut result = point.clone();
+   |             ----^^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: unused variable: `i`
+   --> src/gpu/backends/cpu_backend.rs:147:13
+    |
+147 |         for i in 1..num_points {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `k`
+   --> src/gpu/backends/cpu_backend.rs:519:44
+    |
+519 |     fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    |                                            ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `hare`
+   --> src/gpu/backends/cpu_backend.rs:606:48
+    |
+606 | ...[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    |                ^^^^ help: if this is intentional, prefix it with an underscore: `_hare`
+
+warning: unused variable: `max_steps`
+   --> src/gpu/backends/cpu_backend.rs:606:68
+    |
+606 | ...8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_max_steps`
+
+warning: unused variable: `range_min`
+   --> src/gpu/backends/cpu_backend.rs:625:36
+    |
+625 | ...&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f6...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_range_min`
+
+warning: unused variable: `range_width`
+   --> src/gpu/backends/cpu_backend.rs:625:72
+    |
+625 | ...256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_range_width`
+
+warning: unused variable: `preseed_pos`
+   --> src/gpu/backends/cpu_backend.rs:629:35
+    |
+629 | ...elf, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f6...
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_preseed_pos`
+
+warning: unused variable: `num_random`
+   --> src/gpu/backends/cpu_backend.rs:629:58
+    |
+629 | ...f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec...
+    |          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_random`
+
+warning: unused variable: `empirical_pos`
+   --> src/gpu/backends/cpu_backend.rs:629:77
+    |
+629 | ...e, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |       ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_empirical_pos`
+
+warning: unused variable: `weights`
+   --> src/gpu/backends/cpu_backend.rs:629:110
+    |
+629 | ...c<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_weights`
+
+warning: unused variable: `proxy_pos`
+   --> src/gpu/backends/cpu_backend.rs:633:39
+    |
+633 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    |                                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_proxy_pos`
+
+warning: unused variable: `bins`
+   --> src/gpu/backends/cpu_backend.rs:633:58
+    |
+633 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    |                                                          ^^^^ help: if this is intentional, prefix it with an underscore: `_bins`
+
+warning: unused variable: `p`
+   --> src/gpu/backends/cpu_backend.rs:660:30
+    |
+660 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+    |                              ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `k`
+   --> src/gpu/backends/cpu_backend.rs:660:46
+    |
+660 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+    |                                              ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: variable does not need to be mutable
+   --> src/gpu/backends/cpu_backend.rs:709:9
+    |
+709 |     let mut result = point.clone();
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `fail`
+   --> src/gpu/backends/hybrid_backend.rs:694:38
+    |
+694 |     fn simulate_cuda_fail(&mut self, fail: bool) {
+    |                                      ^^^^ help: if this is intentional, prefix it with an underscore: `_fail`
+
+warning: unused variable: `hare`
+    --> src/gpu/backends/hybrid_backend.rs:1186:48
+     |
+1186 | ...[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+     |                ^^^^ help: if this is intentional, prefix it with an underscore: `_hare`
+
+warning: unused variable: `max_steps`
+    --> src/gpu/backends/hybrid_backend.rs:1186:68
+     |
+1186 | ...8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+     |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_max_steps`
+
+warning: unused variable: `num_steps`
+    --> src/gpu/backends/hybrid_backend.rs:1200:29
+     |
+1200 | ...&self, num_steps: usize, _start_state: crate::types::KangarooState) -> Result<(Vec<crate::types:...
+     |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_steps`
+
+Some errors have detailed explanations: E0046, E0050, E0053, E0061, E0063, E0201, E0277, E0282, E0308...
+For more information about an error, try `rustc --explain E0046`.
+warning: `speedbitcrack` (lib) generated 28 warnings
+warning: speedbitcrack@0.1.0: Successfully opened valuable_p2pk_pubkeys.txt for bias computation
+warning: speedbitcrack@0.1.0: Failed to compile bigint_mul.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile barrett_kernel_optimized.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile step.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile solve.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile rho_kernel_optimized.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile bias_check_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Compiled gold_cluster.cu -> gold_cluster.ptx
+warning: speedbitcrack@0.1.0: Failed to compile mod27_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile mod81_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile mod9_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile prime_test_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile refine_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile texture_jump_kernel.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Failed to compile texture_jump_optimized.cu (nvcc not found or compilation error)
+warning: speedbitcrack@0.1.0: Compiled hybrid.cu -> hybrid.ptx
+warning: speedbitcrack@0.1.0: Failed to compile inverse.cu (nvcc not found or compilation error)
+error: could not compile `speedbitcrack` (lib) due to 138 previous errors; 28 warnings emitted

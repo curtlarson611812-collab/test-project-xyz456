@@ -48,9 +48,11 @@ libfuzzer-sys = { version = "0.4", optional = true }  # Fuzz testing
 
 [features]
 default = []  # Disable CUDA by default to avoid compilation issues
+cuda = ["rustacuda"]  # Enable CUDA via rustacuda feature
 rustacuda = ["dep:rustacuda", "dep:rustacuda_core", "dep:rustacuda_derive", "dep:cuda-sys"]
 vulkano = ["dep:vulkano", "dep:vulkano-shaders"]
 wgpu = ["dep:wgpu"]
+hybrid = ["cuda", "wgpu"]  # Enable both CUDA and Vulkan for hybrid tests
 fuzz = ["libfuzzer-sys"]
 smoke = []  # Enable smoke test asserts in benchmarks
 laptop = []  # Enable laptop optimizations (sm_86, lower resources)
@@ -60,6 +62,7 @@ phase4 = []  # Enable Phase 4 features and tests
 cudarc = []
 
 [build-dependencies]
+cc = "1.0"                        # C/CUDA compiler integration
 hex = "0.4"                       # Hex parsing for build script
 num-bigint = "0.4.6"              # Big integer operations for bias computation
 
@@ -81,6 +84,10 @@ tempfile = "3.0"  # For temporary directories in tests
 criterion = { version = "0.5", features = ["html_reports"] }  # Performance benchmarking
 proptest = "1.0"   # Property-based testing
 tokio-test = "0.4" # Async testing utilities
+
+[[bin]]
+name = "bias_analyze"
+path = "src/bin/bias_analyze.rs"
 
 [[test]]
 name = "magic9"

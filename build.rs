@@ -112,8 +112,9 @@ fn main() {
 
     println!("Generated prime sets - GOLD: {} primes, Secondary: {} primes",
              gold_primes.len(), secondary_primes.len());
-    // Compile CUDA kernels to PTX
-    compile_cuda_to_ptx();
+
+    // Compile CUDA kernels using cc crate
+    compile_cuda_kernels();
 
     match std::fs::write(&dest_path, &output) {
         Ok(_) => println!("Generated MAGIC9_BIASES and prime sets at {:?}", dest_path),
@@ -165,70 +166,27 @@ fn compute_pubkey_biases(hex_str: &str) -> Result<(u8, u8, u8, u8, u32), Box<dyn
 
     Ok((mod3, mod9, mod27, mod81, hamming))
 }
-// Compile CUDA kernels to PTX for runtime loading
-fn compile_cuda_to_ptx() {
-    use std::process::Command;
-    
-    let cuda_dir = std::path::Path::new("src/gpu/cuda");
-    let ptx_dir = std::path::Path::new("target/ptx");
+// Compile CUDA kernels using cc crate
+fn compile_cuda_kernels() {
+    let cuda_path = std::env::var("CUDA_HOME").unwrap_or("/usr/local/cuda".to_string());
+    println!("cargo:rustc-env=CUDA_HOME={}", cuda_path);
+    println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
+    println!("cargo:rustc-link-lib=cudart");
+    println!("cargo:rustc-link-lib=cublas");
 
-    // Create PTX output directory
-    std::fs::create_dir_all(ptx_dir).unwrap();
+    let mut builder = cc::Build::new();
+    builder.cuda(true).include("src/gpu/cuda").flag("-O3").flag("-arch=sm_89"); // RTX 5090
 
-    // List of CUDA source files to compile
-    let cuda_files = vec![
-        "bigint_mul.cu",
-        "barrett_kernel_optimized.cu", 
-        "step.cu",
-        "solve.cu",
-        "rho_kernel_optimized.cu",
-        "bias_check_kernel.cu",
-        "gold_cluster.cu",
-        "mod27_kernel.cu",
-        "mod81_kernel.cu",
-        "mod9_kernel.cu",
-        "prime_test_kernel.cu",
-        "refine_kernel.cu",
-        "texture_jump_kernel.cu",
-        "texture_jump_optimized.cu",
-        "hybrid.cu",
-        "inverse.cu",
+    let cu_files = vec![
+        "bigint_mul", "barrett_kernel_optimized", "step", "solve", "rho_kernel_optimized",
+        "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel", "mod9_kernel",
+        "prime_test_kernel", "refine_kernel", "texture_jump_kernel", "texture_jump_optimized",
+        "hybrid", "inverse"
     ];
 
-    for cuda_file in cuda_files {
-        let input_path = cuda_dir.join(cuda_file);
-        let output_name = cuda_file.replace(".cu", ".ptx");
-        let output_path = ptx_dir.join(&output_name);
-
-        // Check if source file exists
-        if !input_path.exists() {
-            println!("cargo:warning=CUDA source file {} not found, skipping", cuda_file);
-            continue;
-        }
-
-        // Compile with nvcc
-        let status = Command::new("nvcc")
-            .args(&[
-                "-ptx",  // Generate PTX
-                "-arch=sm_80",  // Target Ampere+ GPUs (adjust for your hardware)
-                "--default-stream", "per-thread",  // Per-thread default stream
-                "-O3",  // Maximum optimization
-                "-use_fast_math",  // Fast math approximations
-                "-lineinfo",  // Include line info for debugging
-                "-o", &output_path.to_string_lossy(),
-                &input_path.to_string_lossy(),
-            ])
-            .status();
-
-        match status {
-            Ok(exit_status) if exit_status.success() => {
-                println!("cargo:warning=Compiled {} -> {}", cuda_file, output_name);
-            }
-            _ => {
-                println!("cargo:warning=Failed to compile {} (nvcc not found or compilation error)", cuda_file);
-                // Create empty PTX file as placeholder
-                let _ = std::fs::write(&output_path, "// Placeholder PTX - nvcc compilation failed\n");
-            }
-        }
+    for file in cu_files {
+        builder.file(format!("src/gpu/cuda/{}.cu", file));
     }
+
+    builder.compile("gpu_kernels");
 }
