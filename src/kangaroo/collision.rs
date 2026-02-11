@@ -329,10 +329,10 @@ impl CollisionDetector {
         ]);
 
         let priv_big = if tame.dist >= wild.dist {
-            &tame.dist - &wild.dist
+            (&tame.dist - &wild.dist) % &n
         } else {
-            &n - (&wild.dist - &tame.dist)
-        } % &n;
+            (&n + &tame.dist - &wild.dist) % &n
+        };
 
         let mut priv_array = [0u64; 4];
         for (i, &digit) in priv_big.to_u64_digits().iter().enumerate().take(4) {

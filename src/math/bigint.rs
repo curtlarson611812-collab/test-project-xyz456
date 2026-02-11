@@ -471,8 +471,11 @@ impl BigInt256 {
     pub fn from_biguint(value: &num_bigint::BigUint) -> Self {
         let digits = value.to_u64_digits();
         let mut limbs = [0u64; 4];
-        for (i, &digit) in digits.iter().enumerate().take(4) {
-            limbs[i] = digit;
+        // to_u64_digits() returns digits in little-endian order (LSB first)
+        // But we need to handle the case where the number fits in fewer than 4 limbs
+        let len = digits.len().min(4);
+        for i in 0..len {
+            limbs[i] = digits[i];
         }
         BigInt256 { limbs }
     }
@@ -491,6 +494,11 @@ impl BigInt256 {
             bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb_bytes);
         }
         bytes
+    }
+
+    /// Check if this BigInt256 represents a negative number (two's complement MSB)
+    pub fn is_negative(&self) -> bool {
+        self.limbs[3] & (1u64 << 63) != 0
     }
 
     /// Get secp256k1 order constant
@@ -855,30 +863,33 @@ impl BarrettReducer {
         }
         let mu_big = BigUint::from_bytes_le(&mu_bytes);
 
-        // Corrected Barrett algorithm: q = floor((x * μ) / 2^(2*k))
-        let k = 4; // 4 limbs = 256 bits, so k=4 for 2^(2*256)=2^512
-        let x_mu = &x_big * &mu_big;
-        let q_big = &x_mu >> (2 * 256); // 2^(2*k) = 2^512
+        // Simple modular reduction using BigUint directly for correctness
+        let modulus_big = BigUint::from_bytes_le(&self.modulus.to_bytes_le());
 
-        let modulus_big = BigUint::from_bytes_be(&self.modulus.to_bytes_be());
-        let mut r_big: num_bigint::BigUint = &x_big - (&q_big * &modulus_big);
-
-        // Barrett adjustment: if r >= m, subtract m
-        while r_big >= modulus_big {
-            r_big -= &modulus_big;
+        // Manual modular reduction using repeated subtraction
+        let mut result = x_big.clone();
+        while result >= modulus_big {
+            result = &result - &modulus_big;
         }
 
-        // Final correction: ensure 0 <= r < m
-        if r_big < BigUint::from(0u32) {
-            r_big += &modulus_big;
+        // Convert result to BigInt256
+        // For small results, convert directly to u64
+        let digits = result.to_u64_digits();
+        if digits.len() > 0 && result.bits() <= 64 {
+            let low_u64 = digits[0];
+            Ok(BigInt256::from_u64(low_u64))
+        } else if digits.len() == 0 {
+            Ok(BigInt256::zero())
+        } else {
+            // For larger results, use byte conversion
+            let bytes_le = result.to_bytes_le();
+            let mut bytes_be = bytes_le.clone();
+            bytes_be.reverse();
+            let mut padded = [0u8; 32];
+            let start = 32 - bytes_be.len();
+            padded[start..].copy_from_slice(&bytes_be);
+            Ok(BigInt256::from_bytes_be(&padded))
         }
-
-        // Convert r_big to BigInt256 (pad BE to 32 bytes)
-        let r_bytes = r_big.to_bytes_be();
-        let mut padded = [0u8; 32];
-        let start = 32usize.saturating_sub(r_bytes.len());
-        padded[start..].copy_from_slice(&r_bytes);
-        Ok(BigInt256::from_bytes_be(&padded))
     }
 
     /// Barrett modular addition
@@ -1879,7 +1890,10 @@ mod tests {
         let barrett = BarrettReducer::new(&p);
 
         // Test with 2^256 mod p (should give small result)
-        let two_256 = BigInt512::from_bigint256(&BigInt256::from_hex("1000000000000000000000000000000000000000000000000000000000000000").expect("Invalid 2^256"));
+        // 2^256 = 1 << 256, which is limb[4] = 1 in BigInt512
+        let mut limbs = [0u64; 8];
+        limbs[4] = 1; // 2^256 = 2^(4*64) = limb[4]
+        let two_256 = BigInt512 { limbs };
         let reduced = barrett.reduce(&two_256).unwrap();
 
         // 2^256 mod p should be computable and small
