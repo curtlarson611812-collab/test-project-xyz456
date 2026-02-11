@@ -62,27 +62,55 @@ fn main() -> Result<()> {
     println!("📈 Running cascade analysis...");
     let cascades = analyze_preseed_cascade(&proxy, 10);
 
-    println!("🎯 Computing bias scores for all pubkeys...");
-    let bias_results: Vec<(AffinePoint, f64)> = pubkeys
-        .par_iter()
-        .map(|point| {
-            let residue = compute_mod_residue(&point, args.mod_level);
-            let pos_score = compute_pos_score(&point, &cascades);
-            let gold_bonus = if is_gold_cluster(residue, args.mod_level) { 1.3 } else { 1.0 };
-            let total_score = pos_score * gold_bonus;
-            (*point, total_score)
+    println!("🎯 Computing bias scores for all {} pubkeys...", pubkeys.len());
+
+    // Parallel computation of residues and local scores
+    let residues: Vec<u64> = pubkeys.par_iter()
+        .map(|point| compute_mod_residue(point, args.mod_level))
+        .collect();
+
+    // Compute overall cascade score
+    let overall_score = cascades.last().map(|(_, bias)| *bias).unwrap_or(1.0);
+
+    // Parallel scoring with detailed computation
+    let scores: Vec<(String, f64)> = pubkeys.par_iter().zip(residues.par_iter()).map(|(point, &residue)| {
+        let pos_score = compute_pos_score(point, &cascades);
+        let gold_bonus = if is_gold_cluster(residue, args.mod_level) { 1.2 } else { 1.0 };
+        let mod_bonus = match args.mod_level {
+            81 => if residue % 9 == 0 { 1.1 } else { 1.0 }, // Mod9 alignment bonus
+            27 => if residue % 9 == 0 { 1.05 } else { 1.0 },
+            9 => 1.0,
+            _ => 1.0,
+        };
+        let total_score = overall_score * pos_score * gold_bonus * mod_bonus;
+        (hex::encode(point.to_encoded_point(false).as_bytes()), total_score)
+    }).collect();
+
+    // Sort by score descending for priority ordering
+    let mut sorted_scores = scores;
+    sorted_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    // Extract high bias targets
+    println!("🔍 Extracting high-bias targets (threshold: {:.2}x)...", args.threshold);
+    let high_bias: Vec<String> = sorted_scores.iter()
+        .filter(|&(_, score)| *score > args.threshold)
+        .map(|(hex, score)| {
+            println!("  🎯 Score: {:.2}x - {}", score, &hex[..16]); // Truncate for readability
+            hex.clone()
         })
         .collect();
 
-    println!("🔍 Extracting high-bias targets (threshold: {:.2}x)...", args.threshold);
-    let high_bias: Vec<String> = bias_results
-        .into_iter()
-        .filter(|(_, score)| *score > args.threshold)
-        .map(|(point, score)| {
-            println!("  🎯 Score: {:.2}x - {}", score, hex::encode(point.to_encoded_point(false).as_bytes()));
-            hex::encode(point.to_encoded_point(false).as_bytes())
-        })
-        .collect();
+    // Detailed statistics
+    let avg_score = sorted_scores.iter().map(|(_, s)| s).sum::<f64>() / sorted_scores.len() as f64;
+    let max_score = sorted_scores.first().map(|(_, s)| *s).unwrap_or(0.0);
+    let min_score = sorted_scores.last().map(|(_, s)| *s).unwrap_or(0.0);
+    let high_percentage = (high_bias.len() as f64 / sorted_scores.len() as f64) * 100.0;
+
+    println!("📊 Analysis Statistics:");
+    println!("  📈 Average score: {:.2}x", avg_score);
+    println!("  🎯 Max score: {:.2}x", max_score);
+    println!("  📉 Min score: {:.2}x", min_score);
+    println!("  🎪 High priority: {} targets ({:.1}%)", high_bias.len(), high_percentage);
 
     println!("💾 Writing {} high-priority pubkeys to {}...", high_bias.len(), args.output);
     write_priority_list(&args.output, &high_bias)?;
@@ -136,6 +164,16 @@ fn compute_mod_residue(point: &AffinePoint, mod_level: u64) -> u64 {
     let x_bytes = point.x().to_bytes();
     let x_big = BigInt256::from_bytes_be(&x_bytes);
     (x_big % BigInt256::from_u64(mod_level)).low_u32() as u64
+}
+
+/// Check if residue indicates gold cluster membership
+fn is_gold_cluster(residue: u64, mod_level: u64) -> bool {
+    match mod_level {
+        81 => matches!(residue, 0 | 9 | 18 | 27 | 36 | 45 | 54 | 63 | 72), // Gold pattern
+        27 => matches!(residue, 0 | 9 | 18), // Secondary gold
+        9 => residue == 0, // Basic gold
+        _ => false,
+    }
 }
 
 /// Check if residue indicates gold cluster membership
@@ -224,5 +262,26 @@ mod tests {
         let empty_cascades = vec![];
         let empty_score = compute_pos_score(&point, &empty_cascades);
         assert_eq!(empty_score, 1.0, "Empty cascades should return base score");
+    }
+
+    #[test]
+    fn test_bias_analysis_workflow() {
+        // Test the core bias analysis workflow with mock data
+        let mock_pubkeys = vec![
+            AffinePoint::GENERATOR,
+            // Add more mock points if needed
+        ];
+
+        let cascades = vec![(2.0, 1.5), (1.8, 1.3)]; // Mock cascades
+
+        for point in &mock_pubkeys {
+            let residue = compute_mod_residue(point, 81);
+            let pos_score = compute_pos_score(point, &cascades);
+            let gold_bonus = if is_gold_cluster(residue, 81) { 1.2 } else { 1.0 };
+            let mod_bonus = if residue % 9 == 0 { 1.1 } else { 1.0 };
+            let total_score = 1.5 * pos_score * gold_bonus * mod_bonus; // Mock overall
+
+            assert!(total_score >= 1.0, "Bias score should be at least 1.0: {}", total_score);
+        }
     }
 }
