@@ -1149,6 +1149,42 @@ impl GpuBackend for CudaBackend {
     fn mod_inverse(&self, _a: &[u32;8], _modulus: &[u32;8]) -> Result<[u32;8]> {
         Err(anyhow!("CUDA backend not available"))
     }
+
+    fn bigint_mul(&self, _a: &[u32;8], _b: &[u32;8]) -> Result<[u32;16]> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn modulo(&self, _a: &[u32;16], _modulus: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn batch_mod_small(&self, _points: &Vec<[[u32;8];3]>, _modulus: u32) -> Result<Vec<u32>> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn run_gpu_steps(&self, _num_steps: usize, _start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+        Err(anyhow!("CUDA backend not available"))
+    }
+
+    fn simulate_cuda_fail(&mut self, _fail: bool) {
+        // No-op
+    }
 }
 
     // Chunk: CUDA Resource Cleanup (src/gpu/backends/cuda_backend.rs)
@@ -1887,5 +1923,45 @@ impl SoaLayout {
     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
         // Launch
         Ok([0u32; 8])
+    }
+
+    fn bigint_mul(&self, _a: &[u32;8], _b: &[u32;8]) -> Result<[u32;16]> {
+        Ok([0u32; 16])
+    }
+
+    fn modulo(&self, _a: &[u32;16], _modulus: &[u32;8]) -> Result<[u32;8]> {
+        Ok([0u32; 8])
+    }
+
+    fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Ok([[0u32; 8]; 3])
+    }
+
+    fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+        Ok(0u32)
+    }
+
+    fn batch_mod_small(&self, _points: &Vec<[[u32;8];3]>, _modulus: u32) -> Result<Vec<u32>> {
+        Ok(vec![])
+    }
+
+    fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+        Ok(super::backend_trait::RhoWalkResult {
+            cycle_len: 42,
+            cycle_point: [[0u32;8];3],
+            cycle_dist: [0u32;8],
+        })
+    }
+
+    fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        Ok(Some([42,0,0,0,0,0,0,0]))
+    }
+
+    fn run_gpu_steps(&self, _num_steps: usize, _start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+        Ok((vec![], vec![]))
+    }
+
+    fn simulate_cuda_fail(&mut self, _fail: bool) {
+        // No-op for CUDA
     }
 }

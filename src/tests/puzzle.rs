@@ -141,4 +141,50 @@ mod tests {
 
         println!("Large step parity test completed ✓ (CPU reference: {} steps)", TEST_STEPS);
     }
+
+    #[cfg(feature = "hybrid")]
+    #[test]
+    fn test_gpu_hybrid_puzzle66() -> anyhow::Result<()> {
+        use crate::gpu::backends::HybridBackend;
+        use crate::kangaroo::manager::KangarooManager;
+        use std::time::Duration;
+
+        let config = SearchConfig::for_puzzle(66);
+        let manager = KangarooManager::new(&config)?;
+        let backend = HybridBackend::new()?;
+        let priv_k = manager.run_until_solve(&backend, Duration::from_secs(60))?;
+        assert_eq!(priv_k, KNOWN_66_PRIV, "Puzzle66 solve fail"); // 0x... known
+        Ok(())
+    }
+
+    #[cfg(feature = "hybrid")]
+    #[test]
+    fn test_10m_step_parity_hybrid() -> anyhow::Result<()> {
+        use crate::gpu::backends::HybridBackend;
+        use crate::parity::checker::ParityChecker;
+
+        let backend = HybridBackend::new()?;
+        let checker = ParityChecker::new();
+        let (cpu_points, cpu_dists) = checker.run_cpu_steps(10000000, mock_start_state());
+        let (gpu_points, gpu_dists) = backend.run_gpu_steps(10000000, mock_start_state())?;
+        for i in 0..10000000 {
+            assert_eq!(cpu_points[i], gpu_points[i], "Point parity fail at {}", i);
+        }
+        Ok(())
+    }
+
+    // Helper for mock start state
+    fn mock_start_state() -> crate::types::KangarooState {
+        // Simplified mock
+        crate::types::KangarooState::new(
+            Point::generator(),
+            crate::math::BigInt256::zero(),
+            crate::types::AlphaBeta::default(),
+            0,
+            true,
+        )
+    }
+
+    // Known priv for puzzle 66 (placeholder)
+    const KNOWN_66_PRIV: &str = "0x123456789abcdef"; // Replace with real
 }

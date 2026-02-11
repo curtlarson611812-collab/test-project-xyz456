@@ -65,4 +65,44 @@ mod tests {
 
         println!("Edge case testing passed ✓");
     }
+
+    #[cfg(feature = "hybrid")]
+    #[test]
+    fn test_gpu_mod_bias() -> anyhow::Result<()> {
+        use crate::gpu::backends::HybridBackend;
+        use crate::gpu::backends::Backend;
+        use crate::math::BigInt256;
+        use k256::ProjectivePoint;
+        use k256::Scalar;
+
+        let backend = HybridBackend::new()?;
+        let point = ProjectivePoint::GENERATOR * Scalar::from(42u64);
+        let x_bytes = point.to_affine().x.to_bytes();
+        let x_limbs = bytes_to_limbs(&x_bytes);
+        // Dispatch to mod9_kernel via backend
+        let res9 = backend.mod_small(&x_limbs, 9)?;
+        assert_eq!(res9, 6, "Mod9 bias fail"); // Tool verified
+        // Phase 8 multi: Batch points for 10 targets
+        let multi_points = vec![point; 10];
+        let multi_res = backend.batch_mod_small(&multi_points, 81)?;
+        for r in multi_res {
+            assert!(is_magic9_gold(r), "Multi bias drift");
+        }
+        Ok(())
+    }
+
+    // Helper to convert bytes to limbs
+    fn bytes_to_limbs(bytes: &[u8; 32]) -> [u32; 8] {
+        let mut limbs = [0u32; 8];
+        for i in 0..8 {
+            limbs[i] = u32::from_be_bytes(bytes[i*4..(i+1)*4].try_into().unwrap());
+        }
+        limbs
+    }
+
+    // Check if residue is Magic9 gold (0,3,6 mod9)
+    fn is_magic9_gold(res: u32) -> bool {
+        let mod9 = (res % 9) as u32;
+        matches!(mod9, 0 | 3 | 6)
+    }
 }

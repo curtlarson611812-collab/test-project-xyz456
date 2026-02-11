@@ -391,6 +391,42 @@ impl GpuBackend for CpuBackend {
     fn mod_inverse(&self, _a: &[u32;8], _modulus: &[u32;8]) -> Result<[u32;8]> {
         Err(anyhow!("CPU backend not available"))
     }
+
+    fn bigint_mul(&self, _a: &[u32;8], _b: &[u32;8]) -> Result<[u32;16]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn modulo(&self, _a: &[u32;16], _modulus: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn batch_mod_small(&self, _points: &Vec<[[u32;8];3]>, _modulus: u32) -> Result<Vec<u32>> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn run_gpu_steps(&self, _num_steps: usize, _start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn simulate_cuda_fail(&mut self, _fail: bool) {
+        // No-op for CPU
+    }
 }
 
 #[cfg(test)]

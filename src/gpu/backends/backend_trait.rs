@@ -5,6 +5,13 @@
 use crate::kangaroo::collision::Trap;
 use anyhow::Result;
 
+#[derive(Debug, Clone)]
+pub struct RhoWalkResult {
+    pub cycle_len: u32,
+    pub cycle_point: [[u32;8];3],
+    pub cycle_dist: [u32;8],
+}
+
 /// Unified GPU backend trait for hybrid Vulkan+CUDA acceleration
 /// Enables dispatch of kangaroo operations to appropriate GPU backends
 #[async_trait::async_trait]
@@ -56,4 +63,31 @@ pub trait GpuBackend {
 
     /// Modular inverse for collision solving (Phase 7)
     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]>;
+
+    /// Bigint multiplication for parity tests
+    fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]>;
+
+    /// Modulo operation for parity tests
+    fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]>;
+
+    /// Scalar multiplication with GLV for hybrid tests
+    fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]>;
+
+    /// Mod small for bias tests
+    fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32>;
+
+    /// Batch mod small for multi-target bias
+    fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>>;
+
+    /// Rho walk for near-collisions
+    fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<RhoWalkResult>;
+
+    /// Solve post walk for near-collisions
+    fn solve_post_walk(&self, walk_result: &RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>>;
+
+    /// Run GPU steps for parity
+    fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)>;
+
+    /// Simulate CUDA fail for fallback tests
+    fn simulate_cuda_fail(&mut self, fail: bool);
 }
