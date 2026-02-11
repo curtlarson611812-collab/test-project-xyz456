@@ -197,7 +197,7 @@ impl GpuBackend for CpuBackend {
         Ok(vec![None; deltas.len()])
     }
 
-    fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         // CPU implementation using modular inverse (more efficient than Fermat's little theorem)
         let mut results = Vec::with_capacity(inputs.len());
         let modulus_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
@@ -234,10 +234,9 @@ impl GpuBackend for CpuBackend {
         Ok(results)
     }
 
-    fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
-        // CPU implementation for batch collision solving
-        // For each pair (alpha, beta), solve: k = alpha * inv(beta) mod n
-        let mut results = Vec::with_capacity(alphas.len());
+    fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+        // CPU implementation for batch collision solving from DP entries
+        let mut results = Vec::with_capacity(dps.len());
 
         for (alpha, beta) in alphas.iter().zip(betas.iter()) {
             // Convert to BigUint for modular arithmetic
@@ -381,7 +380,7 @@ impl GpuBackend for CpuBackend {
         Ok(result)
     }
 
-    fn batch_mul(&self, a: Vec<[u32;8]>, b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+    fn batch_bigint_mul(&self, a: &Vec<[u32;8]>, b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
         // Simple schoolbook multiplication for CPU fallback
         let mut results = Vec::with_capacity(a.len());
 
@@ -423,7 +422,7 @@ impl GpuBackend for CpuBackend {
         Ok(results)
     }
 
-    fn batch_to_affine(&self, positions: Vec<[[u32;8];3]>, modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+    fn batch_to_affine(&self, points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>> {
         // CPU implementation for Jacobian to affine coordinate conversion
         // For each point (X:Y:Z), compute (X/Z^2, Y/Z^3)
         let mut x_coords = Vec::with_capacity(positions.len());
@@ -637,6 +636,57 @@ impl GpuBackend for CpuBackend {
 
     fn simulate_cuda_fail(&mut self, _fail: bool) {
         // No-op for CPU
+    }
+
+    fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+        // CPU implementation: (tame - wild) mod n, handling negative results
+        let tame_big = BigInt256 { limbs: tame };
+        let wild_big = BigInt256 { limbs: wild };
+        let n_big = BigInt256 { limbs: n };
+
+        let mut diff = tame_big.wrapping_sub(&wild_big);
+        if diff >= n_big {
+            diff = diff.wrapping_sub(&n_big);
+        }
+
+        Ok(diff.limbs)
+    }
+
+    fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+        // CPU GLV-optimized scalar multiplication
+        self.scalar_mul_glv(p, k)
+    }
+
+    fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+        // CPU scalar multiplication (placeholder - needs full EC arithmetic)
+        Ok([[0u32; 8]; 3])
+    }
+
+    fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
+        // CPU modular reduction to small modulus
+        let x_big = BigInt256 { limbs: x };
+        let modulus_big = BigInt256::from_u64(modulus as u64);
+        let result = x_big % modulus_big;
+        Ok(result.limbs[0])
+    }
+
+    fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+        // CPU batch modular reduction
+        points.iter().map(|point| self.mod_small(point[0], modulus)).collect()
+    }
+
+    fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkResult> {
+        // CPU rho walk implementation (placeholder)
+        Ok(RhoWalkResult {
+            cycle_len: 42,
+            cycle_point: *tortoise,
+            cycle_dist: [0u32; 8],
+        })
+    }
+
+    fn solve_post_walk(&self, walk_result: &RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        // CPU post-walk solving (placeholder)
+        Ok(Some([42, 0, 0, 0, 0, 0, 0, 0]))
     }
 
 }

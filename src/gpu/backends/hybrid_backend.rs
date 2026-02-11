@@ -446,35 +446,22 @@ impl GpuBackend for HybridBackend {
         Self::new().await
     }
 
-    fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
-        // Dispatch to Vulkan for bulk precomputation
-        #[cfg(feature = "wgpu")]
-        {
-            self.vulkan.precomp_table(primes, base)
-        }
-        #[cfg(not(feature = "wgpu"))]
-        {
-            self.cpu.precomp_table(primes, base)
-        }
-    }
-
-    /// GLV windowed NAF precomputation table dispatch
-    fn precomp_table_glv(&self, base: [u32;8*3], window: u32) -> Result<Vec<[[u32;8];3]>> {
+    fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>> {
         // Dispatch to CUDA for precision GLV precomputation (if available)
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.precomp_table_glv(base, window)
+            self.cuda.precomp_table(base, window)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
             // Fallback to Vulkan or CPU
             #[cfg(feature = "wgpu")]
             {
-                self.vulkan.precomp_table_glv(base, window)
+                self.vulkan.precomp_table(base, window)
             }
             #[cfg(not(feature = "wgpu"))]
             {
-                self.cpu.precomp_table_glv(base, window)
+                self.cpu.precomp_table(base, window)
             }
         }
     }
@@ -528,15 +515,15 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn batch_solve(&self, alphas: Vec<[u32;8]>, betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
-        // Dispatch to CUDA for precision solve operations
+    fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+        // Dispatch to CUDA for collision solving
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.batch_solve(alphas, betas)
+            self.cuda.batch_solve(dps, targets)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            self.cpu.batch_solve(alphas, betas)
+            Err(anyhow!("CUDA required for batch_solve"))
         }
     }
 
@@ -745,6 +732,90 @@ impl GpuBackend for HybridBackend {
         #[cfg(not(feature = "rustacuda"))]
         {
             self.cpu.analyze_preseed_cascade(proxy_pos, bins)
+        }
+    }
+
+    fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+        // Dispatch to CUDA for precision modular arithmetic
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.safe_diff_mod_n(tame, wild, n)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.safe_diff_mod_n(tame, wild, n)
+        }
+    }
+
+    fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+        // Dispatch to CUDA for GLV optimization
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.mul_glv_opt(p, k)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.mul_glv_opt(p, k)
+        }
+    }
+
+    fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+        // Dispatch to CUDA for GLV scalar multiplication
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.scalar_mul_glv(p, k)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.scalar_mul_glv(p, k)
+        }
+    }
+
+    fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
+        // Dispatch to CUDA for modular reduction
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.mod_small(x, modulus)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.mod_small(x, modulus)
+        }
+    }
+
+    fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+        // Dispatch to CUDA for batch modular reduction
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.batch_mod_small(points, modulus)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.batch_mod_small(points, modulus)
+        }
+    }
+
+    fn rho_walk(&self, tortoise: [[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<RhoWalkResult> {
+        // Dispatch to CUDA for rho walk
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.rho_walk(tortoise, hare, max_steps)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.rho_walk(tortoise, hare, max_steps)
+        }
+    }
+
+    fn solve_post_walk(&self, walk: RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        // Dispatch to CUDA for post-walk solving
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.solve_post_walk(walk, targets)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            self.cpu.solve_post_walk(walk, targets)
         }
     }
 }

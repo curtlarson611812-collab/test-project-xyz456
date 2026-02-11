@@ -262,11 +262,11 @@ impl GpuBackend for WgpuBackend {
         Ok(vec![])
     }
 
-    fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         Err(anyhow!("Vulkan batch_inverse not implemented - use CUDA"))
     }
 
-    fn batch_solve(&self, _alphas: Vec<[u32;8]>, _betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
+    fn batch_solve(&self, _dps: &Vec<crate::dp::DpEntry>, _targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan batch_solve not implemented - use CUDA"))
     }
 
@@ -278,11 +278,11 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan batch_barrett_reduce not implemented - use CUDA"))
     }
 
-    fn batch_mul(&self, _a: Vec<[u32;8]>, _b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        Err(anyhow!("Vulkan batch_mul not implemented - use CUDA"))
+    fn batch_bigint_mul(&self, _a: &Vec<[u32;8]>, _b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        Err(anyhow!("Vulkan batch_bigint_mul not implemented - use CUDA"))
     }
 
-    fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+    fn batch_to_affine(&self, _points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>> {
         Err(anyhow!("Vulkan batch_to_affine not implemented - use CUDA"))
     }
 
@@ -391,6 +391,22 @@ impl GpuBackend for WgpuBackend {
     fn simulate_cuda_fail(&mut self, _fail: bool) {
         // No-op for Vulkan
     }
+
+    fn safe_diff_mod_n(&self, _tame: [u32;8], _wild: [u32;8], _n: [u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("Vulkan safe_diff_mod_n not implemented - use CUDA"))
+    }
+
+    fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("Vulkan mul_glv_opt not implemented - use CUDA"))
+    }
+
+    fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<RhoWalkResult> {
+        Err(anyhow!("Vulkan rho_walk not implemented - use CUDA"))
+    }
+
+    fn solve_post_walk(&self, _walk: RhoWalkResult, _targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        Err(anyhow!("Vulkan solve_post_walk not implemented - use CUDA"))
+    }
 }
 
 /// CPU fallback when Vulkan/WGPU is not available
@@ -436,7 +452,7 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn batch_mul(&self, _a: Vec<[u32;8]>, _b: Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+    fn batch_bigint_mul(&self, _a: &Vec<[u32;8]>, _b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -549,4 +565,5 @@ impl GpuBackend for WgpuBackend {
 
         Ok((hist, bias_factors))
     }
+
 }
