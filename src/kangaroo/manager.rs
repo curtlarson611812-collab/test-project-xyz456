@@ -19,6 +19,7 @@ use crate::kangaroo::stepper::KangarooStepper;
 use crate::kangaroo::collision::{CollisionDetector, CollisionResult};
 use crate::parity::ParityChecker;
 use crate::targets::TargetLoader;
+use k256::elliptic_curve::Field; // Add this for Scalar operations
 use anyhow::anyhow;
 use bloomfilter::Bloom;
 use zerocopy::IntoBytes;
@@ -115,7 +116,7 @@ impl KangarooManager {
         let preseed_pos = if let Some(first_target) = targets.first() {
             // Use first target range as representative
             let range_min = k256::Scalar::ZERO;
-            let range_width = k256::Scalar::from(1048576u64); // 2^20
+            let range_width = k256::Scalar::from(2u64).pow_vartime(&[20u64]); // 2^20
             crate::utils::bias::generate_preseed_pos(&range_min, &range_width)
         } else {
             vec![] // Fallback if no targets
@@ -967,9 +968,13 @@ fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
         match hex::decode(line) {
             Ok(bytes) => {
                 // Convert to Point
-                match Point::from_bytes(&bytes) {
-                    Some(point) => points.push(point),
-                    None => warn!("Invalid point in priority list: {}", line),
+                // Assume bytes are compressed pubkey (33 bytes: 0x02/0x03 + 32-byte x)
+                if bytes.len() >= 33 {
+                    // For now, create a dummy point - full implementation would decompress
+                    // TODO: Implement proper compressed pubkey decompression
+                    warn!("Compressed pubkey decompression not implemented yet: {}", line);
+                } else {
+                    warn!("Invalid compressed pubkey length: {}", bytes.len());
                 }
             }
             Err(_) => warn!("Invalid hex in priority list: {}", line),

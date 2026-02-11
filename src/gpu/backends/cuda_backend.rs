@@ -1138,6 +1138,18 @@ impl GpuBackend for CudaBackend {
         // CUDA post-walk solving
         Ok(Some([42, 0, 0, 0, 0, 0, 0, 0])) // Stub - needs kernel implementation
     }
+
+    fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
+        crate::utils::bias::generate_preseed_pos(range_min, range_width).map_err(Into::into)
+    }
+
+    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+        crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, false).map_err(Into::into)
+    }
+
+    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+        Ok(crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins))
+    }
 }
 
 /// CPU fallback when CUDA is not available

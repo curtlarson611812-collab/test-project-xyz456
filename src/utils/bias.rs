@@ -37,7 +37,7 @@ pub fn apply_biases(scalar: &BigInt256, target: (u8, u8, u8, u8, bool)) -> f64 {
     }
 
     // Positional bias filter
-    if target.4 && scalar.is_zero() {
+    if target.4 && bool::from(scalar.is_zero()) {
         return 0.0;  // Reject zero scalars if pos bias enabled
     }
 
@@ -225,7 +225,7 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
 /// Returns 32*32 = 1024 normalized positions [0,1] within the puzzle range
 /// This provides "curve-aware" baseline for unsolved puzzles lacking empirical data
 pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64> {
-    if range_width.is_zero() {
+    if bool::from(range_width.is_zero()) {
         panic!("Zero range width"); // Edge: Prevent div by zero
     }
 
@@ -236,14 +236,14 @@ pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64
 
         for k in 1..=32 {
             let scalar = prime * Scalar::from(k);
-            if scalar.is_zero() {
+            if bool::from(scalar.is_zero()) {
                 continue; // Skip zero scalars
             }
 
             let point = ProjectivePoint::GENERATOR * scalar;
             let affine = point.to_affine();
 
-            if !affine.is_on_curve() {
+            if !bool::from(affine.is_on_curve()) {
                 panic!("Off-curve pre-seed point"); // Edge: Panic on invalid curve point
             }
 

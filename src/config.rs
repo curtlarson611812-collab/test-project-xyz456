@@ -252,6 +252,9 @@ impl Default for Config {
             use_hybrid_bsgs: true,
             bsgs_threshold: 4294967296,
             gold_bias_combo: false,
+            bias_log: None,
+            enable_noise: false,
+            preseed_pos_weights: vec![0.5, 0.25, 0.25],
         }
     }
 }
