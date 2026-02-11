@@ -1,6 +1,7 @@
 // GOLD Cluster CUDA optimizations - shared memory bias preloading
 // Optimized for Magic 9 cluster with universal bias patterns
 
+#include <cuda_runtime.h>
 #include <stdint.h>
 
 // Shared memory structure for GOLD cluster biases

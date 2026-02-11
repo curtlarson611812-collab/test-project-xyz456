@@ -816,6 +816,16 @@ impl BigInt256 {
         }
         BigInt256 { limbs: result }
     }
+
+    /// Convert BigInt256 to u64 limbs [u64; 4] format
+    pub fn to_u64_limbs(&self) -> [u64; 4] {
+        self.limbs
+    }
+
+    /// Convert from u64 limbs [u64; 4] format to BigInt256
+    pub fn from_u64_limbs(limbs: [u64; 4]) -> Self {
+        BigInt256 { limbs }
+    }
 }
 
 impl fmt::Display for BigInt256 {

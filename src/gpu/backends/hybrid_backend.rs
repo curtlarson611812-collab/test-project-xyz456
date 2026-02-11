@@ -53,6 +53,7 @@ pub struct HybridBackend {
     #[cfg(feature = "rustacuda")]
     cuda: CudaBackend,
     cpu: CpuBackend,
+    cuda_available: bool,
 }
 
 impl HybridBackend {
@@ -72,6 +73,7 @@ impl HybridBackend {
             #[cfg(feature = "rustacuda")]
             cuda,
             cpu,
+            cuda_available: true,
         })
     }
 }

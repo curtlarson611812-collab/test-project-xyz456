@@ -3,6 +3,7 @@
 // Optimizations: Shared memory for jump points, coalesced memory access
 
 #include <cuda_runtime.h>
+#include <stdint.h>
 
 // BigInt256 struct for unified CPU/GPU arithmetic (matches CPU BigInt256)
 typedef struct {

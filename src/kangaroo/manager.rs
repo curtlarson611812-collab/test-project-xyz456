@@ -116,10 +116,8 @@ impl KangarooManager {
         let preseed_pos = if let Some(first_target) = targets.first() {
             // Use first target range as representative
             let range_min = k256::Scalar::ZERO;
-            let range_width = k256::Scalar::from(2u64).pow_vartime(&[20u64]); // 2^20
-            let range_min_big = BigInt256::from_scalar(&range_min);
-            let range_width_big = BigInt256::from_scalar(&range_width);
-            crate::utils::bias::generate_preseed_pos(&range_min_big, &range_width_big)
+            let range_width = k256::Scalar::from(2u64).pow_vartime(&[20]); // 2^20
+            crate::utils::bias::generate_preseed_pos(range_min, range_width)
         } else {
             vec![] // Fallback if no targets
         };
@@ -976,9 +974,12 @@ fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
                         Ok(encoded) => {
                             match k256::AffinePoint::decompress(&encoded.x(), encoded.y().unwrap_or_default()) {
                                 Some(affine) => {
+                                    let encoded_point = affine.to_encoded_point(true);
+                                    let x_bytes = encoded_point.x().unwrap().as_bytes();
+                                    let y_bytes = encoded_point.y().unwrap().as_bytes();
                                     let point = crate::types::Point::from_affine(
-                                        affine.x.to_bytes().as_slice().try_into().unwrap_or([0u8; 32]),
-                                        affine.y.to_bytes().as_slice().try_into().unwrap_or([0u8; 32])
+                                        x_bytes.try_into().unwrap_or([0u8; 32]),
+                                        y_bytes.try_into().unwrap_or([0u8; 32])
                                     );
                                     points.push(point);
                                 }

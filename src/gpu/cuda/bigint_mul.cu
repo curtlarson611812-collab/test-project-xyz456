@@ -11,6 +11,9 @@ typedef struct {
     uint64_t limbs[4];  // LSB in limbs[0], MSB in limbs[3] - exact match to CPU BigInt256
 } bigint256;
 
+// Forward declarations
+__device__ bigint256 bigint256_sub(const bigint256 a, const bigint256 b);
+
 // BigInt256 helper functions
 __device__ bigint256 bigint256_zero() {
     bigint256 res;
@@ -74,8 +77,13 @@ __device__ bigint256 bigint256_sub(const bigint256 a, const bigint256 b) {
     int64_t borrow = 0;
     for (int i = 0; i < 4; i++) {
         __int128_t diff = (__int128_t)a.limbs[i] - b.limbs[i] - borrow;
-        res.limbs[i] = (diff < 0) ? (uint64_t)(diff + (1LL << 64)) : (uint64_t)diff;
-        borrow = (diff < 0) ? 1 : 0;
+        if (diff < 0) {
+            res.limbs[i] = (uint64_t)(diff + (__int128_t)1 << 64);
+            borrow = 1;
+        } else {
+            res.limbs[i] = (uint64_t)diff;
+            borrow = 0;
+        }
     }
     return res;
 }
@@ -292,9 +300,10 @@ __device__ void mul256_simd(uint64_t* result, const uint64_t* a, const uint64_t*
     for (int i = 0; i < 4; i++) {
         uint64_t carry = 0;
         for (int j = 0; j < 4; j++) {
-            // Use CUDA SIMD multiply-high for 64-bit multiplication
-            low = __umul64(a[i], b[j]);
-            high = __mul64hi(a[i], b[j]);
+            // Use standard 64-bit multiplication
+            __int128_t product = (__int128_t)a[i] * (__int128_t)b[j];
+            low = (uint64_t)product;
+            high = (uint64_t)(product >> 64);
 
             // Add to existing result with carry propagation
             uint64_t existing = result[i + j];

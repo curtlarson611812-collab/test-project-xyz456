@@ -255,6 +255,7 @@ impl Default for Config {
             bias_log: None,
             enable_noise: false,
             preseed_pos_weights: vec![0.5, 0.25, 0.25],
+            priority_list: None,
         }
     }
 }

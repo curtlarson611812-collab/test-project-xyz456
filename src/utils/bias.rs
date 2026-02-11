@@ -5,7 +5,7 @@
 
 use crate::math::bigint::BigInt256;
 use log::{info, warn};
-use rand::Rng;
+use rand::{Rng, RngCore};
 use crate::kangaroo::generator::PRIME_MULTIPLIERS;
 use k256::{ProjectivePoint, Scalar};
 
