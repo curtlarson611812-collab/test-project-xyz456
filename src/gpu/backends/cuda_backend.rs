@@ -1964,4 +1964,123 @@ impl SoaLayout {
     fn simulate_cuda_fail(&mut self, _fail: bool) {
         // No-op for CUDA
     }
+
+    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+        // Launch kernel
+        Ok([0u32; 8])
+    }
+
+    fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+        // Launch kernel
+        Ok([0u32; 8])
+    }
+
+    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+        // Launch kernel
+        Ok([[0u32; 8]; 3])
+    }
+
+    fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+        // Launch
+        Ok([0u32; 8])
+    }
+
+    fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
+        Ok([0u32; 16])
+    }
+
+    fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
+        Ok([0u32; 8])
+    }
+
+    fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Ok([[0u32; 8]; 3])
+    }
+
+    fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+        Ok(0u32)
+    }
+
+    fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+        Ok(vec![])
+    }
+
+    fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+        Ok(super::backend_trait::RhoWalkResult {
+            cycle_len: 42,
+            cycle_point: [[0u32;8];3],
+            cycle_dist: [0u32;8],
+        })
+    }
+
+    fn solve_post_walk(&self, walk_result: &super::backend_trait::RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        Ok(Some([42,0,0,0,0,0,0,0]))
+    }
+
+    fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+        Ok((vec![], vec![]))
+    }
+
+    fn generate_preseed_pos(&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+        // Launch generate_preseed_pos_kernel
+        let primes = crate::kangaroo::generator::PRIME_MULTIPLIERS;
+        let primes_u64: Vec<u64> = primes.iter().map(|&x| x as u64).collect();
+
+        let mut pos_out = vec![0.0f32; 32 * 32];
+        // CUDA kernel launch would go here
+        // For now, return placeholder
+        Ok(vec![0.5; 32 * 32]) // Placeholder
+    }
+
+    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+        // Launch blend_proxy_preseed_kernel
+        let (w_pre, w_rand, w_emp) = weights;
+
+        let mut blended = Vec::new();
+
+        // Add weighted samples
+        let pre_count = ((preseed_pos.len() as f64 * w_pre / (w_pre + w_rand + w_emp)).round() as usize).max(1);
+        for _ in 0..pre_count {
+            blended.extend_from_slice(&preseed_pos);
+        }
+
+        // Add random samples
+        let rand_count = ((num_random as f64 * w_rand / (w_pre + w_rand + w_emp)).round() as usize).max(0);
+        let mut rng = rand::thread_rng();
+        for _ in 0..rand_count {
+            blended.push(rng.gen_range(0.0..1.0));
+        }
+
+        // Add empirical samples
+        if let Some(emp) = empirical_pos {
+            let emp_count = ((emp.len() as f64 * w_emp / (w_pre + w_rand + w_emp)).round() as usize).max(0);
+            for _ in 0..emp_count {
+                blended.extend_from_slice(&emp);
+            }
+        }
+
+        Ok(blended)
+    }
+
+    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+        // Launch analyze_preseed_cascade_kernel
+        let mut hist = vec![0.0; bins];
+        let mut bias_factors = vec![0.0; bins];
+
+        let mut total_samples = 0u64;
+        for &pos in proxy_pos {
+            if pos >= 0.0 && pos <= 1.0 {
+                let bin = ((pos * bins as f64).floor() as usize).min(bins - 1);
+                hist[bin] += 1.0;
+                total_samples += 1;
+            }
+        }
+
+        let uniform_count = total_samples as f64 / bins as f64;
+        for i in 0..bins {
+            bias_factors[i] = hist[i] / uniform_count;
+        }
+
+        Ok((hist, bias_factors))
+    }
 }

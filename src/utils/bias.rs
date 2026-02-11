@@ -5,6 +5,8 @@
 
 use crate::math::bigint::BigInt256;
 use log::{info, warn};
+use rand::Rng;
+use crate::kangaroo::generator::PRIME_MULTIPLIERS;
 
 /// Compute target biases from pubkey x-coordinate with attractor cross-check
 /// Returns (mod9, mod27, mod81, pos) bias targets
@@ -216,4 +218,133 @@ pub fn get_precomputed_d_g(attractor_x: &BigInt256, bias: (u8, u8, u8, u8, u32))
 
     info!("✅ D_g pre-computed for pattern {:?}: {}", bias_key, d_g.to_hex());
     d_g
+}
+
+/// Generate pre-seed positional bias points using G * (small_prime * k)
+/// Returns 32*32 = 1024 normalized positions [0,1] within the puzzle range
+/// This provides "curve-aware" baseline for unsolved puzzles lacking empirical data
+pub fn generate_preseed_pos(range_min: &BigInt256, range_width: &BigInt256) -> Vec<f64> {
+    let mut pos = Vec::with_capacity(32 * 32);
+
+    for &prime_u64 in PRIME_MULTIPLIERS.iter() {
+        let prime = BigInt256::from_u64(prime_u64);
+
+        for k in 1..=32 {
+            let k_big = BigInt256::from_u64(k as u64);
+            let scalar = prime.mul(&k_big); // prime * k
+
+            // Skip if scalar would overflow range (rough check)
+            if scalar >= *range_width {
+                continue;
+            }
+
+            // Compute point = scalar * G (using secp256k1 multiplication)
+            let curve = crate::math::secp::Secp256k1::new();
+            let generator = crate::types::Point::generator();
+            let point = curve.mul(&generator, &scalar);
+
+            // Skip identity point (scalar = 0 mod N)
+            if point.is_infinity() {
+                continue;
+            }
+
+            // Compute pos_proxy from point.x hash (deterministic)
+            let x_hash = hash_point_x_to_u64(&point);
+            let range_width_u64 = range_width.to_u64().max(1); // Prevent div by zero
+            let offset_u64 = x_hash % range_width_u64;
+            let offset_big = BigInt256::from_u64(offset_u64);
+            let pos_big = offset_big.sub(range_min).modulo(range_width);
+            let pos_val = pos_big.to_f64_approx() / range_width.to_f64_approx();
+
+            pos.push(pos_val.clamp(0.0, 1.0));
+        }
+    }
+
+    pos
+}
+
+/// Hash point x-coordinate to u64 for deterministic pos_proxy calculation
+fn hash_point_x_to_u64(point: &crate::types::Point) -> u64 {
+    // Use point's x coordinate as deterministic seed
+    // For simplicity, use low 64 bits of x (sufficient for proxy)
+    match point {
+        crate::types::Point::Affine(p) => {
+            // Convert x to bytes and hash
+            let x_bytes = p.x.to_bytes_be();
+            let mut hash = 0u64;
+            for chunk in x_bytes.chunks(8) {
+                let mut bytes = [0u8; 8];
+                bytes[..chunk.len()].copy_from_slice(chunk);
+                hash ^= u64::from_be_bytes(bytes);
+            }
+            hash
+        }
+        crate::types::Point::Projective(_) => {
+            // Convert to affine for hashing (expensive but accurate)
+            // For performance, could cache or approximate
+            0u64 // Placeholder - would need Point::to_affine()
+        }
+    }
+}
+
+/// Blend pre-seed positions with random simulations and empirical data
+/// weights: (preseed_weight, random_weight, empirical_weight)
+/// Returns combined proxy positions for histogram analysis
+pub fn blend_proxy_preseed(
+    preseed_pos: Vec<f64>,
+    num_random: usize,
+    empirical_pos: Option<Vec<f64>>,
+    weights: (f64, f64, f64)
+) -> Vec<f64> {
+    let (w_pre, w_rand, w_emp) = weights;
+    let total_weight = w_pre + w_rand + w_emp;
+
+    if total_weight <= 0.0 {
+        return vec![];
+    }
+
+    let mut proxy = Vec::new();
+
+    // Add pre-seed positions (weighted by duplication)
+    let pre_count = ((preseed_pos.len() as f64 * w_pre / total_weight).round() as usize).max(1);
+    for _ in 0..pre_count {
+        proxy.extend_from_slice(&preseed_pos);
+    }
+
+    // Add random simulations (uniform distribution as negative samples)
+    let rand_count = ((num_random as f64 * w_rand / total_weight).round() as usize).max(0);
+    let mut rng = rand::thread_rng();
+    for _ in 0..rand_count {
+        proxy.push(rng.gen_range(0.0..1.0));
+    }
+
+    // Add empirical positions (real solved puzzle data)
+    if let Some(emp) = empirical_pos {
+        let emp_count = ((emp.len() as f64 * w_emp / total_weight).round() as usize).max(0);
+        for _ in 0..emp_count {
+            proxy.extend_from_slice(&emp);
+        }
+    }
+
+    proxy
+}
+
+/// Analyze blended proxy positions for cascade histogram generation
+/// Returns histogram bins and bias factors for POS filter tuning
+pub fn analyze_preseed_cascade(proxy_pos: &[f64], bins: usize) -> (Vec<f64>, Vec<f64>) {
+    let mut hist = vec![0u64; bins];
+
+    // Build histogram
+    for &pos in proxy_pos {
+        let bin = ((pos * bins as f64).floor() as usize).min(bins - 1);
+        hist[bin] += 1;
+    }
+
+    // Calculate bias factors (deviation from uniform)
+    let uniform_count = proxy_pos.len() as f64 / bins as f64;
+    let bias_factors: Vec<f64> = hist.iter()
+        .map(|&count| count as f64 / uniform_count)
+        .collect();
+
+    (hist.into_iter().map(|x| x as f64).collect(), bias_factors)
 }

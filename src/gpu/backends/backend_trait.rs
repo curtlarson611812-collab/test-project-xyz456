@@ -90,4 +90,13 @@ pub trait GpuBackend {
 
     /// Simulate CUDA fail for fallback tests
     fn simulate_cuda_fail(&mut self, fail: bool);
+
+    /// Generate pre-seed positional bias points
+    fn generate_preseed_pos(&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>>;
+
+    /// Blend pre-seed positions with random and empirical data
+    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>>;
+
+    /// Analyze pre-seed cascade for histogram generation
+    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)>;
 }

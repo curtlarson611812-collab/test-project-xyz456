@@ -427,6 +427,66 @@ impl GpuBackend for CpuBackend {
     fn simulate_cuda_fail(&mut self, _fail: bool) {
         // No-op for CPU
     }
+
+    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn solve_post_walk(&self, walk_result: &super::backend_trait::RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn generate_preseed_pos(&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+        Err(anyhow!("CPU backend not available"))
+    }
+
+    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+        Err(anyhow!("CPU backend not available"))
+    }
 }
 
 #[cfg(test)]

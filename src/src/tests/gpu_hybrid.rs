@@ -20,6 +20,9 @@ fn gpu_hybrid_suite() -> Result<()> {
     test_hybrid_fallback()?;
     test_gpu_hybrid_puzzle66()?;
     test_10m_step_parity_hybrid()?;
+    test_preseed_pos_generation()?;
+    test_preseed_blend_proxy()?;
+    test_preseed_cascade_analysis()?;
     Ok(())
 }
 
@@ -184,6 +187,82 @@ fn test_10m_step_parity_hybrid() -> Result<()> {
     for i in 0..10000000 {
         assert_eq!(cpu_points[i], gpu_points[i], "Point parity fail at {}", i);
     }
+    Ok(())
+}
+
+fn test_preseed_pos_generation() -> Result<()> {
+    use crate::gpu::backends::HybridBackend;
+    use crate::math::BigInt256;
+
+    let backend = HybridBackend::new()?;
+    let range_min = BigInt256::from_u64(1);
+    let range_width = BigInt256::from_u64(1000000); // 2^20 for puzzle #20
+
+    let preseed_pos = backend.generate_preseed_pos(&range_min, &range_width)?;
+
+    // Should generate 32 * 32 = 1024 positions
+    assert_eq!(preseed_pos.len(), 32 * 32, "Pre-seed count mismatch");
+
+    // All positions should be in [0,1]
+    for &pos in &preseed_pos {
+        assert!(pos >= 0.0 && pos <= 1.0, "Position out of range: {}", pos);
+    }
+
+    // Should have some clustering (not perfectly uniform)
+    let avg_pos: f64 = preseed_pos.iter().sum::<f64>() / preseed_pos.len() as f64;
+    assert!(avg_pos > 0.3 && avg_pos < 0.7, "Unexpected average position: {}", avg_pos);
+
+    Ok(())
+}
+
+fn test_preseed_blend_proxy() -> Result<()> {
+    use crate::gpu::backends::HybridBackend;
+
+    let backend = HybridBackend::new()?;
+
+    // Generate pre-seed
+    let range_min = BigInt256::from_u64(1);
+    let range_width = BigInt256::from_u64(1000000);
+    let preseed_pos = backend.generate_preseed_pos(&range_min, &range_width)?;
+
+    // Blend with random and empirical
+    let empirical_pos = Some(vec![0.1, 0.2, 0.9]);
+    let blended = backend.blend_proxy_preseed(preseed_pos.clone(), 200, empirical_pos, (0.5, 0.25, 0.25))?;
+
+    // Should have blended samples
+    assert!(blended.len() > preseed_pos.len(), "Blended count too small");
+
+    // Check weights approximately
+    let pre_count = blended.iter().filter(|&&x| preseed_pos.contains(&x)).count();
+    assert!(pre_count > blended.len() / 3, "Pre-seed weight not respected");
+
+    Ok(())
+}
+
+fn test_preseed_cascade_analysis() -> Result<()> {
+    use crate::gpu::backends::HybridBackend;
+
+    let backend = HybridBackend::new()?;
+
+    // Create test proxy positions with known distribution
+    let proxy_pos = vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]; // Uniform
+    let bins = 5;
+
+    let (hist, bias_factors) = backend.analyze_preseed_cascade(&proxy_pos, bins)?;
+
+    // Should have 5 bins
+    assert_eq!(hist.len(), bins, "Histogram bin count mismatch");
+    assert_eq!(bias_factors.len(), bins, "Bias factor count mismatch");
+
+    // Uniform distribution should have bias factors ~1.0
+    for &factor in &bias_factors {
+        assert!(factor > 0.8 && factor < 1.2, "Bias factor not near uniform: {}", factor);
+    }
+
+    // Total histogram should equal sample count
+    let total: f64 = hist.iter().sum();
+    assert_eq!(total as usize, proxy_pos.len(), "Histogram total mismatch");
+
     Ok(())
 }
 

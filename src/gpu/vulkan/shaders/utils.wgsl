@@ -836,6 +836,117 @@ fn test_modular_arithmetic() {
     let inv_valid = bigint_cmp(inv_check, one) == 0;
     test_results[7] = select(0u, 1u, inv_valid); // 1=pass, 0=fail
 }
+
+/// Generate pre-seed positional bias points using G * (small_prime * k)
+/// Returns 32*32 = 1024 normalized positions [0,1] within the puzzle range
+/// This provides "curve-aware" baseline for unsolved puzzles lacking empirical data
+fn generate_preseed_pos(range_min: f32, range_width: f32) -> array<f32, 1024> {
+    var pos: array<f32, 1024>;
+    var idx = 0u;
+
+    for (var p: u32 = 0u; p < 32u; p = p + 1u) {
+        let prime = PRIME_MULTIPLIERS[p];
+
+        for (var k: u32 = 1u; k <= 32u; k = k + 1u) {
+            let scalar = array<u32, 8>(prime * k, 0u, 0u, 0u, 0u, 0u, 0u, 0u); // Low limb only
+            let point = mul_glv_opt(GENERATOR, scalar);
+
+            // Skip identity point (scalar = 0 mod N)
+            if (is_identity(point)) {
+                continue;
+            }
+
+            // Hash point.x to get deterministic pos_proxy
+            let x_hash = hash_u64(point.x);
+            let offset = x_hash % u32(range_width);
+            let pos_val = (f32(offset) - range_min) / range_width;
+            pos[idx] = clamp(pos_val, 0.0, 1.0);
+            idx = idx + 1u;
+        }
+    }
+
+    return pos;
+}
+
+/// Blend pre-seed positions with random simulations and empirical data
+/// weights: (preseed_weight, random_weight, empirical_weight)
+fn blend_proxy_preseed(
+    preseed: array<f32, 1024>,
+    random_samples: array<f32, 512>,
+    empirical_samples: array<f32, 256>,
+    weights: vec3<f32>
+) -> array<f32, 1792> { // 1024 + 512 + 256
+    var blended: array<f32, 1792>;
+    var idx = 0u;
+
+    let total_weight = weights.x + weights.y + weights.z;
+
+    // Add pre-seed (weighted)
+    let pre_count = u32((f32(arrayLength(&preseed)) * weights.x / total_weight));
+    for (var i = 0u; i < pre_count && i < arrayLength(&preseed); i = i + 1u) {
+        blended[idx] = preseed[i];
+        idx = idx + 1u;
+    }
+
+    // Add random samples (weighted)
+    let rand_count = u32((f32(arrayLength(&random_samples)) * weights.y / total_weight));
+    for (var i = 0u; i < rand_count && i < arrayLength(&random_samples); i = i + 1u) {
+        blended[idx] = random_samples[i];
+        idx = idx + 1u;
+    }
+
+    // Add empirical samples (weighted)
+    let emp_count = u32((f32(arrayLength(&empirical_samples)) * weights.z / total_weight));
+    for (var i = 0u; i < emp_count && i < arrayLength(&empirical_samples); i = i + 1u) {
+        blended[idx] = empirical_samples[i];
+        idx = idx + 1u;
+    }
+
+    return blended;
+}
+
+/// Analyze blended proxy positions for cascade histogram generation
+/// Returns histogram bins and bias factors for POS filter tuning
+fn analyze_preseed_cascade(proxy_pos: array<f32, 1792>, bins: u32) -> array<f32, 20> { // bins + bias_factors
+    var hist: array<u32, 10>; // Assume bins <= 10 for simplicity
+    var total_samples = 0u;
+
+    // Build histogram
+    for (var i = 0u; i < arrayLength(&proxy_pos); i = i + 1u) {
+        let pos = proxy_pos[i];
+        if (pos >= 0.0 && pos <= 1.0) {
+            let bin = min(u32(pos * f32(bins)), bins - 1u);
+            hist[bin] = hist[bin] + 1u;
+            total_samples = total_samples + 1u;
+        }
+    }
+
+    // Calculate bias factors (deviation from uniform)
+    var result: array<f32, 20>;
+    let uniform_count = f32(total_samples) / f32(bins);
+
+    for (var i = 0u; i < bins && i < 10u; i = i + 1u) {
+        result[i] = f32(hist[i]) / uniform_count; // bias factor
+    }
+
+    return result;
+}
+
+// Helper: Simple hash function for u64
+fn hash_u64(x: array<u32, 8>) -> u32 {
+    var hash = 0u;
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        hash = hash ^ x[i];
+        hash = (hash << 5u) | (hash >> 27u); // Simple rotation
+    }
+    return hash;
+}
+
+// Helper: Check if point is identity
+fn is_identity(point: array<array<u32, 8>, 3>) -> bool {
+    return bigint_is_zero(point[2]); // Z == 0 in Jacobian
+}
+
 // Entry point for testing (optimized workgroup size for RTX 5090 occupancy)
 @compute @workgroup_size(256)
 fn test_entry(@builtin(local_invocation_id) local_id: vec3<u32>) {

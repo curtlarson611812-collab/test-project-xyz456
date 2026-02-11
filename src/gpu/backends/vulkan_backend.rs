@@ -462,4 +462,58 @@ impl GpuBackend for WgpuBackend {
     fn simulate_cuda_fail(&mut self, _fail: bool) {
         // No-op
     }
+
+    fn generate_preseed_pos(&self, _range_min: &crate::math::BigInt256, _range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+        // Dispatch generate_preseed_pos shader
+        Ok(vec![0.5; 32 * 32]) // Placeholder
+    }
+
+    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+        // Dispatch blend_proxy_preseed shader
+        let (w_pre, w_rand, w_emp) = weights;
+
+        let mut blended = Vec::new();
+
+        let pre_count = ((preseed_pos.len() as f64 * w_pre / (w_pre + w_rand + w_emp)).round() as usize).max(1);
+        for _ in 0..pre_count {
+            blended.extend_from_slice(&preseed_pos);
+        }
+
+        let rand_count = ((num_random as f64 * w_rand / (w_pre + w_rand + w_emp)).round() as usize).max(0);
+        let mut rng = rand::thread_rng();
+        for _ in 0..rand_count {
+            blended.push(rng.gen_range(0.0..1.0));
+        }
+
+        if let Some(emp) = empirical_pos {
+            let emp_count = ((emp.len() as f64 * w_emp / (w_pre + w_rand + w_emp)).round() as usize).max(0);
+            for _ in 0..emp_count {
+                blended.extend_from_slice(&emp);
+            }
+        }
+
+        Ok(blended)
+    }
+
+    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+        // Dispatch analyze_preseed_cascade shader
+        let mut hist = vec![0.0; bins];
+        let mut bias_factors = vec![0.0; bins];
+
+        let mut total_samples = 0u64;
+        for &pos in proxy_pos {
+            if pos >= 0.0 && pos <= 1.0 {
+                let bin = ((pos * bins as f64).floor() as usize).min(bins - 1);
+                hist[bin] += 1.0;
+                total_samples += 1;
+            }
+        }
+
+        let uniform_count = total_samples as f64 / bins as f64;
+        for i in 0..bins {
+            bias_factors[i] = hist[i] / uniform_count;
+        }
+
+        Ok((hist, bias_factors))
+    }
 }
