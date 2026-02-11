@@ -91,12 +91,15 @@ impl KangarooManager {
         let mut targets = if let Some(priority_path) = &config.priority_list {
             info!("Loading high-priority targets from {}", priority_path.display());
             match load_pubkeys_from_file(priority_path) {
-                Ok(priority_targets) => {
-                    info!("Loaded {} high-priority targets", priority_targets.len());
-                    if priority_targets.len() < targets.len() / 10 {
-                        warn!("Priority list very small ({}), may not be optimal", priority_targets.len());
+                Ok(priority_points) => {
+                    info!("Loaded {} high-priority points", priority_points.len());
+                    if priority_points.len() < targets.len() / 10 {
+                        warn!("Priority list very small ({}), may not be optimal", priority_points.len());
                     }
-                    priority_targets
+                    // Convert points to targets
+                    priority_points.into_iter().enumerate().map(|(i, point)| {
+                        Target::new(point, i as u64)
+                    }).collect()
                 }
                 Err(e) => {
                     warn!("Failed to load priority list: {}, falling back to full list", e);
@@ -112,8 +115,8 @@ impl KangarooManager {
         let preseed_pos = if let Some(first_target) = targets.first() {
             // Use first target range as representative
             let range_min = k256::Scalar::ZERO;
-            let range_width = k256::Scalar::from(2u64).pow(&k256::Scalar::from(20u32)); // Default 2^20
-            crate::utils::bias::generate_preseed_pos(range_min, range_width)
+            let range_width = k256::Scalar::from(1048576u64); // 2^20
+            crate::utils::bias::generate_preseed_pos(&range_min, &range_width)
         } else {
             vec![] // Fallback if no targets
         };

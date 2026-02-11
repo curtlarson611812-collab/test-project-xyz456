@@ -31,6 +31,10 @@ struct Args {
     /// Enable noise in proxy blending
     #[arg(long)]
     enable_noise: bool,
+
+    /// Number of cascade levels for POS analysis (1-5)
+    #[arg(long, default_value = "3")]
+    cascade_levels: usize,
 }
 
 fn main() -> Result<()> {
@@ -60,7 +64,7 @@ fn main() -> Result<()> {
     );
 
     println!("📈 Running cascade analysis...");
-    let cascades = analyze_preseed_cascade(&proxy, 10);
+    let cascades = analyze_preseed_cascade(&proxy, args.cascade_levels.min(5), 10); // Clamp max 5
 
     println!("🎯 Computing bias scores for all {} pubkeys...", pubkeys.len());
 
@@ -178,12 +182,8 @@ fn is_gold_cluster(residue: u64, mod_level: u64) -> bool {
 
 /// Check if residue indicates gold cluster membership
 fn is_gold_cluster(residue: u64, mod_level: u64) -> bool {
-    match mod_level {
-        81 => matches!(residue, 0 | 9 | 18 | 27 | 36 | 45 | 54 | 63 | 72), // Gold pattern
-        27 => matches!(residue, 0 | 9 | 18), // Secondary gold
-        9 => residue == 0, // Basic gold
-        _ => false,
-    }
+    let step = mod_level / 9;
+    (0..9).any(|i| residue == i * step)
 }
 
 /// Compute positional score from cascade analysis

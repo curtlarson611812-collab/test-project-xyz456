@@ -172,4 +172,33 @@ mod tests {
         assert!(results[0].1 >= 1.0, "Bias factor too low: {}", results[0].1);
         Ok(())
     }
+
+    #[test]
+    fn test_bias_analyze_cli_workflow() -> anyhow::Result<()> {
+        // Test the key components of the bias_analyze workflow
+        use crate::utils::bias::{generate_preseed_pos, blend_proxy_preseed, analyze_preseed_cascade};
+        use k256::Scalar;
+
+        // Test pre-seed generation
+        let range_min = Scalar::ZERO;
+        let range_width = Scalar::from(100u64);
+        let preseed = generate_preseed_pos(&range_min, &range_width);
+        assert_eq!(preseed.len(), 1024, "Pre-seed count incorrect");
+
+        // Test blending
+        let blended = blend_proxy_preseed(preseed, 200, None, (0.5, 0.25, 0.25), false);
+        assert!(blended.len() > 1000, "Blended count too small");
+
+        // Test cascade analysis
+        let cascades = analyze_preseed_cascade(&blended, 10);
+        assert!(!cascades.is_empty(), "Cascade analysis failed");
+
+        // Verify bias factors are reasonable
+        for (density, bias) in &cascades {
+            assert!(*density >= 0.0, "Density should be non-negative");
+            assert!(*bias >= 1.0, "Bias should be at least 1.0");
+        }
+
+        Ok(())
+    }
 }

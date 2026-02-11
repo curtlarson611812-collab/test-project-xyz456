@@ -162,6 +162,39 @@ impl GpuBackend for WgpuBackend {
         Ok((positions, distances))
     }
 
+    /// GLV windowed NAF precomputation table for Vulkan bulk operations
+    fn precomp_table_glv(&self, base: [u32;8*3], window: u32) -> Result<Vec<[[u32;8];3]>> {
+        let num_points = 1 << (window - 1);
+        if num_points == 0 {
+            return Ok(vec![]);
+        }
+
+        // Create GPU buffer for base point
+        let base_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("base_point"),
+            size: (base.len() * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create output buffer for precomputed points
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("glv_precomp_output"),
+            size: (num_points * 24 * std::mem::size_of::<u32>()) as u64, // 3 * 8 u32 per point
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        // Upload base point data
+        self.queue.write_buffer(&base_buffer, 0, bytemuck::cast_slice(&base));
+
+        // TODO: Load and execute GLV precomputation compute shader
+        // For now, return empty table to indicate framework is ready
+        // In full implementation: create compute pipeline from glv_precomp.wgsl shader
+
+        Ok(vec![])
+    }
+
     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
         let num = positions.len();
         if num == 0 {
