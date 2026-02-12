@@ -2,8 +2,8 @@
 //!
 //! Contains cryptographic constants and prime arrays for kangaroo optimization.
 
-// use crate::math::bigint::BigInt256; // Already imported at top
 use crate::types::Point;
+use crate::math::bigint::BigInt256;
 use std::sync::LazyLock;
 
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
@@ -464,12 +464,11 @@ pub fn test_glv4_decomposition(k: &Scalar) -> bool {
 // LLL Lattice Reduction for GLV Basis Optimization
 // Lenstra-Lenstra-Lovasz algorithm for shorter, nearly orthogonal basis vectors
 
-// use crate::math::bigint::BigInt256; // Already imported at top
 
 const DIM: usize = 4; // Configurable via glv_dim
 
 // LLL reduction delta parameter (Lovasz condition)
-static LLL_DELTA: Lazy<BigInt256> = Lazy::new(|| {
+static LLL_DELTA: LazyLock<BigInt256> = LazyLock::new(|| {
     BigInt256::from_u64(3) / BigInt256::from_u64(4) // 3/4 for standard LLL
 });
 

@@ -66,6 +66,7 @@ pub const SECONDARY_PRIMES: [u64; 8] = {};
 
     // Compile CUDA kernels using cc crate
     compile_cuda_kernels();
+    validate_vulkan_shaders();
 
     match std::fs::write(&dest_path, &output) {
         Ok(_) => println!("Generated prime constants at {:?}", dest_path),
@@ -153,3 +154,24 @@ fn compile_cuda_kernels() {
         }
     }
 }
+
+// Validate Vulkan WGSL shaders at build time
+fn validate_vulkan_shaders() {
+    #[cfg(feature = "wgpu")]
+    {
+        use naga::valid::{Capabilities, ValidationFlags};
+        let mut validator = naga::valid::Validator::new(ValidationFlags::all(), Capabilities::all());
+        
+        let shader_files = ["kangaroo.wgsl", "jump_table.wgsl", "dp_check.wgsl", "utils.wgsl"];
+        for shader_file in &shader_files {
+            let shader_path = format!("src/gpu/vulkan/shaders/{}", shader_file);
+            if let Ok(shader_source) = std::fs::read_to_string(&shader_path) {
+                match validator.validate(&naga::front::wgsl::parse_str(&shader_source).unwrap()) {
+                    Ok(_) => println!("cargo:warning=WGSL validation passed: {}", shader_file),
+                    Err(e) => println!("cargo:warning=WGSL validation failed for {}: {:?}", shader_file, e),
+                }
+            }
+        }
+    }
+}
+

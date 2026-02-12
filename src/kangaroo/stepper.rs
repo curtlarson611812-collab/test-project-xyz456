@@ -3,7 +3,8 @@
 //! Implements the jump operations for tame and wild kangaroos, updating positions
 //! and alpha/beta coefficients according to the distinguished point method.
 
-use crate::types::{KangarooState, Point, JumpOp, JUMP_TABLE};
+use crate::types::{KangarooState, Point, JumpOp};
+use crate::math::constants::jump_table;
 use crate::math::{Secp256k1, BigInt256};
 use k256::ProjectivePoint;
 use crate::SmallOddPrime_Precise_code as sop;

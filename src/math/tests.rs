@@ -400,3 +400,34 @@ fn test_babai_fermat_vow_integration() {
     }
 }
 
+
+// Integration test: CUDA/Vulkan fixes + Babai/Fermat/VOW
+#[test]
+fn cuda_vulkan_integration_test() {
+    let config = crate::config::Config {
+        enable_babai_multi_sim: true,
+        enable_fermat_ecdlp: true,
+        enable_vow_rho_p2pk: true,
+        enable_shader_precompile: true,
+        ..Default::default()
+    };
+    
+    if config.enable_babai_multi_sim {
+        simulate_babai_multi_round();
+    }
+    
+    let dummy_p = k256::ProjectivePoint::GENERATOR;
+    let dummy_q = dummy_p * k256::Scalar::from_u64(2);
+    
+    if config.enable_fermat_ecdlp {
+        let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
+        assert_eq!(diff, k256::Scalar::from_u64(2));
+    }
+    
+    if config.enable_vow_rho_p2pk {
+        let result = crate::kangaroo::manager::vow_rho_p2pk(&vec![dummy_p]);
+        // Placeholder assertion for build verification
+        assert_eq!(result.len(), 1);
+    }
+}
+

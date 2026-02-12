@@ -444,4 +444,9 @@ pub fn enable_nvidia_persistence() -> Result<bool> {
 
     let status = String::from_utf8_lossy(&query_output.stdout);
     Ok(status.contains("Enabled"))
-}
+}    /// Enable strict linting (for CI/CD)
+    #[arg(long, default_value = "false")]
+    pub enable_strict_lints: bool,
+    /// Enable Vulkan shader precompilation
+    #[arg(long, default_value = "false")]
+    pub enable_shader_precompile: bool,
