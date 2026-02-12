@@ -117,7 +117,7 @@ impl KangarooManager {
             // Use first target range as representative
             let range_min = k256::Scalar::ZERO;
             let range_width = k256::Scalar::from(2u64).pow_vartime(&[20]); // 2^20
-            crate::utils::bias::generate_preseed_pos(range_min, range_width)
+            crate::utils::bias::generate_preseed_pos(&range_min, &range_width)
         } else {
             vec![] // Fallback if no targets
         };
@@ -582,7 +582,7 @@ impl KangarooManager {
 
         let mut distances: Vec<[u32; 8]> = kangaroos.iter()
             .map(|k| [
-                k.distance.to_u64() as u32, (k.distance.to_u64() >> 32) as u32, 0, 0, 0, 0, 0, 0
+                k.distance[0], k.distance[1], 0, 0, 0, 0, 0, 0
             ])
             .collect();
 
@@ -623,12 +623,14 @@ impl KangarooManager {
 
                 KangarooState::new(
                     position,
-                    BigInt256::from_u64(distance),
+                    dist, // distance as [u32; 8]
                     kangaroos[i].alpha,
                     kangaroos[i].beta,
                     kangaroos[i].is_tame,
                     kangaroos[i].is_dp,
                     kangaroos[i].id,
+                    kangaroos[i].step,
+                    if kangaroos[i].is_tame { 1 } else { 0 }, // kangaroo_type
                 )
             })
             .collect();
@@ -664,12 +666,14 @@ impl KangarooManager {
             // Create kangaroo state for the trap
             let trap_state = KangarooState::new(
                 trap_point,
-                BigInt256::from_u64(trap_distance),
+                [trap_distance as u32, (trap_distance >> 32) as u32, 0, 0, 0, 0, 0, 0], // distance as [u32; 8]
                 [0; 4], // alpha not provided
                 [0; 4], // beta not provided
                 trap.is_tame,
                 true, // is_dp - this is a distinguished point
                 0, // id not provided
+                0, // step not provided
+                if trap.is_tame { 1 } else { 0 }, // kangaroo_type
             );
 
             // Add to DP table
@@ -729,12 +733,14 @@ impl KangarooManager {
                     // Found distinguished point - add to DP table
                     let kangaroo_state = KangarooState::new(
                         point,
-                        BigInt256::from_u64(distance),
+                        [distance as u32, (distance >> 32) as u32, 0, 0, 0, 0, 0, 0], // distance as [u32; 8]
                         [0; 4], // alpha (would be tracked)
                         [0; 4], // beta (would be tracked)
                         true,   // is_tame (simplified)
                         true,   // is_dp - this is a distinguished point
                         i as u64, // id
+                        0, // step
+                        1, // kangaroo_type (tame)
                     );
 
                     let mut table = self.dp_table.lock().await;
@@ -852,7 +858,7 @@ impl KangarooManager {
         let stagnation_threshold = BigInt256::from_u64(10000u64);
 
         for state in near_states {
-            if state.distance < stagnation_threshold {
+            if BigInt256 { limbs: [state.distance[0] as u64, state.distance[1] as u64, state.distance[2] as u64, state.distance[3] as u64] } < stagnation_threshold {
                 info!("Restarting stagnant herd {}", state.id);
                 // In practice: reset herd to new random starting position
             }

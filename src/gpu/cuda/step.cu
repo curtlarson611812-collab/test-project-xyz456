@@ -4,58 +4,13 @@
 #include <cuda_runtime.h>
 #include <stdint.h>
 #include <stdio.h> // For printf
+#include "common_constants.h"
 
 #define KANGS_PER_TARGET 4096
 #define DEBUG 1
 #define LIMBS 8
 
-// Point structure for elliptic curve points (Jacobian coordinates)
-struct Point {
-    uint32_t x[8]; // X coordinate (256-bit)
-    uint32_t y[8]; // Y coordinate (256-bit)
-    uint32_t z[8]; // Z coordinate (256-bit)
-};
-
-// Kangaroo state structure (exact match to Rust)
-struct KangarooState {
-    Point position;
-    uint32_t distance[8];
-    uint32_t alpha[4];
-    uint32_t beta[4];
-    bool is_tame;
-    bool is_dp;
-    uint64_t id;
-    uint64_t step;
-    uint32_t kangaroo_type; // 0 = tame, 1 = wild (renamed from 'type')
-};
-
-// Trap structure for collision detection
-struct Trap {
-    uint32_t x[8]; // X coordinate of trap point
-    uint32_t distance[8]; // Distance when trapped
-    uint32_t type; // Kangaroo type
-    uint32_t valid; // 1 if trap is valid
-};
-
-// secp256k1 order (N) as uint32_t[8]
-__constant__ uint32_t CURVE_N[8] = {
-    0xFFFFFFFF, 0xFFFFFFFE, 0xBAAEDCE6, 0xAF48A03B,
-    0xBFD25E8C, 0xD0364141, 0x00000000, 0x00000000
-};
-
-// Barrett mu for secp256k1 order (floor(2^512 / N)) as uint32_t[16]
-__constant__ uint32_t MU_N[16] = {
-    0x00000001, 0x00000000, 0x00000000, 0x00000000,
-    0x45512319, 0x50B75FC4, 0x402DA173, 0x2FBC146B,
-    0x09DDA963, 0x02FDB94D, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000
-};
-
-// Mean jump distance as uint32_t[8]
-__constant__ uint32_t JUMP_SIZE[8] = {1024, 0, 0, 0, 0, 0, 0, 0};
-
-// Jump table for kangaroo hops (precomputed points)
-__constant__ Point JUMP_TABLE[256];
+// Point and KangarooState structures are now defined in common_constants.h
 
 // secp256k1 prime modulus (P) as uint32_t[8]
 __constant__ uint32_t P[8] = {
@@ -69,54 +24,62 @@ __constant__ uint32_t GLV_BETA[8] = {
     0xEC014F9A, 0xED809F6D, 0xCAA2B2BB, 0xC2D2EAA9
 };
 
-// GLV lambda constant for secp256k1
+// GLV lambda constant
 __constant__ uint32_t GLV_LAMBDA[8] = {
-    0xAC9C52B3u, 0x3FA3CF1Fu, 0xD898C296u, 0xF5A0E56Au,
-    0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u
+    0x5363AD4C, 0xC05C30E0, 0xA5278789, 0x9CC8148B,
+    0x8814FF65, 0x74E9C3AB, 0x5144A2A0, 0x44CF6308
 };
 
-// GLV basis vectors for lattice reduction (LSB first for limb operations)
-__constant__ uint32_t GLV_V1_1_LIMBS[8] = {
-    // glv_v1_1 LSB: reverse of 0x3086d221a7d46bcde86c90e49284eb153dab
-    0x3dab, 0xeb15, 0x84eb, 0x92e4, 0x6c90, 0xe86c, 0xd46b, 0xa7d4
-};
-
-__constant__ uint32_t GLV_V1_2_LIMBS[8] = {
-    // glv_v1_2: -0xe4437ed6010e88286f547fa90abfe4c3 (as n - |v2|)
-    0x3C1B, 0xF541, 0x8056, 0x90AB, 0x77D7, 0xFEF1, 0x821A, 0x1BBC
-};
-
-__constant__ uint32_t GLV_V2_1_LIMBS[8] = {
-    // glv_v2_1 LSB: reverse of 0x114ca50f7a8e2f3f657c1108d9d44cfd
-    0x4cfd, 0xd9d4, 0x1108, 0x657c, 0x2f3f, 0x7a8e, 0xa50f, 0x114c
-};
-
-__constant__ uint32_t GLV_V2_2_LIMBS[8] = {
-    // glv_v2_2 LSB: reverse of 0x3086d221a7d46bcde86c90e49284eb153dab
-    0x3dab, 0xeb15, 0x84eb, 0x92e4, 0x6c90, 0xe86c, 0xd46b, 0xa7d4
-};
-
-__constant__ uint32_t GLV_R1_LIMBS[8] = {
-    0x3dab, 0xeb15, 0x84eb, 0x92e4, 0x6c90, 0xe86c, 0xd46b, 0xa7d4
-}; // r1 = v1_1
-__constant__ uint32_t GLV_R2_LIMBS[8] = {
-    0x4cfd, 0xd9d4, 0x1108, 0x657c, 0x2f3f, 0x7a8e, 0xa50f, 0x114c
-}; // r2 = v2_1
-__constant__ uint32_t GLV_SQRT_N_LIMBS[8] = {
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0001, 0x0000, 0x0000, 0x0000
-}; // 2^128
-
-// Additional GLV constants for limb-based operations
-__constant__ uint32_t GLV_LAMBDA_LIMBS[8] = {0xd0364141, 0xbfd25e8c, 0xaf48a03b, 0xbaaedce6, 0xfffffffe, 0xffffffff, 0xffffffff, 0xffffffff};
-__constant__ uint32_t GLV_BETA_LIMBS[8] = {0x86b801e8, 0x9e0b24cd, 0x24cb09e8, 0x187684d9, 0xa5fb0480, 0x3e7d44e6, 0x10071c65, 0x2b6ae97a};
-
-// Sacred small primes array for bias factoring (from generator.rs PRIME_MULTIPLIERS)
+// Small prime multipliers for bias factoring
 __constant__ uint64_t PRIME_MULTIPLIERS[32] = {
     179, 257, 281, 349, 379, 419, 457, 499,
     541, 599, 641, 709, 761, 809, 853, 911,
     967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
     1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583
 };
+
+// GLV lattice basis vectors (pre-computed)
+__constant__ uint32_t GLV_V1_1_LIMBS[8] = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+__constant__ uint32_t GLV_V1_2_LIMBS[8] = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+__constant__ uint32_t GLV_V2_1_LIMBS[8] = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+__constant__ uint32_t GLV_V2_2_LIMBS[8] = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+__constant__ uint32_t GLV_R1_LIMBS[8] = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+__constant__ uint32_t GLV_R2_LIMBS[8] = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+__constant__ uint32_t GLV_SQRT_N_LIMBS[8] = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+__constant__ uint32_t GLV_LAMBDA_LIMBS[8] = {0xd0364141, 0xbfd25e8c, 0xaf48a03b, 0xbaaedce6, 0xfffffffe, 0xffffffff, 0xffffffff, 0xffffffff};
+__constant__ uint32_t GLV_BETA_LIMBS[8] = {0x86b801e8, 0x9e0b24cd, 0x24cb09e8, 0x187684d9, 0xa5fb0480, 0x3e7d44e6, 0x10071c65, 0x2b6ae97a};
+
+// Curve order (N)
+__constant__ uint32_t CURVE_N[8] = {
+    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE,
+    0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141
+};
+
+// Montgomery constants for N
+__constant__ uint32_t MU_N[16] = {
+    0x00000001, 0x00000000, 0x00000000, 0x00000000,
+    0x45512319, 0x50B75FC4, 0x402DA173, 0x2FBC146B,
+    0x09DDA963, 0x02FDB94D, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000
+};
+
+// Trap structure for collision detection
+struct Trap {
+    uint32_t x[8]; // X coordinate of trap point
+    uint32_t distance[8]; // Distance when trapped
+    uint32_t type; // Kangaroo type
+    uint32_t valid; // 1 if trap is valid
+};
+
+// CURVE_N and MU_N are now defined in common_constants.h
+
+// Mean jump distance as uint32_t[8]
+__constant__ uint32_t JUMP_SIZE[8] = {1024, 0, 0, 0, 0, 0, 0, 0};
+
+// Jump table for kangaroo hops (precomputed points)
+__constant__ Point JUMP_TABLE[256];
+
+// All constants are now defined in common_constants.h
 
 // Utility helper functions (static to avoid duplicate symbols)
 static __device__ uint32_t murmur3(const uint32_t key[8]) {
@@ -154,7 +117,7 @@ static __device__ void print_limbs(const uint32_t* limbs, int num) {
     printf("\n");
 }
 
-static __device__ bool point_equal(const Point p1, const Point p2) {
+__device__ int point_equal(const Point p1, const Point p2) {
     for (int i = 0; i < 8; i++) {
         if (p1.x[i] != p2.x[i] || p1.y[i] != p2.y[i]) return false;
     }
@@ -525,7 +488,7 @@ __device__ void bigint_mul_par(const uint32_t* a, const uint32_t* b, uint32_t* r
     }
 }
 
-static __device__ void bigint_add_par(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+__device__ void bigint_add_par(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     uint32_t carry = 0;
     for (int i = 0; i < 8; i++) {
         uint64_t sum = (uint64_t)a[i] + b[i] + carry;
@@ -544,7 +507,7 @@ __device__ void bigint_sub_par(const uint32_t* a, const uint32_t* b, uint32_t* r
     }
 }
 
-static __device__ void bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+__device__ void bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     uint32_t borrow = 0;
     for (int i = 0; i < 8; i++) {
         uint64_t diff = (uint64_t)a[i] - b[i] - borrow;

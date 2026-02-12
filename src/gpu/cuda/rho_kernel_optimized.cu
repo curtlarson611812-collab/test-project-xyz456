@@ -8,10 +8,18 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <stdint.h> // For uint32_t, int64_t etc.
-#include "step.cu" // For shared point_add/double functions
+#include "common_constants.h"
 
-// Forward declaration for mul_glv_opt from step.cu
+// Forward declarations for functions and constants from step.cu
 extern __device__ Point mul_glv_opt(Point p, const uint32_t k[8]);
+extern __device__ Point jacobian_add(Point p1, Point p2);
+extern __device__ Point jacobian_double(Point p);
+extern __device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* res, const uint32_t* mod);
+extern __device__ void glv_decompose_scalar(const uint32_t k[8], uint32_t k1[8], uint32_t k2[8], int8_t* sign1, int8_t* sign2);
+
+// Constants from step.cu
+extern __constant__ uint32_t P[8];
+extern __constant__ uint32_t GLV_BETA[8];
 
 // GLV scalar decomposition for rho kernel (master-level)
 static __device__ void glv_decompose(const uint32_t k[8], uint32_t k1[4], uint32_t k2[4]) {

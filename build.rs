@@ -125,7 +125,7 @@ fn compile_cuda_kernels() {
         "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel"
     ];
 
-    println!("cargo:warning=Compiling {} CUDA files together:", cu_files.len());
+    println!("cargo:warning=Compiling {} CUDA files together with shared constants header:", cu_files.len());
     for file in &cu_files {
         let file_path = format!("src/gpu/cuda/{}.cu", file);
         if std::path::Path::new(&file_path).exists() {
@@ -139,7 +139,7 @@ fn compile_cuda_kernels() {
     println!("cargo:warning=Starting CUDA compilation...");
     let start_time = std::time::Instant::now();
 
-    // Compile all files together (this allows cross-references)
+    // Compile all files together (constants are now shared via common_constants.h)
     match std::panic::catch_unwind(|| {
         builder.compile("gpu_kernels");
     }) {

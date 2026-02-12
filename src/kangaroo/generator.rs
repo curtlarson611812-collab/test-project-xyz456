@@ -475,7 +475,9 @@ impl KangarooGenerator {
                 [1, 0, 0, 0],           // beta placeholder (updated during stepping)
                 false,                  // is_tame
                 false,                  // is_dp
-                i as u64,
+                i as u64,               // id
+                0,                      // step
+                0,                      // kangaroo_type (wild)
             );
 
             wilds.push(state);
@@ -541,7 +543,9 @@ impl KangarooGenerator {
                 [1, 0, 0, 0],           // beta = 1 for tame
                 true,                   // is_tame
                 false,                  // is_dp
-                i as u64,
+                i as u64,               // id
+                0,                      // step
+                1,                      // kangaroo_type (tame)
             );
 
             tames.push(state);
@@ -652,7 +656,9 @@ impl KangarooGenerator {
                 beta,
                 true, // is_tame = true
                 false, // is_dp
-                i as u64,
+                i as u64, // id
+                0, // step
+                1, // kangaroo_type (tame)
             ));
         }
 

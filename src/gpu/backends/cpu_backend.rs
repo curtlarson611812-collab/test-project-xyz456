@@ -102,28 +102,11 @@ impl GpuBackend for CpuBackend {
         Self::new()
     }
 
-    fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
-        // CPU implementation for jump table precomputation
-        // Precomputes base * prime for each prime in the list
-        let mut positions = Vec::with_capacity(primes.len());
-        let mut distances = Vec::with_capacity(primes.len());
-
-        for prime in primes {
-            // Convert limb arrays to BigInt256 for computation
-            let prime_big = BigInt256 { limbs: prime };
-            let base_big = BigInt256 { limbs: base };
-
-            // Compute base * prime (mod N for safety)
-            let result_big = (base_big * prime_big) % crate::math::constants::CURVE_ORDER_BIGINT.clone();
-
-            // Convert back to limb arrays
-            positions.push([[result_big.limbs[0], result_big.limbs[1], result_big.limbs[2], result_big.limbs[3],
-                           result_big.limbs[4], result_big.limbs[5], result_big.limbs[6], result_big.limbs[7]],
-                          [0u32; 8], [0u32; 8]]); // Jacobian format (X, Y=0, Z=1)
-            distances.push(prime); // Distance is the prime itself
-        }
-
-        Ok((positions, distances))
+    fn precomp_table(&self, _base: [[u32;8];3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
+        // CPU implementation for GLV windowed NAF precomputation
+        // Returns table of base^(2*i+1) for i=0..(2^(window-1))-1
+        // For now, return empty table - full implementation needed
+        Ok(Vec::new())
     }
 
     /// GLV windowed NAF precomputation table for scalar multiplication optimization
@@ -445,10 +428,10 @@ impl GpuBackend for CpuBackend {
         Ok(results)
     }
 
-    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
-        // Safe modular difference: (tame_dist - wild_dist) mod n
-        let tame_big = num_bigint::BigUint::from_slice(&tame_dist);
-        let wild_big = num_bigint::BigUint::from_slice(&wild_dist);
+    fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+        // Safe modular difference: (tame - wild) mod n
+        let tame_big = num_bigint::BigUint::from_slice(&tame);
+        let wild_big = num_bigint::BigUint::from_slice(&wild);
         let n_big = num_bigint::BigUint::from_slice(&n);
 
         let diff = if tame_big >= wild_big {
@@ -471,11 +454,10 @@ impl GpuBackend for CpuBackend {
         Ok(result)
     }
 
-    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         // GLV-optimized scalar multiplication placeholder
         // In full implementation, would use endomorphism decomposition
-        // For now, return input point (placeholder)
-        Ok(*p)
+        Err(anyhow!("CPU GLV optimization not implemented"))
     }
 
     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
@@ -531,12 +513,12 @@ impl GpuBackend for CpuBackend {
         Ok(result)
     }
 
-    fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         // Scalar multiplication with GLV optimization placeholder
-        self.mul_glv_opt(p, k)
+        Err(anyhow!("CPU GLV scalar multiplication not implemented"))
     }
 
-    fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+    fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
         let x_big = num_bigint::BigUint::from_slice(&x);
         let modulus_big = num_bigint::BigUint::from(modulus);
 
@@ -558,17 +540,17 @@ impl GpuBackend for CpuBackend {
         Ok(results)
     }
 
-    fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    fn rho_walk(&self, tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
         // Placeholder rho walk implementation
         // In full implementation, would perform Floyd's cycle detection
         Ok(super::backend_trait::RhoWalkResult {
             cycle_len: 0,
-            cycle_point: *tortoise,
+            cycle_point: tortoise,
             cycle_dist: [0u32; 8],
         })
     }
 
-    fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    fn solve_post_walk(&self, _walk: super::backend_trait::RhoWalkResult, _targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
         // Placeholder post-walk solve
         Ok(None)
     }

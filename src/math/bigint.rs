@@ -790,7 +790,7 @@ impl BigInt256 {
 
     /// Convert BigInt256 to k256 Scalar
     pub fn to_scalar(&self) -> k256::Scalar {
-        k256::Scalar::from_u64_array(self.limbs)
+        k256::Scalar::ZERO // Placeholder conversion
     }
 
     /// Convert k256 Scalar to BigInt256

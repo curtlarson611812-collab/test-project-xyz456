@@ -75,12 +75,14 @@ impl ParityChecker {
                     y: [(i * 987654321) as u64; 4],
                     z: [1; 4],
                 },
-                BigInt256::from_u64((i * 1000) as u64), // Deterministic distance
+                [((i * 1000) as u64) as u32, 0, 0, 0, 0, 0, 0, 0], // Deterministic distance as [u32; 8]
                 [i as u64; 4],   // Deterministic alpha
                 [i as u64; 4],   // Deterministic beta
                 i % 2 == 0,      // Alternate tame/wild
                 false,           // is_dp
-                i as u64,
+                i as u64,        // id
+                0,                // step
+                if i % 2 == 0 { 1 } else { 0 }, // kangaroo_type
             );
             kangaroos.push(state);
         }
@@ -104,7 +106,14 @@ impl ParityChecker {
         for _step in 0..self.test_steps {
             for kangaroo in &mut result {
                 // Simple CPU stepping - just increment distance for testing
-                kangaroo.distance = kangaroo.distance.saturating_add(1);
+                // Manual saturating add for [u32; 8] array
+                let mut carry = 1u32;
+                for i in 0..8 {
+                    let (sum, new_carry) = kangaroo.distance[i].overflowing_add(carry);
+                    kangaroo.distance[i] = sum;
+                    carry = new_carry as u32;
+                    if carry == 0 { break; } // No more carry to propagate
+                }
             }
         }
 

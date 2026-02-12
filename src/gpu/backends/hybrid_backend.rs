@@ -468,6 +468,26 @@ impl GpuBackend for HybridBackend {
         }
     }
 
+    fn precomp_table_glv(&self, base: [u32;8*3], window: u32) -> Result<Vec<[[u32;8];3]>> {
+        // Dispatch to CUDA for precision GLV precomputation (if available)
+        #[cfg(feature = "rustacuda")]
+        {
+            self.cuda.precomp_table_glv(base, window)
+        }
+        #[cfg(not(feature = "rustacuda"))]
+        {
+            // Fallback to Vulkan or CPU
+            #[cfg(feature = "wgpu")]
+            {
+                self.vulkan.precomp_table_glv(base, window)
+            }
+            #[cfg(not(feature = "wgpu"))]
+            {
+                self.cpu.precomp_table_glv(base, window)
+            }
+        }
+    }
+
     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
         // Dispatch to Vulkan for bulk stepping operations
         #[cfg(feature = "wgpu")]
@@ -505,15 +525,15 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn batch_inverse(&self, inputs: Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, inputs: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         // Dispatch to CUDA for precision inverse operations
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.batch_inverse(inputs, modulus)
+            self.cuda.batch_inverse(inputs.clone(), modulus)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            self.cpu.batch_inverse(inputs, modulus)
+            self.cpu.batch_inverse(inputs.clone(), modulus)
         }
     }
 
@@ -577,15 +597,15 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn safe_diff_mod_n(&self, tame_dist: &[u32;8], wild_dist: &[u32;8], n: &[u32;8]) -> Result<[u32;8]> {
+    fn safe_diff_mod_n(&self, _tame: [u32;8], _wild: [u32;8], _n: [u32;8]) -> Result<[u32;8]> {
         // Dispatch to CUDA for modular difference
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.safe_diff_mod_n(tame_dist, wild_dist, n)
+            self.cuda.safe_diff_mod_n(_tame, _wild, _n)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            self.cpu.safe_diff_mod_n(tame_dist, wild_dist, n)
+            self.cpu.safe_diff_mod_n(_tame, _wild, _n)
         }
     }
 
@@ -601,15 +621,15 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         // Dispatch to CUDA for GLV multiplication
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.mul_glv_opt(p, k)
+            self.cuda.mul_glv_opt(_p, _k)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            self.cpu.mul_glv_opt(p, k)
+            self.cpu.mul_glv_opt(_p, _k)
         }
     }
 
@@ -649,21 +669,21 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         // Dispatch to CUDA for scalar multiplication with GLV
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.scalar_mul_glv(p, k)
+            self.cuda.scalar_mul_glv(_p, _k)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            self.cpu.scalar_mul_glv(p, k)
+            self.cpu.scalar_mul_glv(_p, _k)
         }
     }
 
-    fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
+    fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
         // Dispatch to CPU for small modulus
-        self.cpu.mod_small(x, modulus)
+        self.cpu.mod_small(_x, _modulus)
     }
 
     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
@@ -671,14 +691,14 @@ impl GpuBackend for HybridBackend {
         self.cpu.batch_mod_small(points, modulus)
     }
 
-    fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
         // Dispatch to CPU for rho walk (simplified)
-        self.cpu.rho_walk(tortoise, hare, max_steps)
+        self.cpu.rho_walk(_tortoise, _hare, _max_steps)
     }
 
-    fn solve_post_walk(&self, walk_result: &super::backend_trait::RhoWalkResult, targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    fn solve_post_walk(&self, _walk: super::backend_trait::RhoWalkResult, _targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
         // Dispatch to CPU for post-walk solve
-        self.cpu.solve_post_walk(walk_result, targets)
+        self.cpu.solve_post_walk(_walk, _targets)
     }
 
     fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
@@ -1048,16 +1068,16 @@ impl HybridBackend {
 
 
 
-    fn mul_glv_opt(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
+    fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         #[cfg(feature = "rustacuda")]
         if self.cuda_available {
-            return self.cuda.mul_glv_opt(p, k);
+            return self.cuda.mul_glv_opt(_p, _k);
         }
         #[cfg(feature = "wgpu")]
         if self.vulkan_available {
-            return self.vulkan.mul_glv_opt(p, k);
+            return self.vulkan.mul_glv_opt(_p, _k);
         }
-        self.cpu.mul_glv_opt(p, k)
+        self.cpu.mul_glv_opt(_p, _k)
     }
 
     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
@@ -1090,24 +1110,24 @@ impl HybridBackend {
         self.barrett_reduce(a, modulus, &compute_mu_big(modulus))
     }
 
-    fn scalar_mul_glv(&self, p: &[[u32;8];3], k: &[u32;8]) -> Result<[[u32;8];3]> {
-        self.mul_glv_opt(p, k)
+    fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
+        self.mul_glv_opt(_p, _k)
     }
 
-    fn mod_small(&self, x: &[u32;8], modulus: u32) -> Result<u32> {
-        let res = self.barrett_reduce(&x.map(|v| [v, 0,0,0,0,0,0,0,0]).concat().try_into().unwrap(), &modulus.to_le_bytes().map(|b| b as u32).into(), &compute_mu_small(modulus))?;
-        Ok(res[0] as u32 % modulus)
+    fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
+        let res = self.barrett_reduce(&_x.map(|v| [v, 0,0,0,0,0,0,0,0]).concat().try_into().unwrap(), &_modulus.to_le_bytes().map(|b| b as u32).into(), &compute_mu_small(_modulus))?;
+        Ok(res[0] as u32 % _modulus)
     }
 
     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
-        points.iter().map(|p| self.mod_small(&p[0], modulus)).collect()
+        points.iter().map(|p| self.mod_small(p[0], modulus)).collect()
     }
 
-    fn rho_walk(&self, tortoise: &[[u32;8];3], hare: &[[u32;8];3], max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
         // Stub implementation
         Ok(super::backend_trait::RhoWalkResult {
             cycle_len: 42,
-            cycle_point: *tortoise,
+            cycle_point: _tortoise,
             cycle_dist: [0;8],
         })
     }
@@ -1117,10 +1137,6 @@ impl HybridBackend {
         Ok(Some([42,0,0,0,0,0,0,0]))
     }
 
-    fn run_gpu_steps(&self, num_steps: usize, _start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
-        // Stub for parity test
-        Ok((vec![], vec![]))
-    }
 
     fn simulate_cuda_fail(&mut self, fail: bool) {
         self.cuda_available = !fail;
@@ -1177,44 +1193,8 @@ impl HybridBackend {
         crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins)
     }
 
-    fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
-        #[cfg(feature = "rustacuda")]
-        if self.cuda_available {
-            return self.cuda.generate_preseed_pos(range_min, range_width);
-        }
-        #[cfg(feature = "wgpu")]
-        if self.vulkan_available {
-            return self.vulkan.generate_preseed_pos(range_min, range_width);
-        }
-        // Fallback to CPU implementation from utils::bias
-        crate::utils::bias::generate_preseed_pos(range_min, range_width)
-    }
 
-    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
-        #[cfg(feature = "rustacuda")]
-        if self.cuda_available {
-            return self.cuda.blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights);
-        }
-        #[cfg(feature = "wgpu")]
-        if self.vulkan_available {
-            return self.vulkan.blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights);
-        }
-        // Fallback to CPU implementation from utils::bias
-        crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights)
-    }
 
-    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
-        #[cfg(feature = "rustacuda")]
-        if self.cuda_available {
-            return self.cuda.analyze_preseed_cascade(proxy_pos, bins);
-        }
-        #[cfg(feature = "wgpu")]
-        if self.vulkan_available {
-            return self.vulkan.analyze_preseed_cascade(proxy_pos, bins);
-        }
-        // Fallback to CPU implementation from utils::bias
-        crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins)
-    }
 }
 
 // Helper functions

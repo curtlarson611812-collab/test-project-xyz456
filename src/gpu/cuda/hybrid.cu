@@ -14,8 +14,8 @@ extern __constant__ uint32_t P[8];
 extern __constant__ uint32_t CURVE_N[8];
 extern __constant__ uint32_t MU_N[16];
 
-// Local Barrett mu for P (since step.cu doesn't define it)
-__constant__ uint32_t MU_P[9] = {
+// Local Barrett mu for P (hybrid-specific values)
+__constant__ uint32_t MU_P_HYBRID[9] = {
     0x9ED0D4F9u, 0xA9E34737u, 0x8F5E9C3Du, 0x7B2E0029u,
     0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u,
     0x00000000u
@@ -272,7 +272,7 @@ static __device__ void mod_mul_hybrid(const uint32_t a[LIMBS], const uint32_t b[
     // Step 4: Barrett reduction for final result
     uint32_t mu[MU_LIMBS];
     if (mod_[0] == SECP_P[0]) {
-        for (int i = 0; i < MU_LIMBS; i++) mu[i] = MU_P[i];
+        for (int i = 0; i < MU_LIMBS; i++) mu[i] = MU_P_HYBRID[i];
     } else {
         for (int i = 0; i < MU_LIMBS; i++) mu[i] = MU_N[i];
     }

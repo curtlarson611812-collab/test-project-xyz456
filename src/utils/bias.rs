@@ -9,6 +9,9 @@ use rand::{Rng, RngCore};
 use crate::kangaroo::generator::PRIME_MULTIPLIERS;
 use k256::{ProjectivePoint, Scalar};
 
+// Include build-generated prime constants (non-sensitive mathematical values)
+include!(concat!(env!("OUT_DIR"), "/primes.rs"));
+
 /// Compute target biases from pubkey x-coordinate with attractor cross-check
 /// Returns (mod9, mod27, mod81, pos) bias targets
 pub fn compute_pubkey_biases(x: &BigInt256, attractor_x: &BigInt256) -> (u8, u8, u8, bool) {
@@ -166,7 +169,6 @@ pub fn get_magic9_bias(index: usize) -> (u8, u8, u8, u8, u32) {
 }
 
 /// Pre-computed D_g cache for different bias patterns (GOLD cluster + future extensions)
-use std::sync::Mutex;
 
 static D_G_CACHE: std::sync::OnceLock<Mutex<std::collections::HashMap<(u8, u8, u8, u8), BigInt256>>> =
     std::sync::OnceLock::new();

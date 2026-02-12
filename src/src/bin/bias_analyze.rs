@@ -51,7 +51,7 @@ fn main() -> Result<()> {
 
     println!("📊 Computing POS baseline...");
     let range_min = Scalar::ZERO;
-    let range_width = Scalar::MAX; // Full keyspace proxy
+    let range_width = Scalar::from_u64(u64::MAX); // Full keyspace proxy
     let preseed_pos = generate_preseed_pos(&range_min, &range_width);
 
     println!("🔄 Blending proxy data...");

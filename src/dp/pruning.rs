@@ -64,7 +64,8 @@ impl DpPruning {
             let mut entries: Vec<(f64, u64)> = table.get_entries().iter()
                 .filter_map(|(hash, entry)| {
                     // Calculate real value score based on distance and cluster density
-                    let dist_score = entry.state.distance.to_f64_approx();
+                    let dist_bigint = BigInt256 { limbs: [entry.state.distance[0] as u64, entry.state.distance[1] as u64, entry.state.distance[2] as u64, entry.state.distance[3] as u64] };
+                    let dist_score = dist_bigint.to_f64_approx();
                     let cluster_density = table.get_cluster_size(entry.cluster_id) as f64;
                     let value_score = dist_score / (cluster_density + 1.0);
                     Some((value_score, *hash))
@@ -106,7 +107,7 @@ impl DpPruning {
         let samples: Vec<[f64; 2]> = entries.iter().map(|(_, entry)| {
             [
                 (entry.point.x[0] as f64) / u32::MAX as f64,  // Normalize x-coordinate
-                entry.state.distance.to_f64_approx().log2().max(0.0) / 64.0,  // Log distance normalized
+                { let dist_bigint = BigInt256 { limbs: [entry.state.distance[0] as u64, entry.state.distance[1] as u64, entry.state.distance[2] as u64, entry.state.distance[3] as u64] }; dist_bigint.to_f64_approx().log2().max(0.0) / 64.0 },  // Log distance normalized
             ]
         }).collect();
 

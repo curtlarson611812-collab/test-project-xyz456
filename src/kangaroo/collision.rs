@@ -278,20 +278,23 @@ impl CollisionDetector {
                     // Try resolve_near_collision before walk
                     let trap1 = Trap {
                         x: entry1.point.x,
-                        dist: entry1.state.distance.to_biguint(),
+                        dist: BigUint::from_slice(&entry1.state.distance),
                         is_tame: entry1.state.is_tame,
                         alpha: entry1.state.alpha,
                     };
                     let trap2 = Trap {
                         x: entry2.point.x,
-                        dist: entry2.state.distance.to_biguint(),
+                        dist: BigUint::from_slice(&entry2.state.distance),
                         is_tame: entry2.state.is_tame,
                         alpha: entry2.state.alpha,
                     };
 
                     if let Some(offset) = self.resolve_near_collision(&trap1, &trap2, dp_bit_threshold) {
                         // Construct solution from resolved offset
-                        let solution = Solution::new(offset.to_u64_array(), entry1.point, entry1.state.distance.clone() + entry2.state.distance.clone(), 0.0);
+                        let private_key = [offset.limbs[0], offset.limbs[1], offset.limbs[2], offset.limbs[3]];
+                        let total_ops = BigInt256 { limbs: [entry1.state.distance[0] as u64, entry1.state.distance[1] as u64, entry1.state.distance[2] as u64, entry1.state.distance[3] as u64] } +
+                                        BigInt256 { limbs: [entry2.state.distance[0] as u64, entry2.state.distance[1] as u64, entry2.state.distance[2] as u64, entry2.state.distance[3] as u64] };
+                        let solution = Solution::new(private_key, entry1.point, total_ops, 0.0);
                         return Ok(CollisionResult::Full(solution));
                     }
 
@@ -454,12 +457,14 @@ impl CollisionDetector {
                     Ok(back_point) => {
                         let back_pos = KangarooState {
                             position: back_point,
-                            distance: tame_walk.distance.saturating_sub(jump_neg_u64),
+                            distance: tame_walk.distance, // Keep same distance for now
                             alpha: tame.alpha,
                             beta: tame.beta,
                             is_tame: tame.is_tame,
                             is_dp: tame.is_dp,
                             id: tame.id,
+                            step: tame.step,
+                            kangaroo_type: tame.kangaroo_type,
                         };
 
                         // Check if this backward position matches the wild kangaroo
@@ -494,12 +499,14 @@ impl CollisionDetector {
                     Ok(fwd_point) => {
                         let fwd_pos = KangarooState {
                             position: fwd_point,
-                            distance: wild_walk.distance.saturating_add(jump_fwd_u64),
+                            distance: wild_walk.distance, // Keep same distance for now
                             alpha: wild.alpha,
                             beta: wild.beta,
                             is_tame: wild.is_tame,
                             is_dp: wild.is_dp,
                             id: wild.id,
+                            step: wild.step,
+                            kangaroo_type: wild.kangaroo_type,
                         };
 
                         // Check if this forward position matches the tame kangaroo

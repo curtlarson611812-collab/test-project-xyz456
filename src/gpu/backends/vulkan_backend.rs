@@ -5,6 +5,7 @@
 use super::backend_trait::GpuBackend;
 use crate::kangaroo::collision::Trap;
 use anyhow::{Result, anyhow};
+use rand::Rng;
 
 #[cfg(feature = "wgpu")]
 use wgpu;
@@ -105,61 +106,10 @@ impl GpuBackend for WgpuBackend {
         Self::new().await
     }
 
-    fn precomp_table(&self, primes: Vec<[u32;8]>, base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
-        // Vulkan implementation for jump table precomputation
-        // Uses compute shader to calculate G * 2^i for efficient jumping
-        let num_primes = primes.len();
-        if num_primes == 0 {
-            return Ok((vec![], vec![]));
-        }
-
-        // Flatten prime data for GPU
-        let primes_flat: Vec<u32> = primes.into_iter().flatten().collect();
-        let base_flat: Vec<u32> = base.into_iter().collect();
-
-        // Create GPU buffers
-        let primes_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("primes"),
-            size: (primes_flat.len() * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let base_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("base"),
-            size: (base_flat.len() * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Create output buffers for positions and distances
-        let output_positions_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("output_positions"),
-            size: (num_primes * 24 * std::mem::size_of::<u32>()) as u64, // 3 * 8 u32 per position
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let output_distances_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("output_distances"),
-            size: (num_primes * 8 * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        // Upload input data
-        self.queue.write_buffer(&primes_buffer, 0, bytemuck::cast_slice(&primes_flat));
-        self.queue.write_buffer(&base_buffer, 0, bytemuck::cast_slice(&base_flat));
-
-        // TODO: Load and execute precomputation compute shader
-        // For now, return placeholder data to indicate framework is ready
-        // In full implementation: create pipeline from jump_table.wgsl shader
-
-        // Return placeholder results - in real implementation, read back from GPU
-        let positions = vec![[[0u32; 8]; 3]; num_primes];
-        let distances = vec![[0u32; 8]; num_primes];
-
-        Ok((positions, distances))
+    fn precomp_table(&self, _base: [[u32;8];3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
+        // TODO: Implement Vulkan jump table precomputation
+        // For now, return empty table
+        Ok(vec![])
     }
 
     /// GLV windowed NAF precomputation table for Vulkan bulk operations
@@ -424,7 +374,11 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available - compile with --features wgpu"))
     }
 
-    fn precomp_table(&self, _primes: Vec<[u32;8]>, _base: [u32;8]) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>)> {
+    fn precomp_table(&self, _base: [[u32;8];3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
+        Err(anyhow!("Vulkan backend not available"))
+    }
+
+    fn precomp_table_glv(&self, _base: [u32;8*3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -440,11 +394,11 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn batch_inverse(&self, _inputs: Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn batch_solve(&self, _alphas: Vec<[u32;8]>, _betas: Vec<[u32;8]>) -> Result<Vec<[u64;4]>> {
+    fn batch_solve(&self, _dps: &Vec<crate::types::DpEntry>, _targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -460,11 +414,11 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
+    fn batch_to_affine(&self, _points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn safe_diff_mod_n(&self, _tame_dist: &[u32;8], _wild_dist: &[u32;8], _n: &[u32;8]) -> Result<[u32;8]> {
+    fn safe_diff_mod_n(&self, _tame: [u32;8], _wild: [u32;8], _n: [u32;8]) -> Result<[u32;8]> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -472,7 +426,7 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn mul_glv_opt(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+    fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -488,11 +442,11 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn scalar_mul_glv(&self, _p: &[[u32;8];3], _k: &[u32;8]) -> Result<[[u32;8];3]> {
+    fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn mod_small(&self, _x: &[u32;8], _modulus: u32) -> Result<u32> {
+    fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -500,11 +454,11 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn rho_walk(&self, _tortoise: &[[u32;8];3], _hare: &[[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    fn solve_post_walk(&self, _walk: super::backend_trait::RhoWalkResult, _targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -535,7 +489,7 @@ impl GpuBackend for WgpuBackend {
         let rand_count = ((num_random as f64 * w_rand / (w_pre + w_rand + w_emp)).round() as usize).max(0);
         let mut rng = rand::thread_rng();
         for _ in 0..rand_count {
-            blended.push(rng.gen_range(0.0..1.0));
+            blended.push(rng.gen_range(0.0..=1.0));
         }
 
         if let Some(emp) = empirical_pos {

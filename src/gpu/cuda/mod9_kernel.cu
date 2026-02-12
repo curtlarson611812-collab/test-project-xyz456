@@ -1,11 +1,6 @@
-// Sacred PRIME_MULTIPLIERS for pre-seed generation (deterministic, no entropy)
+// PRIME_MULTIPLIERS defined in step.cu - extern declaration here
 #include <stdint.h>
-__constant__ uint32_t PRIME_MULTIPLIERS[32] = {
-    179, 257, 347, 461, 577, 691, 797, 919,
-    1033, 1153, 1277, 1399, 1523, 1657, 1783, 1907,
-    2039, 2161, 2287, 2411, 2539, 2663, 2789, 2917,
-    3041, 3167, 3299, 34211, 3547, 3673, 3797, 3923
-};
+extern __constant__ uint64_t PRIME_MULTIPLIERS[32];
 
 // Curve order for mod operations
 __constant__ uint32_t CURVE_ORDER_U32[8] = {

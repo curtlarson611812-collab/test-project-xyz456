@@ -1,6 +1,7 @@
 // solve.cu - CUDA kernels for batch collision solving and BSGS
 #include <cuda_runtime.h>
 #include <stdint.h>
+#include "common_constants.h"
 #include <stdio.h> // For printf
 
 #define KANGS_PER_TARGET 4096
@@ -8,21 +9,7 @@
 #define LIMBS 8
 #define WIDE_LIMBS 16
 
-// Point structure for elliptic curve points (Jacobian coordinates)
-struct Point {
-    uint32_t x[8]; // X coordinate (256-bit)
-    uint32_t y[8]; // Y coordinate (256-bit)
-    uint32_t z[8]; // Z coordinate (256-bit)
-};
-
-// Kangaroo state structure (exact match to Rust)
-struct KangarooState {
-    Point position;
-    uint32_t dist[8];
-    uint32_t alpha[8];
-    uint32_t beta[8];
-    uint32_t tame_wild; // 0 for tame, 1 for wild
-};
+// Point and KangarooState structures are now defined in common_constants.h
 
 // Constants are defined in step.cu - extern declarations here
 
@@ -619,10 +606,12 @@ __global__ void batch_bsgs_collision_solve(
 
         // Fallback: BSGS algorithm
         uint64_t m = (uint64_t)sqrt((double)bsgs_threshold) + 1;
+        // Cap m to fit in shared memory (512 baby steps max)
+        if (m > 512) m = 512;
 
-        // Use shared memory for baby steps (limit to reasonable size)
-        __shared__ uint32_t baby_x_shared[1024 * LIMBS];  // x coordinates only
-        __shared__ uint32_t baby_y_shared[1024 * LIMBS];  // y coordinates only
+        // Use shared memory for baby steps (limit to fit in shared memory)
+        __shared__ uint32_t baby_x_shared[512 * LIMBS];  // x coordinates only
+        __shared__ uint32_t baby_y_shared[512 * LIMBS];  // y coordinates only
 
         // Build baby steps: g^0, g^1, ..., g^{m-1}
         if (threadIdx.x < m) {
