@@ -7,72 +7,19 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 fn main() {
-    println!("cargo:rerun-if-changed=valuable_p2pk_pubkeys.txt");
     println!("cargo:rerun-if-changed=src/gpu/cuda");
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("magic9_biases.rs");
+    let dest_path = Path::new(&out_dir).join("primes.rs");
 
-    // Try to read the pubkey file with enhanced error handling
-    let pubkey_file = match File::open("valuable_p2pk_pubkeys.txt") {
-        Ok(file) => {
-            println!("cargo:warning=Successfully opened valuable_p2pk_pubkeys.txt for bias computation");
-            file
-        },
-        Err(e) => {
-            eprintln!("Error: Could not open valuable_p2pk_pubkeys.txt: {}. This file is required for Magic 9 GOLD cluster analysis.", e);
-            eprintln!("Please ensure valuable_p2pk_pubkeys.txt exists in the project root.");
-            eprintln!("Falling back to placeholder biases - GOLD cluster optimizations will be limited.");
-            // Generate placeholder biases based on typical patterns
-            generate_placeholder_biases(&dest_path);
-            return;
-        }
-    };
+    // SECURITY: No longer embedding key-derived biases in binary
+    // All valuable keys and Magic9 keys must be loaded from external files at runtime
+    // This prevents key information from being embedded in the executable
 
-    let lines: Vec<String> = BufReader::new(pubkey_file)
-        .lines()
-        .filter_map(Result::ok)
-        .filter(|l| !l.is_empty())
-        .collect();
+    println!("cargo:warning=SECURITY: Key-derived biases no longer embedded in binary");
+    println!("cargo:warning=All valuable and Magic9 keys must be loaded from external files at runtime");
 
-    if lines.is_empty() {
-        eprintln!("Warning: valuable_p2pk_pubkeys.txt is empty. Using placeholder biases.");
-        generate_placeholder_biases(&dest_path);
-        return;
-    }
-
-    // Magic 9 indices (0-based)
-    let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
-
-    let mut biases = Vec::new();
-
-    for &idx in &indices {
-        if idx >= lines.len() {
-            eprintln!("Warning: Index {} out of bounds (file has {} lines). Using placeholder.", idx, lines.len());
-            biases.push((0u8, 0u8, 0u8, 0u8, 128u32)); // Placeholder
-            continue;
-        }
-
-        let hex_str = &lines[idx];
-        match compute_pubkey_biases(hex_str) {
-            Ok(bias) => biases.push(bias),
-            Err(e) => {
-                eprintln!("Warning: Failed to compute bias for index {}: {}. Using placeholder.", idx, e);
-                biases.push((0u8, 0u8, 0u8, 0u8, 128u32)); // Placeholder
-            }
-        }
-    }
-
-    // Write the const arrays
-    let mut output = String::from("pub const MAGIC9_BIASES: [(u8, u8, u8, u8, u32); 9] = [\n");
-    for (i, (mod3, mod9, mod27, mod81, hamming)) in biases.iter().enumerate() {
-        output.push_str(&format!("    ({}, {}, {}, {}, {}),\n", mod3, mod9, mod27, mod81, hamming));
-        println!("Magic9 key {} (index {}): mod3={}, mod9={}, mod27={}, mod81={}, hamming={}",
-                i, indices[i], mod3, mod9, mod27, mod81, hamming);
-    }
-    output.push_str("];\n\n");
-
-    // Add pre-computed prime sets for GOLD cluster
+    // Only embed non-sensitive prime arrays (these are public mathematical constants)
     let primes: [u64; 32] = [
         179, 257, 281, 349, 379, 419, 457, 499,
         541, 599, 641, 709, 761, 809, 853, 911,
@@ -94,7 +41,6 @@ fn main() {
             format!("[{}, {}, {}, {}]", primes[0], primes[1], primes[2], primes[3])
         }
     };
-    output.push_str(&format!("pub const GOLD_CLUSTER_PRIMES: [u64; 4] = {};\n\n", gold_array));
 
     // Generate secondary primes (mod27 == 0) for fallback - fixed 8 elements
     let secondary_primes: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).cloned().collect();
@@ -108,7 +54,14 @@ fn main() {
                 primes[0], primes[1], primes[2], primes[3],
                 primes[4], primes[5], primes[6], primes[7])
     };
-    output.push_str(&format!("pub const SECONDARY_PRIMES: [u64; 8] = {};\n", secondary_array));
+
+    let output = format!("\
+// Non-sensitive prime constants (public mathematical values)
+// No key-derived information embedded in binary for security
+pub const GOLD_CLUSTER_PRIMES: [u64; 4] = {};
+pub const SECONDARY_PRIMES: [u64; 8] = {};
+",
+        gold_array, secondary_array);
 
     println!("Generated prime sets - GOLD: {} primes, Secondary: {} primes",
              gold_primes.len(), secondary_primes.len());
@@ -117,7 +70,7 @@ fn main() {
     compile_cuda_kernels();
 
     match std::fs::write(&dest_path, &output) {
-        Ok(_) => println!("Generated MAGIC9_BIASES and prime sets at {:?}", dest_path),
+        Ok(_) => println!("Generated prime constants at {:?}", dest_path),
         Err(e) => eprintln!("Error writing to {:?}: {}", dest_path, e),
     }
 }

@@ -1753,12 +1753,14 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     }
 
     // Block 1: Bias Load and GOLD Cluster Detection
-    let is_gold = bias::MAGIC9_BIASES.iter().all(|b| b == &bias::MAGIC9_BIASES[0]);
+    // SECURITY: Load biases from external files at runtime, no embedded key data
+    let magic9_biases: Vec<(u8, u8, u8, u8, u32)> = (0..9).map(|i| bias::get_magic9_bias(i)).collect();
+    let is_gold = magic9_biases.iter().all(|b| b == &magic9_biases[0]);
     if !is_gold {
         return Err(anyhow!("Non-uniform cluster - GOLD optimizations require identical bias patterns"));
     }
 
-    let shared_bias = bias::MAGIC9_BIASES[0]; // Universal (0,0,0,0,128) for GOLD
+    let shared_bias = magic9_biases[0]; // Universal (0,0,0,0,128) for GOLD
     let _use_hamming = !is_gold || shared_bias.4 != 128; // Disable if uniform 128
 
     // Validate nested modulus relationships (GOLD cluster consistency)

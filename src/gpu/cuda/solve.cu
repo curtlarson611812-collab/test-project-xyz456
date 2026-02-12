@@ -39,6 +39,9 @@ extern __device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* r
 extern __device__ void glv_decompose_scalar(const uint32_t k[8], uint32_t k1[8], uint32_t k2[8], int8_t* sign1, int8_t* sign2);
 extern __device__ Point mul_glv_opt(Point p, const uint32_t k[8]);
 extern __device__ int point_equal(Point p1, Point p2);
+
+// Constants from step.cu
+extern __constant__ uint64_t PRIME_MULTIPLIERS[32];
 extern __device__ Point jacobian_add(Point p1, Point p2);
 extern __device__ Point jacobian_double(Point p);
 extern __device__ Point ec_mul_small(Point p, uint32_t scalar);
