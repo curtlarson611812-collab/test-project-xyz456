@@ -470,7 +470,7 @@ impl KangarooGenerator {
 
             let state = KangarooState::new(
                 final_pos,
-                BigInt256::from_u64(scalar.value.low_u64()),  // initial distance = biased prime
+                [scalar.value.low_u64() as u32, 0, 0, 0, 0, 0, 0, 0],  // initial distance = biased prime
                 scalar.value.to_u64_array(),  // alpha starts with biased prime offset
                 [1, 0, 0, 0],           // beta placeholder (updated during stepping)
                 false,                  // is_tame
@@ -538,7 +538,7 @@ impl KangarooGenerator {
 
             let state = KangarooState::new(
                 final_pos,
-                BigInt256::from_u64(scalar.value.low_u64()),  // distance = biased prime
+                [scalar.value.low_u64() as u32, 0, 0, 0, 0, 0, 0, 0],  // distance = biased prime
                 [0, 0, 0, 0],           // alpha = 0 for tame (deterministic from G)
                 [1, 0, 0, 0],           // beta = 1 for tame
                 true,                   // is_tame
@@ -651,7 +651,7 @@ impl KangarooGenerator {
 
             tames.push(KangarooState::new(
                 actual_start,
-                BigInt256::from_u64(alpha[0]), // Use lowest 64 bits as distance
+                [alpha[0] as u32, 0, 0, 0, 0, 0, 0, 0], // Use lowest 64 bits as distance
                 alpha,
                 beta,
                 true, // is_tame = true

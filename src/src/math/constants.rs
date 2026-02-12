@@ -64,37 +64,10 @@ pub fn jump_table() -> Vec<BigInt256> {
     jumps
 }
 
-// GLV (Gallant-Lambert-Vanstone) constants for endomorphism optimization
-// lambda = sqrt(-3) mod p for secp256k1, enabling ~15% stall reduction
-pub const GLV_LAMBDA: &str = "5b2b3e9c8b278c34d3763265d4f1630aa667c87bdd43a382d18a4ed82eabccb";
-
-// beta = lambda * G (generator point), precomputed for GLV decomposition
-pub const GLV_BETA_X: &str = "128ec4256487a122a0f79ae3f4b4bd8ca4f8c6b47b4f7b6b1e3b1c0e8b7b6b1e3";
-pub const GLV_BETA_Y: &str = "5b8b7b6b1e3b1c0e8b7b6b1e3b1c0e8b7b6b1e3b1c0e8b7b6b1e3b1c0e8b7b6b1e3";
-
-// Lazy initialized GLV constants
-pub static GLV_LAMBDA_BIGINT: LazyLock<BigInt256> = LazyLock::new(|| {
-    BigInt256::from_hex(GLV_LAMBDA).expect("Invalid GLV lambda")
-});
-
-pub static GLV_BETA_POINT: LazyLock<Point> = LazyLock::new(|| {
-    Point {
-        x: BigInt256::from_hex(GLV_BETA_X).unwrap().limbs,
-        y: BigInt256::from_hex(GLV_BETA_Y).unwrap().limbs,
-        z: BigInt256::from_u64(1).limbs,
-    }
-});
-
-// GLV window size for NAF decomposition (4-bit windows reduce ~25% of point additions)
-pub const GLV_WINDOW_SIZE: usize = 4;
-
-// Test: assert_eq!(PRIME_MULTIPLIERS.len(), 32); // Cycle %32 for unique starts
-// Deep note: Low Hamming wt (e.g., 179=0b10110011, wt=5) for fast scalar mul in GPU.
 // GLV (Gallant-Lambert-Vanstone) endomorphism constants for secp256k1
 // These constants enable ~30-50% speedup in scalar multiplication via lattice decomposition
 
 use k256::Scalar;
-use subtle::{Choice, ConditionallySelectable};
 
 /// GLV lambda scalar: root of x^2 + x + 1 = 0 mod n (order of secp256k1)
 /// lambda satisfies lambda^3 ≡ 1 mod n, lambda ≠ 1
@@ -283,6 +256,9 @@ fn bigint_abs(x: &BigInt256) -> BigInt256 {
     x.clone()
 }
 
+// Test: assert_eq!(PRIME_MULTIPLIERS.len(), 32); // Cycle %32 for unique starts
+// Deep note: Low Hamming wt (e.g., 179=0b10110011, wt=5) for fast scalar mul in GPU.
+
 /// GLV4 decomposition using Babai's nearest plane algorithm with sign optimization
 /// Decomposes scalar k into k = k0 + k1*lambda + k2*mu + k3*nu mod n
 /// Returns ([k0, k1, k2, k3], [s0, s1, s2, s3]) where si are ±1 signs
@@ -301,9 +277,10 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
     // Precompute Gram-Schmidt orthogonal basis and mu coefficients
     let (b_star, mu) = gram_schmidt_4d(basis);
 
-    // Babai's nearest plane algorithm (multi-round for improved approximation)
+    // Babai's nearest plane algorithm (adaptive multi-round for improved approximation)
     let mut c = [BigInt256::zero(); 4];
-    for _round in 0..3 { // 3 rounds for convergence
+    let mut prev_norm = BigInt256::max_value();
+    for _round in 0..5 { // Max 5 rounds, adaptive convergence
         let mut u = t.clone();
         for i in (0..4).rev() {
             let norm_squared = dot_product(&b_star[i], &b_star[i]);

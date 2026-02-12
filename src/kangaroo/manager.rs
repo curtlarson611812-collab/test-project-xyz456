@@ -858,7 +858,8 @@ impl KangarooManager {
         let stagnation_threshold = BigInt256::from_u64(10000u64);
 
         for state in near_states {
-            if BigInt256 { limbs: [state.distance[0] as u64, state.distance[1] as u64, state.distance[2] as u64, state.distance[3] as u64] } < stagnation_threshold {
+            let distance_bigint = BigInt256 { limbs: [state.distance[0] as u64, state.distance[1] as u64, state.distance[2] as u64, state.distance[3] as u64] };
+            if distance_bigint < stagnation_threshold {
                 info!("Restarting stagnant herd {}", state.id);
                 // In practice: reset herd to new random starting position
             }

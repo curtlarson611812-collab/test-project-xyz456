@@ -122,7 +122,7 @@ fn compile_cuda_kernels() {
     let cu_files = vec![
         "bigint_mul", "step", "solve", "rho_kernel_optimized", "barrett_kernel_optimized", "hybrid",
         // "texture_jump_kernel", "texture_jump_optimized", // Temporarily excluded - need GROK Online completion
-        "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel"
+        "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel", "glv_decomp"
     ];
 
     println!("cargo:warning=Compiling {} CUDA files together with shared constants header:", cu_files.len());

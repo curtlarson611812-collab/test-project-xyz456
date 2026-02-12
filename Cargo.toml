@@ -39,6 +39,7 @@ regex = "1.10"                    # Regular expressions for parsing logs
 sled = "0.34"                    # Fast embedded database for DP overflow
 num-bigint = "0.4.6"
 num-integer = "0.1"              # Integer traits for BigUint operations
+subtle = "2.5"
 rustacuda = { version = "0.1", optional = true }     # CUDA driver API wrapper
 rustacuda_core = { version = "0.1", optional = true } # Core CUDA types
 rustacuda_derive = { version = "0.1", optional = true } # Derive macros
