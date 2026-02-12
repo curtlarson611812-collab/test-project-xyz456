@@ -24,25 +24,7 @@ struct KangarooState {
     uint32_t tame_wild; // 0 for tame, 1 for wild
 };
 
-// secp256k1 prime modulus (P) as uint32_t[8]
-__constant__ uint32_t P[8] = {
-    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE,
-    0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141
-};
-
-// GLV endomorphism beta constant
-__constant__ uint32_t GLV_BETA[8] = {
-    0x7AE96A2B, 0x65718000, 0x5F228AE5, 0x118050B7,
-    0xEC014F9A, 0xED809F6D, 0xCAA2B2BB, 0xC2D2EAA9
-};
-
-// Jump table for kangaroo hops (precomputed points)
-__constant__ Point JUMP_TABLE[256];
-
-// Small prime multipliers for BSGS
-__constant__ uint64_t PRIME_MULTIPLIERS[10] = {
-    2, 3, 5, 7, 11, 13, 17, 19, 23, 29
-};
+// Constants are defined in step.cu - extern declarations here
 
 // Forward declarations for functions from step.cu (only those not implemented locally)
 extern __device__ void bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res);
