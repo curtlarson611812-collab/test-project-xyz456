@@ -65,8 +65,6 @@ phase4 = []  # Enable Phase 4 features and tests
 
 [build-dependencies]
 cc = "1.0"                        # C/CUDA compiler integration
-hex = "0.4"                       # Hex parsing for build script
-num-bigint = "0.4.6"              # Big integer operations for bias computation
 
 [lints.rust]
 # unsafe_code = "deny"  # Disabled for GPU operations (CUDA kernels, Vulkan buffers)

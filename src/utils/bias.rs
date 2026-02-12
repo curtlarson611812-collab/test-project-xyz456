@@ -110,8 +110,42 @@ static MAGIC9_BIASES_CACHE: std::sync::OnceLock<Mutex<Vec<(u8, u8, u8, u8, u32)>
 /// Load Magic 9 biases from external file at runtime
 /// SECURITY: This prevents embedding key information in the binary
 fn load_magic9_biases() -> Vec<(u8, u8, u8, u8, u32)> {
-    // Try to load from magic9_biases.txt or similar external file
-    // For now, return placeholder values - actual implementation should load from file
+    // Try to load from magic9_biases.txt file
+    match std::fs::read_to_string("magic9_biases.txt") {
+        Ok(content) => {
+            let mut biases = Vec::new();
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                // Parse format: mod3,mod9,mod27,mod81,hamming
+                if let Some((mods, hamming)) = line.split_once(',') {
+                    let mods: Vec<&str> = mods.split(',').collect();
+                    if mods.len() == 4 {
+                        if let (Ok(mod3), Ok(mod9), Ok(mod27), Ok(mod81), Ok(hamming)) =
+                            (mods[0].parse::<u8>(), mods[1].parse::<u8>(),
+                             mods[2].parse::<u8>(), mods[3].parse::<u8>(),
+                             hamming.parse::<u32>()) {
+                            biases.push((mod3, mod9, mod27, mod81, hamming));
+                        }
+                    }
+                }
+            }
+            if biases.len() == 9 {
+                log::info!("Loaded {} Magic9 biases from external file", biases.len());
+                return biases;
+            } else {
+                log::warn!("Invalid magic9_biases.txt format (expected 9 entries, got {}), using defaults", biases.len());
+            }
+        }
+        Err(e) => {
+            log::warn!("Could not load magic9_biases.txt: {}, using defaults", e);
+        }
+    }
+
+    // Fallback: return default values if file doesn't exist or is invalid
+    log::info!("Using default Magic9 bias values (all zeros)");
     vec![
         (0, 0, 0, 0, 128), (0, 0, 0, 0, 128), (0, 0, 0, 0, 128),
         (0, 0, 0, 0, 128), (0, 0, 0, 0, 128), (0, 0, 0, 0, 128),

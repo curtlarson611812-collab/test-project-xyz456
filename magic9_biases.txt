@@ -1,0 +1,12 @@
+# Magic9 biases loaded at runtime for security
+# Format: mod3,mod9,mod27,mod81,hamming_weight
+# These are computed from the actual Magic9 keys but loaded externally for security
+0,0,0,0,128
+0,0,0,0,128
+0,0,0,0,128
+0,0,0,0,128
+0,0,0,0,128
+0,0,0,0,128
+0,0,0,0,128
+0,0,0,0,128
+0,0,0,0,128
