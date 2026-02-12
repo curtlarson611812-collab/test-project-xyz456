@@ -1144,4 +1144,3 @@ pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
 }
 
 
-}

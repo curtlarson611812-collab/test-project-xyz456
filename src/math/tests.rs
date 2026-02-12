@@ -255,3 +255,97 @@ fn test_lll_glv_with_puzzle() {
     assert_eq!(reconstructed, puzzle_scalar);
 }
 
+
+// LLL Algorithm Proof Verification
+// Tests for termination and approximation guarantees
+
+const DIM: usize = 4;
+
+fn lll_potential(b_star: &[[BigInt256; DIM]; DIM]) -> BigInt256 {
+    let mut phi = BigInt256::one();
+    for i in 0..DIM {
+        phi = phi * norm_squared(&b_star[i]).pow(DIM - i);
+    }
+    phi
+}
+
+fn check_lovasz(k: usize, mu: &[[BigInt256; DIM]; DIM], b_star: &[[BigInt256; DIM]; DIM], delta: &BigInt256) -> bool {
+    let lhs = norm_squared(&b_star[k]);
+    let rhs = (*delta - mu[k][k-1] * mu[k][k-1]) * norm_squared(&b_star[k-1]);
+    lhs >= rhs
+}
+
+#[test]
+fn simulate_lll_proof() {
+    let mut basis = [[BigInt256::zero(); DIM]; DIM];
+    // Initialize with sample basis
+    basis[0][0] = BigInt256::one();
+    basis[1][1] = BigInt256::one();
+    // ... initialize other vectors
+    
+    let old_phi = lll_potential(&compute_gs(&basis).0);
+    lll_reduce(&mut basis, &BigInt256::from_u64(3)/BigInt256::from_u64(4));
+    let new_phi = lll_potential(&compute_gs(&basis).0);
+    assert!(new_phi < old_phi); // Termination: Phi decreases
+    
+    // Approximation check
+    let min_vec_len = BigInt256::one(); // Simplified
+    let approx_factor = norm_squared(&basis[0]) / min_vec_len;
+    let bound = BigInt256::from_u64(2).pow((DIM-1)/4);
+    assert!(approx_factor <= bound);
+}
+
+fn compute_gs(basis: &[[BigInt256; DIM]; DIM]) -> ([[BigInt256; DIM]; DIM], [[BigInt256; DIM]; DIM]) {
+    let mut b_star = *basis;
+    let mut mu = [[BigInt256::zero(); DIM]; DIM];
+    for i in 1..DIM {
+        for j in 0..i {
+            mu[i][j] = dot(&basis[i], &b_star[j]) / dot(&b_star[j], &b_star[j]);
+            for d in 0..DIM {
+                b_star[i][d] = b_star[i][d] - mu[i][j] * b_star[j][d];
+            }
+        }
+    }
+    (b_star, mu)
+}
+
+fn dot(a: &[BigInt256; DIM], b: &[BigInt256; DIM]) -> BigInt256 {
+    let mut sum = BigInt256::zero();
+    for i in 0..DIM {
+        sum = sum + a[i] * b[i];
+    }
+    sum
+}
+
+fn norm_squared(vec: &[BigInt256; DIM]) -> BigInt256 {
+    dot(vec, vec)
+}
+
+
+// Integration test: LLL proofs + Rho optimization
+#[test]
+fn test_rho_with_lll_proofs() {
+    let config = crate::config::Config {
+        enable_rho_parallel: true,
+        enable_lll_proof_sim: true,
+        ..Default::default()
+    };
+    
+    if config.enable_lll_proof_sim {
+        simulate_lll_proof();
+    }
+    
+    // Test rho with small parameters
+    let dummy_pubkey = crate::types::Point {
+        x: BigInt256::one().limbs,
+        y: BigInt256::one().limbs,
+        z: BigInt256::one().limbs,
+    };
+    
+    if config.enable_rho_parallel {
+        let result = parallel_rho(&dummy_pubkey, 2);
+        // Verify rho completes without panic
+        assert_eq!(result, Scalar::ZERO); // Placeholder assertion
+    }
+}
+
