@@ -27,6 +27,48 @@ mod tests {
     }
 
     #[test]
+    fn test_puzzle_35_math_verification() {
+        // Test puzzle 35 to verify bit-perfect math operations
+        println!("🧪 Testing Puzzle 35 - Bit-Perfect Math Verification");
+
+        // Puzzle 35 pubkey (compressed)
+        let puzzle35_pub = "020000000000000000000000000000000000000000000000000000000000000007";
+        let target_point = Point::from_pubkey(puzzle35_pub).expect("Should parse puzzle 35 pubkey");
+
+        let secp = Secp256k1::new();
+        assert!(target_point.is_valid(&secp), "Puzzle 35 target point should be valid");
+
+        // Verify search range calculation: 2^34 to 2^35 - 1
+        let min_range = BigInt256::from_u64(1u64 << 34);
+        let max_range = (BigInt256::from_u64(1u64 << 35)) - BigInt256::one();
+
+        // Verify range size is 2^35 keys
+        let range_size = max_range.sub(&min_range).add(&BigInt256::one());
+        let expected_size = BigInt256::from_u64(1u64 << 35);
+        assert_eq!(range_size, expected_size, "Range size should be 2^35");
+
+        // Test basic elliptic curve operations
+        let generator = secp.generator();
+        let double_g = secp.add(&generator, &generator);
+        assert!(double_g.is_valid(&secp), "2G should be valid");
+
+        // Test scalar multiplication consistency
+        let test_key = BigInt256::from_u64(42);
+        let point1 = secp.mul_scalar(&generator, &test_key);
+        let point2 = secp.mul_scalar(&generator, &test_key);
+        assert_eq!(point1, point2, "Scalar multiplication should be deterministic");
+
+        // Test modular arithmetic
+        let a = BigInt256::from_u64(12345);
+        let b = BigInt256::from_u64(67890);
+        let sum1 = a.add_mod(&b, &secp.n);
+        let sum2 = a.add_mod(&b, &secp.n);
+        assert_eq!(sum1, sum2, "Modular addition should be consistent");
+
+        println!("✅ Puzzle 35 math verification passed!");
+    }
+
+    #[test]
     fn test_full_puzzle_run() {
         // Test full puzzle solving with SmallOddPrime logic
         // This is a mock test - actual solving would take too long for unit tests

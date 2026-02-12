@@ -1,6 +1,7 @@
 // Concise Block: CUDA Prime Mul Kernel for Test
 // In src/gpu/cuda/kernels.cu — batch mul primes * target, check on-curve.
 // Use our montgomery_point_mul (ladder for const-time).
+#include <stdint.h>
 __global__ void test_prime_mul(Point* outputs, const Point target, const uint64_t primes[32], uint64_t modulus[4]) {
     int idx = threadIdx.x;
     if (idx >= 32) return;

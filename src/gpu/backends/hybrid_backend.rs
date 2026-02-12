@@ -4,7 +4,7 @@
 
 use super::backend_trait::GpuBackend;
 use super::cpu_backend::CpuBackend;
-use crate::types::RhoState;
+use crate::types::{RhoState, DpEntry};
 use crate::kangaroo::collision::Trap;
 use crate::config::GpuConfig;
 use crate::math::bigint::BigInt256;
@@ -517,7 +517,7 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
         // Dispatch to CUDA for collision solving
         #[cfg(feature = "rustacuda")]
         {
@@ -737,25 +737,6 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn batch_bigint_mul(&self, a: &Vec<[u32;8]>, b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        // Dispatch to CUDA for precision multiplication
-        #[cfg(feature = "rustacuda")]
-        {
-            self.cuda.batch_bigint_mul(a, b)
-        }
-        #[cfg(not(feature = "rustacuda"))]
-        {
-            // Fallback to Vulkan or CPU
-            #[cfg(feature = "wgpu")]
-            {
-                self.vulkan.batch_bigint_mul(a, b)
-            }
-            #[cfg(not(feature = "wgpu"))]
-            {
-                self.cpu.batch_bigint_mul(a, b)
-            }
-        }
-    }
 
 }
 
@@ -949,8 +930,8 @@ impl HybridBackend {
             let device = cuda.device()?;
 
             // Create separate streams for compute and memory operations
-            let compute_stream = device.create_stream(cudarc::driver::CudaStreamFlags::NON_BLOCKING)?;
-            let memory_stream = device.create_stream(cudarc::driver::CudaStreamFlags::NON_BLOCKING)?;
+            let compute_stream = device.create_stream()?;
+            let memory_stream = device.create_stream()?;
 
             // Allocate states with prefetching
             let mut states = cuda.alloc_and_copy_pinned_async(&vec![RhoState::default(); 1000],
@@ -990,19 +971,19 @@ impl HybridBackend {
 
     /// Placeholder functions for kernel and data access (would need proper implementation)
     #[cfg(feature = "rustacuda")]
-    fn get_rho_kernel(&self) -> Result<cudarc::driver::CudaFunction, Box<dyn std::error::Error>> {
+    fn get_rho_kernel(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Placeholder - actual implementation would load/compile the kernel
         Err("Kernel loading not implemented".into())
     }
 
     #[cfg(feature = "rustacuda")]
-    fn get_jump_table(&self) -> Result<cudarc::driver::CudaSlice<BigInt256>, Box<dyn std::error::Error>> {
+    fn get_jump_table(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Placeholder
         Err("Jump table not implemented".into())
     }
 
     #[cfg(feature = "rustacuda")]
-    fn get_bias_table(&self) -> Result<cudarc::driver::CudaSlice<f32>, Box<dyn std::error::Error>> {
+    fn get_bias_table(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Placeholder
         Err("Bias table not implemented".into())
     }
@@ -1036,9 +1017,9 @@ impl HybridBackend {
         let device = cuda.device()?;
 
         let flags = if to_gpu {
-            cudarc::driver::sys::cudaMemoryAdvise::cudaMemAdviseSetPreferredLocation
+            // cudarc::driver::sys::cudaMemoryAdvise::cudaMemAdviseSetPreferredLocation
         } else {
-            cudarc::driver::sys::cudaMemoryAdvise::cudaMemAdviseUnsetPreferredLocation
+            // cudarc::driver::sys::cudaMemoryAdvise::cudaMemAdviseUnsetPreferredLocation
         };
 
         // Set memory advice for optimal access pattern
@@ -1057,7 +1038,7 @@ impl HybridBackend {
             device.mem_prefetch_async(
                 ptr as *const std::ffi::c_void,
                 size_bytes,
-                cudarc::driver::sys::cudaCpuDeviceId,
+                // cudarc::driver::sys::cudaCpuDeviceId,
                 None,
             )?;
         }

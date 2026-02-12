@@ -1,4 +1,5 @@
 // Sacred PRIME_MULTIPLIERS for pre-seed generation (deterministic, no entropy)
+#include <stdint.h>
 __constant__ uint32_t PRIME_MULTIPLIERS[32] = {
     179, 257, 347, 461, 577, 691, 797, 919,
     1033, 1153, 1277, 1399, 1523, 1657, 1783, 1907,

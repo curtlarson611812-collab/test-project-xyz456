@@ -1,4 +1,5 @@
 // Concise Block: CUDA Mod27 Check for Attractor Filter
+#include <stdint.h>
 __global__ void mod27_attractor_check(uint64_t* x_limbs, bool* results, int batch_size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size) return;

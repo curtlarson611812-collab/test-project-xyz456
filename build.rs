@@ -175,13 +175,22 @@ fn compile_cuda_kernels() {
     println!("cargo:rustc-link-lib=cublas");
 
     let mut builder = cc::Build::new();
-    builder.cuda(true).include("src/gpu/cuda").flag("-O3").flag("-arch=sm_89").flag("-diag-suppress=63"); // RTX 5090, suppress shift warnings
+    builder.cuda(true)
+        .include("src/gpu/cuda")
+        .flag("-O3")
+        .flag("-arch=sm_86") // Default RTX 3070; override via env
+        .flag("-diag-suppress=63") // Existing shift warnings
+        .flag("-diag-suppress=177") // Unused declarations
+        .flag("-diag-suppress=550"); // Unused variables/shared mem
+
+    // Allow override via environment variable
+    if let Ok(arch) = env::var("GPU_ARCH") {
+        builder.flag(&format!("-arch={}", arch));
+    } // RTX 5090, suppress shift warnings
 
     let cu_files = vec![
-        "bigint_mul", "barrett_kernel_optimized", "step", "solve", "rho_kernel_optimized",
-        "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel", "mod9_kernel",
-        "prime_test_kernel", "refine_kernel", "texture_jump_kernel", "texture_jump_optimized",
-        "hybrid", "inverse"
+        "bigint_mul", "step",
+        "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel"
     ];
 
     for file in cu_files {

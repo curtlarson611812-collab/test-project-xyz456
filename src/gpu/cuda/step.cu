@@ -70,8 +70,8 @@ __constant__ uint64_t PRIME_MULTIPLIERS[32] = {
     1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583
 };
 
-// Utility helper functions
-__device__ uint32_t murmur3(const uint32_t key[8]) {
+// Utility helper functions (static to avoid duplicate symbols)
+static __device__ uint32_t murmur3(const uint32_t key[8]) {
     const uint32_t seed = 0x9747b28c;
     uint32_t hash = seed;
     for (int i = 0; i < 8; i += 2) { // Process in pairs for efficiency
@@ -92,7 +92,7 @@ __device__ uint32_t murmur3(const uint32_t key[8]) {
     return hash;
 }
 
-__device__ int hamming_weight(uint32_t x) {
+static __device__ int hamming_weight(uint32_t x) {
     x = x - ((x >> 1) & 0x55555555);
     x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
     x = (x + (x >> 4)) & 0x0F0F0F0F;
@@ -101,19 +101,19 @@ __device__ int hamming_weight(uint32_t x) {
     return x & 0x3F;
 }
 
-__device__ void print_limbs(const uint32_t* limbs, int num) {
+static __device__ void print_limbs(const uint32_t* limbs, int num) {
     for (int i = num - 1; i >= 0; i--) printf("%08x", limbs[i]);
     printf("\n");
 }
 
-__device__ bool point_equal(const Point p1, const Point p2) {
+static __device__ bool point_equal(const Point p1, const Point p2) {
     for (int i = 0; i < 8; i++) {
         if (p1.x[i] != p2.x[i] || p1.y[i] != p2.y[i]) return false;
     }
     return true;
 }
 
-__device__ void increment_distance(uint32_t* dist, uint32_t jump_idx) {
+static __device__ void increment_distance(uint32_t* dist, uint32_t jump_idx) {
     uint64_t carry = jump_idx + 1;
     for (int i = 0; i < 8; i++) {
         uint64_t sum = (uint64_t)dist[i] + carry;
@@ -124,33 +124,33 @@ __device__ void increment_distance(uint32_t* dist, uint32_t jump_idx) {
 }
 
 // Modular arithmetic functions
-__device__ void bigint_copy(const uint32_t* src, uint32_t* dst) {
+static __device__ void bigint_copy(const uint32_t* src, uint32_t* dst) {
     for (int i = 0; i < 8; i++) dst[i] = src[i];
 }
 
-__device__ void bigint_zero_u32(uint32_t* res) {
+static __device__ void bigint_zero_u32(uint32_t* res) {
     for (int i = 0; i < 8; i++) res[i] = 0;
 }
 
-__device__ void bigint_one_u32(uint32_t* res) {
+static __device__ void bigint_one_u32(uint32_t* res) {
     res[0] = 1;
     for (int i = 1; i < 8; i++) res[i] = 0;
 }
 
-__device__ bool bigint_is_zero(const uint32_t* a) {
+static __device__ bool bigint_is_zero(const uint32_t* a) {
     for (int i = 0; i < 8; i++) if (a[i] != 0) return false;
     return true;
 }
 
-__device__ bool bigint_is_negative(const uint32_t* a) {
+static __device__ bool bigint_is_negative(const uint32_t* a) {
     return (int32_t)a[7] < 0;
 }
 
-__device__ uint32_t bigint_to_u32(const uint32_t* a) {
+static __device__ uint32_t bigint_to_u32(const uint32_t* a) {
     return a[0];
 }
 
-__device__ void bigint_add_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+static __device__ void bigint_add_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     uint32_t carry = 0;
     for (int i = 0; i < 8; i++) {
         uint64_t sum = (uint64_t)a[i] + b[i] + carry;
@@ -159,7 +159,7 @@ __device__ void bigint_add_u32(const uint32_t* a, const uint32_t* b, uint32_t* r
     }
 }
 
-__device__ void bigint_sub_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+static __device__ void bigint_sub_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     int32_t borrow = 0;
     for (int i = 0; i < 8; i++) {
         int64_t diff = (int64_t)a[i] - (int64_t)b[i] - borrow;
@@ -168,7 +168,7 @@ __device__ void bigint_sub_u32(const uint32_t* a, const uint32_t* b, uint32_t* r
     }
 }
 
-__device__ void bigint_mul_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+static __device__ void bigint_mul_u32(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     for (int i = 0; i < 16; i++) res[i] = 0;
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
@@ -189,7 +189,7 @@ __device__ void bigint_mul_u32(const uint32_t* a, const uint32_t* b, uint32_t* r
     }
 }
 
-__device__ int bigint_cmp_par(const uint32_t* a, const uint32_t* b) {
+static __device__ int bigint_cmp_par(const uint32_t* a, const uint32_t* b) {
     for (int i = 7; i >= 0; i--) {
         if (a[i] > b[i]) return 1;
         if (a[i] < b[i]) return -1;
@@ -197,7 +197,7 @@ __device__ int bigint_cmp_par(const uint32_t* a, const uint32_t* b) {
     return 0;
 }
 
-__device__ void add_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
+static __device__ void add_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
     uint64_t carry = 0;
     for (int i = 0; i < 8; i++) {
         uint64_t sum = (uint64_t)a[i] + (uint64_t)b[i] + carry;
@@ -214,7 +214,7 @@ __device__ void add_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const
     }
 }
 
-__device__ void sub_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
+static __device__ void sub_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
     uint64_t borrow = 0;
     for (int i = 0; i < 8; i++) {
         uint64_t diff = (uint64_t)a[i] - (uint64_t)b[i] - borrow;
@@ -231,7 +231,7 @@ __device__ void sub_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const
     }
 }
 
-__device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
+static __device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
     uint32_t result[16] = {0};
     for (int i = 0; i < 8; i++) {
         uint64_t carry = 0;
@@ -250,7 +250,7 @@ __device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const
 }
 
 // Point and curve helper functions
-__device__ void set_infinity(Point* p) {
+static __device__ void set_infinity(Point* p) {
     for (int i = 0; i < 8; i++) {
         p->x[i] = 0;
         p->y[i] = 0;
@@ -259,12 +259,12 @@ __device__ void set_infinity(Point* p) {
     p->z[0] = 0;
 }
 
-__device__ bool is_infinity(const Point p) {
+static __device__ bool is_infinity(const Point p) {
     for (int i = 0; i < 8; i++) if (p.z[i] != 0) return false;
     return true;
 }
 
-__device__ void point_to_affine(const Point* p, Point* affine, const uint32_t* mod) {
+static __device__ void point_to_affine(const Point* p, Point* affine, const uint32_t* mod) {
     if (is_infinity(*p)) {
         set_infinity(affine);
         return;
@@ -280,7 +280,7 @@ __device__ void point_to_affine(const Point* p, Point* affine, const uint32_t* m
     for (int i = 1; i < 8; i++) affine->z[i] = 0;
 }
 
-__device__ int is_on_curve_affine(const uint32_t x[8], const uint32_t y[8], const uint32_t* mod) {
+static __device__ int is_on_curve_affine(const uint32_t x[8], const uint32_t y[8], const uint32_t* mod) {
     uint32_t y2[8], x3[8], rhs[8];
     mul_mod(y, y, y2, mod);
     mul_mod(x, x, x3, mod); // x^2 temp, but full x^3
@@ -290,7 +290,7 @@ __device__ int is_on_curve_affine(const uint32_t x[8], const uint32_t y[8], cons
     return bigint_cmp_par(y2, rhs) == 0;
 }
 
-__device__ void safe_diff_mod_n(const uint32_t a[8], const uint32_t b[8], const uint32_t n[8], uint32_t* result) {
+static __device__ void safe_diff_mod_n(const uint32_t a[8], const uint32_t b[8], const uint32_t n[8], uint32_t* result) {
     if (bigint_cmp_par(a, b) >= 0) {
         sub_mod(a, b, result, n);
     } else {
@@ -300,7 +300,7 @@ __device__ void safe_diff_mod_n(const uint32_t a[8], const uint32_t b[8], const 
     }
 }
 
-__device__ bool is_near_dp(const Point p) {
+static __device__ bool is_near_dp(const Point p) {
     uint32_t hash = murmur3(p.x);
     const uint32_t DP_MASK = 0xFFFF;
     uint32_t masked = hash & DP_MASK;
@@ -310,7 +310,7 @@ __device__ bool is_near_dp(const Point p) {
 
 
 // Extended Euclidean algorithm functions (duplicate removed)
-__device__ void parallel_div(const uint32_t* dividend, const uint32_t* divisor, uint32_t* quotient) {
+static __device__ void parallel_div(const uint32_t* dividend, const uint32_t* divisor, uint32_t* quotient) {
     uint32_t temp[8];
     bigint_copy(dividend, temp);
     bigint_zero_u32(quotient);
@@ -333,7 +333,7 @@ __device__ void parallel_div(const uint32_t* dividend, const uint32_t* divisor, 
     }
 }
 
-__device__ int extended_gcd(const uint32_t* a, const uint32_t* b, uint32_t* x, uint32_t* y) {
+static __device__ int extended_gcd(const uint32_t* a, const uint32_t* b, uint32_t* x, uint32_t* y) {
     uint32_t old_r[8], r[8], old_s[8], s[8], old_t[8], t[8];
     bigint_copy(a, old_r);
     bigint_copy(b, r);
@@ -364,7 +364,7 @@ __device__ int extended_gcd(const uint32_t* a, const uint32_t* b, uint32_t* x, u
     return bigint_to_u32(old_r); // gcd
 }
 
-__device__ void bigint_inv_mod(const uint32_t* a, const uint32_t* mod, uint32_t* result) {
+static __device__ void bigint_inv_mod(const uint32_t* a, const uint32_t* mod, uint32_t* result) {
     uint32_t x[8], y[8];
     int gcd = extended_gcd(a, mod, x, y);
     if (gcd != 1) {
@@ -378,7 +378,7 @@ __device__ void bigint_inv_mod(const uint32_t* a, const uint32_t* mod, uint32_t*
 }
 
 // EC arithmetic functions
-__device__ Point jacobian_double(Point p1) {
+static __device__ Point jacobian_double(Point p1) {
     Point result;
     if (is_infinity(p1)) return p1;
     uint32_t xx[8], yy[8], yyyy[8], s[8], m[8], x3[8], y3[8], z3[8];
@@ -405,7 +405,7 @@ __device__ Point jacobian_double(Point p1) {
     return result;
 }
 
-__device__ Point ec_add(Point p1, Point p2) {
+static __device__ Point ec_add(Point p1, Point p2) {
     Point result;
     if (is_infinity(p1)) return p2;
     if (is_infinity(p2)) return p1;
@@ -445,11 +445,11 @@ __device__ Point ec_add(Point p1, Point p2) {
     return result;
 }
 
-__device__ Point jacobian_add(const Point p1, const Point p2) {
+static __device__ Point jacobian_add(const Point p1, const Point p2) {
     return ec_add(p1, p2); // Alias to full add
 }
 
-__device__ Point ec_mul_small(Point p, uint64_t scalar) {
+static __device__ Point ec_mul_small(Point p, uint64_t scalar) {
     Point result; set_infinity(&result);
     for (int bit = 0; bit < 64 && scalar > 0; bit++) {
         if (scalar & 1) result = jacobian_add(result, p);
@@ -460,7 +460,7 @@ __device__ Point ec_mul_small(Point p, uint64_t scalar) {
 }
 
 // Bias and special functions
-__device__ int select_bucket_cuda(const Point position, const uint32_t dist[8], uint64_t step, uint32_t kangaroo_type) {
+static __device__ int select_bucket_cuda(const Point position, const uint32_t dist[8], uint64_t step, uint32_t kangaroo_type) {
     const uint32_t WALK_BUCKETS = 32;
     if (kangaroo_type == 0) { // tame
         return step % WALK_BUCKETS;
@@ -473,7 +473,7 @@ __device__ int select_bucket_cuda(const Point position, const uint32_t dist[8], 
     }
 }
 
-__device__ uint64_t skew_magic9(uint64_t val) {
+static __device__ uint64_t skew_magic9(uint64_t val) {
     uint64_t res = val % 9;
     uint64_t attractors[3] = {0, 3, 6};
     uint64_t closest = attractors[0];
@@ -485,7 +485,7 @@ __device__ uint64_t skew_magic9(uint64_t val) {
     return val + ((res > closest) ? (9 - min_diff) : min_diff);
 }
 
-__device__ uint64_t mod_small_primes(uint64_t val) {
+static __device__ uint64_t mod_small_primes(uint64_t val) {
     for (int i = 0; i < 32; i++) {
         uint64_t prime = PRIME_MULTIPLIERS[i];
         while (val % prime == 0 && val >= prime) val /= prime;
@@ -493,12 +493,12 @@ __device__ uint64_t mod_small_primes(uint64_t val) {
     return val;
 }
 
-__device__ bool is_gold_attractor(uint64_t x_low, uint64_t mod_level) {
+static __device__ bool is_gold_attractor(uint64_t x_low, uint64_t mod_level) {
     uint64_t res = x_low % mod_level;
     return (res % 9 == 0 || res % 9 == 3 || res % 9 == 6);
 }
 
-__device__ uint64_t gold_nudge_distance(uint64_t x_low, uint64_t mod_level) {
+static __device__ uint64_t gold_nudge_distance(uint64_t x_low, uint64_t mod_level) {
     uint64_t res = x_low % mod_level;
     uint64_t attractors[] = {0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51,54,57,60,63,66,69,72,75,78,81};
     int num = mod_level / 3;
@@ -615,7 +615,7 @@ extern "C" void launch_kangaroo_step_batch(
 }
 
 // SOP bucket selection
-__device__ uint32_t select_sop_bucket(const Point point, const uint32_t dist[8], uint32_t seed, uint32_t step, bool is_tame) {
+static __device__ uint32_t select_sop_bucket(const Point point, const uint32_t dist[8], uint32_t seed, uint32_t step, bool is_tame) {
     const uint32_t WALK_BUCKETS = 32;
     if (is_tame) return step % WALK_BUCKETS;
     uint32_t x0 = *(uint32_t*)point.x, x1 = *(uint32_t*)(point.x + 4);
@@ -625,7 +625,7 @@ __device__ uint32_t select_sop_bucket(const Point point, const uint32_t dist[8],
 }
 
 // Biased prime getter
-__device__ uint64_t get_biased_prime(uint32_t index, uint64_t bias_mod) {
+static __device__ uint64_t get_biased_prime(uint32_t index, uint64_t bias_mod) {
     uint64_t cycle_index = ((uint64_t)index % bias_mod) % 32;
     return PRIME_MULTIPLIERS[cycle_index];
 }

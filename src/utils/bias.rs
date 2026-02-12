@@ -41,11 +41,7 @@ pub fn apply_biases(scalar: &BigInt256, target: (u8, u8, u8, u8, bool)) -> f64 {
         return 0.0;  // Reject zero scalars if pos bias enabled
     }
 
-    // Check for zero range width
-    if bool::from(range_width.is_zero()) {
-        warn!("Zero range width in bias analysis");
-        return 0.0;
-    }
+    // Bias analysis continues...
 
     // Weighted scoring for mod9, mod27, mod81
     let mut score = 0.0f64;

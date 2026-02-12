@@ -5,8 +5,17 @@
 #define LIMBS 8
 #define WIDE_LIMBS 16
 
-// Include step.cu for shared functions (jacobian_add, jacobian_double, etc.)
-#include "step.cu"
+// Point structure for elliptic curve operations in BSGS
+struct Point {
+    uint32_t x[LIMBS];
+    uint32_t y[LIMBS];
+    uint32_t z[LIMBS];
+};
+
+// Forward declarations for functions from step.cu
+extern __device__ Point jacobian_add(Point p1, Point p2);
+extern __device__ Point jacobian_double(Point p1);
+extern __device__ Point ec_mul_small(Point p, uint64_t scalar);
 
 // secp256k1 order (n) as uint32_t[8]
 __constant__ uint32_t SECP_N[LIMBS] = {

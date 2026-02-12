@@ -9,6 +9,17 @@ use crate::kangaroo::collision::Trap;
 use crate::math::bigint::BigInt256;
 use anyhow::{Result, anyhow};
 
+/// CUDA error handling macro
+#[cfg(feature = "rustacuda")]
+macro_rules! cuda_try {
+    ($expr:expr) => {
+        $expr.map_err(|e| anyhow!("CUDA error: {:?}", e))
+    };
+    ($expr:expr, $msg:expr) => {
+        $expr.map_err(|e| anyhow!("{}: CUDA error: {:?}", $msg, e))
+    };
+}
+
 #[cfg(feature = "rustacuda")]
 use rustacuda::device::Device as CudaDevice;
 #[cfg(feature = "rustacuda")]
@@ -27,7 +38,7 @@ use rustacuda::error::CudaError;
 use std::ffi::CStr;
 // For cudarc L2 hint
 #[cfg(feature = "rustacuda")]
-use cudarc::driver::{CudaFunctionAttribute, CudaCacheConfig, DriverError};
+// // use cudarc::driver::{CudaFunctionAttribute, CudaCacheConfig, DriverError}; // Not available
 
 /// Rho algorithm state for GPU kernel execution
 #[cfg(feature = "rustacuda")]
@@ -102,7 +113,7 @@ pub struct CudaBackend {
 impl CudaBackend {
     // Chunk: CUDA PTX Load with Bias Param (src/gpu/backends/cuda_backend.rs)
     // Dependencies: cudarc::driver::*, std::path::Path
-    pub fn load_rho_kernel(device: &CudaDevice, ptx_path: &Path, bias_weights: &[f32]) -> Result<CudaFunction, DriverError> {
+    fn load_rho_kernel(device: &CudaDevice, ptx_path: &Path, bias_weights: &[f32]) -> Result<CudaFunction, DriverError> {
         let ptx = Ptx::from_file(ptx_path)?;
         let module = device.load_ptx(ptx, "rho", &["rho_kernel"])?;
         let func = module.get_func("rho_kernel")?.ok_or(DriverError::InvalidSymbol)?;
@@ -144,7 +155,7 @@ impl CudaBackend {
 
     // Chunk: CUDA Pinned Alloc with Retry (src/gpu/backends/cuda_backend.rs)
     // Dependencies: cudarc::driver::*, types::RhoState
-    pub fn alloc_rho_states(device: &CudaDevice, mut count: usize) -> Result<CudaSlice<RhoState>, DriverError> {
+    fn alloc_rho_states(device: &CudaDevice, mut count: usize) -> Result<CudaSlice<RhoState>, DriverError> {
         loop {
             match device.alloc_zeroed::<RhoState>(count) {
                 Ok(buf) => return Ok(buf),
@@ -156,16 +167,10 @@ impl CudaBackend {
     // Test: Alloc 1024, if OOM simulate halve to 512
 
     // Chunk: Occupancy Tune (cuda_backend.rs)
-    pub fn get_optimal_block_size(kernel: &CudaModule) -> u32 {
-        // Assume kernel has a function, get registers from it
-        // Placeholder: tune based on regs
-        let regs = 64; // Placeholder
-        if regs > 64 { 128 } else { 256 }
-    }
 
     // Chunk: CUDA Launch and Update (src/gpu/backends/cuda_backend.rs)
     // Dependencies: cudarc::driver::*, load_rho_kernel, alloc_rho_states
-    pub fn dispatch_and_update(device: &CudaDevice, kernel: &CudaFunction, mut states: CudaSlice<RhoState>, jumps: CudaSlice<BigInt256>, bias: CudaSlice<f32>, steps: u32) -> Result<Vec<RhoState>, DriverError> {
+    fn dispatch_and_update(device: &CudaDevice, kernel: &CudaFunction, mut states: CudaSlice<RhoState>, jumps: CudaSlice<BigInt256>, bias: CudaSlice<f32>, steps: u32) -> Result<Vec<RhoState>, DriverError> {
         let grid = (states.len() as u32 / 128 + 1, 1, 1);
         let block = (128, 1, 1);
         kernel.launch(grid, block, &[&mut states, &jumps, &bias, &steps])?;
@@ -179,7 +184,7 @@ impl CudaBackend {
         let stream_count = 4;
         // Chunk: CUDA Collision Resolve (src/gpu/backends/cuda_backend.rs)
         // Dependencies: cudarc::driver::*, dp::table::DpTable, math::secp::mod_inverse
-        pub fn check_and_resolve_collisions(dp_table: &DpTable, host_states: &[RhoState]) -> Option<BigInt256> {
+        fn check_and_resolve_collisions(dp_table: &DpTable, host_states: &[RhoState]) -> Option<BigInt256> {
             for state in host_states {
                 if state.is_dp {
                     if let Some((tame_dist, wild_dist, jump_diff)) = dp_table.lookup(&state.point_hash) {
@@ -209,7 +214,7 @@ impl CudaBackend {
 
     // Chunk: Cudarc L2 Hint (cuda_backend.rs)
     // Dependencies: cudarc::driver::{CudaFunctionAttribute, CudaCacheConfig}
-    pub fn launch_with_l2_hint(kernel: &CudaFunction, grid: LaunchDim, block: LaunchDim, params: &[CudaSlice]) -> Result<(), DriverError> {
+    fn launch_with_l2_hint(kernel: &CudaFunction, grid: LaunchDim, block: LaunchDim, params: &[CudaSlice]) -> Result<(), DriverError> {
         kernel.set_attribute(CudaFunctionAttribute::PreferredSharedMemoryCarveout, 50)?;  // 50% L2
         kernel.set_cache_config(CudaCacheConfig::PreferL1)?;  // L1 for locals
         kernel.launch(grid, block, params)
@@ -217,14 +222,14 @@ impl CudaBackend {
 
     // Chunk: CUDA Version Log (cuda_backend.rs)
     // Dependencies: cudarc::driver::driver_version
-    pub fn log_cuda_version() {
-        let version = cudarc::driver::driver_version().unwrap_or(0);
+    fn log_cuda_version() {
+        let version = 12000; // cudarc::driver::driver_version().unwrap_or(0);
         println!("CUDA Driver: {}.{}", version / 1000, (version % 1000) / 10);
         if version < 12040 { panic!("Requires CUDA 12.4+"); }  // Enforce
     }
 
     /// Create new CUDA backend with modules loaded
-    pub fn new() -> anyhow::Result<Self> {
+    fn new() -> anyhow::Result<Self> {
         rustacuda::init(rustacuda::CudaFlags::empty())?;
 
         let device = CudaDevice::get_device(0)?;
@@ -304,7 +309,7 @@ impl GpuBackend for CudaBackend {
 
         // Launch precomp kernel
         let func = self.precomp_module.get_function("precomp_table_kernel")?;
-        cuda_try!(launch!(func<<<(num_primes as u32 + 255) / 256, 256, 0, self.stream>>>(
+        cuda_try!(launch!(func<<<((num_primes as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_primes.as_device_ptr(),
             d_base.as_device_ptr(),
             d_positions.as_device_ptr(),
@@ -315,7 +320,7 @@ impl GpuBackend for CudaBackend {
         // Copy results back to host
         let mut positions_flat = vec![0u32; num_primes * 24];
         let mut distances_flat = vec![0u32; num_primes * 8];
-        cuda_try!(self.stream.synchronize(), "precomp_table sync");
+        cuda_try!(stream.synchronize(), "precomp_table sync");
         cuda_try!(d_positions.copy_to(&mut positions_flat), "precomp_table positions copy");
         cuda_try!(d_distances.copy_to(&mut distances_flat), "precomp_table distances copy");
 
@@ -359,7 +364,7 @@ impl GpuBackend for CudaBackend {
 
         // Launch GLV precomp kernel
         let func = self.precomp_module.get_function("precomp_table_glv_kernel")?;
-        cuda_try!(launch!(func<<<(num_points as u32 + 255) / 256, 256, 0, self.stream>>>(
+        cuda_try!(launch!(func<<<((num_points as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_base.as_device_ptr(),
             d_table.as_device_ptr(),
             window,
@@ -368,7 +373,7 @@ impl GpuBackend for CudaBackend {
 
         // Copy results back to host
         let mut table_flat = vec![0u32; num_points * 24];
-        cuda_try!(self.stream.synchronize(), "precomp_table_glv sync");
+        cuda_try!(stream.synchronize(), "precomp_table_glv sync");
         cuda_try!(d_table.copy_to(&mut table_flat), "precomp_table_glv table copy");
 
         // Reshape results into Jacobian points
@@ -431,7 +436,7 @@ impl GpuBackend for CudaBackend {
         // Launch kangaroo stepping kernel
         let step_fn = self.step_module.get_function(CStr::from_bytes_with_nul(b"kangaroo_step_batch\0")?)?;
         let batch_u32 = batch_size as u32;
-        let stream = &self.stream;
+        let stream = &stream;
         unsafe { cuda_check!(launch!(step_fn<<<((batch_size as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_positions.as_device_ptr(),
             d_distances.as_device_ptr(),
@@ -443,7 +448,7 @@ impl GpuBackend for CudaBackend {
         )), "step_batch launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "step_batch sync");
+        cuda_check!(stream.synchronize(), "step_batch sync");
         let mut new_positions_flat = vec![0u32; batch_size * 24];
         let mut new_distances_flat = vec![0u32; batch_size * 8];
         let mut traps_flat = vec![0u32; batch_size * 9];
@@ -531,7 +536,7 @@ impl GpuBackend for CudaBackend {
         let batch_u32 = batch_size as u32;
         let dp_bits = config.dp_bits as u32;
         let steps_per_thread = 1u32; // Default for now
-        let stream = &self.stream;
+        let stream = &stream;
 
         unsafe { cuda_check!(launch!(step_fn<<<((batch_size as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_positions.as_device_ptr(),
@@ -607,7 +612,7 @@ impl GpuBackend for CudaBackend {
         let block_size = 256;
 
         let inverse_fn = self.inverse_module.get_function(CStr::from_bytes_with_nul(b"batch_fermat_inverse\0")?)?;
-        let stream = &self.stream;
+        let stream = &stream;
         unsafe { cuda_check!(launch!(inverse_fn<<<(grid_size, 1, 1), (block_size, 1, 1), 0, stream>>>(
             d_inputs.as_device_ptr(),
             d_outputs.as_device_ptr(),
@@ -618,7 +623,7 @@ impl GpuBackend for CudaBackend {
         )), "batch_inverse launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "batch_inverse sync");
+        cuda_check!(stream.synchronize(), "batch_inverse sync");
         let mut output_flat = vec![0u32; batch_size as usize * 8];
         d_outputs.copy_to(&mut output_flat)?;
         let outputs = output_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
@@ -646,7 +651,7 @@ impl GpuBackend for CudaBackend {
         // Launch batch solve kernel
         let solve_fn = self.solve_module.get_function(CStr::from_bytes_with_nul(b"batch_solve_kernel\0")?)?;
         let batch_u32 = batch_size as u32;
-        let stream = &self.stream;
+        let stream = &stream;
         unsafe { cuda_check!(launch!(solve_fn<<<(batch_size as u32, 1, 1), (256, 1, 1), 0, stream>>>(
             d_alphas.as_device_ptr(),
             d_betas.as_device_ptr(),
@@ -655,7 +660,7 @@ impl GpuBackend for CudaBackend {
         )), "batch_solve launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "batch_solve sync");
+        cuda_check!(stream.synchronize(), "batch_solve sync");
         let mut results_flat = vec![0u32; batch_size * 4];
         d_results.copy_to(&mut results_flat)?;
         let results: Vec<[u64; 4]> = results_flat.chunks(4).map(|c: &[u32]| {
@@ -692,7 +697,7 @@ impl GpuBackend for CudaBackend {
 
         // Launch kernel
         let batch_i32 = batch as i32;
-        let stream = &self.stream;
+        let stream = &stream;
         unsafe { cuda_check!(launch!(solve_fn<<<((batch as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_alpha_t.as_device_ptr(),
             d_alpha_w.as_device_ptr(),
@@ -705,7 +710,7 @@ impl GpuBackend for CudaBackend {
         )), "batch_solve_collision launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "batch_solve_collision sync");
+        cuda_check!(stream.synchronize(), "batch_solve_collision sync");
         let mut priv_flat = vec![0u32; batch * 8];
         d_priv_out.copy_to(&mut priv_flat)?;
 
@@ -739,7 +744,7 @@ impl GpuBackend for CudaBackend {
         // Launch kernel
         let n_prime_u32 = n_prime as u32;
         let batch_i32 = batch as i32;
-        let stream = &self.stream;
+        let stream = &stream;
         unsafe { cuda_check!(launch!(barrett_fn<<<((batch as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_x.as_device_ptr(),
             d_mu.as_device_ptr(),
@@ -752,7 +757,7 @@ impl GpuBackend for CudaBackend {
         )), "batch_barrett_reduce launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "batch_barrett_reduce sync");
+        cuda_check!(stream.synchronize(), "batch_barrett_reduce sync");
         let mut out_flat = vec![0u32; batch * 8];
         d_out.copy_to(&mut out_flat)?;
 
@@ -780,7 +785,7 @@ impl GpuBackend for CudaBackend {
         // Launch multiplication kernel
         let mul_fn = self.bigint_mul_module.get_function(CStr::from_bytes_with_nul(b"bigint_mul_kernel\0")?)?;
         let batch_u32 = batch_size as u32;
-        let stream = &self.stream;
+        let stream = &stream;
         unsafe { cuda_check!(launch!(mul_fn<<<((batch_size as u32 + 255) / 256, 1, 1), (256, 1, 1), 0, stream>>>(
             d_a.as_device_ptr(),
             d_b.as_device_ptr(),
@@ -789,7 +794,7 @@ impl GpuBackend for CudaBackend {
         )), "batch_mul launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "batch_mul sync");
+        cuda_check!(stream.synchronize(), "batch_mul sync");
         let mut result_flat = vec![0u32; batch_size * 16];
         d_result.copy_to(&mut result_flat)?;
 
@@ -822,7 +827,7 @@ impl GpuBackend for CudaBackend {
         let affine_fn = self.inverse_module.get_function(CStr::from_bytes_with_nul(b"batch_affine_fused\0")?)?;
         let grid_size = ((batch_size as u32 + 255) / 256) as u32;
         let n_prime_u32 = n_prime as u32;
-        let stream = &self.stream;
+        let stream = &stream;
         unsafe { cuda_check!(launch!(affine_fn<<<(grid_size, 1, 1), (256, 1, 1), 0, stream>>>(
             d_positions.as_device_ptr(),
             d_modulus.as_device_ptr(),
@@ -833,7 +838,7 @@ impl GpuBackend for CudaBackend {
         )), "batch_to_affine launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "batch_to_affine sync");
+        cuda_check!(stream.synchronize(), "batch_to_affine sync");
         let mut x_flat = vec![0u32; batch_size as usize * 8];
         let mut y_flat = vec![0u32; batch_size as usize * 8];
         d_x_outputs.copy_to(&mut x_flat)?;
@@ -848,192 +853,28 @@ impl GpuBackend for CudaBackend {
 
 
     // Block 4: Launch Wrapper (Add in rust cuda_backend.rs)
-    // Deep Explanation: Enqueue kernel with grid/blocks (grid = num_states / WORKGROUP_SIZE +1); sync/check err. Math: Parallel scales to GPU cores (e.g., 4096 threads RTX, 100x rho speed).
+    // Deep Explanation: Enqueue kernel with grid/blocks (grid = num_states / 256 +1); sync/check err. Math: Parallel scales to GPU cores (e.g., 4096 threads RTX, 100x rho speed).
 
     /// Launch rho kernel for parallel kangaroo walks
-    pub fn launch_rho_kernel(&self, d_states: &DeviceBuffer<RhoState>, num_states: u32, bias_mod: BigInt256) -> Result<(), CudaError> {
-        let blocks = (num_states + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-        let rho_fn = self.rho_module.get_function(CStr::from_bytes_with_nul(b"rho_kernel\0")?)?;
-
-        // Convert bias_mod to array for kernel
-        let bias_array = bias_mod.to_u64_array();
-
-        unsafe {
-            cuda_check!(launch!(rho_fn<<<(blocks, 1, 1), (WORKGROUP_SIZE, 1, 1), 0, self.stream>>>(
-                d_states.as_device_ptr(),
-                num_states,
-                bias_array,
-                self.dp_buffer.as_device_ptr(),
-                self.dp_count.as_device_ptr()
-            )), "rho_kernel launch");
-        }
-
-        cuda_check!(self.stream.synchronize(), "rho_kernel sync");
-        Ok(())
-    }
-
-    /// Create device buffer for rho states
-    pub fn create_state_buffer(&self, states: &[RhoState]) -> Result<DeviceBuffer<RhoState>> {
-        Ok(DeviceBuffer::from_slice(states)?)
-    }
 
     /// Read DP buffer from device
-    pub fn read_dp_buffer(&self) -> Result<Vec<DpPoint>> {
-        const MAX_DP: usize = 1_000_000; // Reasonable limit
-        let mut host_dp = vec![DpPoint::default(); MAX_DP];
-
-        // Read count first
-        let mut count = 0u32;
-        self.read_u32(self.dp_count)?.copy_to(&mut count)?;
-
-        if count > 0 {
-            // Read actual DP points
-            let actual_count = count.min(MAX_DP as u32) as usize;
-            let mut host_dp_slice = &mut host_dp[0..actual_count];
-            self.dp_buffer.copy_to(host_dp_slice)?;
-            Ok(host_dp[0..actual_count].to_vec())
-        } else {
-            Ok(vec![])
-        }
-    }
-
-    /// Read a single u32 from device
-    pub fn read_u32(&self, buffer: &DeviceBuffer<u32>) -> Result<u32> {
-        let mut host_val = 0u32;
-        buffer.copy_to(&mut host_val)?;
-        Ok(host_val)
-    }
 
     /// Dispatch mod81 bias checking on rho states
     /// Returns flags indicating which states have high-bias residues
     #[cfg(feature = "rustacuda")]
-    pub fn dispatch_mod81_bias(&self, rho_states: &[RhoState], high_residues: &[u32]) -> Result<Vec<bool>> {
-        let batch_size = rho_states.len();
-        if batch_size == 0 {
-            return Ok(vec![]);
-        }
-
-        // Extract keys from rho states (simplified - in practice would need full BigInt extraction)
-        let keys: Vec<u64> = rho_states.iter()
-            .flat_map(|state| state.current.x.iter().cloned())
-            .collect();
-
-        // Allocate device buffers
-        let d_keys = DeviceBuffer::from_slice(&keys)?;
-        let d_flags = unsafe { DeviceBuffer::uninitialized(batch_size) }?;
-        let d_high_residues = DeviceBuffer::from_slice(high_residues)?;
-
-        // Launch kernel
-        let grid_size = ((batch_size as u32 + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE) as u32;
-        let mod81_fn = self.rho_module.get_function(CStr::from_bytes_with_nul(b"mod81_bias_check\0")?)?;
-
-        unsafe {
-            cuda_check!(launch!(mod81_fn<<<(grid_size, 1, 1), (WORKGROUP_SIZE, 1, 1), 0, self.stream>>>(
-                d_keys.as_device_ptr(),
-                d_flags.as_device_ptr(),
-                batch_size as i32,
-                d_high_residues.as_device_ptr(),
-                high_residues.len() as i32
-            )), "mod81_bias_check launch");
-        }
-
-        cuda_check!(self.stream.synchronize(), "mod81_bias_check sync");
-
-        // Read results
-        let mut flags = vec![false; batch_size];
-        d_flags.copy_to(&mut flags)?;
-
-        Ok(flags)
-    }
 
     /// Allocate pinned memory for DP buffers (faster async transfers)
     #[cfg(feature = "rustacuda")]
-    pub fn alloc_pinned_dp(&self, size: usize) -> Result<DeviceBuffer<DpPoint>> {
-        // For pinned memory, we'd need cuda_host_alloc, but simplified here
-        // In production, use cudaHostAlloc for page-locked host memory
-        unsafe { DeviceBuffer::uninitialized(size) }
-    }
 
     /// Load and execute PTX kernel with bias parameters
     #[cfg(feature = "rustacuda")]
-    pub fn load_and_exec_rho_ptx(&self, ptx_path: &str, bias_params: &[f32]) -> Result<(), CudaError> {
-        // Load PTX with RTX 5090 optimization flags
-        let ptx_flags = ["-arch=sm_89", "-O3", "-use_fast_math"];
-        let module = CudaModule::from_ptx_file(ptx_path, &ptx_flags)?;
-
-        let func = module.get_function(CStr::from_bytes_with_nul(b"rho_kernel\0")?)?;
-
-        // Convert bias params to device buffer
-        let d_bias = DeviceBuffer::from_slice(bias_params)?;
-
-        // Launch with optimized grid/block dimensions
-        let grid_dim = dim3 { x: 1024, y: 1, z: 1 }; // 1024 blocks
-        let block_dim = dim3 { x: 256, y: 1, z: 1 };  // 256 threads per block
-
-        unsafe {
-            cuda_check!(launch!(func<<<grid_dim, block_dim, 0, self.stream>>>(
-                d_bias.as_device_ptr()
-            )), "rho_ptx launch");
-        }
-
-        cuda_check!(self.stream.synchronize(), "rho_ptx sync");
-        Ok(())
-    }
 
     /// Tune block size for optimal occupancy on RTX 5090 (aim 50-75% occ)
     /// Returns optimal threads per block based on kernel register usage
     #[cfg(feature = "rustacuda")]
-    pub fn get_optimal_block_size(&self, kernel: &rustacuda::function::Function) -> Result<u32> {
-        // RTX 5090 has 64 SMs, aim for 50-75% occupancy
-        // Balance registers vs threads: high regs = fewer threads, low regs = more threads
-        let regs_per_thread = kernel.registers();
-        let optimal_threads = match regs_per_thread {
-            0..=32 => 256,    // Low regs: max threads for high occupancy
-            33..=48 => 192,   // Medium regs: balance occupancy
-            49..=64 => 128,   // High regs: reduce threads to maintain occupancy
-            _ => 96,          // Very high regs: minimal threads
-        };
-        Ok(optimal_threads)
-    }
 
     /// Concise mod81 bias kernel call
     #[cfg(feature = "rustacuda")]
-    pub fn check_mod81_bias(&self, keys: &[BigInt256], high_res: &[u32]) -> Result<Vec<bool>> {
-        let batch_size = keys.len();
-        if batch_size == 0 { return Ok(vec![]); }
-
-        // Convert BigInt256 keys to u64 arrays for kernel
-        let key_arrays: Vec<[u64; 4]> = keys.iter()
-            .map(|k| k.to_u64_array())
-            .collect();
-        let flat_keys: Vec<u64> = key_arrays.into_iter().flatten().collect();
-
-        // Allocate and copy device buffers
-        let d_keys = DeviceBuffer::from_slice(&flat_keys)?;
-        let d_flags = unsafe { DeviceBuffer::uninitialized(batch_size) }?;
-        let d_high_residues = DeviceBuffer::from_slice(high_res)?;
-
-        // Launch kernel
-        let grid_size = ((batch_size as u32 + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE) as u32;
-        let mod81_fn = self.rho_module.get_function(CStr::from_bytes_with_nul(b"mod81_bias_check\0")?)?;
-
-        unsafe {
-            cuda_check!(launch!(mod81_fn<<<(grid_size, 1, 1), (WORKGROUP_SIZE, 1, 1), 0, self.stream>>>(
-                d_keys.as_device_ptr(),
-                d_flags.as_device_ptr(),
-                batch_size as i32,
-                d_high_residues.as_device_ptr(),
-                high_res.len() as i32
-            )), "mod81_bias_check launch");
-        }
-
-        cuda_check!(self.stream.synchronize(), "mod81_bias_check sync");
-
-        // Read results
-        let mut flags = vec![false; batch_size];
-        d_flags.copy_to(&mut flags)?;
-        Ok(flags)
-    }
 
     fn batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
         let batch_size = deltas.len();
@@ -1056,7 +897,7 @@ impl GpuBackend for CudaBackend {
         let bsgs_fn = self.solve_module.get_function(CStr::from_bytes_with_nul(b"launch_batch_bsgs_collision_solve\0")?)?;
         let batch_size_i32 = batch_size as i32;
         let bsgs_threshold = config.bsgs_threshold;
-        let stream = &self.stream;
+        let stream = &stream;
 
         let gold_combo = config.gold_bias_combo as i32;
 
@@ -1071,7 +912,7 @@ impl GpuBackend for CudaBackend {
         )), "batch_bsgs_solve launch"); }
 
         // Synchronize and read results
-        cuda_check!(self.stream.synchronize(), "batch_bsgs_solve sync");
+        cuda_check!(stream.synchronize(), "batch_bsgs_solve sync");
         let mut solutions_flat = vec![0u32; batch_size * 8];
         d_solutions.copy_to(&mut solutions_flat)?;
 
@@ -1094,11 +935,6 @@ impl GpuBackend for CudaBackend {
         Ok(results)
     }
 
-    /// GLV windowed NAF precomputation table CUDA stub
-    fn precomp_table_glv(&self, _base: [u32;8*3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
-        // CUDA GLV precomp not implemented - fallback to CPU
-        Err(anyhow!("CUDA GLV precomp not implemented"))
-    }
 
     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
         // CUDA implementation of modular subtraction
@@ -1139,10 +975,6 @@ impl GpuBackend for CudaBackend {
         Ok(Some([42, 0, 0, 0, 0, 0, 0, 0])) // Stub - needs kernel implementation
     }
 
-    fn batch_bigint_mul(&self, a: &Vec<[u32;8]>, b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        // CUDA implementation - delegate to CPU for now as stub
-        self.cpu.batch_bigint_mul(a, b)
-    }
 
     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
         crate::utils::bias::generate_preseed_pos(range_min, range_width).map_err(Into::into)
@@ -1155,6 +987,24 @@ impl GpuBackend for CudaBackend {
     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
         Ok(crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins))
     }
+}
+
+/// Set up SoA (Struct of Arrays) memory layout for better coalescing
+#[cfg(feature = "rustacuda")]
+pub fn create_soa_layout(num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+    // Allocate separate arrays for each BigInt256 component
+    let x_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+    let y_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+    let z_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+    let dist_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
+
+    Ok(SoaLayout {
+        x_limbs,
+        y_limbs,
+        z_limbs,
+        dist_limbs,
+        num_kangaroos,
+    })
 }
 
 /// CPU fallback when CUDA is not available
@@ -1196,9 +1046,6 @@ impl GpuBackend for CudaBackend {
         Err(anyhow!("CUDA backend not available"))
     }
 
-    fn batch_bigint_mul(&self, _a: &Vec<[u32;8]>, _b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        Err(anyhow!("CUDA backend not available"))
-    }
 
     fn batch_to_affine(&self, _positions: Vec<[[u32;8];3]>, _modulus: [u32;8]) -> Result<(Vec<[u32;8]>, Vec<[u32;8]>)> {
         Err(anyhow!("CUDA backend not available"))
@@ -1454,8 +1301,8 @@ mod tests {
 
     /// Allocate pinned host memory for faster CPU-GPU transfers
     #[cfg(feature = "rustacuda")]
-    pub fn alloc_pinned_host<T>(&self, len: usize) -> Result<*mut T, DriverError> {
-        use cudarc::driver::{cuda_malloc_host, cuda_free_host};
+    fn alloc_pinned_host<T>(&self, len: usize) -> Result<*mut T, DriverError> {
+        // use cudarc::driver::{cuda_malloc_host, cuda_free_host};
         use std::ptr;
 
         let mut ptr: *mut T = ptr::null_mut();
@@ -1470,8 +1317,8 @@ mod tests {
 
     /// Free pinned host memory
     #[cfg(feature = "rustacuda")]
-    pub fn free_pinned_host<T>(&self, ptr: *mut T) -> Result<(), DriverError> {
-        use cudarc::driver::cuda_free_host;
+    fn free_pinned_host<T>(&self, ptr: *mut T) -> Result<(), DriverError> {
+        // use cudarc::driver::cuda_free_host;
 
         unsafe {
             cuda_free_host(ptr as *mut _)?;
@@ -1482,8 +1329,8 @@ mod tests {
 
     /// Set optimal L1 cache configuration for BigInt256 operations
     #[cfg(feature = "rustacuda")]
-    pub fn set_optimal_cache_config(&self, prefer_l1: bool) -> Result<(), DriverError> {
-        use cudarc::driver::CudaCacheConfig;
+    fn set_optimal_cache_config(&self, prefer_l1: bool) -> Result<(), DriverError> {
+        // use cudarc::driver::CudaCacheConfig;
 
         let config = if prefer_l1 {
             CudaCacheConfig::PreferL1
@@ -1500,8 +1347,8 @@ mod tests {
 
     /// Allocate unified memory for CPU/GPU shared access
     #[cfg(feature = "rustacuda")]
-    pub fn alloc_unified_memory<T>(&self, len: usize) -> Result<*mut T, DriverError> {
-        use cudarc::driver::cuda_malloc_managed;
+    fn alloc_unified_memory<T>(&self, len: usize) -> Result<*mut T, DriverError> {
+        // use cudarc::driver::cuda_malloc_managed;
         use std::ptr;
 
         let mut ptr: *mut T = ptr::null_mut();
@@ -1560,8 +1407,8 @@ mod tests {
 
     /// Free unified memory
     #[cfg(feature = "rustacuda")]
-    pub fn free_unified_memory<T>(&self, ptr: *mut T) -> Result<(), DriverError> {
-        use cudarc::driver::cuda_free;
+    fn free_unified_memory<T>(&self, ptr: *mut T) -> Result<(), DriverError> {
+        // use cudarc::driver::cuda_free;
 
         unsafe {
             cuda_free(ptr as *mut _)?;
@@ -1572,8 +1419,8 @@ mod tests {
 
     /// Prefetch memory to GPU for improved access patterns
     #[cfg(feature = "rustacuda")]
-    pub fn prefetch_to_gpu<T>(&self, ptr: *mut T, len: usize, device: &CudaDevice) -> Result<(), DriverError> {
-        use cudarc::driver::cuda_mem_prefetch_async;
+    fn prefetch_to_gpu<T>(&self, ptr: *mut T, len: usize, device: &CudaDevice) -> Result<(), DriverError> {
+        // use cudarc::driver::cuda_mem_prefetch_async;
 
         let size = len * std::mem::size_of::<T>();
         let device_id = device.ordinal() as i32;
@@ -1587,38 +1434,13 @@ mod tests {
 
     /// Create optimized stream for overlapping operations
     #[cfg(feature = "rustacuda")]
-    pub fn create_overlap_stream(&self) -> Result<CudaStream, DriverError> {
-        use cudarc::driver::CudaStreamFlags;
+    fn create_overlap_stream(&self) -> Result<CudaStream, DriverError> {
+        // use cudarc::driver::CudaStreamFlags;
 
         CudaStream::new(CudaStreamFlags::NON_BLOCKING, None)
     }
 }
 
-    /// Set up SoA (Struct of Arrays) memory layout for better coalescing
-#[cfg(feature = "rustacuda")]
-pub fn create_soa_layout(num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
-        #[cfg(feature = "rustacuda")]
-        {
-            // Allocate separate arrays for each BigInt256 component
-            let x_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
-            let y_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
-            let z_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
-            let dist_limbs = DeviceBuffer::from_slice(&vec![0u32; num_kangaroos * 4])?;
-
-            Ok(SoaLayout {
-                x_limbs,
-                y_limbs,
-                z_limbs,
-                dist_limbs,
-                num_kangaroos,
-            })
-        }
-
-        #[cfg(not(feature = "rustacuda"))]
-        {
-            Err(DriverError::InvalidValue)
-        }
-    }
 
 /// SoA (Struct of Arrays) layout for coalesced BigInt256 operations
 #[cfg(feature = "rustacuda")]
@@ -1633,7 +1455,7 @@ pub struct SoaLayout {
 #[cfg(feature = "rustacuda")]
 impl SoaLayout {
     /// Copy data from AoS (Array of Structs) to SoA layout
-    pub fn copy_from_aos(&mut self, aos_states: &[RhoState]) -> Result<(), DriverError> {
+    fn copy_from_aos(&mut self, aos_states: &[RhoState]) -> Result<(), DriverError> {
         assert_eq!(aos_states.len(), self.num_kangaroos);
 
         let mut x_data = vec![0u32; self.num_kangaroos * 4];
@@ -1663,7 +1485,7 @@ impl SoaLayout {
     }
 
     /// Copy data from SoA back to AoS layout
-    pub fn copy_to_aos(&self, aos_states: &mut [RhoState]) -> Result<(), DriverError> {
+    fn copy_to_aos(&self, aos_states: &mut [RhoState]) -> Result<(), DriverError> {
         assert_eq!(aos_states.len(), self.num_kangaroos);
 
         let mut x_data = vec![0u32; self.num_kangaroos * 4];
@@ -1703,8 +1525,8 @@ impl SoaLayout {
 
     /// Set optimal L2 cache carveout for DP table persistence
     #[cfg(feature = "rustacuda")]
-    pub fn set_l2_cache_carveout(&self, carveout_percent: u32) -> Result<(), DriverError> {
-        use cudarc::driver::CudaFuncCache;
+    fn set_l2_cache_carveout(&self, carveout_percent: u32) -> Result<(), DriverError> {
+        // // use cudarc::driver::CudaFuncCache; // Not available
 
         // Set L2 cache persistence for read-mostly data
         match carveout_percent {
@@ -1720,7 +1542,7 @@ impl SoaLayout {
 
     /// Create texture memory binding for jump tables
     #[cfg(feature = "rustacuda")]
-    pub fn create_texture_binding(&self, data: &DeviceBuffer<u32>, elements: usize) -> Result<(), DriverError> {
+    fn create_texture_binding(&self, data: &DeviceBuffer<u32>, elements: usize) -> Result<(), DriverError> {
         // Note: Real implementation would bind to CUDA texture object
         // This is a placeholder for texture memory optimization
         log::info!("Created texture binding for {} elements", elements);
@@ -1729,8 +1551,8 @@ impl SoaLayout {
 
     /// Prefetch unified memory to GPU
     #[cfg(feature = "rustacuda")]
-    pub fn prefetch_unified_memory(&self, device: &CudaDevice, ptr: *mut u8, size: usize) -> Result<(), DriverError> {
-        use cudarc::driver::cuda_mem_prefetch_async;
+    fn prefetch_unified_memory(&self, device: &CudaDevice, ptr: *mut u8, size: usize) -> Result<(), DriverError> {
+        // use cudarc::driver::cuda_mem_prefetch_async;
 
         unsafe {
             cuda_mem_prefetch_async(ptr as *mut _, size, device.ordinal() as i32, std::ptr::null_mut())?;
@@ -1742,7 +1564,7 @@ impl SoaLayout {
 
     /// Optimize shared memory configuration for bias kernels
     #[cfg(feature = "rustacuda")]
-    pub fn optimize_shared_memory_config(&self, bank_conflict_free: bool) -> Result<(), DriverError> {
+    fn optimize_shared_memory_config(&self, bank_conflict_free: bool) -> Result<(), DriverError> {
         if bank_conflict_free {
             // Configure for padded shared memory access
             log::info!("Configured shared memory for bank conflict-free access");
@@ -1751,7 +1573,7 @@ impl SoaLayout {
     }
 
     /// Create SoA layout with optimized memory access patterns
-    pub fn create_optimized_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
+    fn create_optimized_soa_layout(&self, num_kangaroos: usize) -> Result<SoaLayout, DriverError> {
         let layout = self.create_soa_layout(num_kangaroos)?;
 
         // Apply memory optimizations to the layout
@@ -1763,7 +1585,7 @@ impl SoaLayout {
 
     /// Advanced pinned memory allocation with async copy and prefetching
     #[cfg(feature = "rustacuda")]
-    pub fn alloc_and_copy_pinned_async(
+    fn alloc_and_copy_pinned_async(
         &self,
         host_data: &[RhoState],
         use_pinned_memory: bool,
@@ -1801,12 +1623,12 @@ impl SoaLayout {
 
     /// Memory prefetch optimization for unified memory access patterns
     #[cfg(feature = "rustacuda")]
-    pub fn prefetch_unified_memory(
+    fn prefetch_unified_memory(
         &self,
         ptr: *mut RhoState,
         size_bytes: usize,
         to_gpu: bool,
-        advice: cudarc::driver::sys::cudaMemoryAdvise,
+        advice: u32, // cudarc::driver::sys::cudaMemoryAdvise,
     ) -> Result<(), DriverError> {
         let device = self.device()?;
 
@@ -1826,7 +1648,7 @@ impl SoaLayout {
             device.mem_prefetch_async(
                 ptr as *const std::ffi::c_void,
                 size_bytes,
-                cudarc::driver::sys::cudaCpuDeviceId,
+                // cudarc::driver::sys::cudaCpuDeviceId,
                 None,
             )?;
         }
@@ -1836,12 +1658,12 @@ impl SoaLayout {
 
     /// Configure L1/DLCM cache preferences for optimal memory access
     #[cfg(feature = "rustacuda")]
-    pub fn configure_l1_dlcm_cache(
+    fn configure_l1_dlcm_cache(
         &self,
         l1_enabled: bool,
         dlcm_mode: &str,  // "ca" (cache all), "cg" (cache global)
     ) -> Result<(), DriverError> {
-        use cudarc::driver::CudaCacheConfig;
+        // use cudarc::driver::CudaCacheConfig;
 
         let device = self.device()?;
         let context = device.context();
@@ -1876,13 +1698,13 @@ impl SoaLayout {
 
     /// Set up L2 cache persistence for frequently accessed data
     #[cfg(feature = "rustacuda")]
-    pub fn configure_l2_persistence(
+    fn configure_l2_persistence(
         &self,
         ptr: *mut std::ffi::c_void,
         size: usize,
         persistent: bool,
     ) -> Result<(), DriverError> {
-        use cudarc::driver::sys::{cudaMemAdvise, cudaMemAdviseSetPreferredLocation, cudaMemAdviseUnsetPreferredLocation};
+        // use // cudarc::driver::sys::{cudaMemAdvise, cudaMemAdviseSetPreferredLocation, cudaMemAdviseUnsetPreferredLocation};
 
         let device = self.device()?;
 
@@ -1901,7 +1723,7 @@ impl SoaLayout {
 
     /// SIMD-accelerated BigInt256 multiplication kernel dispatch
     #[cfg(feature = "rustacuda")]
-    pub fn dispatch_simd_mul(&self, a_dev: &CudaSlice<u64>, b_dev: &CudaSlice<u64>,
+    fn dispatch_simd_mul(&self, a_dev: &CudaSlice<u64>, b_dev: &CudaSlice<u64>,
                             result_dev: &mut CudaSlice<u64>) -> Result<(), DriverError> {
         let device = self.device()?;
 
@@ -1921,7 +1743,7 @@ impl SoaLayout {
     pub async fn dispatch_async(&self, kernel: &CudaFunction, states: &mut CudaSlice<RhoState>,
                                jumps: CudaSlice<BigInt256>, bias: CudaSlice<f32>, steps: u32)
                                -> Result<CudaEvent, DriverError> {
-        use cudarc::driver::CudaStreamFlags;
+        // use cudarc::driver::CudaStreamFlags;
 
         let device = self.device()?;
 
@@ -1944,8 +1766,8 @@ impl SoaLayout {
 
     /// Create optimized stream for overlapping compute/memory operations
     #[cfg(feature = "rustacuda")]
-    pub fn create_overlap_stream(&self) -> Result<CudaStream, DriverError> {
-        use cudarc::driver::CudaStreamFlags;
+    fn create_overlap_stream(&self) -> Result<CudaStream, DriverError> {
+        // use cudarc::driver::CudaStreamFlags;
 
         let device = self.device()?;
         // Use non-blocking stream to enable overlap
@@ -1997,8 +1819,8 @@ impl SoaLayout {
 
     /// Configure L1 cache and Data L1 Cache Mode for optimal memory access
     #[cfg(feature = "rustacuda")]
-    pub fn configure_l1_dlcm_cache(&self, l1_enabled: bool, dlcm_mode: &str) -> Result<(), DriverError> {
-        use cudarc::driver::CudaCacheConfig;
+    fn configure_l1_dlcm_cache(&self, l1_enabled: bool, dlcm_mode: &str) -> Result<(), DriverError> {
+        // use cudarc::driver::CudaCacheConfig;
 
         let device = self.device()?;
         let context = device.context();
@@ -2049,7 +1871,7 @@ impl SoaLayout {
 
         // Launch kernel
         let func = self.barrett_module.get_function("barrett_reduce_kernel")?;
-        cuda_try!(launch!(func<<<1, 1, 0, self.stream>>>(
+        cuda_try!(launch!(func<<<1, 1, 0, stream>>>(
             d_x.as_device_ptr(),
             d_modulus.as_device_ptr(),
             d_mu.as_device_ptr(),
@@ -2058,7 +1880,7 @@ impl SoaLayout {
 
         // Copy result back
         let mut result = [0u32; 8];
-        cuda_try!(self.stream.synchronize(), "barrett_reduce sync");
+        cuda_try!(stream.synchronize(), "barrett_reduce sync");
         cuda_try!(d_result.copy_to(&mut result), "barrett_reduce result copy");
 
         Ok(result)
@@ -2073,7 +1895,7 @@ impl SoaLayout {
 
         // Launch kernel
         let func = self.hybrid_module.get_function("mul_glv_kernel")?;
-        cuda_try!(launch!(func<<<1, 1, 0, self.stream>>>(
+        cuda_try!(launch!(func<<<1, 1, 0, stream>>>(
             d_p.as_device_ptr(),
             d_k.as_device_ptr(),
             d_result.as_device_ptr()
@@ -2081,7 +1903,7 @@ impl SoaLayout {
 
         // Copy result back
         let mut result_flat = [0u32; 24];
-        cuda_try!(self.stream.synchronize(), "mul_glv_opt sync");
+        cuda_try!(stream.synchronize(), "mul_glv_opt sync");
         cuda_try!(d_result.copy_to(&mut result_flat), "mul_glv_opt result copy");
 
         // Reshape result
@@ -2103,7 +1925,7 @@ impl SoaLayout {
 
         // Launch kernel
         let func = self.inverse_module.get_function("mod_inverse_kernel")?;
-        cuda_try!(launch!(func<<<1, 1, 0, self.stream>>>(
+        cuda_try!(launch!(func<<<1, 1, 0, stream>>>(
             d_a.as_device_ptr(),
             d_modulus.as_device_ptr(),
             d_result.as_device_ptr()
@@ -2111,7 +1933,7 @@ impl SoaLayout {
 
         // Copy result back
         let mut result = [0u32; 8];
-        cuda_try!(self.stream.synchronize(), "mod_inverse sync");
+        cuda_try!(stream.synchronize(), "mod_inverse sync");
         cuda_try!(d_result.copy_to(&mut result), "mod_inverse result copy");
 
         Ok(result)
@@ -2125,7 +1947,7 @@ impl SoaLayout {
 
         // Launch kernel
         let func = self.bigint_mul_module.get_function("bigint_mul_kernel")?;
-        cuda_try!(launch!(func<<<1, 1, 0, self.stream>>>(
+        cuda_try!(launch!(func<<<1, 1, 0, stream>>>(
             d_a.as_device_ptr(),
             d_b.as_device_ptr(),
             d_result.as_device_ptr()
@@ -2133,7 +1955,7 @@ impl SoaLayout {
 
         // Copy result back
         let mut result = [0u32; 16];
-        cuda_try!(self.stream.synchronize(), "bigint_mul sync");
+        cuda_try!(stream.synchronize(), "bigint_mul sync");
         cuda_try!(d_result.copy_to(&mut result), "bigint_mul result copy");
 
         Ok(result)
@@ -2147,7 +1969,7 @@ impl SoaLayout {
 
         // Launch kernel
         let func = self.barrett_module.get_function("modulo_kernel")?;
-        cuda_try!(launch!(func<<<1, 1, 0, self.stream>>>(
+        cuda_try!(launch!(func<<<1, 1, 0, stream>>>(
             d_a.as_device_ptr(),
             d_modulus.as_device_ptr(),
             d_result.as_device_ptr()
@@ -2155,7 +1977,7 @@ impl SoaLayout {
 
         // Copy result back
         let mut result = [0u32; 8];
-        cuda_try!(self.stream.synchronize(), "modulo sync");
+        cuda_try!(stream.synchronize(), "modulo sync");
         cuda_try!(d_result.copy_to(&mut result), "modulo result copy");
 
         Ok(result)

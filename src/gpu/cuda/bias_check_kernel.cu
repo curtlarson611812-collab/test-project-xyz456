@@ -1,4 +1,5 @@
 // Concise Block: CUDA Multi-Modulus Bias Check for Attractor Filter
+#include <stdint.h>
 __global__ void multi_bias_attractor_check(uint64_t* x_limbs, uint8_t* results, int batch_size, int num_moduli, uint64_t* moduli) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size) return;
