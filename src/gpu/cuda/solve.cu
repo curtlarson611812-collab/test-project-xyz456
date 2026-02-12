@@ -44,27 +44,19 @@ __constant__ uint64_t PRIME_MULTIPLIERS[10] = {
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29
 };
 
-// Forward declarations for functions from step.cu
-extern __device__ int bigint_cmp(const uint32_t* a, const uint32_t* b);
+// Forward declarations for functions from step.cu (only those not implemented locally)
 extern __device__ void bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res);
-extern __device__ void bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* res);
-extern __device__ void bigint_mul(const uint32_t* a, const uint32_t* b, uint32_t* res);
-extern __device__ void barrett_reduce_full(const uint32_t* x, const uint32_t* modulus, const uint32_t* mu, uint32_t* result);
-extern __device__ void bigint_mod(const uint32_t* a, const uint32_t* m, uint32_t* res);
-extern __device__ void mod_inverse(const uint32_t* a, const uint32_t* mod, uint32_t* res);
-extern __device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const uint32_t wild[LIMBS], const uint32_t n[LIMBS], uint32_t result[LIMBS]);
 extern __device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod);
-extern __device__ void point_sub(const Point* p1, const Point* p2, Point* result, const uint32_t* mod);
-extern __device__ Point mul_small(const Point* p, uint32_t scalar, const uint32_t* mod);
-extern __device__ void point_add_jacobian(const Point* p1, const Point* p2, Point* result, const uint32_t* mod);
-extern __device__ Point point_mul_small(const Point* p, uint32_t scalar, const uint32_t* mod);
-extern __device__ uint64_t mod_inverse_u64(uint64_t a, uint64_t mod);
-extern __device__ uint64_t factor_small_primes_u64(uint64_t val);
 extern __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]);
-extern __device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]);
 extern __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[WIDE_LIMBS]);
-extern __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t mod_[LIMBS], uint32_t n_prime, uint32_t result[LIMBS]);
-extern __device__ void bigint_wide_mul_par(const uint32_t a[WIDE_LIMBS], const uint32_t b[LIMBS+1], uint32_t result[WIDE_LIMBS + LIMBS + 1]);
+extern __device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]);
+extern __device__ Point jacobian_add(Point p1, Point p2);
+extern __device__ Point jacobian_double(Point p);
+extern __device__ Point ec_mul_small(Point p, uint32_t scalar);
+extern __device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* res, const uint32_t* mod);
+extern __device__ void glv_decompose_scalar(const uint32_t k[8], uint32_t k1[8], uint32_t k2[8], int8_t* sign1, int8_t* sign2);
+extern __device__ Point mul_glv_opt(Point p, const uint32_t k[8]);
+extern __device__ int point_equal(Point p1, Point p2);
 extern __device__ Point jacobian_add(Point p1, Point p2);
 extern __device__ Point jacobian_double(Point p);
 extern __device__ Point ec_mul_small(Point p, uint32_t scalar);
