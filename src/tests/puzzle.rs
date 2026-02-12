@@ -402,4 +402,131 @@ mod tests {
 
         println!("✅ GLV master multiplication correctness verified");
     }
+
+    /// Test professor-level GLV2 Babai decomposition
+    #[test]
+    fn test_glv2_babai_decomposition() {
+        let curve = Secp256k1::new();
+        let test_scalars = vec![
+            k256::Scalar::from(1u64),
+            k256::Scalar::from(123456789u64),
+            k256::Scalar::from_u128(9876543210987654321u128),
+        ];
+
+        for k in test_scalars {
+            let (k1, k2, sign1, sign2) = curve.glv2_decompose_babai(&k);
+
+            // Reconstruct: k should equal sign1*k1 + sign2*k2 * lambda mod n
+            let lambda = curve.glv_lambda_scalar();
+            let k2_lambda = k2 * lambda;
+
+            let mut reconstructed = if sign1 > 0 { k1 } else { -k1 };
+            let k2_term = if sign2 > 0 { k2_lambda } else { -k2_lambda };
+            reconstructed = reconstructed + k2_term;
+
+            // Should equal k mod n
+            let expected = k.reduce();
+            let reconstructed_reduced = reconstructed.reduce();
+
+            assert_eq!(reconstructed_reduced, expected,
+                "Babai GLV2 reconstruction failed for scalar {:?}", k);
+
+            // Check bounds: |k1|, |k2| <= sqrt(n)
+            let sqrt_n = curve.glv_sqrt_n_scalar();
+            assert!(k1 <= sqrt_n && k2 <= sqrt_n,
+                "Babai GLV2 bounds exceeded: k1={:?}, k2={:?}", k1, k2);
+        }
+
+        println!("✅ GLV2 Babai decomposition verified");
+    }
+
+    /// Test professor-level GLV4 Babai decomposition
+    #[test]
+    fn test_glv4_babai_decomposition() {
+        let curve = Secp256k1::new();
+        let test_scalars = vec![
+            k256::Scalar::from(42u64),
+            k256::Scalar::from(123456789u64),
+        ];
+
+        for k in test_scalars {
+            let (coeffs, signs) = curve.glv4_decompose_babai(&k);
+
+            // Reconstruct: k should equal sum(signs[i] * coeffs[i] * lambda^i) mod n
+            let lambda = curve.glv_lambda_scalar();
+            let mut reconstructed = k256::Scalar::ZERO;
+
+            let mut lambda_pow = k256::Scalar::ONE;
+            for i in 0..4 {
+                let term = if signs[i] > 0 { coeffs[i] } else { -coeffs[i] };
+                reconstructed = reconstructed + term * lambda_pow;
+                lambda_pow = lambda_pow * lambda;
+            }
+
+            // Should equal k mod n
+            let expected = k.reduce();
+            let reconstructed_reduced = reconstructed.reduce();
+
+            assert_eq!(reconstructed_reduced, expected,
+                "Babai GLV4 reconstruction failed for scalar {:?}", k);
+
+            // Check bounds: |coeffs[i]| <= n^{1/4}
+            let n_quarter = k256::Scalar::from_u64(1u64 << 64);
+            for &c in &coeffs {
+                assert!(c <= n_quarter, "GLV4 coefficient exceeds bounds: {:?}", c);
+            }
+        }
+
+        println!("✅ GLV4 Babai decomposition verified");
+    }
+
+    /// Test professor-level GLV4 multiplication
+    #[test]
+    fn test_glv4_babai_multiplication() {
+        let curve = Secp256k1::new();
+        let generator = k256::ProjectivePoint::GENERATOR;
+
+        let test_scalars = vec![
+            k256::Scalar::from(1u64),
+            k256::Scalar::from(42u64),
+        ];
+
+        for k in test_scalars {
+            let result_glv4 = curve.mul_glv4_opt_babai(&generator, &k);
+            let result_naive = generator * &k;
+
+            assert_eq!(result_glv4, result_naive,
+                "GLV4 Babai multiplication failed for scalar {:?}", k);
+        }
+
+        println!("✅ GLV4 Babai multiplication verified");
+    }
+
+    /// Test constant-time operations
+    #[test]
+    fn test_constant_time_operations() {
+        let curve = Secp256k1::new();
+        let generator = k256::ProjectivePoint::GENERATOR;
+        let k = k256::Scalar::from(12345u64);
+
+        // Test conditional negation
+        let p_pos = generator * &k;
+        let p_neg = curve.cond_neg_ct(&p_pos, 1);
+        let p_neg_expected = -p_pos;
+
+        assert_eq!(p_neg, p_neg_expected, "Constant-time negation failed");
+
+        // Test with cond=0 (should be unchanged)
+        let p_unchanged = curve.cond_neg_ct(&p_pos, 0);
+        assert_eq!(p_unchanged, p_pos, "Constant-time negation with cond=0 failed");
+
+        // Test short multiplication
+        let k_short = k256::Scalar::from(15u64);  // Small scalar
+        let result_ct = curve.mul_short_ct(&generator, &k_short);
+        let result_naive = generator * &k_short;
+
+        assert_eq!(result_ct, result_naive, "Constant-time short multiplication failed");
+
+        println!("✅ Constant-time operations verified");
+    }
 }
