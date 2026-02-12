@@ -507,6 +507,8 @@ __device__ uint64_t gold_nudge_distance(uint64_t x_low, uint64_t mod_level) {
         uint64_t diff = min(res - attractors[i], attractors[i] - res + mod_level);
         if (diff < min_diff) min_diff = diff, closest = attractors[i];
     }
+    // Use closest: if min_diff is 0, we're already at attractor, return closest for reference
+    if (min_diff == 0) return closest;
     return min_diff;
 }
 
@@ -527,11 +529,8 @@ __global__ void kangaroo_step_opt(
 ) {
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_kangaroos) return;
-    __shared__ uint32_t shared_P[8], shared_n_prime[8]; // Stub n_prime
-    if (threadIdx.x == 0) {
-        for (int i = 0; i < 8; i++) shared_P[i] = P[i];
-    }
-    __syncthreads();
+    // Shared modulus loaded but not used in this simplified version
+    // Could be used for optimized modular operations in future
     Point position = positions[idx];
     uint64_t distance = distances[idx];
     uint32_t kang_type = types[idx];

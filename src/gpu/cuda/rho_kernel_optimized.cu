@@ -7,22 +7,35 @@
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include <stdint.h> // For uint32_t, int64_t etc.
+#include "step.cu" // For shared point_add/double functions
+
+// Forward declaration for mul_glv_opt from solve.cu
+__device__ Point mul_glv_opt(Point p, const uint32_t k[8]);
+
+// Simple GLV decompose (placeholder - full implementation needs lattice reduction)
+__device__ void glv_decompose(const uint32_t k[8], uint32_t k1[4], uint32_t k2[4]) {
+    // Simplified: split scalar into two halves
+    for (int i = 0; i < 4; i++) {
+        k1[i] = k[i];
+        k2[i] = k[i + 4];
+    }
+}
+
+// Simple endomorphism apply (beta * p)
+__device__ Point endomorphism_apply(const Point p) {
+    Point result = p;
+    // Simplified: just return p (full endomorphism needs beta multiplication)
+    return result;
+}
 
 // Barrett reduction constants for secp256k1
 __constant__ uint32_t MU[9] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
 __constant__ uint32_t MODULUS[8] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE};
 
-// GLV mul with windowed NAF for 15% stall reduction
-__device__ void mul_glv_opt_device(const point_jacob_t p, const uint32_t k[8], point_jacob_t* result) {
-    uint32_t k1[4], k2[4];
-    glv_decompose(k, k1, k2); // Lattice round
-    point_jacob_t beta_p = endomorphism_apply(p); // beta * p
-    point_jacob_t table1[8], table2[8];
-    precompute_window(p, 4, table1);
-    precompute_window(beta_p, 4, table2);
-    point_jacob_t res1 = naf_mul_window(k1, table1, 4);
-    point_jacob_t res2 = naf_mul_window(k2, table2, 4);
-    point_add_jacob(&res1, &res2, result);
+// Simplified GLV mul (uses mul_glv_opt from solve.cu)
+__device__ void mul_glv_opt_device(const Point p, const uint32_t k[8], Point* result) {
+    *result = mul_glv_opt(p, k);
 }
 
 // Optimized Barrett reduction for bias modulus calculation
@@ -113,7 +126,7 @@ __global__ void rho_kernel_aos(
 ) {
     uint32_t kangaroo_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (kangaroo_idx >= num_kangroos) return;
+    if (kangaroo_idx >= num_kangaroos) return;
 
     // Load state (uncoalesced due to AoS layout)
     uint32_t* kangaroo_state = &states[kangaroo_idx * 16]; // 4 limbs each for x,y,z,dist

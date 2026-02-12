@@ -985,14 +985,14 @@ __global__ void solve_collisions(DpEntry* tames, DpEntry* wilds, Point* targets,
     DpEntry tame = tames[idx];
     DpEntry wild = wilds[idx];
     // Phase 4: Safe diffs
-    uint32_t diff_alpha[LIMBS];
+    uint32_t diff_alpha[LIMBS] = {0};
     cuda_safe_diff_mod_n(tame.alpha, wild.alpha, CURVE_ORDER, diff_alpha);
-    uint32_t diff_beta[LIMBS];
+    uint32_t diff_beta[LIMBS] = {0};
     cuda_safe_diff_mod_n(wild.beta, tame.beta, CURVE_ORDER, diff_beta);
     // Phase 7: Inv
-    uint32_t inv_beta[LIMBS];
+    uint32_t inv_beta[LIMBS] = {0};
     mod_inverse(diff_beta, CURVE_ORDER, inv_beta);
-    uint32_t k[WIDE_LIMBS];
+    uint32_t k[WIDE_LIMBS] = {0};
     bigint_mul(diff_alpha, inv_beta, k);
     bigint_mod(k, CURVE_ORDER, (uint32_t*)k);
     // Phase 8: Test multi targets
@@ -1008,7 +1008,7 @@ __global__ void solve_collisions(DpEntry* tames, DpEntry* wilds, Point* targets,
 __global__ void batch_scalar_mul(Point *results, uint32_t *scalars, int num_points, const uint32_t* mod) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_points) return;
-    uint32_t scalar_limbs[LIMBS];
+    uint32_t scalar_limbs[LIMBS] = {0};
     for (int i = 0; i < LIMBS; i++) scalar_limbs[i] = scalars[idx * LIMBS + i]; // Assume scalars as arrays
     Point g;
     for (int i = 0; i < LIMBS; i++) g.x[i] = GENERATOR_X[i], g.y[i] = GENERATOR_Y[i], g.z[i] = (i==0) ? 1 : 0;
