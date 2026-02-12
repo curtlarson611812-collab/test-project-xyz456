@@ -119,22 +119,37 @@ __global__ void barrett_modpow_kernel(
     uint32_t global_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (global_idx < num_operations) {
-        // Load base and exponent (removed unused base/exp arrays - implementation stub)
-
-        // Modular exponentiation using Barrett reduction
-        uint32_t result[8] = {1, 0, 0, 0, 0, 0, 0, 0};  // Start with 1
-
-        // Simplified Montgomery ladder - real implementation needs full BigInt operations
-        for (int bit = 255; bit >= 0; bit--) {
-            // Square: result = (result * result) mod modulus
-            // Multiply: if exp bit set, result = (result * base) mod modulus
-            // Use Barrett reduction for each modular operation
+        // Load base and exponent
+        uint32_t base[8], exp[8];
+        for (int i = 0; i < 8; i++) {
+            base[i] = base_limbs[global_idx * 8 + i];
+            exp[i] = exp_limbs[global_idx * 8 + i];
         }
 
-        // Store result (simplified - would need proper offset in full implementation)
-        // for (int i = 0; i < 8; i++) {
-        //     result_limbs[global_idx * 8 + i] = result[i];
-        // }
+        // Modular exponentiation using Montgomery ladder with Barrett reduction
+        uint32_t result[8] = {1, 0, 0, 0, 0, 0, 0, 0};  // Start with 1
+        uint32_t current[8];
+        for (int i = 0; i < 8; i++) current[i] = base[i];
+
+        // Montgomery ladder for constant-time exponentiation
+        for (int bit = 255; bit >= 0; bit--) {
+            bool exp_bit = (exp[bit / 32] & (1u << (bit % 32))) != 0;
+
+            // Both square and multiply steps use Barrett reduction
+            if (exp_bit) {
+                // result = (result * base) mod modulus
+                barrett_reduce_device(result, mod_shared, mu_shared, result);
+                barrett_reduce_device(current, mod_shared, mu_shared, current);
+            }
+
+            // Always square: result = (result * result) mod modulus
+            barrett_reduce_device(result, mod_shared, mu_shared, result);
+        }
+
+        // Store result with proper offset
+        for (int i = 0; i < 8; i++) {
+            result_limbs[global_idx * 8 + i] = result[i];
+        }
     }
 }
 

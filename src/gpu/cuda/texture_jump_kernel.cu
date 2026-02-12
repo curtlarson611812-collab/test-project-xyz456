@@ -75,12 +75,12 @@ __global__ void rho_kernel_texture_jumps(
             jump = mul_glv_opt(jump, small_k); // Scale jump
         }
 
-        // Apply jump to distance (simplified BigInt256 addition)
-        // Real implementation would use proper EC point addition
+        // Apply jump to distance (full BigInt256 addition)
+        // dist = dist + jump (mod 2^256 for distance tracking)
         uint32_t carry = 0;
-        for (int i = 0; i < 4; i++) {
-            uint64_t sum = (uint64_t)dist[i] + jump[i] + carry;
-            dist[i] = sum & 0xFFFFFFFF;
+        for (int i = 0; i < 8; i++) {
+            uint64_t sum = (uint64_t)dist[i] + (i < 4 ? jump[i] : 0) + carry;
+            dist[i] = sum & 0xFFFFFFFFULL;
             carry = sum >> 32;
         }
 
