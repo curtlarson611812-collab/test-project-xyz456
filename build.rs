@@ -166,13 +166,31 @@ fn compute_pubkey_biases(hex_str: &str) -> Result<(u8, u8, u8, u8, u32), Box<dyn
 
     Ok((mod3, mod9, mod27, mod81, hamming))
 }
-// Compile CUDA kernels using cc crate
+// Compile CUDA kernels using cc crate with enhanced debugging
 fn compile_cuda_kernels() {
+    println!("cargo:warning=Starting CUDA kernel compilation with enhanced debugging...");
+
     let cuda_path = std::env::var("CUDA_HOME").unwrap_or("/usr/local/cuda".to_string());
     println!("cargo:rustc-env=CUDA_HOME={}", cuda_path);
     println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
     println!("cargo:rustc-link-lib=cudart");
     println!("cargo:rustc-link-lib=cublas");
+
+    // Check if nvcc is available
+    let nvcc_path = format!("{}/bin/nvcc", cuda_path);
+    if !std::path::Path::new(&nvcc_path).exists() {
+        println!("cargo:warning=nvcc not found at {}, checking PATH...", nvcc_path);
+        if let Ok(output) = std::process::Command::new("which").arg("nvcc").output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                println!("cargo:warning=nvcc found in PATH: {}", path);
+            } else {
+                println!("cargo:warning=nvcc not found in PATH either!");
+            }
+        }
+    } else {
+        println!("cargo:warning=nvcc found at: {}", nvcc_path);
+    }
 
     let mut builder = cc::Build::new();
     builder.cuda(true)
@@ -181,12 +199,18 @@ fn compile_cuda_kernels() {
         .flag("-arch=sm_86") // Default RTX 3070; override via env
         .flag("-diag-suppress=63") // Existing shift warnings
         .flag("-diag-suppress=177") // Unused declarations
-        .flag("-diag-suppress=550"); // Unused variables/shared mem
+        .flag("-diag-suppress=550") // Unused variables/shared mem
+        .flag("-Xptxas") // Pass options to ptxas
+        .flag("-v") // Verbose PTXAS output
+        .flag("-Xcompiler=-Wall,-Wextra"); // Pass host compiler flags correctly
 
     // Allow override via environment variable
     if let Ok(arch) = env::var("GPU_ARCH") {
+        println!("cargo:warning=Using custom GPU arch: {}", arch);
         builder.flag(&format!("-arch={}", arch));
-    } // RTX 5090, suppress shift warnings
+    } else {
+        println!("cargo:warning=Using default GPU arch: sm_86");
+    }
 
     let cu_files = vec![
         "bigint_mul", "step", "solve", "rho_kernel_optimized", "barrett_kernel_optimized", "hybrid",
@@ -194,9 +218,31 @@ fn compile_cuda_kernels() {
         "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel"
     ];
 
-    for file in cu_files {
-        builder.file(format!("src/gpu/cuda/{}.cu", file));
+    println!("cargo:warning=Compiling {} CUDA files together:", cu_files.len());
+    for file in &cu_files {
+        let file_path = format!("src/gpu/cuda/{}.cu", file);
+        if std::path::Path::new(&file_path).exists() {
+            println!("cargo:warning=  - {}", file_path);
+            builder.file(&file_path);
+        } else {
+            println!("cargo:warning=  - {} (NOT FOUND!)", file_path);
+        }
     }
 
-    builder.compile("gpu_kernels");
+    println!("cargo:warning=Starting CUDA compilation...");
+    let start_time = std::time::Instant::now();
+
+    // Compile all files together (this allows cross-references)
+    match std::panic::catch_unwind(|| {
+        builder.compile("gpu_kernels");
+    }) {
+        Ok(_) => {
+            let elapsed = start_time.elapsed();
+            println!("cargo:warning=CUDA compilation completed successfully in {:.2}s", elapsed.as_secs_f64());
+        }
+        Err(e) => {
+            println!("cargo:warning=CUDA compilation failed: {:?}", e);
+            // Don't panic - let the build continue and show Rust compilation errors
+        }
+    }
 }
