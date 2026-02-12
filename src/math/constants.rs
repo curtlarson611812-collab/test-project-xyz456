@@ -2,7 +2,7 @@
 //!
 //! Contains cryptographic constants and prime arrays for kangaroo optimization.
 
-use crate::math::bigint::BigInt256;
+// use crate::math::bigint::BigInt256; // Already imported at top
 use crate::types::Point;
 use std::sync::LazyLock;
 
@@ -464,7 +464,7 @@ pub fn test_glv4_decomposition(k: &Scalar) -> bool {
 // LLL Lattice Reduction for GLV Basis Optimization
 // Lenstra-Lenstra-Lovasz algorithm for shorter, nearly orthogonal basis vectors
 
-use crate::math::bigint::BigInt256;
+// use crate::math::bigint::BigInt256; // Already imported at top
 
 const DIM: usize = 4; // Configurable via glv_dim
 

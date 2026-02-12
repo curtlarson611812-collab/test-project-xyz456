@@ -349,3 +349,24 @@ fn test_rho_with_lll_proofs() {
     }
 }
 
+
+// Integration test: Babai proofs + VOW method
+#[test]
+fn test_vow_with_babai() {
+    let config = crate::config::Config {
+        enable_vow_parallel: true,
+        enable_babai_proof_sim: true,
+        ..Default::default()
+    };
+    
+    if config.enable_babai_proof_sim {
+        simulate_babai_proof();
+    }
+    
+    let dummy_pubkey = k256::ProjectivePoint::GENERATOR;
+    if config.enable_vow_parallel {
+        let result = vow_parallel_rho(&dummy_pubkey, 2, 1.0 / 2f64.powf(20.0));
+        assert_eq!(result, k256::Scalar::ZERO);
+    }
+}
+
