@@ -295,10 +295,8 @@ impl fmt::Display for Point {
 pub struct KangarooState {
     /// Current position (point on curve)
     pub position: Point,
-    /// Distance traveled (steps) - now BigInt256 for full scalar range
-    pub distance: BigInt256,
-    /// Distance in wide format for Barrett reduction input
-    pub distance_wide: [u32; 16],
+    /// Distance traveled (steps) as uint32_t[8] to match CUDA
+    pub distance: [u32; 8],
     /// Alpha coefficient for collision solving
     pub alpha: [u64; 4],
     /// Beta coefficient for collision solving
@@ -311,6 +309,8 @@ pub struct KangarooState {
     pub id: u64,
     /// Current step count for initialization and checking
     pub step: u64,
+    /// Kangaroo type (0 = tame, 1 = wild) to match CUDA
+    pub kangaroo_type: u32,
 }
 
 /// Tagged kangaroo state for multi-target solving
@@ -328,17 +328,17 @@ pub struct TaggedKangarooState {
 
 impl KangarooState {
     /// Create new kangaroo state
-    pub fn new(position: Point, distance: BigInt256, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, id: u64) -> Self {
+    pub fn new(position: Point, distance: [u32; 8], alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, id: u64, step: u64, kangaroo_type: u32) -> Self {
         KangarooState {
             position,
             distance,
-            distance_wide: [0; 16],
             alpha,
             beta,
             is_tame,
             is_dp,
             id,
-            step: 0,
+            step,
+            kangaroo_type,
         }
     }
 }
@@ -347,14 +347,14 @@ impl Default for KangarooState {
     fn default() -> Self {
         KangarooState {
             position: Point::infinity(),
-            distance: BigInt256::zero(),
-            distance_wide: [0; 16],
+            distance: [0; 8],
             alpha: [0; 4],
             beta: [0; 4],
             is_tame: false,
             is_dp: false,
             id: 0,
             step: 0,
+            kangaroo_type: 1, // Default to wild
         }
     }
 }
