@@ -7,6 +7,7 @@
 
 #define KANGS_PER_TARGET 4096
 #define DEBUG 1
+#define LIMBS 8
 
 // Point structure for elliptic curve points (Jacobian coordinates)
 struct Point {
@@ -571,6 +572,62 @@ __device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod) {
     bigint_sub(mod, p->y, neg->y);
 }
 
+
+// Approximate big integer division for CUDA (a / b -> result)
+__device__ void bigint_div_approx(const uint32_t a[16], const uint32_t b[16], uint32_t result[8]) {
+    // Simple approximation: a / b ≈ a_high / b_high for large numbers
+    // For Babai, we need integer division, so implement bit-by-bit
+    for (int i = 0; i < 8; i++) result[i] = 0;
+
+    uint32_t dividend[17] = {0};
+    for (int i = 0; i < 16; i++) dividend[i] = a[i];
+
+    // Find leading bit
+    int leading_bit = 0;
+    for (int i = 16; i >= 0; i--) {
+        if (dividend[i] != 0) {
+            leading_bit = i * 32 + 31 - __clz(dividend[i]);
+            break;
+        }
+    }
+
+    // Bit-by-bit division
+    for (int bit = leading_bit - 1; bit >= 0; bit--) {
+        // Shift dividend left by 1
+        uint32_t carry = 0;
+        for (int i = 0; i < 17; i++) {
+            uint32_t next_carry = dividend[i] >> 31;
+            dividend[i] = (dividend[i] << 1) | carry;
+            carry = next_carry;
+        }
+
+        // If dividend >= divisor, subtract and set bit
+        // Use simple comparison for approximation
+        bool greater_equal = true;
+        for (int i = 16; i >= 0; i--) {
+            if (dividend[i] > b[i]) break;
+            if (dividend[i] < b[i]) {
+                greater_equal = false;
+                break;
+            }
+        }
+
+        if (greater_equal) {
+            // Simple subtraction approximation
+            for (int i = 0; i < 16; i++) {
+                if (dividend[i] >= b[i]) {
+                    dividend[i] -= b[i];
+                }
+            }
+            int word_idx = bit / 32;
+            int bit_idx = bit % 32;
+            if (word_idx < 8) {
+                result[word_idx] |= (1u << bit_idx);
+            }
+        }
+    }
+}
+
 // CUDA Gram-Schmidt orthogonalization for 4D
 __device__ void gram_schmidt_4d_cuda(const uint32_t v[4][8], uint32_t gs[4][8]) {
     // Copy first vector
@@ -601,14 +658,6 @@ __device__ void gram_schmidt_4d_cuda(const uint32_t v[4][8], uint32_t gs[4][8]) 
     }
 }
 
-// Approximate big integer division for CUDA
-__device__ void bigint_div_approx(const uint32_t a[16], const uint32_t b[16], uint32_t result[8]) {
-    // Simplified division for approximation - shift right by 256 bits
-    #pragma unroll
-    for (int i = 0; i < 8; i++) {
-        result[i] = a[i + 8];  // Take high 256 bits
-    }
-}
 
 // Professor-level GLV4 decompose with 4D Babai's algorithm
 __device__ void glv4_decompose_babai(const uint32_t k[8], uint32_t coeffs[4][8], int8_t signs[4]) {
@@ -647,7 +696,7 @@ __device__ void glv4_decompose_babai(const uint32_t k[8], uint32_t coeffs[4][8],
         bigint_div_approx(dot, norm_sq, projection);
 
         // Round to nearest integer
-        bigint_add_u32(projection, 1 << 31, projection); // Add 0.5
+        bigint_add_u32(projection, 1u << 31, projection); // Add 0.5
         // Shift right by 256 (approximate)
 
         // Store coefficient
@@ -673,7 +722,7 @@ __device__ void glv4_decompose_babai(const uint32_t k[8], uint32_t coeffs[4][8],
             uint32_t projection[8];
             bigint_div_approx(dot, norm_sq, projection);
 
-            bigint_add_u32(projection, 1 << 31, projection);
+            bigint_add_u32(projection, 1u << 31, projection);
 
             for (int j = 0; j < 8; j++) temp_coeffs[dim][j] = projection[j];
 
@@ -691,10 +740,10 @@ __device__ void glv4_decompose_babai(const uint32_t k[8], uint32_t coeffs[4][8],
     #pragma unroll
     for (int combo = 0; combo < 16; combo++) {
         int8_t combo_signs[4] = {
-            (combo & 1) ? -1 : 1,
-            (combo & 2) ? -1 : 1,
-            (combo & 4) ? -1 : 1,
-            (combo & 8) ? -1 : 1,
+            (int8_t)((combo & 1) ? -1 : 1),
+            (int8_t)((combo & 2) ? -1 : 1),
+            (int8_t)((combo & 4) ? -1 : 1),
+            (int8_t)((combo & 8) ? -1 : 1),
         };
 
         uint32_t signed_coeffs[4][8];
@@ -818,45 +867,6 @@ __device__ void multi_babai_glv4(const uint32_t t[32], uint32_t c[32], const uin
                 current_mu[i] = temp_mu[i];
             }
         }
-    }
-}
-
-// CUDA Gram-Schmidt orthogonalization for 4D
-__device__ void gram_schmidt_4d_cuda(const uint32_t v[4][8], uint32_t gs[4][8]) {
-    // Copy first vector
-    #pragma unroll
-    for (int j = 0; j < 8; j++) gs[0][j] = v[0][j];
-
-    // Orthogonalize remaining vectors
-    #pragma unroll
-    for (int i = 1; i < 4; i++) {
-        // Start with v[i]
-        #pragma unroll
-        for (int j = 0; j < 8; j++) gs[i][j] = v[i][j];
-
-        // Subtract projections onto previous vectors
-        #pragma unroll
-        for (int k = 0; k < i; k++) {
-            // mu = <v[i], gs[k]> / ||gs[k]||^2
-            uint32_t dot[16], norm_sq[16], mu[8];
-            bigint_mul_par(v[i], gs[k], dot);
-            bigint_mul_par(gs[k], gs[k], norm_sq);
-            bigint_div_approx(dot, norm_sq, mu);
-
-            // Subtract mu * gs[k]
-            uint32_t mu_gs[16];
-            bigint_mul_par(mu, gs[k], mu_gs);
-            bigint_sub_par(gs[i], mu_gs, gs[i]);
-        }
-    }
-}
-
-// Approximate big integer division for CUDA
-__device__ void bigint_div_approx(const uint32_t a[16], const uint32_t b[16], uint32_t result[8]) {
-    // Simplified division for approximation - shift right by 256 bits
-    #pragma unroll
-    for (int i = 0; i < 8; i++) {
-        result[i] = a[i + 8];  // Take high 256 bits
     }
 }
 
@@ -993,6 +1003,9 @@ __device__ Point mul_glv_opt(Point p, const uint32_t k[8]) {
     return jacobian_add(p1, p2);
 }
 
+// Forward declaration for endomorphism_apply
+__device__ void endomorphism_apply(const Point* p, Point* result);
+
 // Professor-level GLV4 optimized multiplication with Babai
 __device__ Point mul_glv4_opt_babai(Point p, const uint32_t k[8]) {
     uint32_t coeffs[4][8];
@@ -1057,7 +1070,7 @@ __device__ void ct_naf_cuda(const uint32_t k[8], uint8_t naf[256], int window) {
         int center = 1 << window;
         int digit = 0;
         if (window_bits >= center) {
-            digit = (window_bits as int) - 2 * center;
+            digit = (int)(window_bits) - 2 * center;
         }
 
         naf[i] = digit;
@@ -1200,6 +1213,31 @@ static __device__ uint64_t gold_nudge_distance(uint64_t x_low, uint64_t mod_leve
     return min_diff;
 }
 
+// Forward declarations for CUDA functions
+__device__ void gram_schmidt_4d_cuda(const uint32_t v[4][8], uint32_t gs[4][8]);
+__device__ void bigint_div_approx(const uint32_t a[16], const uint32_t b[16], uint32_t result[8]);
+__device__ void ct_naf_cuda(const uint32_t k[8], uint8_t naf[256], int window);
+__device__ void endomorphism_apply(const Point* p, Point* result) {
+    // Endomorphism phi: (x, y) -> (beta * x, beta^3 * y) in affine
+    // In Jacobian: x' = beta^2 * x, y' = beta^3 * y, z' = z
+
+    uint32_t temp[LIMBS];
+
+    // beta^2 * x
+    mul_mod(p->x, GLV_BETA_LIMBS, temp, P);
+    mul_mod(temp, GLV_BETA_LIMBS, result->x, P);
+
+    // beta^3 * y = beta^2 * (beta * y)
+    mul_mod(p->y, GLV_BETA_LIMBS, temp, P);
+    mul_mod(temp, GLV_BETA_LIMBS, temp, P);
+    mul_mod(temp, GLV_BETA_LIMBS, result->y, P);
+
+    // z unchanged
+    for (int i = 0; i < LIMBS; i++) {
+        result->z[i] = p->z[i];
+    }
+}
+
 // Professor-level multi-round Babai for GLV4 with alternating directions
 __device__ void multi_round_babai_glv4(const uint32_t t[32], uint32_t c[32], const uint32_t basis[128], const uint32_t gs[128], const uint32_t mu[128], int rounds) {
     // Multi-round Babai with alternating directions for tighter approximation
@@ -1292,106 +1330,6 @@ __device__ void multi_round_babai_glv4(const uint32_t t[32], uint32_t c[32], con
                 current_mu[i] = temp_mu[i];
             }
         }
-    }
-}
-
-// Professor-level constant-time NAF recoding
-__device__ void ct_naf_cuda(const uint32_t k[8], uint8_t naf[256], int window) {
-    // Fixed-length processing with constant-time operations
-    uint32_t k_bits[32]; // 256 bits expanded to 32-bit words
-
-    // Extract bits from k (constant-time)
-    #pragma unroll
-    for (int byte = 0; byte < 32; byte++) {
-        int k_byte_idx = byte / 4;
-        int bit_offset = (byte % 4) * 8;
-        if (k_byte_idx < 8) {
-            k_bits[byte] = (k[k_byte_idx] >> bit_offset) & 0xFF;
-        } else {
-            k_bits[byte] = 0; // Padding
-        }
-    }
-
-    #pragma unroll
-    for (int i = 0; i < 256; i++) {
-        int8_t digit = 0;
-        int window_sum = 0;
-
-        // Extract window bits (constant-time)
-        #pragma unroll
-        for (int b = 0; b <= window; b++) {
-            int bit_pos = i + b;
-            if (bit_pos < 256) {
-                int byte_idx = bit_pos / 8;
-                int bit_idx = bit_pos % 8;
-                int bit = (k_bits[byte_idx] >> bit_idx) & 1;
-                window_sum |= bit << b;
-            }
-        }
-
-        // Compute NAF digit (constant-time adjustment)
-        int center = 1 << window;
-        if (window_sum >= center) {
-            digit = (window_sum - 2 * center) as int8_t;
-            // Constant-time subtraction from k_bits (not implemented for brevity)
-        }
-
-        naf[i] = digit;
-    }
-}
-
-// Professor-level constant-time table selection
-__device__ Point ct_table_select_cuda(const Point table[16], uint32_t idx) {
-    Point result = {0}; // Identity
-
-    // Unroll constant-time selection
-    #pragma unroll
-    for (int i = 0; i < 16; i++) {
-        uint32_t eq_mask = - (i == idx); // -1 if equal, 0 otherwise
-        #pragma unroll
-        for (int l = 0; l < 8; l++) {
-            result.x[l] |= eq_mask & table[i].x[l];
-            result.y[l] |= eq_mask & table[i].y[l];
-            result.z[l] |= eq_mask & table[i].z[l];
-        }
-    }
-
-    return result;
-}
-
-// Professor-level constant-time combo selection for GLV4
-__device__ void ct_combo_select_glv4_cuda(
-    const uint32_t combos[16][32], // 16 combos × 4 coeffs × 8 limbs
-    const int8_t signs[16][4],
-    const uint32_t norms[16],
-    uint32_t result_coeffs[32],
-    int8_t result_signs[4]
-) {
-    // Constant-time tournament selection
-    uint32_t best_idx = 0;
-    uint32_t min_norm = norms[0];
-
-    #pragma unroll
-    for (int combo = 1; combo < 16; combo++) {
-        uint32_t current_norm = norms[combo];
-        uint32_t is_better = (current_norm < min_norm) ? 1 : 0;
-        uint32_t update_mask = -is_better; // -1 or 0
-
-        // Update min_norm
-        min_norm = (min_norm & ~update_mask) | (current_norm & update_mask);
-
-        // Update best_idx
-        best_idx = (best_idx & ~update_mask) | (combo & update_mask);
-    }
-
-    // Copy best combo results
-    #pragma unroll
-    for (int i = 0; i < 32; i++) {
-        result_coeffs[i] = combos[best_idx][i];
-    }
-    #pragma unroll
-    for (int i = 0; i < 4; i++) {
-        result_signs[i] = signs[best_idx][i];
     }
 }
 
