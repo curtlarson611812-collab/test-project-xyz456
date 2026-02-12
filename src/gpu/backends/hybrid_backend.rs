@@ -4,9 +4,9 @@
 
 use super::backend_trait::GpuBackend;
 use super::cpu_backend::CpuBackend;
-use crate::types::{RhoState, DpEntry};
+use crate::types::{RhoState, DpEntry, KangarooState};
 use crate::kangaroo::collision::Trap;
-use crate::config::GpuConfig;
+use crate::config::{GpuConfig, Config};
 use crate::math::bigint::BigInt256;
 use crate::utils::logging;
 use anyhow::Result;
@@ -148,6 +148,56 @@ impl HybridBackend {
         let cpu_hr = (test_steps as f64 * test_states.len() as f64) / cpu_time;
 
         (gpu_hr, cpu_hr)
+    }
+
+    // Hybrid kangaroo herd stepping with Vulkan/CUDA overlap
+    // Dispatches bulk steps to Vulkan, precision ops to CUDA
+    pub async fn hybrid_step_herd(
+        &self,
+        herd: &mut [KangarooState],
+        jumps: &[BigInt256],
+        config: &Config,
+    ) -> Result<()> {
+        // Split herd between Vulkan (bulk) and CUDA (precision)
+        let (vulkan_batch, cuda_batch) = self.split_herd_for_hybrid(herd);
+        
+        // Launch Vulkan bulk stepping (async)
+        #[cfg(feature = "wgpu")]
+        let vulkan_fut = async {
+            if !vulkan_batch.is_empty() {
+                self.vulkan.step_batch(vulkan_batch, jumps, config).await
+            } else {
+                Ok(())
+            }
+        };
+        
+        #[cfg(not(feature = "wgpu"))]
+        let vulkan_fut = async { Ok(()) };
+        
+        // Launch CUDA precision operations (collisions, solves)
+        #[cfg(feature = "rustacuda")]
+        let cuda_fut = async {
+            if !cuda_batch.is_empty() {
+                self.cuda.step_batch(cuda_batch, jumps, config).await
+            } else {
+                Ok(())
+            }
+        };
+        
+        #[cfg(not(feature = "rustacuda"))]
+        let cuda_fut = async { Ok(()) };
+        
+        // Overlap execution (Vulkan steps while CUDA solves)
+        tokio::try_join!(vulkan_fut, cuda_fut)?;
+        
+        Ok(())
+    }
+
+    // Split herd for optimal hybrid dispatch
+    fn split_herd_for_hybrid(&self, herd: &[KangarooState]) -> (&[KangarooState], &[KangarooState]) {
+        // Simple 50-50 split; in practice, profile and split by workload
+        let mid = herd.len() / 2;
+        herd.split_at(mid)
     }
 
     // Chunk: Adjust Frac on Metrics (src/gpu/backends/hybrid_backend.rs)

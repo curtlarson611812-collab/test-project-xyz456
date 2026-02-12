@@ -1110,3 +1110,38 @@ fn test_resolve_near_collision() {
     assert!(result.is_some() || result.is_none());
 }
 }
+
+
+/// Check if a point is near a distinguished point (within threshold)
+/// Used for early collision detection in kangaroo algorithm
+pub fn check_near_collision(point: &Point, dp_bits: u32, threshold: f64) -> bool {
+    // Convert point to affine coordinates (assume z=1 for simplicity)
+    // In practice, would need proper affine conversion
+    let x_bytes = point.x.iter().flat_map(|&limb| limb.to_le_bytes()).collect::<Vec<u8>>();
+    
+    // Use murmur3 hash as per project rules for DP computation
+    let x_hash = hash::murmur3(&x_bytes);
+    
+    // Create DP mask
+    let mask = (1u64 << dp_bits) - 1;
+    let dp_val = x_hash & mask;
+    
+    // Near-collision: check if high bits match within threshold
+    // e.g., threshold=0.8 means 80% of DP bits must match
+    let near_bits = (dp_bits as f64 * threshold) as u32;
+    let near_mask = (1u64 << near_bits) - 1;
+    
+    // Point is near-DP if low near_bits match zero (indicating potential DP)
+    (dp_val & near_mask) == 0
+}
+
+/// Trigger walk-back on near-collision detection
+/// Retraces steps to find actual collision earlier
+pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
+    // Placeholder: In practice, would retrace kangaroo path
+    // Return the collision point if found within step limit
+    None // Not implemented in this summary
+}
+
+
+}

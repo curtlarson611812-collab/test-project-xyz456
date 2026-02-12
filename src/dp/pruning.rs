@@ -7,6 +7,7 @@ use crate::math::bigint::BigInt256;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use anyhow::Result;
+use rayon::prelude::*;
 
 /// DP table pruning manager
 pub struct DpPruning {

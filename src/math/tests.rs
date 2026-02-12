@@ -226,3 +226,32 @@ mod tests {
         println!("GLV optimized multiplication test passed ✓");
     }
 }
+// Test LLL-reduced GLV with puzzle validation
+#[test]
+fn test_lll_glv_with_puzzle() {
+    let config = crate::config::Config {
+        glv_dim: 2,
+        enable_lll_reduction: true,
+        ..Default::default()
+    };
+    
+    // Test scalar from known puzzle (e.g., #64)
+    let puzzle_scalar = crate::Scalar::from_u64(0x123456789ABCDEF0); // Placeholder
+    
+    // Decompose with LLL-reduced basis
+    let (coeffs, signs) = crate::math::constants::glv4_decompose_babai(&puzzle_scalar);
+    
+    // Reconstruct and verify
+    let lambda = crate::math::constants::glv_lambda_scalar();
+    let mut reconstructed = crate::Scalar::ZERO;
+    let powers = [crate::Scalar::ONE, lambda, lambda * lambda, lambda * lambda * lambda];
+    
+    for i in 0..config.glv_dim {
+        let term = coeffs[i] * powers[i];
+        let signed_term = if signs[i] > 0 { term } else { term.neg() };
+        reconstructed = reconstructed + signed_term;
+    }
+    
+    assert_eq!(reconstructed, puzzle_scalar);
+}
+

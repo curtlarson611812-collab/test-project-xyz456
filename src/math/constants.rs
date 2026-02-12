@@ -278,6 +278,35 @@ fn div_round(a: &BigInt256, b: &BigInt256) -> BigInt256 {
 }
 
 /// Absolute value for BigInt256 (since BigInt256 is unsigned, this just returns the value)
+// LLL Helper Functions
+
+// Compute Gram-Schmidt mu_ij = <bi, b*j> / ||b*j||^2 (rational approximation with rounding)
+fn compute_mu(basis: &[[BigInt256; DIM]; DIM], i: usize, j: usize, b_star: &[[BigInt256; DIM]; DIM]) -> BigInt256 {
+    div_round(&dot(&basis[i], &b_star[j]), &dot(&b_star[j], &b_star[j]))
+}
+
+// Norm squared for Lovasz condition checking
+fn norm_squared(vec: &[BigInt256; DIM]) -> BigInt256 {
+    dot(vec, vec)
+}
+
+// Size reduction: Make mu_ij close to zero by subtracting integer multiple
+fn size_reduce(basis: &mut [[BigInt256; DIM]; DIM], i: usize, j: usize, mu: &mut [[BigInt256; DIM]; DIM], b_star: &mut [[BigInt256; DIM]; DIM]) {
+    let mu_val = compute_mu(basis, i, j, b_star);
+    if mu_val.abs() > BigInt256::from_u64(1) / BigInt256::from_u64(2) {
+        let r = mu_val.round_to_int();
+        for d in 0..DIM {
+            basis[i][d] = basis[i][d] - r * basis[j][d];
+        }
+        // Update mu and b_star for affected vectors
+        for k in (j+1)..DIM {
+            if k <= i {
+                mu[i][j] = compute_mu(basis, i, j, b_star);
+            }
+        }
+    }
+}
+
 fn bigint_abs(x: &BigInt256) -> BigInt256 {
     // BigInt256 is unsigned, so abs is just the value itself
     x.clone()
@@ -432,6 +461,59 @@ pub fn test_glv4_decomposition(k: &Scalar) -> bool {
 }
 
 // Helper trait for Scalar to reduce mod n
+// LLL Lattice Reduction for GLV Basis Optimization
+// Lenstra-Lenstra-Lovasz algorithm for shorter, nearly orthogonal basis vectors
+
+use crate::math::bigint::BigInt256;
+
+const DIM: usize = 4; // Configurable via glv_dim
+
+// LLL reduction delta parameter (Lovasz condition)
+static LLL_DELTA: Lazy<BigInt256> = Lazy::new(|| {
+    BigInt256::from_u64(3) / BigInt256::from_u64(4) // 3/4 for standard LLL
+});
+
+// Core LLL Reduction Algorithm
+// Lenstra-Lenstra-Lovasz polynomial-time lattice reduction
+pub fn lll_reduce(basis: &mut [[BigInt256; DIM]; DIM], delta: &BigInt256) {
+    let mut b_star = [[BigInt256::zero(); DIM]; DIM];
+    let mut mu = [[BigInt256::zero(); DIM]; DIM];
+    
+    // Initialize Gram-Schmidt
+    b_star[0] = basis[0];
+    
+    let mut k = 1;
+    while k < DIM {
+        // Size reduction: Make all mu_kj < 1/2 for j < k
+        for j in (0..k).rev() {
+            size_reduce(basis, k, j, &mut mu, &mut b_star);
+        }
+        
+        // Recompute Gram-Schmidt orthogonalization for vector k
+        b_star[k] = basis[k];
+        for j in 0..k {
+            mu[k][j] = compute_mu(basis, k, j, &b_star);
+            for d in 0..DIM {
+                b_star[k][d] = b_star[k][d] - mu[k][j] * b_star[j][d];
+            }
+        }
+        
+        // Lovasz condition: ||b*_k||^2 >= (delta - mu_{k,k-1}^2) * ||b*_{k-1}||^2
+        let lovasz_lhs = norm_squared(&b_star[k]);
+        let mu_sq = if k > 0 { mu[k][k-1] * mu[k][k-1] } else { BigInt256::zero() };
+        let lovasz_rhs = (*delta - mu_sq) * norm_squared(&b_star[k-1]);
+        
+        if lovasz_lhs >= lovasz_rhs {
+            // Condition satisfied, move to next vector
+            k += 1;
+        } else {
+            // Condition failed, swap vectors k and k-1, restart from k-1
+            basis.swap(k, k-1);
+            k = k.saturating_sub(1);
+        }
+    }
+}
+
 trait ScalarExt {
     fn reduce_mod_n(&self, n: &Scalar) -> Scalar;
 }
