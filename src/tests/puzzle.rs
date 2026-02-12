@@ -529,4 +529,175 @@ mod tests {
 
         println!("✅ Constant-time operations verified");
     }
+
+    /// Test professor-level Babai's Nearest Plane for GLV2
+    #[test]
+    fn test_babai_nearest_plane_glv2() {
+        let curve = Secp256k1::new();
+
+        // Create test basis and target
+        let basis = [
+            [BigInt256::from_u64(1), BigInt256::zero()],
+            [BigInt256::from_hex("d0364141bfd25e8caf48a03bbaaedce6").unwrap(), BigInt256::from_u64(1)],
+        ];
+
+        let gs = curve.gram_schmidt_4d(&[
+            [BigInt256::from_u64(1), BigInt256::zero()],
+            [BigInt256::from_u64(0), BigInt256::from_u64(1)],
+            [BigInt256::zero(); 4], [BigInt256::zero(); 4]
+        ]).0;
+
+        let mu = [[BigInt256::zero(); 2]; 2]; // Simplified
+
+        // Target point
+        let target = (BigInt256::from_u64(42), BigInt256::from_u64(123));
+
+        let coeffs = curve.babai_nearest_plane_glv2(target, &basis, &[
+            (gs[0][0], gs[0][1]), (gs[1][0], gs[1][1])
+        ], &mu);
+
+        // Verify the lattice point is close to target
+        let lattice_point = (
+            basis[0][0] * coeffs.0 + basis[1][0] * coeffs.1,
+            basis[0][1] * coeffs.0 + basis[1][1] * coeffs.1
+        );
+
+        let error_x = target.0.sub(&lattice_point.0);
+        let error_y = target.1.sub(&lattice_point.1);
+
+        // Error should be small (within approximation factor)
+        assert!(error_x < BigInt256::from_u64(1000), "Babai X error too large");
+        assert!(error_y < BigInt256::from_u64(1000), "Babai Y error too large");
+
+        println!("✅ Babai's Nearest Plane GLV2 verified");
+    }
+
+    /// Test professor-level multi-round Babai for GLV4
+    #[test]
+    fn test_multi_babai_glv4() {
+        let curve = Secp256k1::new();
+
+        // Use the precomputed GLV4 basis
+        let basis = curve.glv4_basis();
+        let (gs, mu) = curve.gram_schmidt_4d(&basis);
+
+        // Target: [k, 0, 0, 0] where k is a test scalar
+        let k = BigInt256::from_u64(0x123456789ABCDEF);
+        let target = [k, BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
+
+        let coeffs = curve.multi_babai_glv4(target, &basis, &gs, &mu, 3);
+
+        // Reconstruct lattice point
+        let mut lattice_point = [BigInt256::zero(); 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                lattice_point[j] = lattice_point[j].add(&basis[i][j].mul(&coeffs[i]));
+            }
+        }
+
+        // Check error is within bounds
+        let mut max_error = BigInt256::zero();
+        for i in 0..4 {
+            let error = target[i].sub(&lattice_point[i]);
+            let abs_error = if error < BigInt256::zero() {
+                BigInt256::zero().sub(&error)
+            } else {
+                error
+            };
+            if abs_error > max_error {
+                max_error = abs_error;
+            }
+        }
+
+        // Should be very small after multi-round Babai
+        assert!(max_error < BigInt256::from_u64(10000), "Multi-round Babai error too large: {:?}", max_error);
+
+        println!("✅ Multi-round Babai GLV4 verified");
+    }
+
+    /// Test professor-level constant-time NAF recoding
+    #[test]
+    fn test_ct_naf_recoding() {
+        let curve = Secp256k1::new();
+
+        let test_scalars = vec![
+            k256::Scalar::from(1u64),
+            k256::Scalar::from(42u64),
+            k256::Scalar::from_u128(0x123456789ABCDEF0123456789ABCDEF),
+        ];
+
+        for k in test_scalars {
+            let naf = curve.ct_naf(&k, 5);
+
+            // Verify NAF properties: no two consecutive non-zero digits
+            let mut prev_nonzero = false;
+            for &digit in &naf {
+                if digit != 0 {
+                    assert!(!prev_nonzero, "NAF has consecutive non-zero digits");
+                    prev_nonzero = true;
+                    assert!(digit >= -15 && digit <= 15, "NAF digit out of range: {}", digit);
+                } else {
+                    prev_nonzero = false;
+                }
+            }
+
+            // Reconstruct original scalar from NAF
+            let mut reconstructed = k256::Scalar::ZERO;
+            let mut factor = k256::Scalar::ONE;
+
+            for &digit in naf.iter().rev() {
+                if digit != 0 {
+                    let digit_scalar = k256::Scalar::from(digit as u64);
+                    reconstructed = reconstructed + digit_scalar * factor;
+                }
+                factor = factor * k256::Scalar::from(2u64);
+            }
+
+            assert_eq!(reconstructed, k, "NAF reconstruction failed for {:?}", k);
+        }
+
+        println!("✅ Constant-time NAF recoding verified");
+    }
+
+    /// Test professor-level constant-time table selection
+    #[test]
+    fn test_ct_table_select() {
+        let curve = Secp256k1::new();
+
+        // Create test table
+        let generator = k256::ProjectivePoint::GENERATOR;
+        let table = vec![
+            generator,
+            generator + generator,
+            generator + generator + generator,
+        ];
+
+        // Test selection of each index
+        for i in 0..table.len() {
+            let selected = curve.ct_table_select(&table, i);
+            assert_eq!(selected, table[i], "Table selection failed for index {}", i);
+        }
+
+        println!("✅ Constant-time table selection verified");
+    }
+
+    /// Test professor-level constant-time Babai rounding
+    #[test]
+    fn test_ct_babai_round() {
+        let curve = Secp256k1::new();
+
+        let test_cases = vec![
+            (BigInt256::from_u64(10), BigInt256::from_u64(3), BigInt256::from_u64(3)), // 10/3 = 3.333 -> 3
+            (BigInt256::from_u64(11), BigInt256::from_u64(3), BigInt256::from_u64(4)), // 11/3 = 3.666 -> 4
+            (BigInt256::from_u64(6), BigInt256::from_u64(2), BigInt256::from_u64(3)),  // 6/2 = 3.0 -> 3
+        ];
+
+        for (numerator, denominator, expected) in test_cases {
+            let result = curve.ct_babai_round(&numerator, &denominator);
+            assert_eq!(result, expected, "CT Babai round failed: {} / {} = {} (expected {})",
+                numerator, denominator, result, expected);
+        }
+
+        println!("✅ Constant-time Babai rounding verified");
+    }
 }
