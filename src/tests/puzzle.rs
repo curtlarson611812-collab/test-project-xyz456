@@ -700,4 +700,146 @@ mod tests {
 
         println!("✅ Constant-time Babai rounding verified");
     }
+
+    /// Test professor-level multi-round Babai GLV4
+    #[test]
+    fn test_multi_round_babai_glv4() {
+        let curve = Secp256k1::new();
+
+        // Use the precomputed GLV4 basis
+        let basis = curve.glv4_basis();
+        let (gs, mu) = curve.gram_schmidt_4d(&basis);
+
+        // Target: [k, 0, 0, 0] where k is a test scalar
+        let k = BigInt256::from_u64(0x123456789ABCDEF);
+        let target = [k, BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
+
+        let coeffs = curve.multi_round_babai_glv4(target, &basis, &gs, &mu, 5);
+
+        // Reconstruct lattice point
+        let mut lattice_point = [BigInt256::zero(); 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                lattice_point[j] = lattice_point[j].add(&basis[i][j].mul(&coeffs[i]));
+            }
+        }
+
+        // Check error is within bounds (should be very small after multi-round)
+        let mut max_error = BigInt256::zero();
+        for i in 0..4 {
+            let error = target[i].sub(&lattice_point[i]);
+            let abs_error = if error < BigInt256::zero() {
+                BigInt256::zero().sub(&error)
+            } else {
+                error
+            };
+            if abs_error > max_error {
+                max_error = abs_error;
+            }
+        }
+
+        // Should be extremely small after 5 rounds of alternating Babai
+        assert!(max_error < BigInt256::from_u64(1000), "Multi-round Babai error too large: {:?}", max_error);
+
+        println!("✅ Multi-round Babai GLV4 verified");
+    }
+
+    /// Test professor-level constant-time NAF with padding
+    #[test]
+    fn test_ct_naf_padded() {
+        let curve = Secp256k1::new();
+
+        let test_scalars = vec![
+            k256::Scalar::from(1u64),
+            k256::Scalar::from(42u64),
+            k256::Scalar::from_u128(0x123456789ABCDEF0123456789ABCDEF),
+        ];
+
+        for k in test_scalars {
+            let naf = curve.ct_naf(&k, 5);
+
+            // Verify NAF properties: no two consecutive non-zero digits
+            let mut prev_nonzero = false;
+            for &digit in &naf[..256] {  // Check first 256, ignore padding
+                if digit != 0 {
+                    assert!(!prev_nonzero, "CT NAF has consecutive non-zero digits");
+                    prev_nonzero = true;
+                    assert!(digit >= -15 && digit <= 15, "CT NAF digit out of range: {}", digit);
+                } else {
+                    prev_nonzero = false;
+                }
+            }
+
+            // Reconstruct original scalar from NAF
+            let mut reconstructed = k256::Scalar::ZERO;
+            let mut factor = k256::Scalar::ONE;
+
+            for &digit in naf.iter().rev() {
+                if digit != 0 {
+                    let digit_scalar = k256::Scalar::from(digit as u64);
+                    reconstructed = reconstructed + digit_scalar * factor;
+                }
+                factor = factor * k256::Scalar::from(2u64);
+            }
+
+            assert_eq!(reconstructed, k, "CT NAF reconstruction failed for {:?}", k);
+        }
+
+        println!("✅ Constant-time NAF with padding verified");
+    }
+
+    /// Test professor-level constant-time combo selection
+    #[test]
+    fn test_ct_combo_select_glv4() {
+        let curve = Secp256k1::new();
+
+        // Create test combos with known minimum
+        let mut combos = [[k256::Scalar::ZERO; 4]; 16];
+        let mut signs = [[0i8; 4]; 16];
+        let mut norms = [k256::Scalar::ZERO; 16];
+
+        // Set up combos with decreasing norms
+        for i in 0..16 {
+            for j in 0..4 {
+                combos[i][j] = k256::Scalar::from((i * 4 + j) as u64);
+                signs[i][j] = ((i + j) % 2 * 2 - 1) as i8; // Alternate +1/-1
+            }
+            norms[i] = k256::Scalar::from((16 - i) as u64); // Decreasing norms
+        }
+
+        let (best_coeffs, best_signs) = curve.ct_combo_select_glv4(&combos, &signs, &norms);
+
+        // Should select combo 15 (minimum norm)
+        for j in 0..4 {
+            assert_eq!(best_coeffs[j], combos[15][j], "Wrong coefficient selected");
+            assert_eq!(best_signs[j], signs[15][j], "Wrong sign selected");
+        }
+
+        println!("✅ Constant-time combo selection verified");
+    }
+
+    /// Test professor-level Gram-Schmidt 4D
+    #[test]
+    fn test_gram_schmidt_4d() {
+        let curve = Secp256k1::new();
+        let basis = curve.glv4_basis();
+        let (gs, mu) = curve.gram_schmidt_4d(&basis);
+
+        // Verify orthogonality: <gs[i], gs[j]> = 0 for i != j
+        for i in 0..4 {
+            for j in 0..4 {
+                if i != j {
+                    let dot = curve.dot_4d(&gs[i], &gs[j]);
+                    assert!(dot < BigInt256::from_u64(1000), "GS vectors not orthogonal: dot({},{}) = {:?}", i, j, dot);
+                }
+            }
+        }
+
+        // Verify first vector unchanged
+        for i in 0..4 {
+            assert_eq!(gs[0][i], basis[0][i], "First GS vector should equal first basis vector");
+        }
+
+        println!("✅ Gram-Schmidt 4D orthogonalization verified");
+    }
 }
