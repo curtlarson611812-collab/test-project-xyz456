@@ -9,52 +9,38 @@
 #define WIDE_LIMBS 16
 #define MU_LIMBS 9
 
-// secp256k1 prime (p) Montgomery constants
-__constant__ uint32_t SECP_P[LIMBS] = {
-    0xFFFFFC2Fu, 0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu,
-    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
-};
+// Use constants from step.cu to avoid conflicts
+extern __constant__ uint32_t P[8];
+extern __constant__ uint32_t CURVE_N[8];
+extern __constant__ uint32_t MU_N[16];
 
-// secp256k1 order (n) Montgomery constants
-__constant__ uint32_t SECP_N[LIMBS] = {
-    0xD0364141u, 0xBFD25E8Cu, 0xAF48A03Bu, 0xBAAEDCE6u,
-    0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
-};
-
-// R = 2^256 mod p (Montgomery base)
-__constant__ uint32_t R_P[LIMBS] = {
-    0x000003D1u, 0x00000001u, 0x00000000u, 0x00000000u,
-    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u
-};
-
-// R = 2^256 mod n
-__constant__ uint32_t R_N[LIMBS] = {
-    0xD0364141u, 0xBFD25E8Cu, 0xAF48A03Bu, 0xBAAEDCE6u,
-    0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
-};
-
-// Barrett mu = floor(2^512 / p) for p
-__constant__ uint32_t MU_P[MU_LIMBS] = {
+// Local Barrett mu for P (since step.cu doesn't define it)
+__constant__ uint32_t MU_P[9] = {
     0x9ED0D4F9u, 0xA9E34737u, 0x8F5E9C3Du, 0x7B2E0029u,
     0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u,
     0x00000000u
 };
 
-// Barrett mu = floor(2^512 / n) for n
-__constant__ uint32_t MU_N[MU_LIMBS] = {
-    0xE89F2F9Eu, 0xED809F6Du, 0xCAA2B2BBu, 0xC2D2EAA9u,
-    0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u,
-    0x00000000u
+// Aliases for compatibility
+#define SECP_P P
+#define SECP_N CURVE_N
+
+// Local constants for hybrid operations
+__constant__ uint32_t R_P[LIMBS] = {
+    0x000003D1u, 0x00000001u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u
 };
 
-// Montgomery n' = -p^{-1} mod 2^32 for p
-__constant__ uint32_t P_PRIME = 0xFFFFFFEDu;
+__constant__ uint32_t R_N[LIMBS] = {
+    0xD0364141u, 0xBFD25E8Cu, 0xAF48A03Bu, 0xBAAEDCE6u,
+    0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
+};
 
-// Montgomery n' = -n^{-1} mod 2^32 for n
+__constant__ uint32_t P_PRIME = 0xFFFFFFEDu;
 __constant__ uint32_t N_PRIME = 0x747ED871u;
 
 // Device helper: Parallel big integer comparison
-__device__ int bigint_cmp_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) {
+static __device__ int bigint_cmp_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
     int local_cmp = 0;
 
@@ -77,7 +63,7 @@ __device__ int bigint_cmp_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) 
 }
 
 // Device helper: Parallel big integer subtraction with borrow
-__device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
+static __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
     uint32_t borrow_in = 0;
 
@@ -99,7 +85,7 @@ __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
 }
 
 // Device helper: Parallel big integer multiplication (8x8 -> 16 limbs)
-__device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[WIDE_LIMBS]) {
+static __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[WIDE_LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
 
     // Initialize result
@@ -136,7 +122,7 @@ __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
 }
 
 // Device helper: Wide multiplication for Barrett (16x9 -> 25 limbs)
-__device__ void bigint_wide_mul_par(const uint32_t a[WIDE_LIMBS], const uint32_t b[MU_LIMBS], uint32_t result[WIDE_LIMBS + MU_LIMBS]) {
+static __device__ void bigint_wide_mul_par(const uint32_t a[WIDE_LIMBS], const uint32_t b[MU_LIMBS], uint32_t result[WIDE_LIMBS + MU_LIMBS]) {
     int limb_idx = threadIdx.x % WIDE_LIMBS;
 
     // Initialize result
@@ -171,7 +157,7 @@ __device__ void bigint_wide_mul_par(const uint32_t a[WIDE_LIMBS], const uint32_t
 }
 
 // Device helper: Montgomery reduction (REDC algorithm)
-__device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t mod_[LIMBS], uint32_t n_prime, uint32_t result[LIMBS]) {
+static __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t mod_[LIMBS], uint32_t n_prime, uint32_t result[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
     uint32_t temp[WIDE_LIMBS];
 
@@ -211,7 +197,7 @@ __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t
 }
 
 // Device helper: Barrett reduction
-__device__ void barrett_reduce_par(const uint32_t x[WIDE_LIMBS], const uint32_t mu[MU_LIMBS], const uint32_t mod_[LIMBS], uint32_t result[LIMBS]) {
+static __device__ void barrett_reduce_par(const uint32_t x[WIDE_LIMBS], const uint32_t mu[MU_LIMBS], const uint32_t mod_[LIMBS], uint32_t result[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
     uint32_t x_mu[WIDE_LIMBS + MU_LIMBS];
 
@@ -260,7 +246,7 @@ __device__ void barrett_reduce_par(const uint32_t x[WIDE_LIMBS], const uint32_t 
 }
 
 // Core hybrid modular multiplication: a * b mod mod
-__device__ void mod_mul_hybrid(const uint32_t a[LIMBS], const uint32_t b[LIMBS], const uint32_t mod_[LIMBS], uint32_t result[LIMBS]) {
+static __device__ void mod_mul_hybrid(const uint32_t a[LIMBS], const uint32_t b[LIMBS], const uint32_t mod_[LIMBS], uint32_t result[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
     uint32_t t[WIDE_LIMBS];
 

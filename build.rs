@@ -189,7 +189,7 @@ fn compile_cuda_kernels() {
     } // RTX 5090, suppress shift warnings
 
     let cu_files = vec![
-        "bigint_mul", "step",
+        "bigint_mul", "step", "solve", "rho_kernel_optimized", "hybrid",
         "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel"
     ];
 

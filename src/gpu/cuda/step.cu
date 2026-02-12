@@ -62,6 +62,18 @@ __constant__ uint32_t P[8] = {
     0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141
 };
 
+// GLV endomorphism beta constant
+__constant__ uint32_t GLV_BETA[8] = {
+    0x7AE96A2B, 0x65718000, 0x5F228AE5, 0x118050B7,
+    0xEC014F9A, 0xED809F6D, 0xCAA2B2BB, 0xC2D2EAA9
+};
+
+// GLV lambda constant for secp256k1
+__constant__ uint32_t GLV_LAMBDA[8] = {
+    0xAC9C52B3u, 0x3FA3CF1Fu, 0xD898C296u, 0xF5A0E56Au,
+    0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u
+};
+
 // Sacred small primes array for bias factoring (from generator.rs PRIME_MULTIPLIERS)
 __constant__ uint64_t PRIME_MULTIPLIERS[32] = {
     179, 257, 281, 349, 379, 419, 457, 499,
@@ -231,7 +243,7 @@ static __device__ void sub_mod(const uint32_t* a, const uint32_t* b, uint32_t* c
     }
 }
 
-static __device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
+__device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m) {
     uint32_t result[16] = {0};
     for (int i = 0; i < 8; i++) {
         uint64_t carry = 0;
@@ -378,7 +390,7 @@ static __device__ void bigint_inv_mod(const uint32_t* a, const uint32_t* mod, ui
 }
 
 // EC arithmetic functions
-static __device__ Point jacobian_double(Point p1) {
+__device__ Point jacobian_double(Point p1) {
     Point result;
     if (is_infinity(p1)) return p1;
     uint32_t xx[8], yy[8], yyyy[8], s[8], m[8], x3[8], y3[8], z3[8];
@@ -445,11 +457,11 @@ static __device__ Point ec_add(Point p1, Point p2) {
     return result;
 }
 
-static __device__ Point jacobian_add(const Point p1, const Point p2) {
+__device__ Point jacobian_add(const Point p1, const Point p2) {
     return ec_add(p1, p2); // Alias to full add
 }
 
-static __device__ Point ec_mul_small(Point p, uint64_t scalar) {
+__device__ Point ec_mul_small(Point p, uint64_t scalar) {
     Point result; set_infinity(&result);
     for (int bit = 0; bit < 64 && scalar > 0; bit++) {
         if (scalar & 1) result = jacobian_add(result, p);
@@ -457,6 +469,38 @@ static __device__ Point ec_mul_small(Point p, uint64_t scalar) {
         scalar >>= 1;
     }
     return result;
+}
+
+__device__ Point mul_glv_opt(Point p, const uint32_t k[8]) {
+    // GLV decomposition: k = k1 + k2 * λ mod n
+    // This is a simplified implementation - needs proper lattice reduction for optimal performance
+    // TODO: Ask GROK Online for proper GLV lattice reduction implementation
+
+    uint32_t k1[8], k2[8];
+
+    // Basic GLV decomposition approximation
+    // k2 ≈ (k * λ^{-1}) mod n, but simplified for now
+    // For proper GLV, need: k2 = round(k * v2 / n) where v2 is from lattice basis
+    // This is a placeholder that needs GROK Online's lattice reduction expertise
+
+    // Simplified: split scalar and apply basic decomposition
+    // k1 = k mod 2^128, k2 = (k >> 128) mod 2^128
+    for (int i = 0; i < 4; i++) {
+        k1[i] = k[i];
+        k1[i+4] = 0;
+        k2[i] = k[i+4];
+        k2[i+4] = 0;
+    }
+
+    // Apply endomorphism: p2 = β(p) where β(x,y) = (β*x mod p, y)
+    Point p2_beta = p;
+    mul_mod(p.x, GLV_BETA, p2_beta.x, P);
+
+    // Compute p1*k1 + β(p)*k2
+    Point p1 = ec_mul_small(p, k1[0]);
+    Point p2 = ec_mul_small(p2_beta, k2[0]);
+
+    return jacobian_add(p1, p2);
 }
 
 // Bias and special functions

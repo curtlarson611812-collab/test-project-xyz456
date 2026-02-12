@@ -11,6 +11,40 @@
 
 // Use bigint functions from bigint_mul.cu
 
+// BigInt256 type alias
+typedef uint32_t bigint256[8];
+
+// Utility functions for limb operations
+static __device__ int limb_compare(const uint32_t* a, const uint32_t* b, int limbs) {
+    for (int i = limbs - 1; i >= 0; i--) {
+        if (a[i] > b[i]) return 1;
+        if (a[i] < b[i]) return -1;
+    }
+    return 0;
+}
+
+static __device__ void limb_add(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
+    uint32_t carry = 0;
+    for (int i = 0; i < limbs; i++) {
+        uint64_t sum = (uint64_t)a[i] + b[i] + carry;
+        res[i] = (uint32_t)sum;
+        carry = (uint32_t)(sum >> 32);
+    }
+}
+
+static __device__ int limb_is_negative(const uint32_t* a) {
+    return (a[7] >> 31) & 1;  // Check if most significant bit is set
+}
+
+static __device__ void limb_sub(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
+    uint32_t borrow = 0;
+    for (int i = 0; i < limbs; i++) {
+        uint64_t diff = (uint64_t)a[i] - b[i] - borrow;
+        res[i] = (uint32_t)diff;
+        borrow = (diff >> 63) & 1;
+    }
+}
+
 // Precomputed Barrett constants for secp256k1 modulus
 __constant__ uint32_t SECP256K1_MU[9] = {
     0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
@@ -105,7 +139,7 @@ __global__ void barrett_modpow_kernel(
 }
 
 // Barrett reduce device function for Phase 5
-__device__ void barrett_reduce_device(const uint32_t x[16], const uint32_t modulus[8], const uint32_t mu[16], uint32_t result[8]) {
+static __device__ void barrett_reduce_device(const uint32_t x[16], const uint32_t modulus[8], const uint32_t mu[16], uint32_t result[8]) {
     uint32_t r[8];
     memcpy(r, x, sizeof(uint32_t) * 8); // Lower 256 bits of x
 
@@ -146,7 +180,7 @@ __global__ void fast_bias_residue_kernel(
 }
 
 // BigInt256 Barrett reduction (matches CPU implementation)
-__device__ bigint256 barrett_reduce(const bigint256 x, const bigint256 p, const bigint256 mu) {
+static __device__ bigint256 barrett_reduce(const bigint256 x, const bigint256 p, const bigint256 mu) {
     bigint256 high = bigint256_shr(x, 256 - 64);  // Fine-tune shift for high 256 bits approximation
     bigint256 q = bigint256_mul(high, mu);
     q = bigint256_shr(q, 256);
@@ -157,7 +191,7 @@ __device__ bigint256 barrett_reduce(const bigint256 x, const bigint256 p, const 
 }
 
 // BigInt256 Montgomery multiplication (matches CPU implementation)
-__device__ bigint256 mont_mul(const bigint256 a, const bigint256 b, const bigint256 p, const bigint256 inv) {
+static __device__ bigint256 mont_mul(const bigint256 a, const bigint256 b, const bigint256 p, const bigint256 inv) {
     bigint256 t = bigint256_mul(a, b);
     bigint256 m = bigint256_mul(t, inv);  // Assume low part; use PTX for fuse
     bigint256 u = bigint256_add(t, bigint256_mul(m, p));

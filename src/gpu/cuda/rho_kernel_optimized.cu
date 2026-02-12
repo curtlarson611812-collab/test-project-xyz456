@@ -10,36 +10,23 @@
 #include <stdint.h> // For uint32_t, int64_t etc.
 #include "step.cu" // For shared point_add/double functions
 
-// Forward declaration for mul_glv_opt from solve.cu
-__device__ Point mul_glv_opt(Point p, const uint32_t k[8]);
+// Forward declaration for mul_glv_opt from step.cu
+extern __device__ Point mul_glv_opt(Point p, const uint32_t k[8]);
 
-// Simple GLV decompose (placeholder - full implementation needs lattice reduction)
-__device__ void glv_decompose(const uint32_t k[8], uint32_t k1[4], uint32_t k2[4]) {
-    // Simplified: split scalar into two halves
-    for (int i = 0; i < 4; i++) {
-        k1[i] = k[i];
-        k2[i] = k[i + 4];
-    }
-}
-
-// Simple endomorphism apply (beta * p)
-__device__ Point endomorphism_apply(const Point p) {
-    Point result = p;
-    // Simplified: just return p (full endomorphism needs beta multiplication)
-    return result;
-}
+// GLV functions removed - if needed, implement proper lattice reduction
+// TODO: Ask GROK Online for complete GLV implementation if rho kernel needs it
 
 // Barrett reduction constants for secp256k1
 __constant__ uint32_t MU[9] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
 __constant__ uint32_t MODULUS[8] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE};
 
 // Simplified GLV mul (uses mul_glv_opt from solve.cu)
-__device__ void mul_glv_opt_device(const Point p, const uint32_t k[8], Point* result) {
+static __device__ void mul_glv_opt_device(const Point p, const uint32_t k[8], Point* result) {
     *result = mul_glv_opt(p, k);
 }
 
 // Optimized Barrett reduction for bias modulus calculation
-__device__ __forceinline__ uint32_t barrett_mod_81(uint32_t low_limb) {
+static __device__ __forceinline__ uint32_t barrett_mod_81(uint32_t low_limb) {
     // Fast approximation for modulus 81 using low limb only
     // For exact calculation, would need full BigInt256 reduction
     return low_limb % 81;

@@ -1,27 +1,21 @@
 // solve.cu - CUDA kernels for batch collision solving and BSGS
 #include <cuda_runtime.h>
 #include <stdint.h>
+#include "step.cu"  // Include step.cu for shared functions
 
 #define LIMBS 8
 #define WIDE_LIMBS 16
 
-// Point structure for elliptic curve operations in BSGS
-struct Point {
-    uint32_t x[LIMBS];
-    uint32_t y[LIMBS];
-    uint32_t z[LIMBS];
-};
-
-// Forward declarations for functions from step.cu
-extern __device__ Point jacobian_add(Point p1, Point p2);
-extern __device__ Point jacobian_double(Point p1);
-extern __device__ Point ec_mul_small(Point p, uint64_t scalar);
+// Use Point struct from step.cu
 
 // secp256k1 order (n) as uint32_t[8]
 __constant__ uint32_t SECP_N[LIMBS] = {
     0xD0364141u, 0xBFD25E8Cu, 0xAF48A03Bu, 0xBAAEDCE6u,
     0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
 };
+
+// Alias for CURVE_ORDER
+#define CURVE_ORDER SECP_N
 
 // secp256k1 prime (p) as uint32_t[8]
 __constant__ uint32_t SECP_P[LIMBS] = {
@@ -47,18 +41,7 @@ __constant__ uint32_t GENERATOR_Y[LIMBS] = {
     0x0DA388F4u, 0xFE5D4984u, 0x35203864u, 0x483ADA77u
 };
 
-// GLV parameters for secp256k1 (lambda, beta)
-__constant__ uint32_t GLV_LAMBDA[LIMBS] = {
-    // Exact lambda = sqrt(-1) mod n for secp
-    0xAC9C52B3u, 0x3FA3CF1Fu, 0xD898C296u, 0xF5A0E56Au,
-    0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u
-};
-
-__constant__ uint32_t GLV_BETA[LIMBS] = {
-    // Exact beta for GLV
-    0x7AE96A2Bu, 0x65718000u, 0x5F228AE5u, 0x118050B7u,
-    0xEC014F9Au, 0xE92D3D1Eu, 0x2D1F8E1Eu, 0x97E7E31Cu
-};
+// GLV constants are now defined in step.cu
 
 
 // BSGS table entry for baby steps
@@ -72,14 +55,6 @@ struct BSGS_Table {
     BSGS_Entry* baby_steps;
     int m;  // sqrt(order) size
 };
-
-// Forward declarations
-__device__ Point jacobian_add(const Point p1, const Point p2);
-__device__ Point point_mul_small(const Point* p, uint32_t scalar, const uint32_t* mod);
-__device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* c, const uint32_t* m);
-
-// Curve order alias for solve_collisions
-#define CURVE_ORDER SECP_N
 
 // DP Entry structure for collision detection
 struct DpEntry {
@@ -98,7 +73,7 @@ struct SolvedFlag {
 };
 
 // Utility functions for limb operations
-__device__ int limb_compare(const uint32_t* a, const uint32_t* b, int limbs) {
+static __device__ int limb_compare(const uint32_t* a, const uint32_t* b, int limbs) {
     for (int i = limbs - 1; i >= 0; i--) {
         if (a[i] > b[i]) return 1;
         if (a[i] < b[i]) return -1;
@@ -106,7 +81,7 @@ __device__ int limb_compare(const uint32_t* a, const uint32_t* b, int limbs) {
     return 0;
 }
 
-__device__ void limb_add(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
+static __device__ void limb_add(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
     uint32_t carry = 0;
     for (int i = 0; i < limbs; i++) {
         uint64_t sum = (uint64_t)a[i] + b[i] + carry;
@@ -115,7 +90,7 @@ __device__ void limb_add(const uint32_t* a, const uint32_t* b, uint32_t* res, in
     }
 }
 
-__device__ void limb_sub(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
+static __device__ void limb_sub(const uint32_t* a, const uint32_t* b, uint32_t* res, int limbs) {
     uint32_t borrow = 0;
     for (int i = 0; i < limbs; i++) {
         uint64_t diff = (uint64_t)a[i] - b[i] - borrow;
@@ -125,7 +100,7 @@ __device__ void limb_sub(const uint32_t* a, const uint32_t* b, uint32_t* res, in
 }
 
 // Barrett modular reduction
-__device__ void barrett_mod(const uint32_t* x, const uint32_t* modulus, uint32_t* result, int limbs) {
+static __device__ void barrett_mod(const uint32_t* x, const uint32_t* modulus, uint32_t* result, int limbs) {
     // Simplified Barrett reduction for now
     for (int i = 0; i < limbs; i++) {
         result[i] = x[i] % modulus[i];
@@ -133,7 +108,7 @@ __device__ void barrett_mod(const uint32_t* x, const uint32_t* modulus, uint32_t
 }
 
 // Compare a ? b
-__device__ int bigint_cmp(const uint32_t* a, const uint32_t* b) {
+static __device__ int bigint_cmp(const uint32_t* a, const uint32_t* b) {
     for (int i = LIMBS - 1; i >= 0; i--) {
         if (a[i] > b[i]) return 1;
         if (a[i] < b[i]) return -1;
@@ -142,7 +117,7 @@ __device__ int bigint_cmp(const uint32_t* a, const uint32_t* b) {
 }
 
 // Sub res = a - b (borrow out)
-__device__ uint32_t bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+static __device__ uint32_t bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     uint32_t borrow = 0;
     for (int i = 0; i < LIMBS; i++) {
         uint64_t diff = (uint64_t)a[i] - b[i] - borrow;
@@ -153,7 +128,7 @@ __device__ uint32_t bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* r
 }
 
 // Add res = a + b (carry out)
-__device__ uint32_t bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+static __device__ uint32_t bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     uint32_t carry = 0;
     for (int i = 0; i < LIMBS; i++) {
         uint64_t sum = (uint64_t)a[i] + b[i] + carry;
@@ -164,7 +139,7 @@ __device__ uint32_t bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* r
 }
 
 // Mul res = a * b (wide)
-__device__ void bigint_mul(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+static __device__ void bigint_mul(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     for (int i = 0; i < WIDE_LIMBS; i++) res[i] = 0;
     for (int i = 0; i < LIMBS; i++) {
         uint32_t carry = 0;
@@ -178,7 +153,7 @@ __device__ void bigint_mul(const uint32_t* a, const uint32_t* b, uint32_t* res) 
 }
 
 // Full Barrett reduction for wide input
-__device__ void barrett_reduce_full(const uint32_t* x, const uint32_t* modulus, const uint32_t* mu, uint32_t* result) {
+static __device__ void barrett_reduce_full(const uint32_t* x, const uint32_t* modulus, const uint32_t* mu, uint32_t* result) {
     // x is WIDE_LIMBS, modulus LIMBS, mu 9 limbs
     uint32_t q[WIDE_LIMBS] = {0};
     // Approximate q = (x >> (LIMBS*32 - 1)) * mu >> (LIMBS*32 + 1)
@@ -194,7 +169,7 @@ __device__ void barrett_reduce_full(const uint32_t* x, const uint32_t* modulus, 
 }
 
 // Simple div for gcd (a / b = q)
-__device__ void bigint_div(const uint32_t* a, const uint32_t* b, uint32_t* q) {
+static __device__ void bigint_div(const uint32_t* a, const uint32_t* b, uint32_t* q) {
     for (int i = 0; i < LIMBS; i++) q[i] = 0;
     uint32_t dividend[WIDE_LIMBS];
     for (int i = 0; i < LIMBS; i++) dividend[i] = a[i];
@@ -216,7 +191,7 @@ __device__ void bigint_div(const uint32_t* a, const uint32_t* b, uint32_t* q) {
 }
 
 // Mod res = a mod m (using Barrett)
-__device__ void bigint_mod(const uint32_t* a, const uint32_t* m, uint32_t* res) {
+static __device__ void bigint_mod(const uint32_t* a, const uint32_t* m, uint32_t* res) {
     uint32_t wide_a[WIDE_LIMBS];
     for (int i = 0; i < LIMBS; i++) wide_a[i] = a[i];
     for (int i = LIMBS; i < WIDE_LIMBS; i++) wide_a[i] = 0;
@@ -224,7 +199,7 @@ __device__ void bigint_mod(const uint32_t* a, const uint32_t* m, uint32_t* res) 
 }
 
 // Extended Euclidean mod inverse
-__device__ void mod_inverse(const uint32_t* a, const uint32_t* mod, uint32_t* res) {
+static __device__ void mod_inverse(const uint32_t* a, const uint32_t* mod, uint32_t* res) {
     uint32_t t[LIMBS] = {0}, r[LIMBS];
     uint32_t nt[LIMBS] = {1}, nr[LIMBS] = {0};
     uint32_t a_copy[LIMBS];
@@ -253,7 +228,7 @@ __device__ void mod_inverse(const uint32_t* a, const uint32_t* mod, uint32_t* re
 }
 
 // Device function for safe diff mod N
-__device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const uint32_t wild[LIMBS], const uint32_t n[LIMBS], uint32_t result[LIMBS]) {
+static __device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const uint32_t wild[LIMBS], const uint32_t n[LIMBS], uint32_t result[LIMBS]) {
     uint32_t diff[LIMBS], temp[LIMBS];
     int cmp = limb_compare(tame, wild, LIMBS);
     if (cmp >= 0) {
@@ -266,7 +241,7 @@ __device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const uint32_t 
 }
 
 // Device function: Point negation (y = -y mod p)
-__device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod) {
+static __device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod) {
     for (int i = 0; i < LIMBS; i++) {
         neg->x[i] = p->x[i];
         neg->z[i] = p->z[i];
@@ -276,7 +251,7 @@ __device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod) {
 
 
 // Device function: Point subtraction (p1 - p2 = p1 + (-p2))
-__device__ void point_sub(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
+static __device__ void point_sub(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
     Point neg_p2;
     point_neg(p2, &neg_p2, mod);
     *result = jacobian_add(*p1, neg_p2);
@@ -284,7 +259,7 @@ __device__ void point_sub(const Point* p1, const Point* p2, Point* result, const
 
 
 // Scalar mul small (binary method)
-__device__ Point mul_small(const Point* p, uint32_t scalar, const uint32_t* mod) {
+static __device__ Point mul_small(const Point* p, uint32_t scalar, const uint32_t* mod) {
     Point result;
     for (int i = 0; i < LIMBS; i++) {
         result.x[i] = 0;
@@ -301,27 +276,15 @@ __device__ Point mul_small(const Point* p, uint32_t scalar, const uint32_t* mod)
 }
 
 // GLV-optimized scalar mul
-__device__ Point mul_glv_opt(const Point p, const uint32_t k[LIMBS]) {
-    uint32_t k1[LIMBS], k2[LIMBS];
-    // Decompose: k = k1 + k2 * lambda mod n
-    // Simplified: k1 = k low half, k2 = high
-    for (int i = 0; i < LIMBS/2; i++) k1[i] = k[i], k1[i+LIMBS/2] = 0, k2[i] = k[i+LIMBS/2], k2[i+LIMBS/2] = 0;
-    Point p1 = mul_small(&p, k1[0], SECP_P); // Low scalar for simplicity
-    Point p2_beta = p;
-    // Apply beta: p2.x = p.x * beta mod p (endomorphism)
-    mul_mod(p.x, GLV_BETA, p2_beta.x, SECP_P);
-    Point p2 = mul_small(&p2_beta, k2[0], SECP_P);
-    return jacobian_add(p1, p2);
-}
 
 
 // Alias for compatibility
-__device__ void point_add_jacobian(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
+static __device__ void point_add_jacobian(const Point* p1, const Point* p2, Point* result, const uint32_t* mod) {
     *result = jacobian_add(*p1, *p2);
 }
 
 // Device function: Scalar multiplication by small integer
-__device__ Point point_mul_small(const Point* p, uint32_t scalar, const uint32_t* mod) {
+static __device__ Point point_mul_small(const Point* p, uint32_t scalar, const uint32_t* mod) {
     Point result;
     // Initialize result to infinity
     for (int i = 0; i < LIMBS; i++) {
@@ -348,7 +311,7 @@ __device__ Point point_mul_small(const Point* p, uint32_t scalar, const uint32_t
 
 
 // Device function: Modular inverse via extended Euclid (simplified for u64 approximation)
-__device__ uint64_t mod_inverse_u64(uint64_t a, uint64_t mod) {
+static __device__ uint64_t mod_inverse_u64(uint64_t a, uint64_t mod) {
     int64_t m = mod, m0 = m, t, q;
     int64_t x0 = 0, x1 = 1;
 
@@ -369,7 +332,7 @@ __device__ uint64_t mod_inverse_u64(uint64_t a, uint64_t mod) {
 }
 
 // Device function: Factor out small primes (simplified u64)
-__device__ uint64_t factor_small_primes_u64(uint64_t val) {
+static __device__ uint64_t factor_small_primes_u64(uint64_t val) {
     for (int i = 0; i < 32; i++) {
         uint64_t p = PRIME_MULTIPLIERS[i];
         while (val % p == 0 && val >= p) {
@@ -427,7 +390,7 @@ __global__ void bsgs_solve_kernel(
 }
 
 // Device helper: Parallel big integer subtraction with borrow propagation
-__device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
+static __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
     uint32_t borrow_in = 0;
 
@@ -449,7 +412,7 @@ __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
 }
 
 // Device helper: Parallel big integer addition with carry propagation
-__device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
+static __device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
     uint32_t carry_in = 0;
 
@@ -471,7 +434,7 @@ __device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
 }
 
 // Device helper: Parallel big integer multiplication (8x8 -> 16 limbs)
-__device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[WIDE_LIMBS]) {
+static __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[WIDE_LIMBS]) {
     int limb_idx = threadIdx.x % LIMBS;
 
     // Initialize result
@@ -510,7 +473,7 @@ __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
 
 
 // Device helper: Montgomery reduction (simplified)
-__device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t mod_[LIMBS], uint32_t n_prime, uint32_t result[LIMBS]) {
+static __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t mod_[LIMBS], uint32_t n_prime, uint32_t result[LIMBS]) {
     // Simplified REDC implementation - would need full CIOS/FIOS algorithm for production
     uint32_t m, carry;
     uint32_t temp[WIDE_LIMBS];
@@ -547,7 +510,7 @@ __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t
 }
 
 // Device helper: Wide multiplication for Barrett (16x9 -> 25 limbs, but we take upper)
-__device__ void bigint_wide_mul_par(const uint32_t a[WIDE_LIMBS], const uint32_t b[LIMBS+1], uint32_t result[WIDE_LIMBS + LIMBS + 1]) {
+static __device__ void bigint_wide_mul_par(const uint32_t a[WIDE_LIMBS], const uint32_t b[LIMBS+1], uint32_t result[WIDE_LIMBS + LIMBS + 1]) {
     int limb_idx = threadIdx.x % WIDE_LIMBS;
 
     // Initialize result
