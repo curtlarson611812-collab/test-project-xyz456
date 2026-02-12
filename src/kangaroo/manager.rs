@@ -842,6 +842,11 @@ impl KangarooManager {
 }
 
 // Chunk: Bias Stabilize (manager.rs)
+// VOW-enhanced Rho on P2PK full-range
+pub fn vow_rho_p2pk(pubkeys: &[ProjectivePoint]) -> Scalar {
+    crate::kangaroo::collision::vow_parallel_rho(&pubkeys[0], 4, 1.0 / 2f64.powf(24.0))
+}
+
 pub fn check_bias_convergence(rate_history: &Vec<f64>, target: f64) -> bool {
     if rate_history.len() < 10 { return false; }
     let ema = rate_history.iter().rev().take(5).fold(0.0, |acc, &r| 0.1 * r + 0.9 * acc);

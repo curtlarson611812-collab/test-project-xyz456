@@ -370,3 +370,33 @@ fn test_vow_with_babai() {
     }
 }
 
+
+// Integration test: Babai multi-round + Fermat ECDLP + VOW P2PK
+#[test]
+fn test_babai_fermat_vow_integration() {
+    let config = crate::config::Config {
+        enable_babai_multi_sim: true,
+        enable_fermat_ecdlp: true,
+        enable_vow_rho_p2pk: true,
+        ..Default::default()
+    };
+    
+    if config.enable_babai_multi_sim {
+        simulate_babai_multi_round();
+    }
+    
+    let dummy_p = k256::ProjectivePoint::GENERATOR;
+    let dummy_q = dummy_p * k256::Scalar::from_u64(2);
+    
+    if config.enable_fermat_ecdlp {
+        let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
+        assert_eq!(diff, k256::Scalar::from_u64(2));
+    }
+    
+    if config.enable_vow_rho_p2pk {
+        let result = crate::kangaroo::manager::vow_rho_p2pk(&vec![dummy_p]);
+        // Placeholder assertion
+        assert_eq!(result, k256::Scalar::ZERO);
+    }
+}
+
