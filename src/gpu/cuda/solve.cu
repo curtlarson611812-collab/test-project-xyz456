@@ -1,7 +1,35 @@
 // solve.cu - CUDA kernels for batch collision solving and BSGS
 #include <cuda_runtime.h>
 #include <stdint.h>
-#include "step.cu"  // Include step.cu for shared functions
+
+// Forward declarations for functions from step.cu
+extern __device__ int bigint_cmp(const uint32_t* a, const uint32_t* b);
+extern __device__ void bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res);
+extern __device__ void bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* res);
+extern __device__ void bigint_mul(const uint32_t* a, const uint32_t* b, uint32_t* res);
+extern __device__ void barrett_reduce_full(const uint32_t* x, const uint32_t* modulus, const uint32_t* mu, uint32_t* result);
+extern __device__ void bigint_mod(const uint32_t* a, const uint32_t* m, uint32_t* res);
+extern __device__ void mod_inverse(const uint32_t* a, const uint32_t* mod, uint32_t* res);
+extern __device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const uint32_t wild[LIMBS], const uint32_t n[LIMBS], uint32_t result[LIMBS]);
+extern __device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod);
+extern __device__ void point_sub(const Point* p1, const Point* p2, Point* result, const uint32_t* mod);
+extern __device__ Point mul_small(const Point* p, uint32_t scalar, const uint32_t* mod);
+extern __device__ void point_add_jacobian(const Point* p1, const Point* p2, Point* result, const uint32_t* mod);
+extern __device__ Point point_mul_small(const Point* p, uint32_t scalar, const uint32_t* mod);
+extern __device__ uint64_t mod_inverse_u64(uint64_t a, uint64_t mod);
+extern __device__ uint64_t factor_small_primes_u64(uint64_t val);
+extern __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]);
+extern __device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]);
+extern __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[WIDE_LIMBS]);
+extern __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t mod_[LIMBS], uint32_t n_prime, uint32_t result[LIMBS]);
+extern __device__ void bigint_wide_mul_par(const uint32_t a[WIDE_LIMBS], const uint32_t b[LIMBS+1], uint32_t result[WIDE_LIMBS + LIMBS + 1]);
+extern __device__ Point jacobian_add(Point p1, Point p2);
+extern __device__ Point jacobian_double(Point p);
+extern __device__ Point ec_mul_small(Point p, uint32_t scalar);
+extern __device__ void mul_mod(const uint32_t* a, const uint32_t* b, uint32_t* res, const uint32_t* mod);
+extern __device__ void glv_decompose_scalar(const uint32_t k[8], uint32_t k1[8], uint32_t k2[8], int8_t* sign1, int8_t* sign2);
+extern __device__ Point mul_glv_opt(Point p, const uint32_t k[8]);
+extern __device__ int point_equal(Point p1, Point p2);
 
 #define LIMBS 8
 #define WIDE_LIMBS 16
@@ -116,16 +144,6 @@ static __device__ int bigint_cmp(const uint32_t* a, const uint32_t* b) {
     return 0;
 }
 
-// Sub res = a - b (borrow out)
-static __device__ uint32_t bigint_sub(const uint32_t* a, const uint32_t* b, uint32_t* res) {
-    uint32_t borrow = 0;
-    for (int i = 0; i < LIMBS; i++) {
-        uint64_t diff = (uint64_t)a[i] - b[i] - borrow;
-        res[i] = diff & 0xFFFFFFFF;
-        borrow = (diff >> 32) != 0 ? 1 : 0;
-    }
-    return borrow;
-}
 
 // Add res = a + b (carry out)
 static __device__ uint32_t bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* res) {
@@ -240,14 +258,6 @@ static __device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const ui
     barrett_reduce_full(diff, n, MU_P, result);
 }
 
-// Device function: Point negation (y = -y mod p)
-static __device__ void point_neg(const Point* p, Point* neg, const uint32_t* mod) {
-    for (int i = 0; i < LIMBS; i++) {
-        neg->x[i] = p->x[i];
-        neg->z[i] = p->z[i];
-        neg->y[i] = mod[i] - p->y[i];  // -y = p - y mod p
-    }
-}
 
 
 // Device function: Point subtraction (p1 - p2 = p1 + (-p2))
@@ -389,87 +399,6 @@ __global__ void bsgs_solve_kernel(
     results[idx] = 0xFFFFFFFF;
 }
 
-// Device helper: Parallel big integer subtraction with borrow propagation
-static __device__ void bigint_sub_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
-    int limb_idx = threadIdx.x % LIMBS;
-    uint32_t borrow_in = 0;
-
-    // Get borrow from previous limb via warp shuffle
-    if (limb_idx > 0) {
-        borrow_in = __shfl_sync(0xFFFFFFFF, (result[limb_idx - 1] >> 31) & 1, limb_idx - 1);
-    }
-
-    uint64_t diff = (uint64_t)a[limb_idx] - b[limb_idx] - borrow_in;
-    result[limb_idx] = diff & 0xFFFFFFFFULL;
-
-    uint32_t borrow_out = (diff >> 63) & 1;
-
-    // Propagate borrow to next limb
-    if (limb_idx < LIMBS - 1) {
-        __shfl_sync(0xFFFFFFFF, borrow_out, limb_idx + 1);
-    }
-    __syncthreads();
-}
-
-// Device helper: Parallel big integer addition with carry propagation
-static __device__ void bigint_add_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[LIMBS]) {
-    int limb_idx = threadIdx.x % LIMBS;
-    uint32_t carry_in = 0;
-
-    // Get carry from previous limb via warp shuffle
-    if (limb_idx > 0) {
-        carry_in = __shfl_sync(0xFFFFFFFF, result[limb_idx - 1] >> 31, limb_idx - 1);
-    }
-
-    uint64_t sum = (uint64_t)a[limb_idx] + b[limb_idx] + carry_in;
-    result[limb_idx] = sum & 0xFFFFFFFFULL;
-
-    uint32_t carry_out = (sum >> 32) & 0xFFFFFFFFULL;
-
-    // Propagate carry to next limb
-    if (limb_idx < LIMBS - 1) {
-        __shfl_sync(0xFFFFFFFF, carry_out, limb_idx + 1);
-    }
-    __syncthreads();
-}
-
-// Device helper: Parallel big integer multiplication (8x8 -> 16 limbs)
-static __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS], uint32_t result[WIDE_LIMBS]) {
-    int limb_idx = threadIdx.x % LIMBS;
-
-    // Initialize result
-    if (limb_idx < WIDE_LIMBS) result[limb_idx] = 0;
-    __syncthreads();
-
-    // Each limb of a multiplies with each limb of b
-    for (int i = 0; i < LIMBS; i++) {
-        if (limb_idx < LIMBS) {
-            uint64_t prod = (uint64_t)a[i] * b[limb_idx];
-            uint32_t low = prod & 0xFFFFFFFFULL;
-            uint32_t high = (prod >> 32) & 0xFFFFFFFFULL;
-
-            // Atomic add to result limbs
-            atomicAdd(&result[i + limb_idx], low);
-            if (i + limb_idx + 1 < WIDE_LIMBS) {
-                atomicAdd(&result[i + limb_idx + 1], high);
-            }
-        }
-    }
-    __syncthreads();
-
-    // Carry propagation for the result
-    if (limb_idx < WIDE_LIMBS) {
-        uint32_t carry = 0;
-        uint64_t sum = result[limb_idx] + carry;
-        result[limb_idx] = sum & 0xFFFFFFFFULL;
-        carry = (sum >> 32) & 0xFFFFFFFFULL;
-
-        if (limb_idx < WIDE_LIMBS - 1) {
-            __shfl_sync(0xFFFFFFFF, carry, limb_idx + 1);
-        }
-    }
-    __syncthreads();
-}
 
 
 // Device helper: Montgomery reduction (simplified)

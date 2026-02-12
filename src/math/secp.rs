@@ -73,6 +73,35 @@ impl Secp256k1 {
     pub fn glv_v2_2() -> BigInt256 {
         BigInt256::from_hex("3086d221a7d46bcde86c90e49284eb153dab").unwrap()
     }
+
+    /// Master-level GLV constants using k256::Scalar
+    pub fn glv_lambda_scalar() -> k256::Scalar {
+        k256::Scalar::from_bytes_reduced(&hex::decode("5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23a416").unwrap())
+    }
+
+    pub fn glv_beta_scalar() -> k256::Scalar {
+        k256::Scalar::from_bytes_reduced(&hex::decode("7ae96a2b657c07106e6447d3e804fba6523f4dce6187684d924cb09e8018b86").unwrap())
+    }
+
+    pub fn glv_v1_scalar() -> k256::Scalar {
+        k256::Scalar::from_bytes_reduced(&hex::decode("3086d221a7d46bcde86c90e49284eb15").unwrap())
+    }
+
+    pub fn glv_v2_scalar() -> k256::Scalar {
+        k256::Scalar::from_bytes_reduced(&hex::decode("114ca50f7a8e2f3f657c1108d9d44cfd8").unwrap()).neg()
+    }
+
+    pub fn glv_r1_scalar() -> k256::Scalar {
+        k256::Scalar::from_bytes_reduced(&hex::decode("3086d221a7d46bcde86c90e49284eb15").unwrap())
+    }
+
+    pub fn glv_r2_scalar() -> k256::Scalar {
+        k256::Scalar::from_bytes_reduced(&hex::decode("114ca50f7a8e2f3f657c1108d9d44cfd8").unwrap())
+    }
+
+    pub fn glv_sqrt_n_scalar() -> k256::Scalar {
+        k256::Scalar::from_u128(1u128 << 128) // Approximate sqrt(n) for bounds checking
+    }
 }
 
 /// secp256k1 curve parameters
@@ -844,6 +873,34 @@ impl Secp256k1 {
         // This is automatically satisfied by the GLV construction
 
         (k1, k2, sign1, sign2)
+    }
+
+    /// Master-level GLV endomorphism application with Jacobian coordinates
+    pub fn endomorphism_apply(p: &k256::ProjectivePoint) -> k256::ProjectivePoint {
+        let beta = Self::glv_beta_scalar();
+        let beta_sq = beta * beta;      // β²
+        let beta_cu = beta_sq * beta;   // β³
+
+        let mut result = *p;
+        result.x = result.x * beta_sq;  // β² * x
+        result.y = result.y * beta_cu;  // β³ * y
+        // z coordinate unchanged (scale invariant in Jacobian)
+
+        result
+    }
+
+    /// Master-level GLV optimized scalar multiplication
+    pub fn mul_glv_opt_master(p: &k256::ProjectivePoint, k: &k256::Scalar) -> k256::ProjectivePoint {
+        let (k1, k2, sign1, sign2) = Self::glv_decompose_master(k);
+
+        let p1 = p * &k1;
+        let p1_signed = if sign1 { -p1 } else { p1 };
+
+        let p2_endo = Self::endomorphism_apply(p);
+        let p2 = p2_endo * &k2;
+        let p2_signed = if sign2 { -p2 } else { p2 };
+
+        p1_signed + p2_signed
     }
 
     /// Helper function for rounding scalar division by 2^256

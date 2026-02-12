@@ -326,4 +326,80 @@ mod tests {
         // Ensure we complete within time limit (for CI/CD)
         assert!(duration < max_duration, "Test took too long: {:?}", duration);
     }
+
+    /// Test master-level GLV decompose correctness with k256::Scalar
+    #[test]
+    fn test_glv_master_decompose_correctness() {
+        let curve = Secp256k1::new();
+        let test_scalars = vec![
+            k256::Scalar::from(1u64),
+            k256::Scalar::from(123456789u64),
+            k256::Scalar::from_u128(12345678901234567890u128),
+            k256::Scalar::MAX,
+        ];
+
+        for k in test_scalars {
+            let (k1, k2, sign1, sign2) = curve.glv_decompose_master(&k);
+
+            // Reconstruct: k should equal sign1*k1 + sign2*k2 * lambda mod n
+            let lambda = curve.glv_lambda_scalar();
+            let k2_lambda = k2 * lambda;
+
+            let mut reconstructed = if sign1 > 0 { k1 } else { -k1 };
+            let k2_term = if sign2 > 0 { k2_lambda } else { -k2_lambda };
+            reconstructed = reconstructed + k2_term;
+
+            // Should equal k mod n
+            let expected = k.reduce();
+            let reconstructed_reduced = reconstructed.reduce();
+
+            assert_eq!(reconstructed_reduced, expected,
+                "GLV master reconstruction failed for scalar {:?}", k);
+        }
+
+        println!("✅ GLV master decompose reconstruction verified");
+    }
+
+    /// Test master-level GLV endomorphism apply
+    #[test]
+    fn test_glv_master_endomorphism_apply() {
+        let curve = Secp256k1::new();
+        let generator = k256::ProjectivePoint::GENERATOR;
+
+        // Apply endomorphism
+        let phi_g = curve.endomorphism_apply(&generator);
+
+        // Verify that phi(phi(G)) = -G (since phi^2 = -1)
+        let phi_phi_g = curve.endomorphism_apply(&phi_g);
+        let neg_g = -generator;
+
+        assert_eq!(phi_phi_g, neg_g,
+            "Endomorphism phi(phi(G)) should equal -G");
+
+        println!("✅ GLV master endomorphism verified");
+    }
+
+    /// Test master-level GLV optimized multiplication correctness
+    #[test]
+    fn test_glv_master_multiplication_correctness() {
+        let curve = Secp256k1::new();
+        let generator = k256::ProjectivePoint::GENERATOR;
+
+        let test_scalars = vec![
+            k256::Scalar::from(1u64),
+            k256::Scalar::from(42u64),
+            k256::Scalar::from(123456789u64),
+            k256::Scalar::from_u128(9876543210987654321u128),
+        ];
+
+        for k in test_scalars {
+            let result_glv = curve.mul_glv_opt_master(&generator, &k);
+            let result_naive = generator * &k;
+
+            assert_eq!(result_glv, result_naive,
+                "GLV master multiplication failed for scalar {:?}", k);
+        }
+
+        println!("✅ GLV master multiplication correctness verified");
+    }
 }
