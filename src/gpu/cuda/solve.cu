@@ -1,6 +1,48 @@
 // solve.cu - CUDA kernels for batch collision solving and BSGS
 #include <cuda_runtime.h>
 #include <stdint.h>
+#include <stdio.h> // For printf
+
+#define KANGS_PER_TARGET 4096
+#define DEBUG 1
+#define LIMBS 8
+#define WIDE_LIMBS 16
+
+// Point structure for elliptic curve points (Jacobian coordinates)
+struct Point {
+    uint32_t x[8]; // X coordinate (256-bit)
+    uint32_t y[8]; // Y coordinate (256-bit)
+    uint32_t z[8]; // Z coordinate (256-bit)
+};
+
+// Kangaroo state structure (exact match to Rust)
+struct KangarooState {
+    Point position;
+    uint32_t dist[8];
+    uint32_t alpha[8];
+    uint32_t beta[8];
+    uint32_t tame_wild; // 0 for tame, 1 for wild
+};
+
+// secp256k1 prime modulus (P) as uint32_t[8]
+__constant__ uint32_t P[8] = {
+    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE,
+    0xBAAEDCE6, 0xAF48A03B, 0xBFD25E8C, 0xD0364141
+};
+
+// GLV endomorphism beta constant
+__constant__ uint32_t GLV_BETA[8] = {
+    0x7AE96A2B, 0x65718000, 0x5F228AE5, 0x118050B7,
+    0xEC014F9A, 0xED809F6D, 0xCAA2B2BB, 0xC2D2EAA9
+};
+
+// Jump table for kangaroo hops (precomputed points)
+__constant__ Point JUMP_TABLE[256];
+
+// Small prime multipliers for BSGS
+__constant__ uint64_t PRIME_MULTIPLIERS[10] = {
+    2, 3, 5, 7, 11, 13, 17, 19, 23, 29
+};
 
 // Forward declarations for functions from step.cu
 extern __device__ int bigint_cmp(const uint32_t* a, const uint32_t* b);
@@ -144,16 +186,25 @@ static __device__ int bigint_cmp(const uint32_t* a, const uint32_t* b) {
     return 0;
 }
 
+// Parallel comparison for LIMBS arrays
+static __device__ int bigint_cmp_par(const uint32_t* a, const uint32_t* b) {
+    for (int i = LIMBS - 1; i >= 0; i--) {
+        if (a[i] > b[i]) return 1;
+        if (a[i] < b[i]) return -1;
+    }
+    return 0;
+}
 
-// Add res = a + b (carry out)
-static __device__ uint32_t bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* res) {
+
+// Add res = a + b
+static __device__ void bigint_add(const uint32_t* a, const uint32_t* b, uint32_t* res) {
     uint32_t carry = 0;
     for (int i = 0; i < LIMBS; i++) {
         uint64_t sum = (uint64_t)a[i] + b[i] + carry;
         res[i] = sum & 0xFFFFFFFF;
         carry = (sum >> 32) != 0 ? 1 : 0;
     }
-    return carry;
+    // Carry is ignored - function modifies res in place
 }
 
 // Mul res = a * b (wide)
