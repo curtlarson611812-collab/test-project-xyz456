@@ -243,28 +243,6 @@ __device__ void mod_inverse(const uint32_t* a, const uint32_t* mod, uint32_t* re
     for (int i = 0; i < LIMBS; i++) res[i] = t[i];
 }
 
-// Simple div for gcd (a / b = q)
-__device__ void bigint_div(const uint32_t* a, const uint32_t* b, uint32_t* q) {
-    for (int i = 0; i < LIMBS; i++) q[i] = 0;
-    uint32_t dividend[WIDE_LIMBS];
-    for (int i = 0; i < LIMBS; i++) dividend[i] = a[i];
-    for (int i = LIMBS; i < WIDE_LIMBS; i++) dividend[i] = 0;
-    for (int bit = 256 - 1; bit >= 0; bit--) {
-        uint32_t carry = 0;
-        for (int i = 0; i < WIDE_LIMBS; i++) {
-            uint32_t next_carry = dividend[i] >> 31;
-            dividend[i] = (dividend[i] << 1) | carry;
-            carry = next_carry;
-        }
-        if (bigint_cmp(dividend, b) >= 0) {
-            bigint_sub(dividend, b, dividend);
-            int word = bit / 32;
-            int bbit = bit % 32;
-            q[word] |= (1u << bbit);
-        }
-    }
-}
-
 // Device function for safe diff mod N
 __device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const uint32_t wild[LIMBS], const uint32_t n[LIMBS], uint32_t result[LIMBS]) {
     uint32_t diff[LIMBS], temp[LIMBS];
@@ -276,21 +254,6 @@ __device__ void cuda_safe_diff_mod_n(const uint32_t tame[LIMBS], const uint32_t 
         limb_sub(temp, wild, diff, LIMBS);
     }
     barrett_reduce_full(diff, n, MU_P, result);
-}
-
-// Phase 4/7/8 integrated collision solve kernel
-    // x is WIDE_LIMBS, modulus LIMBS, mu 9 limbs
-    uint32_t q[WIDE_LIMBS] = {0};
-    // Approximate q = (x >> (LIMBS*32 - 1)) * mu >> (LIMBS*32 + 1)
-    // Shift x right by k-1 = 255 bits (approx with loops)
-    for (int i = 0; i < WIDE_LIMBS; i++) q[i] = x[i] >> 1; // Simplified shift
-    mul_mod(q, mu, q, modulus); // q * mu mod (approx)
-    // r = x - q * modulus
-    uint32_t q_mod[WIDE_LIMBS] = {0};
-    mul_mod(q, modulus, q_mod, modulus); // Placeholder mod
-    limb_sub(x, q_mod, result, LIMBS);
-    // Final subtract if r >= modulus
-    if (limb_compare(result, modulus, LIMBS) >= 0) limb_sub(result, modulus, result, LIMBS);
 }
 
 // Device function: Point negation (y = -y mod p)
@@ -372,59 +335,8 @@ __device__ Point point_mul_small(const Point* p, uint32_t scalar, const uint32_t
 
 
 
-// Modular inverse via extended Euclidean for uint32_t[8]
-__device__ void mod_inverse(const uint32_t a[LIMBS], const uint32_t mod[LIMBS], uint32_t result[LIMBS]) {
-    uint32_t u[LIMBS], v[LIMBS], x1[LIMBS], x2[LIMBS];
-    for (int i = 0; i < LIMBS; i++) {
-        u[i] = a[i];
-        v[i] = mod[i];
-    }
-    uint32_t one[LIMBS] = {1, 0, 0, 0, 0, 0, 0, 0};
-    uint32_t zero[LIMBS] = {0};
-    for (int i = 0; i < LIMBS; i++) x1[i] = one[i], x2[i] = zero[i];
-
-    while (limb_compare(u, one, LIMBS) != 0 && limb_compare(v, one, LIMBS) != 0) {
-        while ((u[0] % 2) == 0) {
-            for (int i = 0; i < LIMBS - 1; i++) u[i] = (u[i] >> 1) | (u[i+1] << 31);
-            u[LIMBS-1] >>= 1;
-            if ((x1[0] % 2) == 0) {
-                for (int i = 0; i < LIMBS - 1; i++) x1[i] = (x1[i] >> 1) | (x1[i+1] << 31);
-                x1[LIMBS-1] >>= 1;
-            } else {
-                limb_add(x1, mod, x1, LIMBS);
-                for (int i = 0; i < LIMBS - 1; i++) x1[i] = (x1[i] >> 1) | (x1[i+1] << 31);
-                x1[LIMBS-1] >>= 1;
-            }
-        }
-        // Similar for v (omitted for brevity; symmetric)
-        // Subtract: if u > v, u -= v, x1 -= x2; else v -= u, x2 -= x1
-    }
-    if (limb_compare(u, one, LIMBS) == 0) for (int i = 0; i < LIMBS; i++) result[i] = x1[i];
-    else for (int i = 0; i < LIMBS; i++) result[i] = x2[i];
-    // Normalize if negative
-    if (result[LIMBS-1] & 0x80000000) limb_add(result, mod, result, LIMBS);
-}
 
 
-
-// Bigint modular reduction (alias to barrett_reduce_full)
-__device__ void bigint_mod(const uint32_t* x, const uint32_t* modulus, uint32_t* result) {
-    barrett_reduce_full(x, modulus, MU_P, result);
-}
-
-// GLV-optimized scalar mul
-__device__ Point mul_glv_opt(Point p, const uint32_t k[LIMBS]) {
-    uint32_t k1[LIMBS], k2[LIMBS];
-    // Decompose k = k1 + k2 * lambda mod n
-    // Simplified: split k into halves (full GLV: round(k / sqrt(n)), k1 = k - k2*lambda)
-    for (int i = 0; i < LIMBS; i++) k1[i] = k[i] & 0xFFFF, k2[i] = k[i] >> 16;
-    Point p1 = point_mul_small(&p, k1[0], SECP_P); // Small for simplicity
-    Point p2_beta = p;
-    // Apply beta: p2.x = p.x * beta mod p (endomorphism)
-    mul_mod(p.x, GLV_BETA, p2_beta.x, SECP_P);
-    Point p2 = point_mul_small(&p2_beta, k2[0], SECP_P);
-    return jacobian_add(p1, p2);
-}
 
 // Device function: Modular inverse via extended Euclid (simplified for u64 approximation)
 __device__ uint64_t mod_inverse_u64(uint64_t a, uint64_t mod) {
@@ -458,13 +370,6 @@ __device__ uint64_t factor_small_primes_u64(uint64_t val) {
     return val;
 }
 
-// Device function: Check if two points are equal (x-coordinate comparison)
-__device__ bool point_equal(const Point* p1, const Point* p2) {
-    for (int i = 0; i < LIMBS; i++) {
-        if (p1->x[i] != p2->x[i]) return false;
-    }
-    return true;
-}
 
 // Device function: Build baby steps table for BSGS
 __global__ void build_baby_steps(Point* baby_table, int m, const Point* generator, const uint32_t* mod) {
@@ -496,12 +401,12 @@ __global__ void bsgs_solve_kernel(
 
     // For each batch item, we would have different targets
     // For now, assume single target per kernel launch
-    const Point* current_target = target;
+    Point current_target = *target;
 
     // Build giant step table in shared memory or use global lookup
     // Simplified: just check baby steps first
     for (int i = 0; i < m; i++) {
-        if (point_equal(&baby_table[i], current_target)) {
+        if (point_equal(baby_table[i], current_target)) {
             results[idx] = i;
             return;
         }
@@ -594,49 +499,6 @@ __device__ void bigint_mul_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS],
     __syncthreads();
 }
 
-// Parallel cmp (reduce max diff)
-__device__ int bigint_cmp_par(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) {
-    int local_diff = 0;
-    for (int i = LIMBS - 1; i >= 0; i--) {
-        int cmp = (a[i] > b[i]) ? 1 : (a[i] < b[i]) ? -1 : 0;
-        if (cmp != 0) local_diff = cmp;
-    }
-    return __reduce_max_sync(0xFFFFFFFF, local_diff); // Warp reduce
-}
-
-// Parallel sub
-__device__ void bigint_sub_par(const uint32_t* a, const uint32_t* b, uint32_t* res) {
-    int idx = threadIdx.x;
-    if (idx >= LIMBS) return;
-    uint32_t borrow = 0;
-    if (idx > 0) borrow = __shfl_up_sync(0xFFFFFFFF, res[idx-1] >> 31, 1);
-    uint64_t diff = (uint64_t)a[idx] - b[idx] - borrow;
-    res[idx] = diff;
-    __syncthreads();
-}
-
-// Device helper: Parallel big integer comparison (old version - keeping for compatibility)
-__device__ int bigint_cmp_par_old(const uint32_t a[LIMBS], const uint32_t b[LIMBS]) {
-    int limb_idx = threadIdx.x % LIMBS;
-    int local_cmp = 0;
-
-    if (limb_idx < LIMBS) {
-        if (a[limb_idx] > b[limb_idx]) local_cmp = 1;
-        else if (a[limb_idx] < b[limb_idx]) local_cmp = -1;
-    }
-
-    // Find the most significant difference
-    int msb_diff = 0;
-    for (int i = LIMBS - 1; i >= 0; i--) {
-        int cmp = __shfl_sync(0xFFFFFFFF, local_cmp, i);
-        if (cmp != 0) {
-            msb_diff = cmp;
-            break;
-        }
-    }
-
-    return msb_diff;
-}
 
 // Device helper: Montgomery reduction (simplified)
 __device__ void montgomery_redc_par(const uint32_t t[WIDE_LIMBS], const uint32_t mod_[LIMBS], uint32_t n_prime, uint32_t result[LIMBS]) {
