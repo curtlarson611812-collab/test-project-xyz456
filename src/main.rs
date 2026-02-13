@@ -1893,8 +1893,7 @@ fn convert_valuable_p2pk_to_uncompressed() -> Result<()> {
                 converted_keys.push(uncompressed_hex);
             }
             Err(error_msg) => {
-                println!("⚠️  Line {}: {} bytes, prefix=0x{:02x}, error: {}",
-                        i + 1, bytes.len(), bytes.get(0).unwrap_or(&0), error_msg);
+                println!("⚠️  Line {}: error: {}", i + 1, error_msg);
                 invalid_keys.push((i + 1, hex_str.to_string(), error_msg));
             }
         }
