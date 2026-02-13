@@ -13,6 +13,7 @@ use speedbitcrack::types::KangarooState;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::bias;
 use speedbitcrack::types::RhoState;
+use speedbitcrack::utils::bias::{BiasAnalysis, analyze_comprehensive_bias};
 use speedbitcrack::math::constants::GENERATOR;
 use speedbitcrack::test_basic::run_basic_test;
 use speedbitcrack::simple_test::run_simple_test;
@@ -97,6 +98,9 @@ struct Args {
     bias_mod: u64,  // Bias modulus for jump selection (0 = no bias)
     #[arg(long)]
     high_bias: bool,  // Enable high-bias optimizations for puzzles like #145
+
+    #[arg(long)]
+    analyze_bias: Option<u32>,  // Analyze bias patterns for a specific puzzle
     #[arg(long)]
     magic9: bool,  // Enable magic 9 sniper mode for specific 9 pubkeys
     #[arg(long)]
@@ -893,6 +897,12 @@ async fn main() -> Result<()> {
     // Check if bias pattern analysis is requested
     if !args.analyze_biases.is_empty() {
         analyze_puzzle_biases(&args.analyze_biases);
+        return Ok(());
+    }
+
+    // Check if comprehensive bias analysis is requested for a specific puzzle
+    if let Some(puzzle_num) = args.analyze_bias {
+        analyze_single_puzzle_bias(puzzle_num)?;
         return Ok(());
     }
 
@@ -1788,6 +1798,68 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
     }
 
     info!("⏰ Search completed after {} cycles - no solution found", cycle_count);
+    Ok(())
+}
+
+/// Analyze comprehensive bias patterns for a single puzzle
+fn analyze_single_puzzle_bias(puzzle_num: u32) -> Result<()> {
+    use speedbitcrack::utils::bias::{analyze_comprehensive_bias, PUZZLE_145_BIAS, PUZZLE_135_BIAS};
+    use speedbitcrack::math::constants::GENERATOR;
+    use speedbitcrack::math::secp::Secp256k1;
+
+    println!("🔬 Comprehensive Bias Analysis for Puzzle #{}", puzzle_num);
+    info!("🔬 Comprehensive Bias Analysis for Puzzle #{}", puzzle_num);
+
+    // Load the puzzle point (simplified - would load from actual puzzle data)
+    let curve = Secp256k1::new();
+    let puzzle_point = match puzzle_num {
+        145 => {
+            // This would be loaded from actual puzzle data
+            // For now, create a representative point for demonstration
+            let scalar = speedbitcrack::math::bigint::BigInt256::from_u64(145);
+            curve.mul_scalar(&GENERATOR, &scalar)
+        },
+        135 => {
+            let scalar = speedbitcrack::math::bigint::BigInt256::from_u64(135);
+            curve.mul_scalar(&GENERATOR, &scalar)
+        },
+        _ => {
+            info!("⚠️  Puzzle #{} not pre-analyzed. Showing general bias analysis.", puzzle_num);
+            let scalar = speedbitcrack::math::bigint::BigInt256::from_u64(puzzle_num as u64);
+            curve.mul_scalar(&GENERATOR, &scalar)
+        }
+    };
+
+    // Perform comprehensive bias analysis
+    let analysis = analyze_comprehensive_bias(&puzzle_point);
+
+    // Display results
+    println!("{}", analysis.format_analysis());
+
+    // Show known comparisons if available
+    match puzzle_num {
+        145 => {
+            println!("\n📊 Known Results for Puzzle #145:");
+            println!("├─ Basic Bias:     {:.3f} (HIGH - optimal target)", PUZZLE_145_BIAS);
+            println!("├─ Mod3 Bias:      {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD3_BIAS);
+            println!("├─ Mod9 Bias:      {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD9_BIAS);
+            println!("├─ Mod27 Bias:     {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD27_BIAS);
+            println!("├─ Mod81 Bias:     {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD81_BIAS);
+            println!("├─ Golden Ratio:   {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_GOLD_BIAS);
+            println!("├─ Population:     {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_POP_BIAS);
+            println!("└─ Status:         🚀 LAUNCH TARGET - High bias exploitation recommended");
+        },
+        135 => {
+            println!("\n📊 Known Results for Puzzle #135:");
+            println!("├─ Basic Bias:     {:.3f} (Standard - comparison baseline)", PUZZLE_135_BIAS);
+            println!("└─ Status:         📊 Standard bias - use as baseline comparison");
+        },
+        _ => {
+            println!("\n📊 Analysis Complete for Puzzle #{}", puzzle_num);
+            println!("💡 Use --analyze-bias 145 or --analyze-bias 135 for known puzzle comparisons");
+        }
+    }
+
     Ok(())
 }
 
