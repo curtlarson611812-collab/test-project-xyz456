@@ -1913,9 +1913,6 @@ fn convert_valuable_p2pk_to_uncompressed() -> Result<()> {
         output_content.push_str(&format!("{}\n", key_hex));
     }
 
-    // Remove trailing newline if present
-    let output_content = output_content.trim_end();
-
     fs::write(output_filename, output_content)?;
 
     println!("✅ Conversion Complete!");
