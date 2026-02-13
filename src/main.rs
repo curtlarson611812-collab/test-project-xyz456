@@ -585,11 +585,13 @@ async fn main() -> Result<()> {
                 let tame = KangarooState {
                     id: i as u64,
                     position: curve.g.clone(), // Start from generator
-                    distance: BigInt256::zero(), // Start distance
+                    distance: [0u32; 8], // Start distance
                     alpha: [0u64; 4], // Initialize alpha coefficient
                     beta: [1u64; 4],  // Initialize beta coefficient (identity)
                     is_tame: true,
                     is_dp: false,
+                    step: 0,
+                    kangaroo_type: 0, // 0 = tame
                 };
                 all_kangaroos.push(tame);
             }
@@ -611,11 +613,13 @@ async fn main() -> Result<()> {
                 let wild = KangarooState {
                     id: (gpu_config.max_kangaroos/2 + i) as u64,
                     position: wild_position,
-                    distance: BigInt256::from_u64(prime as u64), // Initial distance = prime
+                    distance: [prime as u32, 0, 0, 0, 0, 0, 0, 0], // Initial distance = prime
                     alpha: [prime as u64, 0, 0, 0], // Initialize alpha with prime offset
                     beta: [1u64; 4],  // Initialize beta coefficient (identity)
                     is_tame: false,
                     is_dp: false,
+                    step: 0,
+                    kangaroo_type: 1, // 1 = wild
                 };
                 all_kangaroos.push(wild);
             }
@@ -661,7 +665,10 @@ async fn main() -> Result<()> {
                             stepped.position.clone(),
                             stepped.clone(),
                             (stepped.position.x[0] & ((1u64<<24)-1)) as u64, // DP hash
-                            (stepped.distance.div_rem(&BigInt256::from_u64(1000)).1.div_rem(&BigInt256::from_u64(100)).0.to_u64() % 100) as u32 // Distance-based clustering
+                            {
+                                let dist_big = BigInt256::from_u32_limbs(stepped.distance);
+                                (dist_big.div_rem(&BigInt256::from_u64(1000)).1.div_rem(&BigInt256::from_u64(100)).0.to_u64() % 100) as u32
+                            } // Distance-based clustering
                         );
                         dp_candidates.push(dp_entry);
                     }
@@ -698,8 +705,9 @@ async fn main() -> Result<()> {
                     // FULL BRENT'S CYCLE DETECTION during walk attempts
                     for kangaroo in &near_collisions {
                         // Use COMPLETE Brent's cycle detection with bias awareness
+                        let dist_big = BigInt256::from_u32_limbs(kangaroo.distance);
                         let cycle_result = speedbitcrack::kangaroo::generator::biased_brent_cycle(
-                            &kangaroo.distance,
+                            &dist_big,
                             &std::collections::HashMap::new() // Full bias map would be used in production
                         );
 
@@ -728,7 +736,7 @@ async fn main() -> Result<()> {
                         // Check if distances match (indicating potential collision)
                         if k1.distance == k2.distance {
                             // FULL VERIFICATION: Compute actual point and check against target
-                            let distance_bigint = k1.distance.clone();
+                            let distance_bigint = BigInt256::from_u32_limbs(k1.distance);
                             match curve.mul_constant_time(&distance_bigint, &curve.g) {
                                 Ok(collision_point) => {
                                     if collision_point.x == target_point.x && collision_point.y == target_point.y {
@@ -759,7 +767,8 @@ async fn main() -> Result<()> {
                 // STEP 6: ADVANCED HERD MANAGEMENT
                 // Remove stagnant kangaroos (those too far behind)
                 let original_count = all_kangaroos.len();
-                all_kangaroos.retain(|k| k.distance < BigInt256::from_u64(steps as u64 + 10000)); // Adaptive threshold
+                let threshold = BigInt256::from_u64(steps as u64 + 10000);
+                all_kangaroos.retain(|k| BigInt256::from_u32_limbs(k.distance) < threshold); // Adaptive threshold
                 let removed = original_count - all_kangaroos.len();
                 if removed > 0 {
                     println!("🚨 Removed {} stagnant kangaroos", removed);
@@ -795,7 +804,7 @@ async fn main() -> Result<()> {
                         let mut mod81_dist = [0u32; 81];
 
                         for k in &all_kangaroos {
-                            let val = k.distance.to_u64() as usize;
+                            let val = BigInt256::from_u32_limbs(k.distance).to_u64() as usize;
                             mod3_dist[val % 3] += 1;
                             mod9_dist[val % 9] += 1;
                             mod27_dist[val % 27] += 1;
@@ -816,8 +825,8 @@ async fn main() -> Result<()> {
                 // STEP 9: CONVERGENCE DETECTION and SACRED BOOSTERS
                 if steps % 5000 == 0 {
                     // Check for herd convergence (all kangaroos in similar distance ranges)
-                    let avg_distance = all_kangaroos.iter().map(|k| k.distance.to_u64()).sum::<u64>() / all_kangaroos.len() as u64;
-                    let converged = all_kangaroos.iter().filter(|k| (k.distance.to_u64() as i64 - avg_distance as i64).abs() < 1000).count();
+                    let avg_distance = all_kangaroos.iter().map(|k| BigInt256::from_u32_limbs(k.distance).to_u64()).sum::<u64>() / all_kangaroos.len() as u64;
+                    let converged = all_kangaroos.iter().filter(|k| (BigInt256::from_u32_limbs(k.distance).to_u64() as i64 - avg_distance as i64).abs() < 1000).count();
                     let convergence_ratio = converged as f64 / all_kangaroos.len() as f64;
 
                     if convergence_ratio > 0.8 {
@@ -1129,24 +1138,28 @@ fn pollard_lambda_parallel(target: &Point, _range: (BigInt256, BigInt256)) -> Op
         let wild_pos = curve.add(target, &curve.mul(&offset, &curve.g));
         let wild_state = KangarooState::new(
             wild_pos,
-            BigInt256::from_u64(offset.low_u64()),
+            [offset.low_u64() as u32, 0, 0, 0, 0, 0, 0, 0],
             [offset.low_u64(), 0, 0, 0],
             [1, 0, 0, 0],
             false, // wild
             false, // not dp
             i as u64,
+            0, // step
+            1, // kangaroo_type: wild
         );
         wild_states.push(wild_state);
     }
 
     let tame_state = KangarooState::new(
         tame_state,
-        BigInt256::zero(),
+        [0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         true, // tame
         false, // not dp
         0,
+        0, // step
+        0, // kangaroo_type: tame
     );
 
     // Run collision detection

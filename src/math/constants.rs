@@ -96,7 +96,7 @@ pub const GLV_WINDOW_SIZE: usize = 4;
 // These constants enable ~30-50% speedup in scalar multiplication via lattice decomposition
 
 use k256::Scalar;
-use subtle::{Choice, ConditionallySelectable};
+use subtle::Choice;
 
 /// GLV lambda scalar: root of x^2 + x + 1 = 0 mod n (order of secp256k1)
 /// lambda satisfies lambda^3 ≡ 1 mod n, lambda ≠ 1

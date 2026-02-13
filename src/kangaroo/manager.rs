@@ -16,7 +16,8 @@ use crate::gpu::VulkanBackend;
 use crate::gpu::CudaBackend;
 use crate::kangaroo::generator::KangarooGenerator;
 use crate::kangaroo::stepper::KangarooStepper;
-use crate::kangaroo::collision::{CollisionDetector, CollisionResult};
+use crate::kangaroo::collision::{CollisionDetector, CollisionResult, vow_parallel_rho};
+use rayon::prelude::*;
 use crate::parity::ParityChecker;
 use k256::{Scalar, ProjectivePoint};
 use crate::targets::TargetLoader;
@@ -733,8 +734,10 @@ impl KangarooManager {
 
                 // VOW-enhanced Rho on P2PK: parallel processing for 34k targets
                 if self.config.enable_vow_rho_p2pk {
-                    // TODO: Implement proper VOW processing with pubkey conversion
-                    // self.targets.par_iter().map(|t| vow_parallel_rho(&t.point.into(), 4, 1.0 / 2f64.powf(24.0))).collect::<Vec<_>>();
+                    // TODO: Implement proper Point to ProjectivePoint conversion
+                    // self.targets.par_iter().map(|target| {
+                    //     vow_parallel_rho(&target.point.into(), 4, 1.0 / 2f64.powf(24.0))
+                    // }).collect::<Vec<_>>();
                 }
 
                 if x_low == 0 {

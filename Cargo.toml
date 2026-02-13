@@ -86,10 +86,6 @@ criterion = { version = "0.5", features = ["html_reports"] }  # Performance benc
 proptest = "1.0"   # Property-based testing
 tokio-test = "0.4" # Async testing utilities
 
-[[bin]]
-name = "bias_analyze"
-path = "src/bin/bias_analyze.rs"
-
 [[test]]
 name = "magic9"
 path = "tests/magic9.rs"
