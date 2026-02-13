@@ -36,13 +36,13 @@ pub trait GpuBackend {
     fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>>;
 
     /// Batch modular inverse for discrete logarithm denominator calculation
-    fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>>;
+    fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>>;
 
     /// Batch collision solving for private key recovery
     fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>>;
 
     /// Advanced batch collision solving with target points
-    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>>;
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>>;
 
     /// Batch BSGS solving for near-collision resolution
     fn batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>>;

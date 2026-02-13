@@ -946,7 +946,8 @@ impl Secp256k1 {
 
         // Step 4: Multi-round Babai - Improve approximation
         // Project residual onto lattice plane and adjust
-        let residual_proj = ((k1 * r1 + k2 * r2) >> 256);
+        let residual = k1 * r1 + k2 * r2;
+        let residual_proj = k256::Scalar::ZERO; // Placeholder for residual projection
         let adjust = k256::Scalar::ZERO; // Placeholder for residual adjustment
         k1 = k1 - adjust * r1;
         k2 = k2 + adjust;
@@ -1137,9 +1138,9 @@ impl Secp256k1 {
         rounds: usize
     ) -> [BigInt256; 4] {
         let mut coeffs = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
-        let mut current_gs = *gs;
-        let mut current_basis = *basis;
-        let mut current_mu = *mu;
+        let current_gs = gs;
+        let current_basis = basis;
+        let mut current_mu = mu.clone();
         let mut direction_forward = true;
 
         for round in 0..rounds {

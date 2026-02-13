@@ -155,10 +155,10 @@ impl GpuBackend for CpuBackend {
             // Check for DP condition (simplified)
             if distances[i][0] & ((1u32 << 24) - 1) == 0 {
                 traps.push(Trap {
-                    x: positions[i][0],
+                    x: [distances[i][0] as u64, distances[i][1] as u64, distances[i][2] as u64, distances[i][3] as u64],
                     dist: BigUint::from_slice(&distances[i]),
                     is_tame: types[i] == 0,
-                    alpha: [0u32; 4],
+                    alpha: [0u64; 4],
                 });
             }
         }
@@ -180,9 +180,9 @@ impl GpuBackend for CpuBackend {
         Ok(vec![None; deltas.len()])
     }
 
-    fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         // CPU implementation using modular inverse (more efficient than Fermat's little theorem)
-        let mut results = Vec::with_capacity(a.len());
+        let mut results: Vec<Option<[u32; 8]>> = Vec::with_capacity(a.len());
         let modulus_big = num_bigint::BigUint::from_slice(&modulus.iter().rev().map(|&x| x).collect::<Vec<_>>());
 
         for input in a {
@@ -190,7 +190,7 @@ impl GpuBackend for CpuBackend {
             let input_big = num_bigint::BigUint::from_slice(&input.iter().rev().map(|&x| x).collect::<Vec<_>>());
 
             if input_big == num_bigint::BigUint::ZERO {
-                results.push([0u32; 8]);
+                results.push(Some([0u32; 8]));
                 continue;
             }
 
@@ -205,11 +205,11 @@ impl GpuBackend for CpuBackend {
                             result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
                         }
                     }
-                    results.push(result);
+                    results.push(Some(result));
                 }
                 None => {
                     // No inverse exists
-                    results.push([0u32; 8]);
+                    results.push(None);
                 }
             }
         }
@@ -227,8 +227,8 @@ impl GpuBackend for CpuBackend {
             let beta = dp.state.beta;
 
             // Convert to BigUint for modular arithmetic
-            let alpha_big = num_bigint::BigUint::from_slice(&alpha.iter().rev().map(|&x| x).collect::<Vec<_>>());
-            let beta_big = num_bigint::BigUint::from_slice(&beta.iter().rev().map(|&x| x).collect::<Vec<_>>());
+            let alpha_big = num_bigint::BigUint::from_slice(&alpha.iter().rev().map(|&x| x as u32).collect::<Vec<_>>());
+            let beta_big = num_bigint::BigUint::from_slice(&beta.iter().rev().map(|&x| x as u32).collect::<Vec<_>>());
 
             // Compute modular inverse and solve
             if let Some(beta_inv) = beta_big.modinv(&alpha_big) {
@@ -245,19 +245,19 @@ impl GpuBackend for CpuBackend {
                         result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
                     }
                 }
-                results.push(result);
+                results.push(Some(result));
             } else {
-                results.push([0u64; 4]);
+                results.push(None);
             }
         }
 
         Ok(results)
     }
 
-    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         // CPU implementation for advanced collision solving
         // k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod n
-        let mut results = Vec::with_capacity(alpha_t.len());
+        let mut results: Vec<Option<[u32; 8]>> = Vec::with_capacity(alpha_t.len());
 
         let n_big = num_bigint::BigUint::from_slice(&n.iter().rev().map(|&x| x).collect::<Vec<_>>());
 
@@ -282,9 +282,9 @@ impl GpuBackend for CpuBackend {
                         result[i] = u32::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0), chunk.get(3).copied().unwrap_or(0)]);
                     }
                 }
-                results.push(result);
+                results.push(Some(result));
             } else {
-                results.push([0u32; 8]);
+                results.push(None);
             }
         }
 
@@ -322,9 +322,9 @@ impl GpuBackend for CpuBackend {
     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
         // CPU implementation using Barrett reduction algorithm
         // Convert to BigUint for computation
-        let x_big = num_bigint::BigUint::from_slice(&x);
-        let modulus_big = num_bigint::BigUint::from_slice(&modulus);
-        let mu_big = num_bigint::BigUint::from_slice(&mu);
+        let x_big = num_bigint::BigUint::from_slice(&x[..]);
+        let modulus_big = num_bigint::BigUint::from_slice(&modulus[..]);
+        let mu_big = num_bigint::BigUint::from_slice(&mu[..]);
 
         // Barrett reduction: q = floor((x * mu) >> (2 * bit_length))
         let bit_len = modulus_big.bits();
@@ -461,8 +461,8 @@ impl GpuBackend for CpuBackend {
     }
 
     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
-        let a_big = num_bigint::BigUint::from_slice(&a);
-        let modulus_big = num_bigint::BigUint::from_slice(&modulus);
+        let a_big = num_bigint::BigUint::from_slice(a);
+        let modulus_big = num_bigint::BigUint::from_slice(modulus);
 
         match a_big.modinv(&modulus_big) {
             Some(inv) => {
@@ -480,8 +480,8 @@ impl GpuBackend for CpuBackend {
     }
 
     fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
-        let a_big = num_bigint::BigUint::from_slice(&a);
-        let b_big = num_bigint::BigUint::from_slice(&b);
+        let a_big = num_bigint::BigUint::from_slice(a);
+        let b_big = num_bigint::BigUint::from_slice(b);
 
         let result_big = &a_big * &b_big;
 
@@ -497,8 +497,8 @@ impl GpuBackend for CpuBackend {
     }
 
     fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
-        let a_big = num_bigint::BigUint::from_slice(&a);
-        let modulus_big = num_bigint::BigUint::from_slice(&modulus);
+        let a_big = num_bigint::BigUint::from_slice(a);
+        let modulus_big = num_bigint::BigUint::from_slice(modulus);
 
         let result_big = &a_big % &modulus_big;
 

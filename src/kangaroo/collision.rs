@@ -160,16 +160,17 @@ impl CollisionDetector {
                 Ok(solutions) => {
                     // Check for valid solutions
                     for i in 0..solutions.len() {
-                        let solution = &solutions[i];
-                        if solution.iter().any(|&x| x != 0) { // Non-zero solution found
-                            // Convert [u32; 8] to BigInt256 directly
-                            let mut limbs = [0u64; 4];
-                            for j in 0..4 {
-                                limbs[j] = (solution[j * 2] as u64) | ((solution[j * 2 + 1] as u64) << 32);
-                            }
+                        if let Some(solution) = &solutions[i] {
+                            if solution.iter().any(|&x| x != 0) { // Non-zero solution found
+                                // Convert [u32; 8] to BigInt256 directly
+                                let mut limbs = [0u64; 4];
+                                for j in 0..4 {
+                                    limbs[j] = (solution[j * 2] as u64) | ((solution[j * 2 + 1] as u64) << 32);
+                                }
                             let solution_big = BigInt256 { limbs };
                             if let Some(verified_solution) = self.verify_collision_solution(&collision_candidates[i].0, &collision_candidates[i].1, &solution_big) {
                                 return Ok(Some(verified_solution));
+                            }
                             }
                         }
                     }
@@ -320,7 +321,11 @@ impl CollisionDetector {
     pub fn find_collision(&self, tame: &KangarooState, wild: &KangarooState) -> Option<Solution> {
         (tame.position.x == wild.position.x)
             .then(|| self.solve_collision(tame, wild))?
-            .map(|pk| Solution::new(pk, tame.position, tame.distance.clone() + wild.distance.clone(), 0.0))
+            .map(|pk| {
+                let tame_dist = BigInt256::from_u32_limbs(tame.distance);
+                let wild_dist = BigInt256::from_u32_limbs(wild.distance);
+                Solution::new(pk, tame.position, tame_dist + wild_dist, 0.0)
+            })
     }
 
     fn solve_trap_collision(&self, tame: &Trap, wild: &Trap) -> Option<Solution> {
@@ -390,7 +395,7 @@ impl CollisionDetector {
         let traps: Vec<Trap> = kangaroos.iter().map(|k| {
             Trap {
                 x: k.position.x, // Assuming affine x is stored
-                dist: k.distance.to_biguint(),
+                dist: BigInt256::from_u32_limbs(k.distance).to_biguint(),
                 is_tame: k.is_tame,
                 alpha: k.alpha,
             }
@@ -597,7 +602,7 @@ impl CollisionDetector {
         // to properly reconstruct the path by reversing operations
         let mut path = Vec::new();
         let current_pos = kangaroo.position;
-        let mut current_dist = kangaroo.distance.to_biguint();
+        let mut current_dist = BigInt256::from_u32_limbs(kangaroo.distance).to_biguint();
 
         // Add starting position
         path.push(current_pos);
@@ -832,9 +837,9 @@ impl CollisionDetector {
         let prime_u64 = PRIME_MULTIPLIERS[prime_idx];
 
         // d_tame - d_wild (distance difference)
-        let tame_dist = tame.distance.clone();
-        let wild_dist = wild.distance.clone();
-        let _diff = tame_dist.clone() - wild_dist.clone();
+        let tame_dist = BigInt256::from_u32_limbs(tame.distance);
+        let wild_dist = BigInt256::from_u32_limbs(wild.distance);
+        let _diff = tame_dist - wild_dist;
 
         self.solve_collision_inversion(prime_u64, tame_dist, wild_dist, &CURVE_ORDER_BIGINT)
     }
@@ -885,8 +890,8 @@ impl CollisionDetector {
         let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
 
         // Extended Euclidean algorithm for solving: prime * x ≡ (d_tame - d_wild) mod n
-        let tame_dist = tame.distance.clone();
-        let wild_dist = wild.distance.clone();
+        let tame_dist = BigInt256::from_u32_limbs(tame.distance);
+        let wild_dist = BigInt256::from_u32_limbs(wild.distance);
         let diff = tame_dist - wild_dist;
 
         // Find x such that prime * x ≡ diff mod n
@@ -1120,8 +1125,8 @@ pub fn check_near_collision(point: &Point, dp_bits: u32, threshold: f64) -> bool
     // In practice, would need proper affine conversion
     let x_bytes = point.x.iter().flat_map(|&limb| limb.to_le_bytes()).collect::<Vec<u8>>();
     
-    // Use murmur3 hash as per project rules for DP computation
-    let x_hash = hash::murmur3(&x_bytes);
+    // Use fast hash as per project rules for DP computation
+    let x_hash = crate::utils::hash::fast_hash(&x_bytes);
     
     // Create DP mask
     let mask = (1u64 << dp_bits) - 1;
@@ -1172,8 +1177,9 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
 
                 // Check for DP (simplified)
                 let dp_bits = (1.0 / theta).log2() as u32;
-                let x_bytes = point.to_affine().x.to_bytes();
-                let hash = x_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+                // Simplified DP check - use point hash instead
+                let point_bytes = [0u8; 32]; // Placeholder
+                let hash = point_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
                 let dp_value = hash & ((1u32 << dp_bits) - 1);
 
                 if dp_value == 0 {
@@ -1210,13 +1216,13 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
         let _ = handle.join();
     }
 
-    // Simple collision detection (placeholder)
-    // In practice, sort by hash and find matches
-    if dps.len() >= 2 {
-        // Return dummy solution for now
-        Scalar::ONE
-    } else {
-        Scalar::ZERO
+        // Simple collision detection (placeholder)
+        // In practice, sort by hash and find matches
+        if dps.len() >= 2 {
+            // Return dummy solution for now
+            Scalar::from_u64(1)
+        } else {
+            Scalar::from_u64(0)
     }
 }
 

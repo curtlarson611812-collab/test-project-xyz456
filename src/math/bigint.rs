@@ -862,17 +862,14 @@ impl BigInt256 {
 
         BigInt256 { limbs: result }
     }
+
 }
 
-    /// Convert BigInt256 to GPU [u32; 8] limb format
-    pub fn to_u32_limbs(&self) -> [u32; 8] {
-        let mut result = [0u32; 8];
-        for i in 0..4 {
-            result[i * 2] = self.limbs[i] as u32;
-            result[i * 2 + 1] = (self.limbs[i] >> 32) as u32;
-        }
-        result
+impl From<k256::Scalar> for BigInt256 {
+    fn from(s: k256::Scalar) -> Self {
+        BigInt256::from_scalar(&s)
     }
+}
 
 impl fmt::Display for BigInt256 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

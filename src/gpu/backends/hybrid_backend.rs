@@ -575,15 +575,15 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn batch_inverse(&self, inputs: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, inputs: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         // Dispatch to CUDA for precision inverse operations
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.batch_inverse(inputs.clone(), modulus)
+            self.cuda.batch_inverse(inputs, modulus)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            self.cpu.batch_inverse(inputs.clone(), modulus)
+            self.cpu.batch_inverse(inputs, modulus)
         }
     }
 
@@ -599,7 +599,7 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         // Dispatch to CUDA for complex collision solving
         #[cfg(feature = "rustacuda")]
         {

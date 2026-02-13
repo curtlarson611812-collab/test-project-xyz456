@@ -212,7 +212,7 @@ impl GpuBackend for WgpuBackend {
         Ok(vec![])
     }
 
-    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan batch_inverse not implemented - use CUDA"))
     }
 
@@ -220,7 +220,7 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan batch_solve not implemented - use CUDA"))
     }
 
-    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan batch_solve_collision not implemented - use CUDA"))
     }
 
@@ -394,7 +394,7 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 
@@ -402,7 +402,7 @@ impl GpuBackend for WgpuBackend {
         Err(anyhow!("Vulkan backend not available"))
     }
 
-    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan backend not available"))
     }
 

@@ -959,9 +959,9 @@ impl KangarooGenerator {
             }
         }
         let tames: Vec<_> = (0..wilds.len()).map(|_| {
-            let mut tame = KangarooState::new(Point::infinity(), BigInt256::zero(), [0; 4], [0; 4], true, false, 0);
+            let mut tame = KangarooState::new(Point::infinity(), [0; 8], [0; 4], [0; 4], true, false, 0, 0, 0);
             tame.position = self.initialize_tame_start();
-            tame.distance = BigInt256::zero(); // BigInt256 distance for tame kangaroos
+            tame.distance = [0; 8]; // Reset distance for tame kangaroos
             tame
         }).collect();
         (wilds, tames)
@@ -1104,12 +1104,14 @@ impl KangarooGenerator {
             };
             states.push(KangarooState {
                 position: start,
-                distance: BigInt256::zero(),
+                distance: [0; 8],
                 alpha: [0; 4],
                 beta: [0; 4],
                 is_tame: i % 2 == 0,
                 is_dp: false,
                 id: i as u64,
+                step: 0,
+                kangaroo_type: if i % 2 == 0 { 0 } else { 1 },
             });
         }
         states
@@ -1182,11 +1184,13 @@ impl KangarooGenerator {
         for state in states.iter_mut() {
             for s in 0..steps {
                 // Use lambda bucket select for deterministic tame vs mixed wild
-                let bucket = self.select_bucket(&state.position, &state.distance, 0, s as u32, state.is_tame);
-                let jump = self.biased_jump(&state.distance, biases);
+                let distance_bigint = BigInt256::from_u32_limbs(state.distance);
+                let bucket = self.select_bucket(&state.position, &distance_bigint, 0, s as u32, state.is_tame);
+                let jump = self.biased_jump(&distance_bigint, biases);
                 let jump_point = self.curve.mul(&jumps[bucket as usize % jumps.len()], &self.curve.g);
                 state.position = self.curve.point_add(&state.position, &jump_point);
-                state.distance = state.distance.wrapping_add(jump.low_u64());
+                let new_distance = distance_bigint + jump;
+                state.distance = new_distance.to_u32_limbs();
 
                 // Symmetry double effect with rho negation map
                 let neg_pos = self.rho_negation_map(&state.position);
@@ -1194,7 +1198,8 @@ impl KangarooGenerator {
                     // Handle symmetry collision - would set DP flag
                 }
 
-                if state.distance.trailing_zeros() >= crate::math::constants::DP_BITS {
+                let distance_bigint = BigInt256::from_u32_limbs(state.distance);
+                if distance_bigint.trailing_zeros() >= crate::math::constants::DP_BITS {
                     state.is_dp = true;
                     break;
                 }

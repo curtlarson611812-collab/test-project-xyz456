@@ -5,6 +5,7 @@
 use crate::math::bigint::BigInt256;
 use crate::types::Point;
 use std::sync::LazyLock;
+use k256::Scalar;
 
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
 // From ./SmallOddPrime_Precise_code.rs — locked, no adjustments.
@@ -66,8 +67,6 @@ pub fn jump_table() -> Vec<BigInt256> {
 
 // GLV (Gallant-Lambert-Vanstone) endomorphism constants for secp256k1
 // These constants enable ~30-50% speedup in scalar multiplication via lattice decomposition
-
-use k256::Scalar;
 
 /// GLV lambda scalar: root of x^2 + x + 1 = 0 mod n (order of secp256k1)
 /// lambda satisfies lambda^3 ≡ 1 mod n, lambda ≠ 1

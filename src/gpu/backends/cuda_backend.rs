@@ -529,54 +529,9 @@ impl GpuBackend for CudaBackend {
         Ok(traps)
     }
 
-    fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
-        let batch_size = inputs.len() as i32;
-        if batch_size == 0 {
-            return Ok(vec![]);
-        }
-
-        // Prepare p-2 exponent for Fermat's little theorem
-        // For secp256k1 prime, compute p-2
-        let mut p_minus_2 = modulus;
-        // p-2 = p - 2 (subtract 2 from the prime)
-        if p_minus_2[0] >= 2 {
-            p_minus_2[0] -= 2;
-        } else {
-            // Handle borrow if needed
-            p_minus_2[0] = p_minus_2[0].wrapping_sub(2);
-        }
-        let exp_bits = p_minus_2.to_vec();
-        let exp_bit_length = 256;
-
-        // Allocate device memory and copy data
-        let inputs_flat: Vec<u32> = inputs.into_iter().flatten().collect();
-        let mut d_inputs = DeviceBuffer::from_slice(&inputs_flat)?;
-        let mut d_modulus = DeviceBuffer::from_slice(&modulus)?;
-        let mut d_exp_bits = DeviceBuffer::from_slice(&exp_bits)?;
-        let mut d_outputs = unsafe { DeviceBuffer::uninitialized(batch_size as usize * 8) }?;
-
-        // Launch cuBLAS-accelerated batch inverse kernel
-        let grid_size = (batch_size as u32 + 255) / 256;
-        let block_size = 256;
-
-        let inverse_fn = self.inverse_module.get_function(CStr::from_bytes_with_nul(b"batch_fermat_inverse\0")?)?;
-        let stream = &stream;
-        unsafe { cuda_check!(launch!(inverse_fn<<<(grid_size, 1, 1), (block_size, 1, 1), 0, stream>>>(
-            d_inputs.as_device_ptr(),
-            d_outputs.as_device_ptr(),
-            d_modulus.as_device_ptr(),
-            d_exp_bits.as_device_ptr(),
-            exp_bit_length as i32,
-            batch_size
-        )), "batch_inverse launch"); }
-
-        // Synchronize and read results
-        cuda_check!(stream.synchronize(), "batch_inverse sync");
-        let mut output_flat = vec![0u32; batch_size as usize * 8];
-        d_outputs.copy_to(&mut output_flat)?;
-        let outputs = output_flat.chunks(8).map(|c: &[u32]| c.try_into().unwrap()).collect();
-
-        Ok(outputs)
+    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+        // CUDA batch_inverse not fully implemented yet
+        Err(anyhow!("CUDA batch_inverse not implemented"))
     }
 
     fn batch_solve(&self, dps: &Vec<crate::dp::DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
@@ -618,7 +573,7 @@ impl GpuBackend for CudaBackend {
         Ok(results)
     }
 
-    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         let batch = alpha_t.len();
         if batch == 0 || batch != alpha_w.len() || batch != beta_t.len() || batch != beta_w.len() || batch != target.len() {
             return Err(anyhow::anyhow!("Invalid batch sizes for collision solving"));
@@ -982,7 +937,7 @@ impl GpuBackend for CudaBackend {
         Err(anyhow!("CUDA backend not available"))
     }
 
-    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("CUDA backend not available"))
     }
 
@@ -990,7 +945,7 @@ impl GpuBackend for CudaBackend {
         Err(anyhow!("CUDA backend not available"))
     }
 
-    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<[u32;8]>> {
+    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("CUDA backend not available"))
     }
 
