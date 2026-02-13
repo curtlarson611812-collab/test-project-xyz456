@@ -3,7 +3,7 @@
 //! Custom 256-bit integer helpers if k256 insufficient for GPU interop
 
 use std::fmt;
-use std::ops::{Add, Sub, Mul, Div, Rem};
+use std::ops::{Add, Sub, Mul, Div, Rem, Index, IndexMut};
 use std::error::Error;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -480,11 +480,6 @@ impl BigInt256 {
         BigInt256 { limbs }
     }
 
-    /// Convert to BigUint (num-bigint)
-    pub fn to_biguint(&self) -> num_bigint::BigUint {
-        let u32_limbs: Vec<u32> = self.limbs.iter().flat_map(|&x| vec![x as u32, (x >> 32) as u32]).collect();
-        num_bigint::BigUint::from_slice(&u32_limbs)
-    }
 
     /// Convert to little-endian bytes
     pub fn to_bytes_le(&self) -> [u8; 32] {
@@ -837,6 +832,50 @@ impl BigInt256 {
         self.limbs
     }
 
+    /// Absolute value (BigInt256 is unsigned, so returns self)
+    pub fn abs(&self) -> Self {
+        self.clone()
+    }
+
+    /// Round to integer (BigInt256 is already an integer, so returns self)
+    pub fn round_to_int(&self) -> Self {
+        self.clone()
+    }
+
+    /// Negate (two's complement for unsigned BigInt)
+    pub fn neg(&self) -> Self {
+        // For unsigned arithmetic, negation is -x mod 2^256
+        // This is equivalent to (~x + 1) for two's complement
+        let mut result = [0u64; 4];
+        let mut carry = 1u64;
+
+        for i in 0..4 {
+            let negated = (!self.limbs[i]).wrapping_add(carry);
+            result[i] = negated & 0xFFFFFFFFFFFFFFFF;
+            carry = (negated.wrapping_shr(64)) & 1;
+        }
+
+        BigInt256 { limbs: result }
+    }
+
+    /// Convert to num_bigint::BigUint
+    pub fn to_biguint(&self) -> num_bigint::BigUint {
+        num_bigint::BigUint::from_bytes_be(&self.to_bytes_be())
+    }
+}
+
+impl From<[u32; 8]> for BigInt256 {
+    fn from(limbs: [u32; 8]) -> Self {
+        Self::from_u32_limbs(limbs)
+    }
+}
+
+impl From<BigInt256> for [u32; 8] {
+    fn from(b: BigInt256) -> Self {
+        b.to_u32_limbs()
+    }
+}
+
 
 
     /// Absolute value (since BigInt256 is unsigned, returns self)
@@ -864,8 +903,6 @@ impl BigInt256 {
 
         BigInt256 { limbs: result }
     }
-
-}
 
 impl From<k256::Scalar> for BigInt256 {
     fn from(s: k256::Scalar) -> Self {

@@ -1198,7 +1198,7 @@ impl KangarooGenerator {
                     // Handle symmetry collision - would set DP flag
                 }
 
-                let distance_bigint = BigInt256::from_u32_limbs(state.distance);
+                let distance_bigint = state.distance.clone();
                 if distance_bigint.trailing_zeros() >= crate::math::constants::DP_BITS {
                     state.is_dp = true;
                     break;

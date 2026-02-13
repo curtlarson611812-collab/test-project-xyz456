@@ -70,9 +70,9 @@ impl KangarooStepper {
             // Tame: position += jump_d * G, distance += jump_d
             let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), &self.curve.g).unwrap();
             let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-            let current_dist_bigint = BigInt256::from_u32_limbs(kangaroo.distance);
+            let current_dist_bigint = kangaroo.distance.clone();
             let new_dist_bigint = crate::kangaroo::generator::additive_tame_jump(&current_dist_bigint, jump_d);
-            let new_dist = new_dist_bigint.to_u32_limbs();
+            let new_dist = new_dist_bigint;
             let alpha_update = [jump_d as u64, 0, 0, 0]; // Simple alpha update for tame
             let beta_update = [0, 0, 0, 0];
             (new_pos, new_dist, alpha_update, beta_update)
@@ -82,9 +82,9 @@ impl KangarooStepper {
                 let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), target_point).unwrap();
                 let new_pos = self.curve.add(&kangaroo.position, &jump_point);
                 // For wild: multiplicative distance update (scalar *= jump_d mod n)
-                let current_dist_bigint = BigInt256::from_u32_limbs(kangaroo.distance);
+                let current_dist_bigint = kangaroo.distance.clone();
                 let new_dist_bigint = crate::kangaroo::generator::multiplicative_wild_jump(&current_dist_bigint, jump_d);
-                let new_dist = new_dist_bigint.to_u32_limbs();
+                let new_dist = new_dist_bigint;
                 let alpha_update = [0, 0, 0, 0];
                 let beta_update = [jump_d as u64, 0, 0, 0]; // Simple beta update for wild
                 (new_pos, new_dist, alpha_update, beta_update)

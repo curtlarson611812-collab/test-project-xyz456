@@ -394,7 +394,7 @@ impl CollisionDetector {
         let traps: Vec<Trap> = kangaroos.iter().map(|k| {
             Trap {
                 x: k.position.x, // Assuming affine x is stored
-                dist: BigInt256::from_u32_limbs(k.distance).to_biguint(),
+                dist: k.distance.to_biguint(),
                 is_tame: k.is_tame,
                 alpha: k.alpha,
             }
@@ -601,7 +601,7 @@ impl CollisionDetector {
         // to properly reconstruct the path by reversing operations
         let mut path = Vec::new();
         let current_pos = kangaroo.position;
-        let mut current_dist = BigInt256::from_u32_limbs(kangaroo.distance).to_biguint();
+        let mut current_dist = kangaroo.distance.clone().into();
 
         // Add starting position
         path.push(current_pos);
@@ -836,8 +836,8 @@ impl CollisionDetector {
         let prime_u64 = PRIME_MULTIPLIERS[prime_idx];
 
         // d_tame - d_wild (distance difference)
-        let tame_dist = BigInt256::from_u32_limbs(tame.distance);
-        let wild_dist = BigInt256::from_u32_limbs(wild.distance);
+        let tame_dist = tame.distance.clone();
+        let wild_dist = wild.distance.clone();
         let _diff = tame_dist.clone() - wild_dist.clone();
 
         self.solve_collision_inversion(prime_u64, tame_dist, wild_dist, &CURVE_ORDER_BIGINT)
@@ -889,8 +889,8 @@ impl CollisionDetector {
         let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
 
         // Extended Euclidean algorithm for solving: prime * x ≡ (d_tame - d_wild) mod n
-        let tame_dist = BigInt256::from_u32_limbs(tame.distance);
-        let wild_dist = BigInt256::from_u32_limbs(wild.distance);
+        let tame_dist = tame.distance.clone();
+        let wild_dist = wild.distance.clone();
         let diff = tame_dist - wild_dist;
 
         // Find x such that prime * x ≡ diff mod n
