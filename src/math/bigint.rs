@@ -3,7 +3,7 @@
 //! Custom 256-bit integer helpers if k256 insufficient for GPU interop
 
 use std::fmt;
-use std::ops::{Add, Sub, Mul, Div, Rem, Index, IndexMut};
+use std::ops::{Add, Sub, Mul, Div, Rem, OverflowingAdd};
 use std::error::Error;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -1394,6 +1394,22 @@ impl Add for BigInt256 {
         }
 
         BigInt256 { limbs: result }
+    }
+}
+
+impl OverflowingAdd for BigInt256 {
+    fn overflowing_add(&self, rhs: &Self) -> (Self, bool) {
+        let mut result = [0u64; 4];
+        let mut carry = 0u64;
+
+        for i in 0..4 {
+            let (sum, carry1) = self.limbs[i].overflowing_add(rhs.limbs[i]);
+            let (sum, carry2) = sum.overflowing_add(carry);
+            result[i] = sum;
+            carry = (carry1 as u64) + (carry2 as u64);
+        }
+
+        (BigInt256 { limbs: result }, carry != 0)
     }
 }
 
