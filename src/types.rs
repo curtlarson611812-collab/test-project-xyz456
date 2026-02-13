@@ -295,8 +295,8 @@ impl fmt::Display for Point {
 pub struct KangarooState {
     /// Current position (point on curve)
     pub position: Point,
-    /// Distance traveled (steps) as uint32_t[8] to match CUDA
-    pub distance: [u32; 8],
+    /// Distance traveled (steps) as BigInt256 for unified arithmetic
+    pub distance: BigInt256,
     /// Alpha coefficient for collision solving
     pub alpha: [u64; 4],
     /// Beta coefficient for collision solving
@@ -328,7 +328,7 @@ pub struct TaggedKangarooState {
 
 impl KangarooState {
     /// Create new kangaroo state
-    pub fn new(position: Point, distance: [u32; 8], alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, id: u64, step: u64, kangaroo_type: u32) -> Self {
+    pub fn new(position: Point, distance: BigInt256, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, id: u64, step: u64, kangaroo_type: u32) -> Self {
         KangarooState {
             position,
             distance,

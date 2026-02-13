@@ -1,0 +1,1419 @@
+warning: speedbitcrack@0.1.0: SECURITY: Key-derived biases no longer embedded in binary
+warning: speedbitcrack@0.1.0: All valuable and Magic9 keys must be loaded from external files at runtime
+warning: speedbitcrack@0.1.0: Starting CUDA kernel compilation with enhanced debugging...
+warning: speedbitcrack@0.1.0: nvcc found at: /usr/local/cuda-13.0/bin/nvcc
+warning: speedbitcrack@0.1.0: Using default GPU arch: sm_86
+warning: speedbitcrack@0.1.0: Compiling 11 CUDA files together with shared constants header:
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/bigint_mul.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/step.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/solve.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/rho_kernel_optimized.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/barrett_kernel_optimized.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/hybrid.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/bias_check_kernel.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/gold_cluster.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/mod27_kernel.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/mod81_kernel.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/glv_decomp.cu
+warning: speedbitcrack@0.1.0: Starting CUDA compilation...
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z22bigint_mul_kernel_simdPKmS0_Pmj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z17bigint_mul_kernelPvS_S_j' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z15test_bigint_mulP9bigint256S0_S0_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z15test_bigint_addP9bigint256S0_S0_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z22bigint_mul_kernel_simdPKmS0_Pmj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z22bigint_mul_kernel_simdPKmS0_Pmj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 36 registers, used 0 barriers, 380 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 25.421 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z17bigint_mul_kernelPvS_S_j' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17bigint_mul_kernelPvS_S_j
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 24 registers, used 0 barriers, 380 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 8.150 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z15test_bigint_mulP9bigint256S0_S0_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15test_bigint_mulP9bigint256S0_S0_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 0 barriers, 376 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 5.732 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z15test_bigint_addP9bigint256S0_S0_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15test_bigint_addP9bigint256S0_S0_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 24 registers, used 0 barriers, 376 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.711 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15carry_prop_warpmj
+warning: speedbitcrack@0.1.0:     32 bytes stack frame, 28 bytes spill stores, 28 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.977 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11mul256_simdPmPKmS1_
+warning: speedbitcrack@0.1.0:     64 bytes stack frame, 64 bytes spill stores, 64 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 37.235 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z18montgomery_mul_optPKmS0_S0_mPm
+warning: speedbitcrack@0.1.0:     32 bytes stack frame, 28 bytes spill stores, 28 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 32.419 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z12bigint256_ge9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.049 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_cmp9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.702 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_shr9bigint256j
+warning: speedbitcrack@0.1.0:     64 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.073 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_mul9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 5.390 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_add9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.353 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_sub9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.810 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17secp256k1_curve_av
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.246 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15bigint256_eightv
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.117 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint256_fourv
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.868 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15bigint256_threev
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.107 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_twov
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.972 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_onev
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.975 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint256_zerov
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.985 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z11step_kernelP13KangarooStateiPK5PointPj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z17kangaroo_step_optP5PointPmPjS0_P4Trapjjjjiim' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 25344 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z11step_kernelP13KangarooStateiPK5PointPj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11step_kernelP13KangarooStateiPK5PointPj
+warning: speedbitcrack@0.1.0:     144 bytes stack frame, 240 bytes spill stores, 416 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 208.263 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z17kangaroo_step_optP5PointPmPjS0_P4Trapjjjjiim' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17kangaroo_step_optP5PointPmPjS0_P4Trapjjjjiim
+warning: speedbitcrack@0.1.0:     704 bytes stack frame, 1764 bytes spill stores, 2228 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 1 barriers, 3072 bytes smem, 424 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1262.980 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z22multi_round_babai_glv4PKjPjS0_S0_S0_i
+warning: speedbitcrack@0.1.0:     3128 bytes stack frame, 3940 bytes spill stores, 3232 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 164.910 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17mul_short_ct_cuda5PointPj
+warning: speedbitcrack@0.1.0:     680 bytes stack frame, 1808 bytes spill stores, 2392 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2068.948 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11ct_naf_cudaPKjPhi
+warning: speedbitcrack@0.1.0:     56 bytes stack frame, 16 bytes spill stores, 16 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4151.798 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16cond_neg_ct_cuda5Pointa
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.157 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z18endomorphism_applyPK5PointPS_
+warning: speedbitcrack@0.1.0:     8 bytes stack frame, 8 bytes spill stores, 8 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 33.425 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z18mul_glv4_opt_babai5PointPKj
+warning: speedbitcrack@0.1.0:     1112 bytes stack frame, 4564 bytes spill stores, 6112 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 29183.088 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11mul_glv_opt5PointPKj
+warning: speedbitcrack@0.1.0:     808 bytes stack frame, 2440 bytes spill stores, 2928 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1469.928 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20glv_decompose_scalarPKjPjS1_PaS2_
+warning: speedbitcrack@0.1.0:     344 bytes stack frame, 52 bytes spill stores, 52 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 24.668 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16multi_babai_glv4PKjPjS0_S0_S0_i
+warning: speedbitcrack@0.1.0:     336 bytes stack frame, 460 bytes spill stores, 600 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 37.428 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20glv4_decompose_babaiPKjPA8_jPa
+warning: speedbitcrack@0.1.0:     1096 bytes stack frame, 1528 bytes spill stores, 2096 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 11979.411 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20gram_schmidt_4d_cudaPA8_KjPA8_j
+warning: speedbitcrack@0.1.0:     360 bytes stack frame, 460 bytes spill stores, 592 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 169.424 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17bigint_div_approxPKjS0_Pj
+warning: speedbitcrack@0.1.0:     40 bytes stack frame, 36 bytes spill stores, 36 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 12.638 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z9point_negPK5PointPS_PKj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.970 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z10bigint_subPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.446 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint_sub_parPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.930 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint_add_parPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.082 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint_mul_parPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 14.250 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z12ec_mul_small5Pointm
+warning: speedbitcrack@0.1.0:     360 bytes stack frame, 916 bytes spill stores, 1132 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 286.286 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z12jacobian_add5PointS_
+warning: speedbitcrack@0.1.0:     128 bytes stack frame, 156 bytes spill stores, 132 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 174.007 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15jacobian_double5Point
+warning: speedbitcrack@0.1.0:     72 bytes stack frame, 72 bytes spill stores, 72 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 62.324 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z7mul_modPKjS0_PjS0_
+warning: speedbitcrack@0.1.0:     24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 6.803 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11point_equal5PointS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.667 ms
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: 
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16batch_scalar_mulP5PointPjiPKj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16solve_collisionsP7DpEntryS0_P5PointiiPi' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16check_collisionsPjS_S_iS_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27batch_collision_solve_fusedPjS_S_S_S_S_jS_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z20batch_barrett_reducePjS_S_S_bjii' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z26batch_bsgs_collision_solvePK5PointPKjS3_PjimS3_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z21batch_collision_solvePjS_S_S_S_S_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z17bsgs_solve_kernelPK5PointS1_S1_PjiiPKj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16build_baby_stepsP5PointiPKS_PKj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 164 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16batch_scalar_mulP5PointPjiPKj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16batch_scalar_mulP5PointPjiPKj
+warning: speedbitcrack@0.1.0:     224 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 38 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.678 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16solve_collisionsP7DpEntryS0_P5PointiiPi' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16solve_collisionsP7DpEntryS0_P5PointiiPi
+warning: speedbitcrack@0.1.0:     1040 bytes stack frame, 4 bytes spill stores, 4 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 0 barriers, 392 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 73.237 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16check_collisionsPjS_S_iS_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16check_collisionsPjS_S_iS_
+warning: speedbitcrack@0.1.0:     128 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 37 registers, used 0 barriers, 392 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.995 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27batch_collision_solve_fusedPjS_S_S_S_S_jS_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27batch_collision_solve_fusedPjS_S_S_S_S_jS_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 30 registers, used 0 barriers, 192 bytes smem, 420 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.454 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z20batch_barrett_reducePjS_S_S_bjii' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20batch_barrett_reducePjS_S_S_bjii
+warning: speedbitcrack@0.1.0:     104 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 1 barriers, 192 bytes smem, 400 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 16.191 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z26batch_bsgs_collision_solvePK5PointPKjS3_PjimS3_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z26batch_bsgs_collision_solvePK5PointPKjS3_PjimS3_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 26 registers, used 0 barriers, 412 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.522 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z21batch_collision_solvePjS_S_S_S_S_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z21batch_collision_solvePjS_S_S_S_S_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 25 registers, used 0 barriers, 192 bytes smem, 412 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.525 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z17bsgs_solve_kernelPK5PointS1_S1_PjiiPKj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17bsgs_solve_kernelPK5PointS1_S1_PjiiPKj
+warning: speedbitcrack@0.1.0:     192 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 58 registers, used 0 barriers, 400 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.590 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16build_baby_stepsP5PointiPKS_PKj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16build_baby_stepsP5PointiPKS_PKj
+warning: speedbitcrack@0.1.0:     368 bytes stack frame, 240 bytes spill stores, 160 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 7.779 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z32collect_distinguished_points_soaPjS_S_S_S_S_jj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z14rho_kernel_aosPjS_Pfjjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z14rho_kernel_soaPjS_S_S_S_Pfjjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 68 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z32collect_distinguished_points_soaPjS_S_S_S_S_jj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z32collect_distinguished_points_soaPjS_S_S_S_S_jj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 14 registers, used 0 barriers, 408 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.707 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z14rho_kernel_aosPjS_Pfjjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14rho_kernel_aosPjS_Pfjjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 13 registers, used 0 barriers, 388 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.681 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z14rho_kernel_soaPjS_S_S_S_Pfjjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14rho_kernel_soaPjS_S_S_S_Pfjjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 0 barriers, 412 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.296 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z30batch_barrett_reduce_bigint256PA8_jiPjS1_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z24fast_bias_residue_kernelPKjPjjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z21barrett_modpow_kernelPKjS0_Pjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z25barrett_mod_kernel_sharedPKjPjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 68 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z30batch_barrett_reduce_bigint256PA8_jiPjS1_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z30batch_barrett_reduce_bigint256PA8_jiPjS1_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.529 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z24fast_bias_residue_kernelPKjPjjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z24fast_bias_residue_kernelPKjPjjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 12 registers, used 1 barriers, 376 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.297 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z21barrett_modpow_kernelPKjS0_Pjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z21barrett_modpow_kernelPKjS0_Pjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 50 registers, used 1 barriers, 32 bytes smem, 380 bytes cmem[0], 16 bytes cmem[2]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.960 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z25barrett_mod_kernel_sharedPKjPjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z25barrett_mod_kernel_sharedPKjPjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 25 registers, used 1 barriers, 32 bytes smem, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.809 ms
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: 
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z23fused_mul_reduce_kernelPjS_S_S_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z20batch_mod_sqr_hybridPjS_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z20batch_mod_mul_hybridPjS_S_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 108 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z23fused_mul_reduce_kernelPjS_S_S_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z23fused_mul_reduce_kernelPjS_S_S_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 55 registers, used 1 barriers, 16384 bytes smem, 396 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 31.778 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z20batch_mod_sqr_hybridPjS_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20batch_mod_sqr_hybridPjS_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 6 registers, used 1 barriers, 380 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.612 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z20batch_mod_mul_hybridPjS_S_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20batch_mod_mul_hybridPjS_S_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 6 registers, used 1 barriers, 388 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.468 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z24bias_check_kernel_paddedPjPhjPf' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27common_bias_attractor_checkPmPhi' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z26multi_bias_attractor_checkPmPhiiS_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z24bias_check_kernel_paddedPjPhjPf' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z24bias_check_kernel_paddedPjPhjPf
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 15 registers, used 1 barriers, 448 bytes smem, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.748 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27common_bias_attractor_checkPmPhi' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27common_bias_attractor_checkPmPhi
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 36 registers, used 0 barriers, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 12.075 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z26multi_bias_attractor_checkPmPhiiS_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z26multi_bias_attractor_checkPmPhiiS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 34 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 11.025 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z23gold_cluster_batch_stepPmS_S_S_S_ihhhh' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27generate_gold_cluster_jumpsPmihhhh' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z23gold_cluster_batch_stepPmS_S_S_S_ihhhh' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z23gold_cluster_batch_stepPmS_S_S_S_ihhhh
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 24 registers, used 1 barriers, 400 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.273 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27generate_gold_cluster_jumpsPmihhhh' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27generate_gold_cluster_jumpsPmihhhh
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 48 registers, used 1 barriers, 368 bytes cmem[0], 8 bytes cmem[2]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 14.504 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11gold_ec_opsPmPKm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.250 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z22apply_gold_bias_sharedPm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.015 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z25preload_gold_cluster_biashhhh
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.759 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z21mod27_attractor_checkPmPbi' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z21mod27_attractor_checkPmPbi' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z21mod27_attractor_checkPmPbi
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 20 registers, used 0 barriers, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.587 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16mod81_bias_checkPKmPbiPji' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16mod81_bias_checkPKmPbiPji' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16mod81_bias_checkPKmPbiPji
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 20 registers, used 0 barriers, 388 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 5.712 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13mod81_barrettPKm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.251 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27glv4_batch_decompose_kernelPK8scalar_tP12glv_result_ti' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27glv4_batch_decompose_kernelPK8scalar_tP12glv_result_ti' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27glv4_batch_decompose_kernelPK8scalar_tP12glv_result_ti
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 0 barriers, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 17.097 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z19bigint256_to_scalar11bigint256_t
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.840 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20bigint256_mul_scalar11bigint256_tm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.471 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_sub11bigint256_tS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.965 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_add11bigint256_tS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.314 ms
+warning: speedbitcrack@0.1.0: CUDA compilation completed successfully in 151.24s
+warning: unused import: `subtle::Choice`
+  --> src/math/constants.rs:99:5
+   |
+99 | use subtle::Choice;
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `vow_parallel_rho`
+  --> src/kangaroo/manager.rs:19:70
+   |
+19 | use crate::kangaroo::collision::{CollisionDetector, CollisionResult, vow_parallel_rho};
+   |                                                                      ^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::path::Path`
+  --> src/kangaroo/manager.rs:28:5
+   |
+28 | use std::path::Path;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::math::constants::jump_table`
+ --> src/kangaroo/stepper.rs:7:5
+  |
+7 | use crate::math::constants::jump_table;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `k256::ProjectivePoint`
+ --> src/kangaroo/stepper.rs:9:5
+  |
+9 | use k256::ProjectivePoint;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Scalar`
+ --> src/gpu/hybrid_manager.rs:9:52
+  |
+9 | use crate::types::{Point, Solution, KangarooState, Scalar};
+  |                                                    ^^^^^^
+
+warning: unused import: `crate::math::bigint::BigInt256`
+ --> src/parity/checker.rs:6:5
+  |
+6 | use crate::math::bigint::BigInt256;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `RngCore`
+ --> src/utils/bias.rs:8:17
+  |
+8 | use rand::{Rng, RngCore};
+  |                 ^^^^^^^
+
+warning: variable does not need to be mutable
+  --> src/kangaroo/manager.rs:94:13
+   |
+94 |         let mut targets = if let Some(priority_path) = &config.priority_list {
+   |             ----^^^^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `n_bytes`
+   --> src/math/constants.rs:177:21
+    |
+177 |                 let n_bytes = [
+    |                     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_n_bytes`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `k256::elliptic_curve::PrimeField`
+  --> src/math/secp.rs:11:5
+   |
+11 | use k256::elliptic_curve::PrimeField;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `rayon::prelude`
+  --> src/kangaroo/manager.rs:20:5
+   |
+20 | use rayon::prelude::*;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `rayon::prelude`
+  --> src/dp/pruning.rs:10:5
+   |
+10 | use rayon::prelude::*;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused variable: `v1`
+   --> src/math/secp.rs:912:13
+    |
+912 |         let v1 = Self::glv_v1_scalar();
+    |             ^^ help: if this is intentional, prefix it with an underscore: `_v1`
+
+warning: unused variable: `v2`
+   --> src/math/secp.rs:913:13
+    |
+913 |         let v2 = Self::glv_v2_scalar();
+    |             ^^ help: if this is intentional, prefix it with an underscore: `_v2`
+
+warning: unused variable: `k_big`
+   --> src/math/secp.rs:924:13
+    |
+924 |         let k_big = BigInt256::zero();
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_k_big`
+
+warning: unused variable: `v1_big`
+   --> src/math/secp.rs:925:13
+    |
+925 |         let v1_big = BigInt256::zero();
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_v1_big`
+
+warning: unused variable: `v2_big`
+   --> src/math/secp.rs:926:13
+    |
+926 |         let v2_big = BigInt256::zero();
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_v2_big`
+
+warning: unused variable: `t1_rounded`
+   --> src/math/secp.rs:933:13
+    |
+933 |         let t1_rounded = t1_big;
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t1_rounded`
+
+warning: unused variable: `t2_rounded`
+   --> src/math/secp.rs:934:13
+    |
+934 |         let t2_rounded = t2_big;
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_t2_rounded`
+
+warning: unused variable: `residual`
+   --> src/math/secp.rs:951:13
+    |
+951 |         let residual = k1 * r1 + k2 * r2;
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_residual`
+
+warning: unused variable: `residual_proj`
+   --> src/math/secp.rs:952:13
+    |
+952 |         let residual_proj = k256::Scalar::ZERO; // Placeholder for residual projection
+    |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_residual_proj`
+
+warning: unused variable: `a`
+    --> src/math/secp.rs:1004:26
+     |
+1004 |     fn scalar_dot(&self, a: &k256::Scalar, b: &k256::Scalar) -> BigInt256 {
+     |                          ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: unused variable: `b`
+    --> src/math/secp.rs:1004:44
+     |
+1004 |     fn scalar_dot(&self, a: &k256::Scalar, b: &k256::Scalar) -> BigInt256 {
+     |                                            ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `s`
+    --> src/math/secp.rs:1016:27
+     |
+1016 |     fn mod_inverse_scalar(s: &BigInt256) -> BigInt256 {
+     |                           ^ help: if this is intentional, prefix it with an underscore: `_s`
+
+warning: unused variable: `basis`
+    --> src/math/secp.rs:1076:9
+     |
+1076 |         basis: &[[BigInt256; 2]; 2],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_basis`
+
+warning: unused variable: `gs`
+    --> src/math/secp.rs:1077:9
+     |
+1077 |         gs: &[[BigInt256; 2]; 2],
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_gs`
+
+warning: unused variable: `mu`
+    --> src/math/secp.rs:1078:9
+     |
+1078 |         mu: &[[BigInt256; 2]; 2]
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_mu`
+
+warning: unused variable: `a`
+    --> src/math/secp.rs:1121:15
+     |
+1121 |     fn dot_2d(a: &(BigInt256, BigInt256), b: &(BigInt256, BigInt256)) -> BigInt256 {
+     |               ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: unused variable: `b`
+    --> src/math/secp.rs:1121:43
+     |
+1121 |     fn dot_2d(a: &(BigInt256, BigInt256), b: &(BigInt256, BigInt256)) -> BigInt256 {
+     |                                           ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `odd_multiple`
+    --> src/math/secp.rs:1377:17
+     |
+1377 |             let odd_multiple = 2 * i + 1;
+     |                 ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_odd_multiple`
+
+warning: unused variable: `mu_big`
+   --> src/math/bigint.rs:948:13
+    |
+948 |         let mu_big = BigUint::from_bytes_le(&mu_bytes);
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_mu_big`
+
+warning: unused variable: `n_bytes`
+   --> src/math/constants.rs:133:9
+    |
+133 |     let n_bytes = [
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_n_bytes`
+
+warning: unused variable: `r1_abs_bytes`
+   --> src/math/constants.rs:137:9
+    |
+137 |     let r1_abs_bytes = [
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_r1_abs_bytes`
+
+warning: unused variable: `a`
+   --> src/math/constants.rs:293:11
+    |
+293 | fn dot_4d(a: &[BigInt256; 4], b: &[BigInt256; 4]) -> BigInt256 {
+    |           ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: unused variable: `b`
+   --> src/math/constants.rs:293:31
+    |
+293 | fn dot_4d(a: &[BigInt256; 4], b: &[BigInt256; 4]) -> BigInt256 {
+    |                               ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `i`
+   --> src/math/constants.rs:295:9
+    |
+295 |     for i in 0..4 {
+    |         ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: variable does not need to be mutable
+   --> src/math/constants.rs:340:9
+    |
+340 |     let mut t = [
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `n_bytes`
+   --> src/math/constants.rs:395:9
+    |
+395 |     let n_bytes = [
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_n_bytes`
+
+warning: unused variable: `n_bytes`
+   --> src/math/constants.rs:473:9
+    |
+473 |     let n_bytes = [
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_n_bytes`
+
+warning: unused variable: `first_target`
+   --> src/kangaroo/manager.rs:118:39
+    |
+118 |         let preseed_pos = if let Some(first_target) = targets.first() {
+    |                                       ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_first_target`
+
+warning: unused variable: `distance`
+   --> src/kangaroo/manager.rs:624:21
+    |
+624 |                 let distance = ((dist[1] as u64) << 32) | dist[0] as u64;
+    |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_distance`
+
+warning: unused variable: `jump_neg_u64`
+   --> src/kangaroo/collision.rs:461:21
+    |
+461 |                 let jump_neg_u64 = test_jump;
+    |                     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_jump_neg_u64`
+
+warning: unused variable: `jump_fwd_u64`
+   --> src/kangaroo/collision.rs:503:21
+    |
+503 |                 let jump_fwd_u64 = test_jump;
+    |                     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_jump_fwd_u64`
+
+warning: variable does not need to be mutable
+   --> src/kangaroo/manager.rs:982:9
+    |
+982 |     let mut points = Vec::new();
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `public_key`
+   --> src/kangaroo/manager.rs:998:28
+    |
+998 |                         Ok(public_key) => {
+    |                            ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_public_key`
+
+warning: unused variable: `near_point`
+    --> src/kangaroo/collision.rs:1146:26
+     |
+1146 | pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
+     |                          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_near_point`
+
+warning: unused variable: `steps`
+    --> src/kangaroo/collision.rs:1146:46
+     |
+1146 | pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
+     |                                              ^^^^^ help: if this is intentional, prefix it with an underscore: `_steps`
+
+warning: unused variable: `i`
+    --> src/kangaroo/collision.rs:1162:9
+     |
+1162 |     for i in 0..m {
+     |         ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: variable does not need to be mutable
+  --> src/gpu/backends/cpu_backend.rs:93:13
+   |
+93 |         let mut result = point.clone();
+   |             ----^^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: unused variable: `i`
+   --> src/gpu/backends/cpu_backend.rs:130:13
+    |
+130 |         for i in 1..num_points {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `targets`
+   --> src/gpu/backends/cpu_backend.rs:220:47
+    |
+220 | ...pEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_targets`
+
+warning: unused variable: `shift`
+   --> src/gpu/backends/cpu_backend.rs:331:13
+    |
+331 |         let shift = 2 * bit_len;
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_shift`
+
+warning: unused variable: `range_min`
+   --> src/gpu/backends/cpu_backend.rs:562:36
+    |
+562 | ...&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f6...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_range_min`
+
+warning: unused variable: `range_width`
+   --> src/gpu/backends/cpu_backend.rs:562:72
+    |
+562 | ...256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_range_width`
+
+warning: unused variable: `preseed_pos`
+   --> src/gpu/backends/cpu_backend.rs:566:35
+    |
+566 | ...elf, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f6...
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_preseed_pos`
+
+warning: unused variable: `num_random`
+   --> src/gpu/backends/cpu_backend.rs:566:58
+    |
+566 | ...f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec...
+    |          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_random`
+
+warning: unused variable: `empirical_pos`
+   --> src/gpu/backends/cpu_backend.rs:566:77
+    |
+566 | ...e, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |       ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_empirical_pos`
+
+warning: unused variable: `weights`
+   --> src/gpu/backends/cpu_backend.rs:566:110
+    |
+566 | ...c<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_weights`
+
+warning: unused variable: `proxy_pos`
+   --> src/gpu/backends/cpu_backend.rs:570:39
+    |
+570 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    |                                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_proxy_pos`
+
+warning: unused variable: `bins`
+   --> src/gpu/backends/cpu_backend.rs:570:58
+    |
+570 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    |                                                          ^^^^ help: if this is intentional, prefix it with an underscore: `_bins`
+
+warning: variable does not need to be mutable
+   --> src/gpu/backends/cpu_backend.rs:583:9
+    |
+583 |     let mut result = point.clone();
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `jumps`
+   --> src/gpu/backends/hybrid_backend.rs:158:9
+    |
+158 |         jumps: &[BigInt256],
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_jumps`
+
+warning: unused variable: `config`
+   --> src/gpu/backends/hybrid_backend.rs:159:9
+    |
+159 |         config: &Config,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `vulkan_batch`
+   --> src/gpu/backends/hybrid_backend.rs:162:14
+    |
+162 |         let (vulkan_batch, cuda_batch) = self.split_herd_for_hybrid(herd);
+    |              ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vulkan_batch`
+
+warning: unused variable: `cuda_batch`
+   --> src/gpu/backends/hybrid_backend.rs:162:28
+    |
+162 |         let (vulkan_batch, cuda_batch) = self.split_herd_for_hybrid(herd);
+    |                            ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cuda_batch`
+
+warning: unused variable: `dps`
+   --> src/gpu/backends/hybrid_backend.rs:590:27
+    |
+590 |     fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;...
+    |                           ^^^ help: if this is intentional, prefix it with an underscore: `_dps`
+
+warning: unused variable: `targets`
+   --> src/gpu/backends/hybrid_backend.rs:590:47
+    |
+590 | ...pEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_targets`
+
+warning: unused variable: `fail`
+   --> src/gpu/backends/hybrid_backend.rs:766:38
+    |
+766 |     fn simulate_cuda_fail(&mut self, fail: bool) {
+    |                                      ^^^^ help: if this is intentional, prefix it with an underscore: `_fail`
+
+warning: multiple associated items are never used
+    --> src/math/secp.rs:657:8
+     |
+ 212 | impl Secp256k1 {
+     | -------------- associated items in this implementation
+...
+ 657 |     fn compute_windowed_naf(&self, k: &BigInt256, window_size: usize) -> Vec<i8> {
+     |        ^^^^^^^^^^^^^^^^^^^^
+...
+1004 |     fn scalar_dot(&self, a: &k256::Scalar, b: &k256::Scalar) -> BigInt256 {
+     |        ^^^^^^^^^^
+...
+1011 |     fn scalar_norm_sq(&self, s: &k256::Scalar) -> BigInt256 {
+     |        ^^^^^^^^^^^^^^
+...
+1016 |     fn mod_inverse_scalar(s: &BigInt256) -> BigInt256 {
+     |        ^^^^^^^^^^^^^^^^^^
+...
+1121 |     fn dot_2d(a: &(BigInt256, BigInt256), b: &(BigInt256, BigInt256)) -> BigInt256 {
+     |        ^^^^^^
+...
+1126 |     fn norm_sq_2d(v: &(BigInt256, BigInt256)) -> BigInt256 {
+     |        ^^^^^^^^^^
+...
+1195 |     fn transpose_mu(mu: &[[BigInt256; 4]; 4]) -> [[BigInt256; 4]; 4] {
+     |        ^^^^^^^^^^^^
+...
+1341 |     fn naf_recode_ct(k: &k256::Scalar, window: usize) -> [i8; 256] {
+     |        ^^^^^^^^^^^^^
+...
+1369 |     fn precompute_odd_multiples_ct(p: &k256::ProjectivePoint, count: usize) -> Vec<k256::Projective...
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: static `LLL_DELTA` is never used
+   --> src/math/constants.rs:493:8
+    |
+493 | static LLL_DELTA: LazyLock<BigInt256> = LazyLock::new(|| {
+    |        ^^^^^^^^^
+
+warning: function `point_double` is never used
+   --> src/gpu/backends/cpu_backend.rs:581:4
+    |
+581 | fn point_double(point: &[[u32;8];3]) -> Result<[[u32;8];3]> {
+    |    ^^^^^^^^^^^^
+
+warning: field `cuda_available` is never read
+  --> src/gpu/backends/hybrid_backend.rs:56:5
+   |
+50 | pub struct HybridBackend {
+   |            ------------- field in this struct
+...
+56 |     cuda_available: bool,
+   |     ^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> src/gpu/backends/hybrid_backend.rs:1121:8
+     |
+ 813 | impl HybridBackend {
+     | ------------------ methods in this implementation
+...
+1121 |     fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
+     |        ^^^^^^^^^^^
+...
+1133 |     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+     |        ^^^^^^^^^^^
+...
+1145 |     fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
+     |        ^^^^^^^^^^
+...
+1158 |     fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
+     |        ^^^^^^
+...
+1163 |     fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
+     |        ^^^^^^^^^^^^^^
+...
+1167 |     fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
+     |        ^^^^^^^^^
+...
+1175 |     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+     |        ^^^^^^^^^^^^^^^
+...
+1179 |     fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super...
+     |        ^^^^^^^^
+...
+1188 |     fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[...
+     |        ^^^^^^^^^^^^^^^
+...
+1194 |     fn simulate_cuda_fail(&mut self, fail: bool) {
+     |        ^^^^^^^^^^^^^^^^^^
+...
+1198 |     fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(...
+     |        ^^^^^^^^^^^^^
+...
+1210 |     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f6...
+     |        ^^^^^^^^^^^^^^^^^^^^
+...
+1225 |     fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<V...
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1238 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>...
+     |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `compute_mu_big` is never used
+    --> src/gpu/backends/hybrid_backend.rs:1258:4
+     |
+1258 | fn compute_mu_big(_modulus: &[u32;8]) -> [u32;16] {
+     |    ^^^^^^^^^^^^^^
+
+warning: function `compute_mu_small` is never used
+    --> src/gpu/backends/hybrid_backend.rs:1262:4
+     |
+1262 | fn compute_mu_small(_modulus: u32) -> [u32;16] {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `hash_point_x_to_u64` is never used
+   --> src/utils/bias.rs:331:4
+    |
+331 | fn hash_point_x_to_u64(point: &crate::types::Point) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: module `SmallOddPrime_Precise_code` should have a snake case name
+  --> src/lib.rs:30:9
+   |
+30 | pub mod SmallOddPrime_Precise_code;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `small_odd_prime_precise_code`
+   |
+   = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: `speedbitcrack` (lib) generated 78 warnings (run `cargo fix --lib -p speedbitcrack` to apply 66 suggestions)
+   Compiling speedbitcrack v0.1.0 (/data/Projects/SpeedBitCrackV3)
+error[E0599]: no method named `wrapping_add` found for array `[u32; 8]` in the current scope
+    --> src/main.rs:1178:43
+     |
+1178 |             wild.distance = wild.distance.wrapping_add(1);
+     |                                           ^^^^^^^^^^^^ method not found in `[u32; 8]`
+
+error[E0308]: mismatched types
+    --> src/main.rs:1187:33
+     |
+1187 |                     return Some(tame_state.distance.clone());
+     |                            ---- ^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `BigInt256`, found `[u32; 8]`
+     |                            |
+     |                            arguments to this enum variant are incorrect
+     |
+help: the type constructed contains `[u32; 8]` due to the type of the argument passed
+    --> src/main.rs:1187:28
+     |
+1187 |                     return Some(tame_state.distance.clone());
+     |                            ^^^^^---------------------------^
+     |                                 |
+     |                                 this argument influences the type of `Some`
+note: tuple variant defined here
+    --> /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/option.rs:608:5
+
+error[E0599]: no method named `generator` found for struct `Secp256k1` in the current scope
+    --> src/main.rs:1689:28
+     |
+1689 |     let tame_start = curve.generator();
+     |                            ^^^^^^^^^ method not found in `Secp256k1`
+
+error[E0308]: mismatched types
+    --> src/main.rs:1692:19
+     |
+1692 |         distance: min_range.clone(),
+     |                   ^^^^^^^^^^^^^^^^^ expected `[u32; 8]`, found `BigInt256`
+
+error[E0308]: mismatched types
+    --> src/main.rs:1706:23
+     |
+1706 |             distance: max_range.clone(),
+     |                       ^^^^^^^^^^^^^^^^^ expected `[u32; 8]`, found `BigInt256`
+
+error[E0599]: no method named `check_collision` found for struct `CollisionDetector` in the current scope
+    --> src/main.rs:1731:29
+     |
+1731 |                 if detector.check_collision(tame, wild) {
+     |                             ^^^^^^^^^^^^^^^
+     |
+help: there is a method `check_collisions` with a similar name, but with different arguments
+    --> /data/Projects/SpeedBitCrackV3/src/kangaroo/collision.rs:240:5
+     |
+ 240 |     pub async fn check_collisions(&self, dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>) -> Result<CollisionResult> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0624]: method `solve_collision` is private
+    --> src/main.rs:1733:48
+     |
+1733 |                     let private_key = detector.solve_collision(tame, wild);
+     |                                                ^^^^^^^^^^^^^^^ private method
+     |
+    ::: /data/Projects/SpeedBitCrackV3/src/kangaroo/collision.rs:368:5
+     |
+ 368 |     fn solve_collision(&self, tame: &KangarooState, wild: &KangarooState) -> Option<[u64; 4]> {
+     |     ----------------------------------------------------------------------------------------- private method defined here
+
+error[E0599]: no method named `mul_scalar` found for struct `Secp256k1` in the current scope
+    --> src/main.rs:1737:48
+     |
+1737 |                     let computed_point = curve.mul_scalar(&curve.generator(), &private_key);
+     |                                                ^^^^^^^^^^ method not found in `Secp256k1`
+     |
+help: one of the expressions' fields has a method of the same name
+     |
+1737 |                     let computed_point = curve.g.mul_scalar(&curve.generator(), &private_key);
+     |                                                ++
+
+error[E0599]: no method named `generator` found for struct `Secp256k1` in the current scope
+    --> src/main.rs:1737:66
+     |
+1737 |                     let computed_point = curve.mul_scalar(&curve.generator(), &private_key);
+     |                                                                  ^^^^^^^^^ method not found in `Secp256k1`
+
+Some errors have detailed explanations: E0308, E0599, E0624.
+For more information about an error, try `rustc --explain E0308`.
+warning: speedbitcrack@0.1.0: SECURITY: Key-derived biases no longer embedded in binary
+warning: speedbitcrack@0.1.0: All valuable and Magic9 keys must be loaded from external files at runtime
+warning: speedbitcrack@0.1.0: Starting CUDA kernel compilation with enhanced debugging...
+warning: speedbitcrack@0.1.0: nvcc found at: /usr/local/cuda-13.0/bin/nvcc
+warning: speedbitcrack@0.1.0: Using default GPU arch: sm_86
+warning: speedbitcrack@0.1.0: Compiling 11 CUDA files together with shared constants header:
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/bigint_mul.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/step.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/solve.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/rho_kernel_optimized.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/barrett_kernel_optimized.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/hybrid.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/bias_check_kernel.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/gold_cluster.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/mod27_kernel.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/mod81_kernel.cu
+warning: speedbitcrack@0.1.0:   - src/gpu/cuda/glv_decomp.cu
+warning: speedbitcrack@0.1.0: Starting CUDA compilation...
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z22bigint_mul_kernel_simdPKmS0_Pmj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z17bigint_mul_kernelPvS_S_j' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z15test_bigint_mulP9bigint256S0_S0_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z15test_bigint_addP9bigint256S0_S0_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z22bigint_mul_kernel_simdPKmS0_Pmj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z22bigint_mul_kernel_simdPKmS0_Pmj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 36 registers, used 0 barriers, 380 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 25.421 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z17bigint_mul_kernelPvS_S_j' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17bigint_mul_kernelPvS_S_j
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 24 registers, used 0 barriers, 380 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 8.150 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z15test_bigint_mulP9bigint256S0_S0_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15test_bigint_mulP9bigint256S0_S0_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 0 barriers, 376 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 5.732 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z15test_bigint_addP9bigint256S0_S0_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15test_bigint_addP9bigint256S0_S0_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 24 registers, used 0 barriers, 376 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.711 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15carry_prop_warpmj
+warning: speedbitcrack@0.1.0:     32 bytes stack frame, 28 bytes spill stores, 28 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.977 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11mul256_simdPmPKmS1_
+warning: speedbitcrack@0.1.0:     64 bytes stack frame, 64 bytes spill stores, 64 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 37.235 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z18montgomery_mul_optPKmS0_S0_mPm
+warning: speedbitcrack@0.1.0:     32 bytes stack frame, 28 bytes spill stores, 28 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 32.419 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z12bigint256_ge9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.049 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_cmp9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.702 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_shr9bigint256j
+warning: speedbitcrack@0.1.0:     64 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.073 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_mul9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 5.390 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_add9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.353 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_sub9bigint256S_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.810 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17secp256k1_curve_av
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.246 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15bigint256_eightv
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.117 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint256_fourv
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.868 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15bigint256_threev
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.107 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_twov
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.972 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_onev
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.975 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint256_zerov
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.985 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z11step_kernelP13KangarooStateiPK5PointPj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z17kangaroo_step_optP5PointPmPjS0_P4Trapjjjjiim' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 25344 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z11step_kernelP13KangarooStateiPK5PointPj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11step_kernelP13KangarooStateiPK5PointPj
+warning: speedbitcrack@0.1.0:     144 bytes stack frame, 240 bytes spill stores, 416 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 208.263 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z17kangaroo_step_optP5PointPmPjS0_P4Trapjjjjiim' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17kangaroo_step_optP5PointPmPjS0_P4Trapjjjjiim
+warning: speedbitcrack@0.1.0:     704 bytes stack frame, 1764 bytes spill stores, 2228 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 1 barriers, 3072 bytes smem, 424 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1262.980 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z22multi_round_babai_glv4PKjPjS0_S0_S0_i
+warning: speedbitcrack@0.1.0:     3128 bytes stack frame, 3940 bytes spill stores, 3232 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 164.910 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17mul_short_ct_cuda5PointPj
+warning: speedbitcrack@0.1.0:     680 bytes stack frame, 1808 bytes spill stores, 2392 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2068.948 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11ct_naf_cudaPKjPhi
+warning: speedbitcrack@0.1.0:     56 bytes stack frame, 16 bytes spill stores, 16 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4151.798 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16cond_neg_ct_cuda5Pointa
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.157 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z18endomorphism_applyPK5PointPS_
+warning: speedbitcrack@0.1.0:     8 bytes stack frame, 8 bytes spill stores, 8 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 33.425 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z18mul_glv4_opt_babai5PointPKj
+warning: speedbitcrack@0.1.0:     1112 bytes stack frame, 4564 bytes spill stores, 6112 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 29183.088 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11mul_glv_opt5PointPKj
+warning: speedbitcrack@0.1.0:     808 bytes stack frame, 2440 bytes spill stores, 2928 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1469.928 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20glv_decompose_scalarPKjPjS1_PaS2_
+warning: speedbitcrack@0.1.0:     344 bytes stack frame, 52 bytes spill stores, 52 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 24.668 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16multi_babai_glv4PKjPjS0_S0_S0_i
+warning: speedbitcrack@0.1.0:     336 bytes stack frame, 460 bytes spill stores, 600 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 37.428 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20glv4_decompose_babaiPKjPA8_jPa
+warning: speedbitcrack@0.1.0:     1096 bytes stack frame, 1528 bytes spill stores, 2096 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 11979.411 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20gram_schmidt_4d_cudaPA8_KjPA8_j
+warning: speedbitcrack@0.1.0:     360 bytes stack frame, 460 bytes spill stores, 592 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 169.424 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17bigint_div_approxPKjS0_Pj
+warning: speedbitcrack@0.1.0:     40 bytes stack frame, 36 bytes spill stores, 36 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 12.638 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z9point_negPK5PointPS_PKj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.970 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z10bigint_subPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.446 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint_sub_parPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.930 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint_add_parPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.082 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14bigint_mul_parPKjS0_Pj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 14.250 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z12ec_mul_small5Pointm
+warning: speedbitcrack@0.1.0:     360 bytes stack frame, 916 bytes spill stores, 1132 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 286.286 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z12jacobian_add5PointS_
+warning: speedbitcrack@0.1.0:     128 bytes stack frame, 156 bytes spill stores, 132 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 174.007 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z15jacobian_double5Point
+warning: speedbitcrack@0.1.0:     72 bytes stack frame, 72 bytes spill stores, 72 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 62.324 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z7mul_modPKjS0_PjS0_
+warning: speedbitcrack@0.1.0:     24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 6.803 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11point_equal5PointS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.667 ms
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: 
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16batch_scalar_mulP5PointPjiPKj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16solve_collisionsP7DpEntryS0_P5PointiiPi' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16check_collisionsPjS_S_iS_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27batch_collision_solve_fusedPjS_S_S_S_S_jS_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z20batch_barrett_reducePjS_S_S_bjii' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z26batch_bsgs_collision_solvePK5PointPKjS3_PjimS3_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z21batch_collision_solvePjS_S_S_S_S_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z17bsgs_solve_kernelPK5PointS1_S1_PjiiPKj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16build_baby_stepsP5PointiPKS_PKj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 164 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16batch_scalar_mulP5PointPjiPKj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16batch_scalar_mulP5PointPjiPKj
+warning: speedbitcrack@0.1.0:     224 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 38 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.678 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16solve_collisionsP7DpEntryS0_P5PointiiPi' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16solve_collisionsP7DpEntryS0_P5PointiiPi
+warning: speedbitcrack@0.1.0:     1040 bytes stack frame, 4 bytes spill stores, 4 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 0 barriers, 392 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 73.237 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16check_collisionsPjS_S_iS_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16check_collisionsPjS_S_iS_
+warning: speedbitcrack@0.1.0:     128 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 37 registers, used 0 barriers, 392 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.995 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27batch_collision_solve_fusedPjS_S_S_S_S_jS_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27batch_collision_solve_fusedPjS_S_S_S_S_jS_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 30 registers, used 0 barriers, 192 bytes smem, 420 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.454 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z20batch_barrett_reducePjS_S_S_bjii' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20batch_barrett_reducePjS_S_S_bjii
+warning: speedbitcrack@0.1.0:     104 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 1 barriers, 192 bytes smem, 400 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 16.191 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z26batch_bsgs_collision_solvePK5PointPKjS3_PjimS3_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z26batch_bsgs_collision_solvePK5PointPKjS3_PjimS3_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 26 registers, used 0 barriers, 412 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.522 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z21batch_collision_solvePjS_S_S_S_S_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z21batch_collision_solvePjS_S_S_S_S_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 25 registers, used 0 barriers, 192 bytes smem, 412 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.525 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z17bsgs_solve_kernelPK5PointS1_S1_PjiiPKj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z17bsgs_solve_kernelPK5PointS1_S1_PjiiPKj
+warning: speedbitcrack@0.1.0:     192 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 58 registers, used 0 barriers, 400 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.590 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16build_baby_stepsP5PointiPKS_PKj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16build_baby_stepsP5PointiPKS_PKj
+warning: speedbitcrack@0.1.0:     368 bytes stack frame, 240 bytes spill stores, 160 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 64 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 7.779 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z32collect_distinguished_points_soaPjS_S_S_S_S_jj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z14rho_kernel_aosPjS_Pfjjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z14rho_kernel_soaPjS_S_S_S_Pfjjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 68 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z32collect_distinguished_points_soaPjS_S_S_S_S_jj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z32collect_distinguished_points_soaPjS_S_S_S_S_jj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 14 registers, used 0 barriers, 408 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.707 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z14rho_kernel_aosPjS_Pfjjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14rho_kernel_aosPjS_Pfjjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 13 registers, used 0 barriers, 388 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.681 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z14rho_kernel_soaPjS_S_S_S_Pfjjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z14rho_kernel_soaPjS_S_S_S_Pfjjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 0 barriers, 412 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.296 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z30batch_barrett_reduce_bigint256PA8_jiPjS1_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z24fast_bias_residue_kernelPKjPjjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z21barrett_modpow_kernelPKjS0_Pjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z25barrett_mod_kernel_sharedPKjPjj' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 68 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z30batch_barrett_reduce_bigint256PA8_jiPjS1_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z30batch_barrett_reduce_bigint256PA8_jiPjS1_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.529 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z24fast_bias_residue_kernelPKjPjjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z24fast_bias_residue_kernelPKjPjjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 12 registers, used 1 barriers, 376 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.297 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z21barrett_modpow_kernelPKjS0_Pjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z21barrett_modpow_kernelPKjS0_Pjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 50 registers, used 1 barriers, 32 bytes smem, 380 bytes cmem[0], 16 bytes cmem[2]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 10.960 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z25barrett_mod_kernel_sharedPKjPjj' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z25barrett_mod_kernel_sharedPKjPjj
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 25 registers, used 1 barriers, 32 bytes smem, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.809 ms
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: warning: /usr/local/cuda-13.0/bin/../targets/x86_64-linux/include/device_atomic_functions.hpp(112): Warning: Cannot do atomic on local memory
+warning: speedbitcrack@0.1.0: 
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z23fused_mul_reduce_kernelPjS_S_S_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z20batch_mod_sqr_hybridPjS_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z20batch_mod_mul_hybridPjS_S_S_i' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem, 108 bytes cmem[3]
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z23fused_mul_reduce_kernelPjS_S_S_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z23fused_mul_reduce_kernelPjS_S_S_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 55 registers, used 1 barriers, 16384 bytes smem, 396 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 31.778 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z20batch_mod_sqr_hybridPjS_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20batch_mod_sqr_hybridPjS_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 6 registers, used 1 barriers, 380 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.612 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z20batch_mod_mul_hybridPjS_S_S_i' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20batch_mod_mul_hybridPjS_S_S_i
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 6 registers, used 1 barriers, 388 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.468 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z24bias_check_kernel_paddedPjPhjPf' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27common_bias_attractor_checkPmPhi' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z26multi_bias_attractor_checkPmPhiiS_' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z24bias_check_kernel_paddedPjPhjPf' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z24bias_check_kernel_paddedPjPhjPf
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 15 registers, used 1 barriers, 448 bytes smem, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.748 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27common_bias_attractor_checkPmPhi' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27common_bias_attractor_checkPmPhi
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 36 registers, used 0 barriers, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 12.075 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z26multi_bias_attractor_checkPmPhiiS_' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z26multi_bias_attractor_checkPmPhiiS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 34 registers, used 0 barriers, 384 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 11.025 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z23gold_cluster_batch_stepPmS_S_S_S_ihhhh' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27generate_gold_cluster_jumpsPmihhhh' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z23gold_cluster_batch_stepPmS_S_S_S_ihhhh' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z23gold_cluster_batch_stepPmS_S_S_S_ihhhh
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 24 registers, used 1 barriers, 400 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 3.273 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27generate_gold_cluster_jumpsPmihhhh' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27generate_gold_cluster_jumpsPmihhhh
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 48 registers, used 1 barriers, 368 bytes cmem[0], 8 bytes cmem[2]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 14.504 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z11gold_ec_opsPmPKm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.250 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z22apply_gold_bias_sharedPm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 2.015 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z25preload_gold_cluster_biashhhh
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.759 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z21mod27_attractor_checkPmPbi' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z21mod27_attractor_checkPmPbi' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z21mod27_attractor_checkPmPbi
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 20 registers, used 0 barriers, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.587 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z16mod81_bias_checkPKmPbiPji' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z16mod81_bias_checkPKmPbiPji' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z16mod81_bias_checkPKmPbiPji
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 20 registers, used 0 barriers, 388 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 5.712 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13mod81_barrettPKm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 4.251 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Overriding maximum register limit 256 for '_Z27glv4_batch_decompose_kernelPK8scalar_tP12glv_result_ti' with  64 of maxrregcount option
+warning: speedbitcrack@0.1.0: ptxas info    : 0 bytes gmem
+warning: speedbitcrack@0.1.0: ptxas info    : Compiling entry function '_Z27glv4_batch_decompose_kernelPK8scalar_tP12glv_result_ti' for 'sm_86'
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z27glv4_batch_decompose_kernelPK8scalar_tP12glv_result_ti
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Used 40 registers, used 0 barriers, 372 bytes cmem[0]
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 17.097 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z19bigint256_to_scalar11bigint256_t
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.840 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z20bigint256_mul_scalar11bigint256_tm
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.471 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_sub11bigint256_tS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 0.965 ms
+warning: speedbitcrack@0.1.0: ptxas info    : Function properties for _Z13bigint256_add11bigint256_tS_
+warning: speedbitcrack@0.1.0:     0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+warning: speedbitcrack@0.1.0: ptxas info    : Compile time = 1.314 ms
+warning: speedbitcrack@0.1.0: CUDA compilation completed successfully in 151.24s
+error: could not compile `speedbitcrack` (bin "speedbitcrack") due to 9 previous errors

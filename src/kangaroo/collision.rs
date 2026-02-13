@@ -294,8 +294,7 @@ impl CollisionDetector {
                     if let Some(offset) = self.resolve_near_collision(&trap1, &trap2, dp_bit_threshold) {
                         // Construct solution from resolved offset
                         let private_key = [offset.limbs[0], offset.limbs[1], offset.limbs[2], offset.limbs[3]];
-                        let total_ops = BigInt256 { limbs: [entry1.state.distance[0] as u64, entry1.state.distance[1] as u64, entry1.state.distance[2] as u64, entry1.state.distance[3] as u64] } +
-                                        BigInt256 { limbs: [entry2.state.distance[0] as u64, entry2.state.distance[1] as u64, entry2.state.distance[2] as u64, entry2.state.distance[3] as u64] };
+                        let total_ops = entry1.state.distance.clone() + entry2.state.distance.clone();
                         let solution = Solution::new(private_key, entry1.point, total_ops, 0.0);
                         return Ok(CollisionResult::Full(solution));
                     }
@@ -463,7 +462,7 @@ impl CollisionDetector {
                     Ok(back_point) => {
                         let back_pos = KangarooState {
                             position: back_point,
-                            distance: tame_walk.distance, // Keep same distance for now
+                            distance: tame_walk.distance.clone(), // Keep same distance for now
                             alpha: tame.alpha,
                             beta: tame.beta,
                             is_tame: tame.is_tame,
@@ -505,7 +504,7 @@ impl CollisionDetector {
                     Ok(fwd_point) => {
                         let fwd_pos = KangarooState {
                             position: fwd_point,
-                            distance: wild_walk.distance, // Keep same distance for now
+                            distance: wild_walk.distance.clone(), // Keep same distance for now
                             alpha: wild.alpha,
                             beta: wild.beta,
                             is_tame: wild.is_tame,

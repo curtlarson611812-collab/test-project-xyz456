@@ -585,7 +585,7 @@ async fn main() -> Result<()> {
                 let tame = KangarooState {
                     id: i as u64,
                     position: curve.g.clone(), // Start from generator
-                    distance: [0u32; 8], // Start distance
+                    distance: BigInt256::zero(), // Start distance
                     alpha: [0u64; 4], // Initialize alpha coefficient
                     beta: [1u64; 4],  // Initialize beta coefficient (identity)
                     is_tame: true,
@@ -613,7 +613,7 @@ async fn main() -> Result<()> {
                 let wild = KangarooState {
                     id: (gpu_config.max_kangaroos/2 + i) as u64,
                     position: wild_position,
-                    distance: [prime as u32, 0, 0, 0, 0, 0, 0, 0], // Initial distance = prime
+                    distance: BigInt256::from_u64(prime as u64), // Initial distance = prime
                     alpha: [prime as u64, 0, 0, 0], // Initialize alpha with prime offset
                     beta: [1u64; 4],  // Initialize beta coefficient (identity)
                     is_tame: false,
@@ -1138,7 +1138,7 @@ fn pollard_lambda_parallel(target: &Point, _range: (BigInt256, BigInt256)) -> Op
         let wild_pos = curve.add(target, &curve.mul(&offset, &curve.g));
         let wild_state = KangarooState::new(
             wild_pos,
-            [offset.low_u64() as u32, 0, 0, 0, 0, 0, 0, 0],
+            offset,
             [offset.low_u64(), 0, 0, 0],
             [1, 0, 0, 0],
             false, // wild
@@ -1152,7 +1152,7 @@ fn pollard_lambda_parallel(target: &Point, _range: (BigInt256, BigInt256)) -> Op
 
     let tame_state = KangarooState::new(
         tame_state,
-        [0, 0, 0, 0, 0, 0, 0, 0],
+        BigInt256::zero(),
         [0, 0, 0, 0],
         [0, 0, 0, 0],
         true, // tame

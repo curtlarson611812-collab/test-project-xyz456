@@ -959,9 +959,9 @@ impl KangarooGenerator {
             }
         }
         let tames: Vec<_> = (0..wilds.len()).map(|_| {
-            let mut tame = KangarooState::new(Point::infinity(), [0; 8], [0; 4], [0; 4], true, false, 0, 0, 0);
+            let mut tame = KangarooState::new(Point::infinity(), BigInt256::zero(), [0; 4], [0; 4], true, false, 0, 0, 0);
             tame.position = self.initialize_tame_start();
-            tame.distance = [0; 8]; // Reset distance for tame kangaroos
+            tame.distance = BigInt256::zero(); // Reset distance for tame kangaroos
             tame
         }).collect();
         (wilds, tames)

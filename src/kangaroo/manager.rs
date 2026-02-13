@@ -583,9 +583,10 @@ impl KangarooManager {
             .collect();
 
         let mut distances: Vec<[u32; 8]> = kangaroos.iter()
-            .map(|k| [
-                k.distance[0], k.distance[1], 0, 0, 0, 0, 0, 0
-            ])
+            .map(|k| {
+                let limbs = k.distance.to_u32_limbs();
+                [limbs[0], limbs[1], 0, 0, 0, 0, 0, 0]
+            })
             .collect();
 
         let types: Vec<u32> = kangaroos.iter()
@@ -625,7 +626,7 @@ impl KangarooManager {
 
                 KangarooState::new(
                     position,
-                    dist, // distance as [u32; 8]
+                    BigInt256::from_u64(distance), // distance as BigInt256
                     kangaroos[i].alpha,
                     kangaroos[i].beta,
                     kangaroos[i].is_tame,
@@ -668,7 +669,7 @@ impl KangarooManager {
             // Create kangaroo state for the trap
             let trap_state = KangarooState::new(
                 trap_point,
-                [trap_distance as u32, (trap_distance >> 32) as u32, 0, 0, 0, 0, 0, 0], // distance as [u32; 8]
+                BigInt256::from_u64(trap_distance), // distance as BigInt256
                 [0; 4], // alpha not provided
                 [0; 4], // beta not provided
                 trap.is_tame,
@@ -744,7 +745,7 @@ impl KangarooManager {
                     // Found distinguished point - add to DP table
                     let kangaroo_state = KangarooState::new(
                         point,
-                        [distance as u32, (distance >> 32) as u32, 0, 0, 0, 0, 0, 0], // distance as [u32; 8]
+                        BigInt256::from_u64(distance), // distance as BigInt256
                         [0; 4], // alpha (would be tracked)
                         [0; 4], // beta (would be tracked)
                         true,   // is_tame (simplified)
@@ -875,8 +876,7 @@ impl KangarooManager {
         let stagnation_threshold = BigInt256::from_u64(10000u64);
 
         for state in near_states {
-            let distance_bigint = BigInt256 { limbs: [state.distance[0] as u64, state.distance[1] as u64, state.distance[2] as u64, state.distance[3] as u64] };
-            if distance_bigint < stagnation_threshold {
+            if state.distance < stagnation_threshold {
                 info!("Restarting stagnant herd {}", state.id);
                 // In practice: reset herd to new random starting position
             }

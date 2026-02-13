@@ -400,6 +400,8 @@ mod tests {
             true,
             false,
             0,
+            0, // step
+            0, // kangaroo_type
         );
         let state2 = KangarooState::new(
             stepper.curve.g.clone(),
@@ -409,6 +411,8 @@ mod tests {
             true,
             false,
             1,
+            0, // step
+            0, // kangaroo_type
         );
         let kangaroos = vec![state1, state2];
         let stepped = stepper.step_batch(&kangaroos, None).unwrap();
