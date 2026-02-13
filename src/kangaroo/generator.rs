@@ -470,7 +470,7 @@ impl KangarooGenerator {
 
             let state = KangarooState::new(
                 final_pos,
-                [scalar.value.low_u64() as u32, 0, 0, 0, 0, 0, 0, 0],  // initial distance = biased prime
+                BigInt256::from_u64(scalar.value.low_u64()),  // initial distance = biased prime
                 scalar.value.to_u64_array(),  // alpha starts with biased prime offset
                 [1, 0, 0, 0],           // beta placeholder (updated during stepping)
                 false,                  // is_tame
@@ -538,7 +538,7 @@ impl KangarooGenerator {
 
             let state = KangarooState::new(
                 final_pos,
-                [scalar.value.low_u64() as u32, 0, 0, 0, 0, 0, 0, 0],  // distance = biased prime
+                BigInt256::from_u64(scalar.value.low_u64()),  // distance = biased prime
                 [0, 0, 0, 0],           // alpha = 0 for tame (deterministic from G)
                 [1, 0, 0, 0],           // beta = 1 for tame
                 true,                   // is_tame
@@ -651,7 +651,7 @@ impl KangarooGenerator {
 
             tames.push(KangarooState::new(
                 actual_start,
-                [alpha[0] as u32, 0, 0, 0, 0, 0, 0, 0], // Use lowest 64 bits as distance
+                BigInt256::from_u64(alpha[0] as u64), // Use lowest 64 bits as distance
                 alpha,
                 beta,
                 true, // is_tame = true
@@ -1104,7 +1104,7 @@ impl KangarooGenerator {
             };
             states.push(KangarooState {
                 position: start,
-                distance: [0; 8],
+                distance: BigInt256::zero(),
                 alpha: [0; 4],
                 beta: [0; 4],
                 is_tame: i % 2 == 0,
@@ -1184,13 +1184,13 @@ impl KangarooGenerator {
         for state in states.iter_mut() {
             for s in 0..steps {
                 // Use lambda bucket select for deterministic tame vs mixed wild
-                let distance_bigint = BigInt256::from_u32_limbs(state.distance);
+                let distance_bigint = state.distance.clone();
                 let bucket = self.select_bucket(&state.position, &distance_bigint, 0, s as u32, state.is_tame);
                 let jump = self.biased_jump(&distance_bigint, biases);
                 let jump_point = self.curve.mul(&jumps[bucket as usize % jumps.len()], &self.curve.g);
                 state.position = self.curve.point_add(&state.position, &jump_point);
                 let new_distance = distance_bigint + jump;
-                state.distance = new_distance.to_u32_limbs();
+                state.distance = new_distance;
 
                 // Symmetry double effect with rho negation map
                 let neg_pos = self.rho_negation_map(&state.position);

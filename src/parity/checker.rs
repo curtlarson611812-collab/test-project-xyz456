@@ -107,11 +107,11 @@ impl ParityChecker {
             for kangaroo in &mut result {
                 // Simple CPU stepping - just increment distance for testing
                 // Manual saturating add for [u32; 8] array
-                let mut carry = 1u32;
-                for i in 0..8 {
-                    let (sum, new_carry) = kangaroo.distance[i].overflowing_add(carry);
-                    kangaroo.distance[i] = sum;
-                    carry = new_carry as u32;
+                let mut carry = 1u64;
+                for i in 0..4 {
+                    let (sum, new_carry) = kangaroo.distance.limbs[i].overflowing_add(carry);
+                    kangaroo.distance.limbs[i] = sum;
+                    carry = new_carry as u64;
                     if carry == 0 { break; } // No more carry to propagate
                 }
             }

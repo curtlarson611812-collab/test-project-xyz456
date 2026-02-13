@@ -280,13 +280,13 @@ impl CollisionDetector {
                     // Try resolve_near_collision before walk
                     let trap1 = Trap {
                         x: entry1.point.x,
-                        dist: BigUint::from_slice(&entry1.state.distance),
+                        dist: BigUint::from_slice(&entry1.state.distance.to_u32_limbs()),
                         is_tame: entry1.state.is_tame,
                         alpha: entry1.state.alpha,
                     };
                     let trap2 = Trap {
                         x: entry2.point.x,
-                        dist: BigUint::from_slice(&entry2.state.distance),
+                        dist: BigUint::from_slice(&entry2.state.distance.to_u32_limbs()),
                         is_tame: entry2.state.is_tame,
                         alpha: entry2.state.alpha,
                     };
@@ -321,8 +321,8 @@ impl CollisionDetector {
         (tame.position.x == wild.position.x)
             .then(|| self.solve_collision(tame, wild))?
             .map(|pk| {
-                let tame_dist = BigInt256::from_u32_limbs(tame.distance);
-                let wild_dist = BigInt256::from_u32_limbs(wild.distance);
+                let tame_dist = tame.distance.clone();
+                let wild_dist = wild.distance.clone();
                 Solution::new(pk, tame.position, tame_dist + wild_dist, 0.0)
             })
     }
@@ -364,7 +364,7 @@ impl CollisionDetector {
     }
 
     /// Solve collision using alpha/beta coefficients
-    fn solve_collision(&self, tame: &KangarooState, wild: &KangarooState) -> Option<[u64; 4]> {
+    pub fn solve_collision(&self, tame: &KangarooState, wild: &KangarooState) -> Option<[u64; 4]> {
         let alpha_tame = BigInt256::from_u64_array(tame.alpha);
         let alpha_wild = BigInt256::from_u64_array(wild.alpha);
         let beta_tame = BigInt256::from_u64_array(tame.beta);

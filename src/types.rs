@@ -347,7 +347,7 @@ impl Default for KangarooState {
     fn default() -> Self {
         KangarooState {
             position: Point::infinity(),
-            distance: [0; 8],
+            distance: BigInt256::zero(),
             alpha: [0; 4],
             beta: [0; 4],
             is_tame: false,

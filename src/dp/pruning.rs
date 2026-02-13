@@ -107,7 +107,7 @@ impl DpPruning {
         let samples: Vec<[f64; 2]> = entries.iter().map(|(_, entry)| {
             [
                 (entry.point.x[0] as f64) / u32::MAX as f64,  // Normalize x-coordinate
-                { let dist_bigint = BigInt256 { limbs: [entry.state.distance[0] as u64, entry.state.distance[1] as u64, entry.state.distance[2] as u64, entry.state.distance[3] as u64] }; dist_bigint.to_f64_approx().log2().max(0.0) / 64.0 },  // Log distance normalized
+                { let dist_bigint = BigInt256 { limbs: [entry.state.distance.limbs[0], entry.state.distance.limbs[1], entry.state.distance.limbs[2], entry.state.distance.limbs[3]] }; dist_bigint.to_f64_approx().log2().max(0.0) / 64.0 },  // Log distance normalized
             ]
         }).collect();
 

@@ -16,7 +16,7 @@ use log::info;
 use k256;
 use k256::elliptic_curve::sec1::{ToEncodedPoint, FromEncodedPoint};
 
-#[allow(unused_variables, dead_code)]
+#[allow(unused_variables, dead_code, unused_imports)]
 
 
 impl Secp256k1 {
@@ -213,6 +213,16 @@ impl Secp256k1 {
     /// Get the prime modulus p
     pub fn modulus(&self) -> &BigInt256 {
         &self.p
+    }
+
+    /// Get the generator point G
+    pub fn generator(&self) -> k256::ProjectivePoint {
+        k256::ProjectivePoint::GENERATOR
+    }
+
+    /// Multiply a point by a scalar
+    pub fn mul_scalar(&self, g: &k256::ProjectivePoint, k: &k256::Scalar) -> k256::ProjectivePoint {
+        g * k
     }
 
     /// Reduce a 512-bit wide product modulo a given modulus

@@ -1728,7 +1728,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
         // Check for collisions
         for tame in &tame_kangaroos {
             for wild in &wild_kangaroos {
-                if detector.check_collision(tame, wild) {
+                if detector.check_collisions(&std::sync::Arc::new(std::sync::Mutex::new(dp_table))).await?.is_some() {
                     // Found collision!
                     let private_key = detector.solve_collision(tame, wild);
                     info!("🎉 SOLVED: Puzzle {} private key: 0x{}", puzzle_num, private_key.to_hex());
