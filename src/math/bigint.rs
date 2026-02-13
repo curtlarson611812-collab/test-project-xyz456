@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use num_integer::Integer;
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct BigInt256 {
     /// Limbs in little-endian order (limb[0] is least significant)
     pub limbs: [u64; 4],
@@ -820,22 +820,24 @@ impl BigInt256 {
 
     /// Convert from GPU [u32; 8] limb format to BigInt256
     pub fn from_u32_limbs(limbs: [u32; 8]) -> Self {
-        let mut result = [0u64; 4];
+        let mut l = [0u64; 4];
         for i in 0..4 {
-            result[i] = (limbs[i * 2] as u64) | ((limbs[i * 2 + 1] as u64) << 32);
+            l[i] = ((limbs[i * 2 + 1] as u64) << 32) | (limbs[i * 2] as u64);
         }
-        BigInt256 { limbs: result }
+        Self { limbs: l }
     }
 
-    /// Convert BigInt256 to u64 limbs [u64; 4] format
+    /// Convert from [u64; 4] limb format to BigInt256
+    pub fn from_u64_limbs(limbs: [u64; 4]) -> Self {
+        Self { limbs }
+    }
+
+    /// Convert BigInt256 to [u64; 4] limb format
     pub fn to_u64_limbs(&self) -> [u64; 4] {
         self.limbs
     }
 
-    /// Convert from u64 limbs [u64; 4] format to BigInt256
-    pub fn from_u64_limbs(limbs: [u64; 4]) -> Self {
-        BigInt256 { limbs }
-    }
+
 
     /// Absolute value (since BigInt256 is unsigned, returns self)
     pub fn abs(&self) -> Self {
@@ -857,7 +859,7 @@ impl BigInt256 {
         for i in 0..4 {
             let negated = (!self.limbs[i]).wrapping_add(carry);
             result[i] = negated & 0xFFFFFFFFFFFFFFFF;
-            carry = (negated >> 64) & 1;
+            carry = (negated.wrapping_shr(64)) & 1;
         }
 
         BigInt256 { limbs: result }

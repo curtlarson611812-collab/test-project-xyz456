@@ -293,7 +293,7 @@ pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64
         let prime = Scalar::from(prime_u64);
 
         for k in 1..=32 {
-            let scalar = prime * Scalar::from(k);
+            let scalar = prime * Scalar::from(k as u64);
             if bool::from(scalar.is_zero()) {
                 continue; // Skip zero scalars
             }
@@ -306,7 +306,9 @@ pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64
 
             let encoded = k256::EncodedPoint::from(affine); // Get encoded point
             let x_bytes = encoded.x().unwrap().to_vec();
-            let x_hash = xor_hash_to_u64(&x_bytes);
+            let mut x_bytes_array = [0u8; 32];
+            x_bytes_array[..x_bytes.len().min(32)].copy_from_slice(&x_bytes[..x_bytes.len().min(32)]);
+            let x_hash = xor_hash_to_u64(&x_bytes_array);
             let range_width_u64 = range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64).max(1);
             let offset_u64 = x_hash % range_width_u64;
             let offset_scalar = Scalar::from(offset_u64);
@@ -372,7 +374,11 @@ pub fn blend_proxy_preseed(
         let mut rand_pos = rng.gen_range(0.0..1.0);
         if enable_noise {
             rand_pos += rng.gen_range(-0.05..0.05);
-            rand_pos = rand_pos.clamp(0.0, 1.0);
+            if rand_pos < 0.0 {
+                rand_pos = 0.0;
+            } else if rand_pos > 1.0 {
+                rand_pos = 1.0;
+            }
         }
         proxy.push(rand_pos);
     }
@@ -395,7 +401,11 @@ pub fn blend_proxy_preseed(
             let mut rand_pos = rng.gen_range(0.0..1.0);
             if enable_noise {
                 rand_pos += rng.gen_range(-0.05..0.05);
-                rand_pos = rand_pos.clamp(0.0, 1.0);
+                if rand_pos < 0.0 {
+                    rand_pos = 0.0;
+                } else if rand_pos > 1.0 {
+                    rand_pos = 1.0;
+                }
             }
             proxy.push(rand_pos);
         }

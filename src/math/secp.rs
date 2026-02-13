@@ -1033,7 +1033,7 @@ impl Secp256k1 {
 
         for i in 0..4 {
             // Start with the original basis vector
-            gs[i] = basis[i];
+            gs[i] = [basis[i][0].clone(), basis[i][1].clone(), basis[i][2].clone(), basis[i][3].clone()];
 
             // Subtract projections onto previous orthogonal vectors
             for j in 0..i {
@@ -1050,7 +1050,7 @@ impl Secp256k1 {
                 // gs[i] = gs[i] - mu[i][j] * gs[j]
                 for k in 0..4 {
                     let subtract = BigInt256::zero(); // Placeholder subtraction
-                    gs[i][k] = gs[i][k].sub(subtract);
+                    gs[i][k] = gs[i][k].clone().sub(subtract);
                 }
             }
         }
@@ -1138,8 +1138,8 @@ impl Secp256k1 {
         rounds: usize
     ) -> [BigInt256; 4] {
         let mut coeffs = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
-        let current_gs = gs;
-        let current_basis = basis;
+        let current_gs = gs.clone();
+        let current_basis = basis.clone();
         let mut current_mu = mu.clone();
         let mut direction_forward = true;
 
