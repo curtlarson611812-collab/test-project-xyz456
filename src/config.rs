@@ -161,6 +161,14 @@ pub struct Config {
     #[arg(long)]
     pub enable_vow_rho_p2pk: bool,
 
+    /// VOW threads for parallel solving (default 8 for high-bias puzzles)
+    #[arg(long, default_value = "8")]
+    pub vow_threads: usize,
+
+    /// Poisson lambda for jump distribution (default 1.3 for high-bias puzzles)
+    #[arg(long, default_value = "1.3")]
+    pub poisson_lambda: f64,
+
     /// Path to high-priority pubkey list (from bias_analyze tool)
     #[arg(long)]
     pub priority_list: Option<PathBuf>,
