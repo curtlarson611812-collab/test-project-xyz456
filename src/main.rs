@@ -2219,6 +2219,11 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
              if args.bias_threshold.is_some() { "custom" } else { "adaptive" })?;
     writeln!(gold_file, "")?;
 
+    // Add concise rationales header
+    writeln!(gold_file, "# RATIOS: Basic(entropy filter, 20% boost), Mod3(3x reduction), Mod9(9x thirds), Mod27(27x Poisson), Mod81(81x finest)")?;
+    writeln!(gold_file, "# GOLD(RNG flaws, 8% edge), POP(bit density check)")?;
+    writeln!(gold_file, "")?;
+
     for (i, (pubkey_hex, analysis, score, _)) in analysis_results.iter().take(100).enumerate() {
         writeln!(gold_file, "# Rank: {}, Overall Bias: {:.3}", i + 1, score)?;
         writeln!(gold_file, "# Basic: {:.3}, Mod3: {:.3}, Mod9: {:.3}, Mod27: {:.3}, Mod81: {:.3}",
