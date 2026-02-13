@@ -883,10 +883,12 @@ impl HybridGpuManager {
     pub fn step_with_gold_factor(&self, kangaroos: &mut [KangarooState]) {
         if self.config.gold_bias_combo {
             for kangaroo in kangaroos.iter_mut() {
-                let dist_scalar = Scalar::from(kangaroo.distance[0] as u64);
-                if let Some((reduced, _factors)) = dist_scalar.mod_small_primes() {
+                let dist_bigint = BigInt256::from_u32_limbs(kangaroo.distance);
+                let custom_scalar = crate::types::Scalar::new(dist_bigint);
+                if let Some((reduced, _factors)) = custom_scalar.mod_small_primes() {
                     // Reduce distance by factoring out small primes
-                    kangaroo.distance = BigInt256 { limbs: [reduced.value.limbs[0], 0, 0, 0] };
+                    let reduced_bigint = reduced.value;
+                    kangaroo.distance = reduced_bigint.to_u32_limbs();
                     debug!("Factored kangaroo distance using GOLD combo");
                 }
             }

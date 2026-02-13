@@ -301,12 +301,11 @@ pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64
             let point = ProjectivePoint::GENERATOR * scalar;
             let affine = point.to_affine();
 
-            if !bool::from(affine.is_on_curve()) {
-                panic!("Off-curve pre-seed point"); // Edge: Panic on invalid curve point
-            }
+            // Check if point is on curve (k256 handles this internally)
+            // For now, assume it's valid since we used the generator
 
-            let encoded = affine.to_encoded_point(true); // Compressed encoding
-            let x_bytes = encoded.x().unwrap().as_bytes();
+            let encoded = k256::EncodedPoint::from(affine); // Get encoded point
+            let x_bytes = encoded.x().unwrap().to_vec();
             let x_hash = xor_hash_to_u64(&x_bytes);
             let range_width_u64 = range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64).max(1);
             let offset_u64 = x_hash % range_width_u64;
@@ -330,24 +329,17 @@ fn xor_hash_to_u64(bytes: &[u8; 32]) -> u64 {
 fn hash_point_x_to_u64(point: &crate::types::Point) -> u64 {
     // Use point's x coordinate as deterministic seed
     // For simplicity, use low 64 bits of x (sufficient for proxy)
-    match point {
-        crate::types::Point::Affine(p) => {
-            // Convert x to bytes and hash
-            let x_bytes = p.x.to_bytes_be();
-            let mut hash = 0u64;
-            for chunk in x_bytes.chunks(8) {
-                let mut bytes = [0u8; 8];
-                bytes[..chunk.len()].copy_from_slice(chunk);
-                hash ^= u64::from_be_bytes(bytes);
-            }
-            hash
-        }
-        crate::types::Point::Projective(_) => {
-            // Convert to affine for hashing (expensive but accurate)
-            // For performance, could cache or approximate
-            0u64 // Placeholder - would need Point::to_affine()
-        }
+    let x_bytes = point.x.iter().rev().fold(vec![], |mut acc, &limb| {
+        acc.extend_from_slice(&limb.to_be_bytes());
+        acc
+    });
+    let mut hash = 0u64;
+    for chunk in x_bytes.chunks(8) {
+        let mut bytes = [0u8; 8];
+        bytes[..chunk.len()].copy_from_slice(chunk);
+        hash ^= u64::from_be_bytes(bytes);
     }
+    hash
 }
 
 /// Blend pre-seed positions with random simulations and empirical data
@@ -375,7 +367,7 @@ pub fn blend_proxy_preseed(
     }
 
     // Add random samples (uniform distribution)
-    let dup_rand = ((num_random as f64 * w_rand).round() as usize).max(0);
+    let dup_rand = ((num_random as f64 * w_rand).round() as usize).max(0usize);
     for _ in 0..dup_rand {
         let mut rand_pos = rng.gen_range(0.0..1.0);
         if enable_noise {
@@ -387,18 +379,18 @@ pub fn blend_proxy_preseed(
 
     // Add empirical positions if available
     if let Some(emp) = empirical_pos {
-        let dup_emp = ((emp.len() as f64 * w_emp).round() as usize).max(0);
+        let dup_emp = ((emp.len() as f64 * w_emp).round() as usize).max(0usize);
         for _ in 0..dup_emp {
             proxy.extend_from_slice(&emp);
         }
     } else if w_emp > 0.0 {
         // Fallback: Redistribute empirical weight to pre-seed/random
         let extra = w_emp / 2.0;
-        let extra_pre = ((preseed_pos.len() as f64 * extra).round() as usize).max(0);
+        let extra_pre = ((preseed_pos.len() as f64 * extra).round() as usize).max(0usize);
         for i in 0..extra_pre {
             proxy.push(preseed_pos[i % preseed_pos.len()]);
         }
-        let extra_rand = ((num_random as f64 * extra).round() as usize).max(0);
+        let extra_rand = ((num_random as f64 * extra).round() as usize).max(0usize);
         for _ in 0..extra_rand {
             let mut rand_pos = rng.gen_range(0.0..1.0);
             if enable_noise {

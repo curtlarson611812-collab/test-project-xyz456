@@ -639,11 +639,11 @@ impl GpuBackend for HybridBackend {
         // Dispatch to CUDA for affine conversion
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.batch_to_affine(points.clone())
+            self.cuda.batch_to_affine(&points)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
-            self.cpu.batch_to_affine(points.clone())
+            self.cpu.batch_to_affine(&points)
         }
     }
 
@@ -1165,7 +1165,10 @@ impl HybridBackend {
     }
 
     fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
-        let res = self.barrett_reduce(&_x.map(|v| [v, 0,0,0,0,0,0,0,0]).concat().try_into().unwrap(), &_modulus.to_le_bytes().map(|b| b as u32).into(), &compute_mu_small(_modulus))?;
+        let x_extended = _x.map(|v| [v, 0,0,0,0,0,0,0,0]).concat();
+        let modulus_bytes = _modulus.to_le_bytes();
+        let modulus_extended = [modulus_bytes[0] as u32, modulus_bytes[1] as u32, modulus_bytes[2] as u32, modulus_bytes[3] as u32, 0, 0, 0, 0];
+        let res = self.barrett_reduce(&x_extended.try_into().unwrap(), &modulus_extended, &compute_mu_small(_modulus))?;
         Ok(res[0] as u32 % _modulus)
     }
 
@@ -1214,7 +1217,9 @@ impl HybridBackend {
             return self.vulkan.generate_preseed_pos(range_min, range_width);
         }
         // Fallback to CPU implementation from utils::bias
-        crate::utils::bias::generate_preseed_pos(range_min.clone().try_into().unwrap(), range_width.clone().try_into().unwrap())
+        let min_scalar = range_min.to_scalar();
+        let width_scalar = range_width.to_scalar();
+        Ok(crate::utils::bias::generate_preseed_pos(&min_scalar, &width_scalar))
     }
 
     fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
@@ -1227,7 +1232,7 @@ impl HybridBackend {
             return self.vulkan.blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights);
         }
         // Fallback to CPU implementation from utils::bias
-        crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, false)
+        Ok(crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, false))
     }
 
     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
@@ -1240,7 +1245,9 @@ impl HybridBackend {
             return self.vulkan.analyze_preseed_cascade(proxy_pos, bins);
         }
         // Fallback to CPU implementation from utils::bias
-        crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins)
+        let result = crate::utils::bias::analyze_preseed_cascade(proxy_pos, bins);
+        let (positions, densities): (Vec<f64>, Vec<f64>) = result.into_iter().unzip();
+        Ok((positions, densities))
     }
 
 
