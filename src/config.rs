@@ -279,6 +279,8 @@ impl Default for Config {
             priority_list: None,
             enable_strict_lints: false,
             enable_shader_precompile: false,
+            vow_threads: 8,
+            poisson_lambda: 1.3,
         }
     }
 }

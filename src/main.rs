@@ -20,6 +20,7 @@ use speedbitcrack::simple_test::run_simple_test;
 use std::process::Command;
 use std::fs::read_to_string;
 use regex::Regex;
+use bincode;
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::math::bigint::BigInt256;
@@ -101,6 +102,9 @@ struct Args {
 
     #[arg(long)]
     analyze_bias: Option<u32>,  // Analyze bias patterns for a specific puzzle
+
+    #[arg(long)]
+    analyze_valuable_bias: bool,  // Analyze valuable_p2pk_pubkeys.txt and output high-bias filtered file
     #[arg(long)]
     magic9: bool,  // Enable magic 9 sniper mode for specific 9 pubkeys
     #[arg(long)]
@@ -903,6 +907,12 @@ async fn main() -> Result<()> {
     // Check if comprehensive bias analysis is requested for a specific puzzle
     if let Some(puzzle_num) = args.analyze_bias {
         analyze_single_puzzle_bias(puzzle_num)?;
+        return Ok(());
+    }
+
+    // Check if valuable P2PK bias analysis and filtering is requested
+    if args.analyze_valuable_bias {
+        analyze_and_filter_valuable_p2pk_bias()?;
         return Ok(());
     }
 
@@ -1757,19 +1767,22 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
         info!("🔄 Cycle {}: Running kangaroo steps...", cycle_count);
 
         // Check for collisions - optimized parallel detection with Bloom filter
-        let mut bloom = Bloom::new(1_000_000, 0.01); // 1M entries, 1% false positive rate
+        let mut bloom = Bloom::new(1_000_000, 100_000); // 1M entries, expected 100K items
 
         // Populate Bloom filter with tame kangaroos for pre-filtering
         for tame in &tame_kangaroos {
-            bloom.insert(&tame.position.to_bytes());
+            let pos_bytes = bincode::serialize(&tame.position).unwrap_or_default();
+            bloom.set(&pos_bytes);
         }
 
         let collisions: Vec<_> = tame_kangaroos.par_iter()
             .flat_map(|tame| {
+                let bloom_clone = bloom.clone();
                 wild_kangaroos.par_iter()
                     .filter_map(move |wild| {
                         // Bloom filter pre-check (90% false positive reduction)
-                        if !bloom.check(&wild.position.to_bytes()) {
+                        let pos_bytes = bincode::serialize(&wild.position).unwrap_or_default();
+                        if !bloom_clone.check(&pos_bytes) {
                             return None;
                         }
 
@@ -1801,6 +1814,154 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
     Ok(())
 }
 
+/// Analyze valuable P2PK keys and output filtered high-bias file
+fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
+    use speedbitcrack::utils::bias::{analyze_comprehensive_bias, BiasAnalysis};
+    use speedbitcrack::math::secp::Secp256k1;
+    use std::fs;
+    use std::io::Write;
+
+    println!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns...");
+    info!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns...");
+
+    // Load the valuable P2PK file
+    let content = match fs::read_to_string("valuable_p2pk_pubkeys.txt") {
+        Ok(content) => content,
+        Err(e) => {
+            println!("❌ Error reading valuable_p2pk_pubkeys.txt: {}", e);
+            println!("💡 Make sure valuable_p2pk_pubkeys.txt exists in the current directory");
+            return Err(anyhow!("Failed to read valuable_p2pk_pubkeys.txt: {}", e));
+        }
+    };
+
+    let lines: Vec<&str> = content.lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+
+    println!("📊 Found {} valuable P2PK keys to analyze", lines.len());
+    info!("📊 Found {} valuable P2PK keys to analyze", lines.len());
+
+    let curve = Secp256k1::new();
+    let mut high_bias_keys = Vec::new();
+    let mut analysis_results = Vec::new();
+
+    // Analyze each key
+    for (i, line) in lines.iter().enumerate() {
+        let hex_str = line.trim();
+
+        // Parse pubkey
+        let point = match hex::decode(hex_str) {
+            Ok(bytes) => {
+                if bytes.len() == 65 && bytes[0] == 0x04 {
+                    // Uncompressed format: 0x04 + 32 bytes x + 32 bytes y
+                    let mut x_bytes = [0u8; 32];
+                    let mut y_bytes = [0u8; 32];
+                    x_bytes.copy_from_slice(&bytes[1..33]);
+                    y_bytes.copy_from_slice(&bytes[33..65]);
+
+                    // Convert to [u64; 4] arrays as expected by from_affine
+                    let x_u64 = BigInt256::from_bytes_be(&x_bytes).limbs;
+                    let y_u64 = BigInt256::from_bytes_be(&y_bytes).limbs;
+                    Point::from_affine(x_u64, y_u64)
+                } else {
+                    println!("⚠️  Skipping invalid pubkey format at line {}: {}", i + 1, hex_str);
+                    continue;
+                }
+            }
+            Err(e) => {
+                println!("⚠️  Skipping invalid hex at line {}: {} ({})", i + 1, hex_str, e);
+                continue;
+            }
+        };
+
+        // Analyze bias
+        let analysis = analyze_comprehensive_bias(&point);
+        let overall_score = analysis.overall_score();
+        let is_high_bias = analysis.is_high_bias();
+
+        // Store results
+        analysis_results.push((hex_str.to_string(), analysis, overall_score, is_high_bias));
+
+        // Progress indicator
+        if (i + 1) % 1000 == 0 {
+            println!("📈 Analyzed {}/{} keys...", i + 1, lines.len());
+        }
+    }
+
+    // Sort by bias score (highest first)
+    analysis_results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+
+    // Filter high-bias keys
+    for (pubkey_hex, analysis, score, is_high) in &analysis_results {
+        if *is_high {
+            high_bias_keys.push(pubkey_hex.clone());
+        }
+    }
+
+    println!("🎯 Analysis Complete:");
+    println!("├─ Total keys analyzed: {}", analysis_results.len());
+    println!("├─ High-bias keys found: {} ({:.1}%)",
+             high_bias_keys.len(),
+             (high_bias_keys.len() as f64 / analysis_results.len() as f64) * 100.0);
+    println!("└─ Top bias score: {:.3}", analysis_results[0].2);
+
+    // Show top 10 most biased keys
+    println!("\n🏆 Top 10 Most Biased Valuable P2PK Keys:");
+    for (i, (pubkey_hex, analysis, score, _)) in analysis_results.iter().take(10).enumerate() {
+        println!("{}. {:.3} - {}", i + 1, score, pubkey_hex);
+    }
+
+    // Create filtered output file
+    let output_filename = "valuable_p2pk_high_bias.txt";
+    let mut output_file = fs::File::create(output_filename)?;
+
+    writeln!(output_file, "# High-Bias Valuable P2PK Keys (filtered from valuable_p2pk_pubkeys.txt)")?;
+    writeln!(output_file, "# Generated by SpeedBitCrackV3 bias analysis")?;
+    writeln!(output_file, "# Total analyzed: {}", analysis_results.len())?;
+    writeln!(output_file, "# High-bias threshold: >0.55 overall score")?;
+    writeln!(output_file, "# High-bias keys: {} ({:.1}%)",
+             high_bias_keys.len(),
+             (high_bias_keys.len() as f64 / analysis_results.len() as f64) * 100.0)?;
+    writeln!(output_file, "")?;
+
+    // Write high-bias keys with their bias scores
+    for (i, pubkey_hex) in high_bias_keys.iter().enumerate() {
+        // Find the corresponding analysis for this key
+        if let Some((_, analysis, score, _)) = analysis_results.iter().find(|(hex, _, _, _)| hex == pubkey_hex) {
+            writeln!(output_file, "# Rank: {}, Bias: {:.3}", i + 1, score)?;
+            writeln!(output_file, "{}", pubkey_hex)?;
+            writeln!(output_file, "")?;
+        }
+    }
+
+    println!("💾 High-bias keys saved to: {}", output_filename);
+    info!("💾 High-bias keys saved to: {}", output_filename);
+
+    // Also create a gold targets file with top 100 most biased
+    let gold_filename = "valuable_p2pk_gold_targets.txt";
+    let mut gold_file = fs::File::create(gold_filename)?;
+
+    writeln!(gold_file, "# GOLD TARGETS - Top 100 Most Biased Valuable P2PK Keys")?;
+    writeln!(gold_file, "# From SpeedBitCrackV3 comprehensive bias analysis")?;
+    writeln!(gold_file, "# Total analyzed: {}", analysis_results.len())?;
+    writeln!(gold_file, "# Bias scores: Basic + Mod3/9/27/81 + Golden Ratio + Population Count")?;
+    writeln!(gold_file, "")?;
+
+    for (i, (pubkey_hex, analysis, score, _)) in analysis_results.iter().take(100).enumerate() {
+        writeln!(gold_file, "# Rank: {}, Overall Bias: {:.3}", i + 1, score)?;
+        writeln!(gold_file, "# Basic: {:.3}, Mod3: {:.3}, Mod9: {:.3}, GOLD: {:.3}, POP: {:.3}",
+                analysis.basic_bias, analysis.mod3_bias, analysis.mod9_bias,
+                analysis.golden_bias, analysis.pop_bias)?;
+        writeln!(gold_file, "{}", pubkey_hex)?;
+        writeln!(gold_file, "")?;
+    }
+
+    println!("🏆 Gold targets (top 100) saved to: {}", gold_filename);
+    info!("🏆 Gold targets (top 100) saved to: {}", gold_filename);
+
+    Ok(())
+}
+
 /// Analyze comprehensive bias patterns for a single puzzle
 fn analyze_single_puzzle_bias(puzzle_num: u32) -> Result<()> {
     use speedbitcrack::utils::bias::{analyze_comprehensive_bias, PUZZLE_145_BIAS, PUZZLE_135_BIAS};
@@ -1817,16 +1978,28 @@ fn analyze_single_puzzle_bias(puzzle_num: u32) -> Result<()> {
             // This would be loaded from actual puzzle data
             // For now, create a representative point for demonstration
             let scalar = speedbitcrack::math::bigint::BigInt256::from_u64(145);
-            curve.mul_scalar(&GENERATOR, &scalar)
+            use k256::elliptic_curve::PrimeField;
+            let bytes: [u8; 32] = scalar.to_bytes_le().try_into().unwrap();
+            let k_scalar = k256::Scalar::from_repr(bytes.into()).unwrap();
+            let k_point = curve.mul_scalar(&k256::ProjectivePoint::GENERATOR, &k_scalar);
+            Point::from_k256(&k_point)
         },
         135 => {
             let scalar = speedbitcrack::math::bigint::BigInt256::from_u64(135);
-            curve.mul_scalar(&GENERATOR, &scalar)
+            use k256::elliptic_curve::PrimeField;
+            let bytes: [u8; 32] = scalar.to_bytes_le().try_into().unwrap();
+            let k_scalar = k256::Scalar::from_repr(bytes.into()).unwrap();
+            let k_point = curve.mul_scalar(&k256::ProjectivePoint::GENERATOR, &k_scalar);
+            Point::from_k256(&k_point)
         },
         _ => {
             info!("⚠️  Puzzle #{} not pre-analyzed. Showing general bias analysis.", puzzle_num);
             let scalar = speedbitcrack::math::bigint::BigInt256::from_u64(puzzle_num as u64);
-            curve.mul_scalar(&GENERATOR, &scalar)
+            use k256::elliptic_curve::PrimeField;
+            let bytes: [u8; 32] = scalar.to_bytes_le().try_into().unwrap();
+            let k_scalar = k256::Scalar::from_repr(bytes.into()).unwrap();
+            let k_point = curve.mul_scalar(&k256::ProjectivePoint::GENERATOR, &k_scalar);
+            Point::from_k256(&k_point)
         }
     };
 
@@ -1840,18 +2013,18 @@ fn analyze_single_puzzle_bias(puzzle_num: u32) -> Result<()> {
     match puzzle_num {
         145 => {
             println!("\n📊 Known Results for Puzzle #145:");
-            println!("├─ Basic Bias:     {:.3f} (HIGH - optimal target)", PUZZLE_145_BIAS);
-            println!("├─ Mod3 Bias:      {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD3_BIAS);
-            println!("├─ Mod9 Bias:      {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD9_BIAS);
-            println!("├─ Mod27 Bias:     {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD27_BIAS);
-            println!("├─ Mod81 Bias:     {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_MOD81_BIAS);
-            println!("├─ Golden Ratio:   {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_GOLD_BIAS);
-            println!("├─ Population:     {:.3f}", speedbitcrack::utils::bias::PUZZLE_145_POP_BIAS);
+            println!("├─ Basic Bias:     {:.3} (HIGH - optimal target)", PUZZLE_145_BIAS);
+            println!("├─ Mod3 Bias:      {:.3}", speedbitcrack::utils::bias::PUZZLE_145_MOD3_BIAS);
+            println!("├─ Mod9 Bias:      {:.3}", speedbitcrack::utils::bias::PUZZLE_145_MOD9_BIAS);
+            println!("├─ Mod27 Bias:     {:.3}", speedbitcrack::utils::bias::PUZZLE_145_MOD27_BIAS);
+            println!("├─ Mod81 Bias:     {:.3}", speedbitcrack::utils::bias::PUZZLE_145_MOD81_BIAS);
+            println!("├─ Golden Ratio:   {:.3}", speedbitcrack::utils::bias::PUZZLE_145_GOLD_BIAS);
+            println!("├─ Population:     {:.3}", speedbitcrack::utils::bias::PUZZLE_145_POP_BIAS);
             println!("└─ Status:         🚀 LAUNCH TARGET - High bias exploitation recommended");
         },
         135 => {
             println!("\n📊 Known Results for Puzzle #135:");
-            println!("├─ Basic Bias:     {:.3f} (Standard - comparison baseline)", PUZZLE_135_BIAS);
+            println!("├─ Basic Bias:     {:.3} (Standard - comparison baseline)", PUZZLE_135_BIAS);
             println!("└─ Status:         📊 Standard bias - use as baseline comparison");
         },
         _ => {
