@@ -841,12 +841,12 @@ impl BigInt256 {
 
     /// Absolute value (since BigInt256 is unsigned, returns self)
     pub fn abs(&self) -> Self {
-        *self
+        self.clone()
     }
 
     /// Round to integer (since BigInt256 is already an integer, returns self)
     pub fn round_to_int(&self) -> Self {
-        *self
+        self.clone()
     }
 
     /// Negate (for unsigned BigInt, this is equivalent to two's complement)

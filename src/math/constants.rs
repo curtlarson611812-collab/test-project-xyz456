@@ -225,10 +225,10 @@ pub fn gram_schmidt_4d(basis: &[[BigInt256; 4]; 4]) -> ([[BigInt256; 4]; 4], [[B
     ];
 
     // Initialize first basis vector
-    b_star[0] = basis[0];
+    b_star[0] = basis[0].clone();
 
     for i in 1..4 {
-        b_star[i] = basis[i];
+        b_star[i] = basis[i].clone();
         for j in 0..i {
             let norm_j_squared = dot_product(&b_star[j], &b_star[j]);
             if norm_j_squared.is_zero() {
@@ -236,11 +236,13 @@ pub fn gram_schmidt_4d(basis: &[[BigInt256; 4]; 4]) -> ([[BigInt256; 4]; 4], [[B
             }
             // mu[i][j] = <basis[i], b_star[j]> / <b_star[j], b_star[j]>
             let projection_coeff = div_round(&dot_product(&basis[i], &b_star[j]), &norm_j_squared);
-            mu[i][j] = projection_coeff;
+            mu[i][j] = projection_coeff.clone();
 
             // Subtract projection: b_star[i] = b_star[i] - mu[i][j] * b_star[j]
             for d in 0..4 {
-                b_star[i][d] = b_star[i][d] - projection_coeff * b_star[j][d];
+                let current_val = b_star[i][d].clone();
+                let subtract_val = projection_coeff.clone() * b_star[j][d].clone();
+                b_star[i][d] = current_val - subtract_val;
             }
         }
     }
@@ -262,7 +264,7 @@ fn div_round(a: &BigInt256, b: &BigInt256) -> BigInt256 {
     let (quotient, remainder) = a.div_rem(b);
 
     // If remainder is zero, no rounding needed
-    if remainder.is_zero() {
+    if (&remainder).is_zero() {
         return quotient;
     }
 
@@ -318,7 +320,7 @@ fn size_reduce(basis: &mut [[BigInt256; DIM]; DIM], i: usize, j: usize, mu: &mut
     if mu_val.abs() > BigInt256::from_u64(1) / BigInt256::from_u64(2) {
         let r = mu_val.round_to_int();
         for d in 0..DIM {
-            basis[i][d] = basis[i][d] - r * basis[j][d];
+            basis[i][d] = basis[i][d] - r.clone() * basis[j][d].clone();
         }
         // Update mu and b_star for affected vectors
         for k in (j+1)..DIM {

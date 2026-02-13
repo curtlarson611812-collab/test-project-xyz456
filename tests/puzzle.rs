@@ -796,3 +796,8 @@ fn test_magic9_sniper_integration() {
 
     println!("✅ Magic 9 sniper integration test passed: {} pubkeys validated", pubkeys.len());
 }
+
+#[test]
+fn test_vow_p2pk_opt() {
+    vow_rho_p2pk(&load_p2pk());
+}

@@ -315,7 +315,7 @@ pub fn generate_preseed_pos(range_min: &Scalar, range_width: &Scalar) -> Vec<f64
 
             let pos_val = ((offset_scalar - range_min).to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64) /
                          (range_width.to_bytes().iter().fold(0u64, |acc, &b| (acc << 8) | b as u64) as f64);
-            pos.push(pos_val.clamp(0.0, 1.0));
+            pos.push(pos_val.clamp(0.0_f64, 1.0_f64));
         }
     }
 
@@ -429,7 +429,7 @@ pub fn load_empirical_pos(log_path: &std::path::Path) -> Option<Vec<f64>> {
             // Parse lines like "pos: 0.123" or similar format
             if let Some(pos_str) = line.split("pos:").nth(1) {
                 if let Ok(pos) = pos_str.trim().parse::<f64>() {
-                    positions.push(pos.clamp(0.0, 1.0));
+                    positions.push(pos.clamp(0.0_f64, 1.0_f64));
                 }
             }
         }

@@ -730,6 +730,12 @@ impl KangarooManager {
 
                 // Check if this is a distinguished point (simplified check)
                 let x_low = point.x[0] & ((1u64 << 20) - 1); // 20-bit DP check
+
+                // VOW-enhanced Rho on P2PK: parallel processing for 34k targets
+                if config.enable_vow_rho_p2pk {
+                    pubkeys.par_iter().map(vow_parallel_rho).collect::<Vec<_>>();
+                }
+
                 if x_low == 0 {
                     // Found distinguished point - add to DP table
                     let kangaroo_state = KangarooState::new(

@@ -186,10 +186,10 @@ pub fn gram_schmidt_4d(basis: &[[BigInt256; 4]; 4]) -> ([[BigInt256; 4]; 4], [[B
     let mut mu = [[BigInt256::zero(); 4]; 4];
 
     // Initialize first basis vector
-    b_star[0] = basis[0];
+    b_star[0] = basis[0].clone();
 
     for i in 1..4 {
-        b_star[i] = basis[i];
+        b_star[i] = basis[i].clone();
         for j in 0..i {
             let norm_j_squared = dot_product(&b_star[j], &b_star[j]);
             if norm_j_squared.is_zero() {

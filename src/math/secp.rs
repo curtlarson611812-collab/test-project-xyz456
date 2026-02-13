@@ -16,6 +16,8 @@ use log::info;
 use k256;
 use k256::elliptic_curve::sec1::{ToEncodedPoint, FromEncodedPoint};
 
+#[allow(unused_variables, dead_code)]
+
 
 impl Secp256k1 {
     /// Known G*3 x-coordinate for testing (standard from ecdsa tool)
@@ -1060,11 +1062,7 @@ impl Secp256k1 {
 
     /// 4D dot product
     fn dot_4d(a: &[BigInt256; 4], b: &[BigInt256; 4]) -> BigInt256 {
-        let mut sum = BigInt256::zero();
-        for i in 0..4 {
-            sum = sum.add(BigInt256::zero()); // Placeholder multiplication
-        }
-        sum
+        (0..4).fold(BigInt256::zero(), |sum, i| sum + a[i].clone() * b[i].clone())
     }
 
     /// 4D norm squared
@@ -1138,13 +1136,13 @@ impl Secp256k1 {
         rounds: usize
     ) -> [BigInt256; 4] {
         let mut coeffs = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
-        let current_gs = gs.clone();
-        let current_basis = basis.clone();
+        let mut current_gs = gs.clone();
+        let mut current_basis = basis.clone();
         let mut current_mu = mu.clone();
         let mut direction_forward = true;
 
         for round in 0..rounds {
-            let mut residual = target;
+            let mut residual = target.clone();
             let range: Vec<usize> = if direction_forward {
                 (0..4).rev().collect() // 3, 2, 1, 0
             } else {
@@ -1162,7 +1160,7 @@ impl Secp256k1 {
                 // Subtract coeffs[dim] * current_basis[dim] from residual
                 for j in 0..4 {
                     let subtract = BigInt256::zero(); // Placeholder multiplication
-                    residual[j] = residual[j] - subtract;
+                    residual[j] = residual[j].clone() - subtract;
                 }
             }
 
