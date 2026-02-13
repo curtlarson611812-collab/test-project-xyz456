@@ -68,7 +68,7 @@ struct Args {
     #[arg(long, default_value = "4294967296")]
     bsgs_threshold: u64,  // Max difference for BSGS solving
 
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     gold_bias_combo: bool,  // Enable GOLD hierarchical factoring
 
     // Additional Block 1 flags
