@@ -831,6 +831,16 @@ impl BigInt256 {
     pub fn from_u64_limbs(limbs: [u64; 4]) -> Self {
         BigInt256 { limbs }
     }
+
+    /// Absolute value (since BigInt256 is unsigned, returns self)
+    pub fn abs(&self) -> Self {
+        *self
+    }
+
+    /// Round to integer (since BigInt256 is already an integer, returns self)
+    pub fn round_to_int(&self) -> Self {
+        *self
+    }
 }
 
 impl fmt::Display for BigInt256 {
@@ -2031,4 +2041,3 @@ mod tests {
         assert_eq!(bytes[6], 0x34);
         assert_eq!(bytes[7], 0x12);
     }
-}
