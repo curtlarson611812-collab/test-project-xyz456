@@ -601,7 +601,7 @@ impl CollisionDetector {
         // to properly reconstruct the path by reversing operations
         let mut path = Vec::new();
         let current_pos = kangaroo.position;
-        let mut current_dist = kangaroo.distance.clone().into();
+        let mut current_dist = kangaroo.distance.to_biguint();
 
         // Add starting position
         path.push(current_pos);
@@ -1185,7 +1185,7 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
                     // Send DP to central processor
                     let dp_entry = Trap {
                         x: [0; 4], // Placeholder - should compute actual coordinates
-                        dist: steps.into(),
+                        dist: BigUint::from(steps),
                         is_tame: false,
                         alpha: [0; 4], // Placeholder
                     };

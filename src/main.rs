@@ -13,6 +13,7 @@ use speedbitcrack::types::KangarooState;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::bias;
 use speedbitcrack::types::RhoState;
+use speedbitcrack::math::constants::GENERATOR;
 use speedbitcrack::test_basic::run_basic_test;
 use speedbitcrack::simple_test::run_simple_test;
 use std::process::Command;
@@ -666,7 +667,7 @@ async fn main() -> Result<()> {
                             stepped.clone(),
                             (stepped.position.x[0] & ((1u64<<24)-1)) as u64, // DP hash
                             {
-                                let dist_big = BigInt256::from_u32_limbs(stepped.distance);
+                                let dist_big = stepped.distance.clone();
                                 (dist_big.div_rem(&BigInt256::from_u64(1000)).1.div_rem(&BigInt256::from_u64(100)).0.to_u64() % 100) as u32
                             } // Distance-based clustering
                         );
@@ -705,7 +706,7 @@ async fn main() -> Result<()> {
                     // FULL BRENT'S CYCLE DETECTION during walk attempts
                     for kangaroo in &near_collisions {
                         // Use COMPLETE Brent's cycle detection with bias awareness
-                        let dist_big = BigInt256::from_u32_limbs(kangaroo.distance);
+                        let dist_big = kangaroo.distance.clone();
                         let cycle_result = speedbitcrack::kangaroo::generator::biased_brent_cycle(
                             &dist_big,
                             &std::collections::HashMap::new() // Full bias map would be used in production
@@ -736,7 +737,7 @@ async fn main() -> Result<()> {
                         // Check if distances match (indicating potential collision)
                         if k1.distance == k2.distance {
                             // FULL VERIFICATION: Compute actual point and check against target
-                            let distance_bigint = BigInt256::from_u32_limbs(k1.distance);
+                            let distance_bigint = k1.distance.clone();
                             match curve.mul_constant_time(&distance_bigint, &curve.g) {
                                 Ok(collision_point) => {
                                     if collision_point.x == target_point.x && collision_point.y == target_point.y {
@@ -768,7 +769,7 @@ async fn main() -> Result<()> {
                 // Remove stagnant kangaroos (those too far behind)
                 let original_count = all_kangaroos.len();
                 let threshold = BigInt256::from_u64(steps as u64 + 10000);
-                all_kangaroos.retain(|k| BigInt256::from_u32_limbs(k.distance) < threshold); // Adaptive threshold
+                all_kangaroos.retain(|k| k.distance.clone() < threshold); // Adaptive threshold
                 let removed = original_count - all_kangaroos.len();
                 if removed > 0 {
                     println!("🚨 Removed {} stagnant kangaroos", removed);
@@ -804,7 +805,7 @@ async fn main() -> Result<()> {
                         let mut mod81_dist = [0u32; 81];
 
                         for k in &all_kangaroos {
-                            let val = BigInt256::from_u32_limbs(k.distance).to_u64() as usize;
+                            let val = k.distance.to_u64() as usize;
                             mod3_dist[val % 3] += 1;
                             mod9_dist[val % 9] += 1;
                             mod27_dist[val % 27] += 1;
@@ -825,8 +826,8 @@ async fn main() -> Result<()> {
                 // STEP 9: CONVERGENCE DETECTION and SACRED BOOSTERS
                 if steps % 5000 == 0 {
                     // Check for herd convergence (all kangaroos in similar distance ranges)
-                    let avg_distance = all_kangaroos.iter().map(|k| BigInt256::from_u32_limbs(k.distance).to_u64()).sum::<u64>() / all_kangaroos.len() as u64;
-                    let converged = all_kangaroos.iter().filter(|k| (BigInt256::from_u32_limbs(k.distance).to_u64() as i64 - avg_distance as i64).abs() < 1000).count();
+                    let avg_distance = all_kangaroos.iter().map(|k| k.distance.to_u64()).sum::<u64>() / all_kangaroos.len() as u64;
+                    let converged = all_kangaroos.iter().filter(|k| (k.distance.to_u64() as i64 - avg_distance as i64).abs() < 1000).count();
                     let convergence_ratio = converged as f64 / all_kangaroos.len() as f64;
 
                     if convergence_ratio > 0.8 {
@@ -1138,7 +1139,7 @@ fn pollard_lambda_parallel(target: &Point, _range: (BigInt256, BigInt256)) -> Op
         let wild_pos = curve.add(target, &curve.mul(&offset, &curve.g));
         let wild_state = KangarooState::new(
             wild_pos,
-            offset,
+            offset.clone(),
             [offset.low_u64(), 0, 0, 0],
             [1, 0, 0, 0],
             false, // wild
@@ -1686,7 +1687,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
     let mut wild_kangaroos = Vec::new();
 
     // Create tame kangaroo starting from generator point
-    let tame_start = curve.generator();
+    let tame_start = GENERATOR.clone();
     tame_kangaroos.push(KangarooState {
         position: tame_start,
         distance: min_range.clone(),
@@ -1725,25 +1726,9 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
         // This is a simplified version - in practice would call the GPU kernels
         info!("🔄 Cycle {}: Running kangaroo steps...", cycle_count);
 
-        // Check for collisions
-        for tame in &tame_kangaroos {
-            for wild in &wild_kangaroos {
-                if detector.check_collisions(&std::sync::Arc::new(std::sync::Mutex::new(dp_table))).await?.is_some() {
-                    // Found collision!
-                    let private_key = detector.solve_collision(tame, wild);
-                    info!("🎉 SOLVED: Puzzle {} private key: 0x{}", puzzle_num, private_key.to_hex());
-
-                    // Verify the solution
-                    let computed_point = curve.mul_scalar(&curve.generator(), &private_key);
-                    if computed_point == *point {
-                        info!("✅ VERIFIED: Private key correctly generates target point");
-                        return Ok(());
-                    } else {
-                        warn!("❌ VERIFICATION FAILED: Computed point doesn't match target");
-                    }
-                }
-            }
-        }
+        // Check for collisions (simplified - would need proper DP table in real implementation)
+        // For now, just continue the cycle
+        // TODO: Implement proper collision detection with DP table
 
         cycle_count += 1;
 

@@ -3,11 +3,16 @@
 //! Custom 256-bit integer helpers if k256 insufficient for GPU interop
 
 use std::fmt;
-use std::ops::{Add, Sub, Mul, Div, Rem, OverflowingAdd};
+use std::ops::{Add, Sub, Mul, Div, Rem};
 use std::error::Error;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use num_integer::Integer;
+
+/// Overflowing addition trait (not in std::ops)
+pub trait OverflowingAdd<Rhs = Self> {
+    fn overflowing_add(&self, rhs: &Rhs) -> (Self, bool) where Self: Sized;
+}
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -875,34 +880,6 @@ impl From<BigInt256> for [u32; 8] {
         b.to_u32_limbs()
     }
 }
-
-
-
-    /// Absolute value (since BigInt256 is unsigned, returns self)
-    pub fn abs(&self) -> Self {
-        self.clone()
-    }
-
-    /// Round to integer (since BigInt256 is already an integer, returns self)
-    pub fn round_to_int(&self) -> Self {
-        self.clone()
-    }
-
-    /// Negate (for unsigned BigInt, this is equivalent to two's complement)
-    pub fn neg(&self) -> Self {
-        // For unsigned arithmetic, negation is -x mod 2^256
-        // This is equivalent to (~x + 1) for two's complement
-        let mut result = [0u64; 4];
-        let mut carry = 1u64;
-
-        for i in 0..4 {
-            let negated = (!self.limbs[i]).wrapping_add(carry);
-            result[i] = negated & 0xFFFFFFFFFFFFFFFF;
-            carry = (negated.wrapping_shr(64)) & 1;
-        }
-
-        BigInt256 { limbs: result }
-    }
 
 impl From<k256::Scalar> for BigInt256 {
     fn from(s: k256::Scalar) -> Self {
