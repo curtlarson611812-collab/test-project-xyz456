@@ -1887,6 +1887,8 @@ fn convert_valuable_p2pk_to_uncompressed() -> Result<()> {
                 converted_keys.push(uncompressed_hex);
             }
             Err(error_msg) => {
+                println!("⚠️  Line {}: {} bytes, prefix=0x{:02x}, error: {}",
+                        i + 1, bytes.len(), bytes.get(0).unwrap_or(&0), error_msg);
                 invalid_keys.push((i + 1, hex_str.to_string(), error_msg));
             }
         }
@@ -1954,7 +1956,7 @@ struct ConversionStats {
 fn validate_uncompressed_key(bytes: &[u8], line_num: usize, hex_str: &str) -> Result<String> {
     // Validate uncompressed key format and EC validity
     if bytes.len() != 65 || bytes[0] != 0x04 {
-        return Err(anyhow!("Invalid uncompressed format"));
+        return Err(anyhow!("Invalid uncompressed format: len={}, prefix=0x{:02x}", bytes.len(), bytes.get(0).unwrap_or(&0)));
     }
 
     // Extract x and y coordinates
@@ -1973,10 +1975,10 @@ fn validate_uncompressed_key(bytes: &[u8], line_num: usize, hex_str: &str) -> Re
         Ok(encoded_point) => {
             match k256::ProjectivePoint::from_encoded_point(&encoded_point) {
                 projective_option if projective_option.is_some().into() => {
-                    // Valid EC point
+                    // Valid EC point - return the validated uncompressed key
                     Ok(hex_str.to_string())
                 }
-                _ => Err(anyhow!("Invalid EC point"))
+                _ => Err(anyhow!("Invalid EC point: point not on curve"))
             }
         }
         Err(e) => Err(anyhow!("Invalid encoded point: {}", e))
