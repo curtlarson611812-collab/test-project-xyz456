@@ -18,16 +18,22 @@ pub struct KangarooStepper {
     // expanded_mode: bool, // TODO: Implement expanded jump mode
     dp_bits: usize, // DP bits for negation check
     step_count: u32, // Global step counter for tame kangaroo bucket selection
+    seed: u32, // Configurable seed for randomization
 }
 
 impl KangarooStepper {
     /// Create new stepper with optional expanded jump table
     pub fn new(expanded_mode: bool) -> Self {
-        Self::with_dp_bits(expanded_mode, 20) // Default 20 bits
+        Self::with_dp_bits_and_seed(expanded_mode, 20, 42) // Default 20 bits, seed 42
     }
 
     /// Create new stepper with dp_bits
     pub fn with_dp_bits(expanded_mode: bool, dp_bits: usize) -> Self {
+        Self::with_dp_bits_and_seed(expanded_mode, dp_bits, 42)
+    }
+
+    /// Create new stepper with dp_bits and configurable seed
+    pub fn with_dp_bits_and_seed(expanded_mode: bool, dp_bits: usize, seed: u32) -> Self {
         let curve = Secp256k1::new();
         let jump_table = Self::build_jump_table(&curve, expanded_mode);
 
@@ -36,6 +42,7 @@ impl KangarooStepper {
             _jump_table: jump_table,
             dp_bits,
             step_count: 0,
+            seed,
         }
     }
 
@@ -159,7 +166,7 @@ impl KangarooStepper {
             // TODO: Use full sop::select_bucket when k256 conversions are fixed
             let pos_hash = self.hash_position(&kangaroo.position);
             let dist_hash = self.hash_position(&Point::infinity()); // Simplified distance hash
-            let seed = 42u32; // TODO: Make configurable
+            let seed = self.seed;
             let step = self.step_count;
 
             // Simplified state mixing (mimic sop logic)

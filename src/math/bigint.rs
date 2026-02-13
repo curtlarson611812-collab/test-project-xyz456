@@ -1457,9 +1457,9 @@ impl Mul for BigInt256 {
 impl BigInt256 {
     /// Convert to k256 Scalar (assumes self < curve.n)
     pub fn to_k256_scalar(&self) -> Result<k256::Scalar, Box<dyn Error>> {
-        // TODO: Implement proper k256 scalar conversion
-        // For now, return zero scalar to avoid compilation errors
-        Ok(k256::Scalar::ZERO)
+        use k256::elliptic_curve::PrimeField;
+        let bytes = self.to_bytes_le();
+        k256::Scalar::from_repr(bytes.try_into()?).into_option().ok_or_else(|| "Invalid scalar value".into())
     }
 
     /// Convert to f64 (approximate, for performance calculations)

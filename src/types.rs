@@ -17,11 +17,13 @@ pub struct RhoState {
 
 impl RhoState {
     /// Create random state within range
-    pub fn random_in_range(_range: &(BigInt256, BigInt256)) -> Self {
-        // TODO: Implement proper random generation
+    pub fn random_in_range(range: &(BigInt256, BigInt256)) -> Self {
+        use rand::{thread_rng, Rng};
+        let mut rng = thread_rng();
+        let rand_dist = BigInt256::from_u64(rng.gen_range(range.0.to_u64()..range.1.to_u64()));
         Self {
-            current: Point::infinity(),
-            steps: BigInt256::zero(),
+            current: Point::infinity(), // Placeholder - should use random point
+            steps: rand_dist,
             is_dp: false,
         }
     }

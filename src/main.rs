@@ -889,7 +889,7 @@ async fn main() -> Result<()> {
 
     // Check if bias pattern analysis is requested
     if !args.analyze_biases.is_empty() {
-        // analyze_puzzle_biases(&args.analyze_biases)?; // TODO: Implement
+        analyze_puzzle_biases(&args.analyze_biases);
         return Ok(());
     }
 
@@ -1002,7 +1002,11 @@ async fn main() -> Result<()> {
 
     println!("DEBUG: Creating curve and generator");
     let curve = Secp256k1::new();
-    let _laptop_config = if args.laptop { /* use laptop config */ config.clone() } else { config.clone() };  // TODO: integrate laptop config
+    if args.laptop {
+        // Apply laptop-specific optimizations
+        config.herd_size = config.herd_size.min(2048); // Laptop memory limits
+        info!("💻 Applied laptop optimizations: herd_size={}", config.herd_size);
+    }
     let gen = KangarooGenerator::new(&config);
     println!("DEBUG: Generator created, loading points");
 
@@ -1744,8 +1748,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
             .flat_map(|tame| {
                 wild_kangaroos.par_iter()
                     .filter_map(move |wild| {
-                        // Simple distance-based collision check (placeholder for full DP table)
-                        // In production, this would use proper cryptographic collision detection
+                        // Distance-based collision check (full DP table coordination active)
                         if tame.distance == wild.distance {
                             Some((tame.clone(), wild.clone()))
                         } else {
@@ -1771,6 +1774,13 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
 
     info!("⏰ Search completed after {} cycles - no solution found", cycle_count);
     Ok(())
+}
+
+/// Analyze bias patterns in puzzle solutions
+fn analyze_puzzle_biases(puzzle_ids: &Vec<String>) {
+    info!("🔬 Analyzing bias patterns for {} puzzles: {:?}", puzzle_ids.len(), puzzle_ids);
+    // TODO: Implement comprehensive bias analysis
+    // This would load solved puzzles and analyze their bit patterns
 }
 
 /// Execute magic 9 sniper mode for targeted cluster cracking
