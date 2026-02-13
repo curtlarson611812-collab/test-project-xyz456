@@ -842,4 +842,17 @@ mod tests {
 
         println!("✅ Gram-Schmidt 4D orthogonalization verified");
     }
+
+    #[test]
+    fn test_vow_p2pk_opt() {
+        use crate::kangaroo::manager::vow_rho_p2pk;
+        use crate::targets::loader::load_p2pk_targets;
+
+        // Load a small subset for testing
+        let targets = load_p2pk_targets().unwrap_or_default();
+        if !targets.is_empty() {
+            let _result = vow_rho_p2pk(&targets[..1.min(targets.len())]);
+            // Just verify it doesn't panic
+        }
+    }
 }

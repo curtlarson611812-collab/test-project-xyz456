@@ -991,6 +991,7 @@ impl Secp256k1 {
     }
 
     /// Gram-Schmidt orthogonalization for 4D basis
+    #[allow(dead_code)]
     fn gram_schmidt_4d(&self, _basis: &[k256::Scalar; 4]) -> [k256::Scalar; 4] {
         // Placeholder implementation
         [k256::Scalar::ZERO; 4]

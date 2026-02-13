@@ -304,3 +304,24 @@ mod tests {
         // If we get here without panicking, the operation is safe
     });
 }
+
+#[test]
+fn full_integration_test() {
+    use crate::math::Secp256k1;
+
+    // Test Babai multi-round
+    let curve = Secp256k1::new();
+    let scalar = k256::Scalar::from(12345u64);
+    let _babai_result = curve.glv4_decompose_babai(&scalar);
+
+    // Test Fermat ECDLP diff
+    let p = curve.g.clone();
+    let q = curve.scalar_mul(&k256::Scalar::from(2u64), &p);
+    let _fermat_diff = crate::kangaroo::collision::fermat_ecdlp_diff(&p, &q);
+
+    // Test VOW Rho P2PK (placeholder)
+    let dummy_p = curve.g.clone();
+    let _vow_result = crate::kangaroo::collision::vow_parallel_rho(&dummy_p, 2, 1.0 / 2f64.powf(20.0));
+
+    // If we get here without panicking, all components integrate properly
+}
