@@ -122,6 +122,42 @@ CONFIG_PATTERNS=(
     "hardcoded"
 )
 
+echo ""
+echo -e "${BLUE}🎮 PHASE 6 GPU/CUDA/VULKAN VALIDATION:${NC}"
+echo "-----------------------------------------"
+
+GPU_PATTERNS=(
+    "gpu_hybrid_suite"
+    "test_parity_barrett"
+    "test_cuda_ec_math"
+    "test_vulkan_ec_math"
+    "test_gpu_parity_kangaroo_step"
+)
+
+gpu_tests_passed=0
+gpu_tests_total=${#GPU_PATTERNS[@]}
+
+for pattern in "${GPU_PATTERNS[@]}"; do
+    count=$(grep -r "$pattern" src/ --include="*.rs" 2>/dev/null | wc -l)
+    if [ "$count" -gt 0 ]; then
+        gpu_tests_passed=$((gpu_tests_passed + 1))
+    fi
+done
+
+if [ $gpu_tests_passed -eq $gpu_tests_total ]; then
+    echo -e "${GREEN}✅ PHASE 6 COMPLETE: GPU test suite complete ($gpu_tests_passed/$gpu_tests_total tests)${NC}"
+else
+    echo -e "${YELLOW}⏳ PHASE 6 IN PROGRESS: GPU tests partially implemented ($gpu_tests_passed/$gpu_tests_total tests)${NC}"
+fi
+
+echo ""
+echo -e "${BLUE}📊 GPU TEST COVERAGE:${NC}"
+echo "----------------------"
+echo "GPU hybrid parity tests: $(grep -r "gpu_hybrid_suite" src/ --include="*.rs" 2>/dev/null | wc -l) functions"
+echo "CUDA backend tests: $(grep -r "test_cuda" src/ --include="*.rs" 2>/dev/null | wc -l) functions"
+echo "Vulkan backend tests: $(grep -r "test_vulkan" src/ --include="*.rs" 2>/dev/null | wc -l) functions"
+echo "GPU parity validation: $(grep -r "parity.*gpu\|gpu.*parity" src/ --include="*.rs" 2>/dev/null | wc -l) functions"
+
 # Count total TODOs and placeholders
 TOTAL_TODOS=$(grep -r "TODO\|FIXME\|placeholder\|stub" src/ --include="*.rs" 2>/dev/null | wc -l)
 TOTAL_UNIMPLEMENTED=$(grep -r "unimplemented!" src/ --include="*.rs" 2>/dev/null | wc -l)

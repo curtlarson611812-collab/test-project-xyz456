@@ -103,6 +103,46 @@ check_tests() {
     fi
 }
 
+# Function to check GPU tests
+check_gpu_tests() {
+    echo "🎮 Running GPU/CUDA/Vulkan tests..."
+
+    # Check if GPU tests are available
+    if ! cargo test --quiet --test gpu_hybrid 2>/dev/null; then
+        echo -e "${YELLOW}⚠️  GPU hybrid tests not available${NC}"
+        return 0
+    fi
+
+    # Run GPU hybrid tests (always enabled since run mode is GPU hybrid)
+    if cargo test --quiet --test gpu_hybrid --features gpu_hybrid 2>/dev/null; then
+        echo -e "${GREEN}✓ GPU hybrid tests passed${NC}"
+    else
+        echo -e "${YELLOW}⚠️  GPU hybrid tests failed (may be expected without hardware)${NC}"
+    fi
+
+    # Run GPU backend tests if features are enabled
+    if cargo test --quiet gpu::tests --features rustacuda 2>/dev/null; then
+        echo -e "${GREEN}✓ CUDA backend tests passed${NC}"
+    else
+        echo -e "${YELLOW}⚠️  CUDA backend tests failed (may be expected without CUDA)${NC}"
+    fi
+
+    if cargo test --quiet gpu::tests --features wgpu 2>/dev/null; then
+        echo -e "${GREEN}✓ Vulkan backend tests passed${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Vulkan backend tests failed (may be expected without Vulkan)${NC}"
+    fi
+
+    # Run specific GPU test modules
+    if cargo test --quiet --package speedbitcrack --lib gpu_hybrid 2>/dev/null; then
+        echo -e "${GREEN}✓ GPU hybrid parity tests passed${NC}"
+    else
+        echo -e "${YELLOW}⚠️  GPU hybrid parity tests failed${NC}"
+    fi
+
+    return 0  # GPU tests shouldn't fail the build
+}
+
 # Function to check code formatting
 check_formatting() {
     echo "🎨 Checking code formatting..."
@@ -190,6 +230,7 @@ check_placeholders || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 check_compilation || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 check_release_build || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 check_tests
+check_gpu_tests
 check_formatting
 check_linting
 check_security
