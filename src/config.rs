@@ -157,6 +157,10 @@ pub struct Config {
     #[arg(long)]
     pub enable_noise: bool,
 
+    /// Enable VOW-enhanced Rho on P2PK targets
+    #[arg(long)]
+    pub enable_vow_rho_p2pk: bool,
+
     /// Path to high-priority pubkey list (from bias_analyze tool)
     #[arg(long)]
     pub priority_list: Option<PathBuf>,
@@ -262,6 +266,7 @@ impl Default for Config {
             gold_bias_combo: false,
             bias_log: None,
             enable_noise: false,
+            enable_vow_rho_p2pk: false,
             preseed_pos_weights: vec![0.5, 0.25, 0.25],
             priority_list: None,
             enable_strict_lints: false,

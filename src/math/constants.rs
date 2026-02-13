@@ -6,7 +6,7 @@ use crate::types::Point;
 use crate::math::bigint::BigInt256;
 use std::sync::LazyLock;
 
-#[allow(unused_imports, unused_variables)]
+#[allow(unused_imports, unused_variables, dead_code)]
 
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
 // From ./SmallOddPrime_Precise_code.rs — locked, no adjustments.
@@ -252,11 +252,7 @@ pub fn gram_schmidt_4d(basis: &[[BigInt256; 4]; 4]) -> ([[BigInt256; 4]; 4], [[B
 
 /// Compute dot product of two 4D vectors
 fn dot_product(a: &[BigInt256; 4], b: &[BigInt256; 4]) -> BigInt256 {
-    let mut sum = BigInt256::zero();
-    for i in 0..4 {
-        sum = sum + a[i] * b[i];
-    }
-    sum
+    (0..4).fold(BigInt256::zero(), |sum, i| sum + a[i].clone() * b[i].clone())
 }
 
 /// Round dividing BigInt256: round(a / b) using banker's rounding
@@ -270,7 +266,7 @@ fn div_round(a: &BigInt256, b: &BigInt256) -> BigInt256 {
 
     // Check if remainder * 2 >= divisor (i.e., remainder >= divisor/2)
     // Since we can't do floating point, multiply remainder by 2 and compare
-    let remainder_times_2 = remainder + remainder;
+    let remainder_times_2 = remainder.clone() + remainder;
     let divisor_half = b.clone();
 
     // If remainder * 2 > divisor, round up
@@ -320,7 +316,7 @@ fn size_reduce(basis: &mut [[BigInt256; DIM]; DIM], i: usize, j: usize, mu: &mut
     if mu_val.abs() > BigInt256::from_u64(1) / BigInt256::from_u64(2) {
         let r = mu_val.round_to_int();
         for d in 0..DIM {
-            basis[i][d] = basis[i][d] - r.clone() * basis[j][d].clone();
+            basis[i][d] = basis[i][d].clone() - r.clone() * basis[j][d].clone();
         }
         // Update mu and b_star for affected vectors
         for k in (j+1)..DIM {
@@ -365,16 +361,16 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
             }
 
             let proj = div_round(&dot_product(&u, &b_star[i]), &norm_squared);
-            c[i] = proj;
+            c[i] = proj.clone();
 
             // Subtract projection: u = u - proj * basis[i]
             for d in 0..4 {
-                u[d] = u[d] - proj * basis[i][d];
+                u[d] = u[d].clone() - proj.clone() * basis[i][d].clone();
             }
 
             // Adjust for lower mu coefficients
             for j in 0..i {
-                c[i] = c[i] - mu[i][j] * c[j];
+                c[i] = c[i].clone() - mu[i][j].clone() * c[j].clone();
             }
         }
     }
@@ -383,15 +379,15 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
     let mut l = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
     for i in 0..4 {
         for d in 0..4 {
-            l[d] = l[d] + c[i] * basis[i][d];
+            l[d] = l[d].clone() + c[i].clone() * basis[i][d].clone();
         }
     }
 
     // Small vector coefficients = t - l
     let mut coeffs = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
-    coeffs[0] = t[0] - l[0];
+    coeffs[0] = t[0].clone() - l[0].clone();
     for i in 1..4 {
-        coeffs[i] = l[i].neg(); // Note: negated as per user's specification
+        coeffs[i] = l[i].clone().neg(); // Note: negated as per user's specification
     }
 
     // Convert to Scalar (reduce mod n)
@@ -407,7 +403,7 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
         let bytes = coeffs[i].to_bytes_le();
         let mut scalar_bytes = [0u8; 32];
         scalar_bytes.copy_from_slice(&bytes[..32]);
-        let scalar = Scalar::ZERO; // TODO: implement proper byte conversion
+        let mut scalar = Scalar::ZERO; // TODO: implement proper byte conversion
         // Reduce mod n by subtracting n until < n
         while scalar >= n {
             scalar = scalar - n;
@@ -515,7 +511,7 @@ pub fn lll_reduce(basis: &mut [[BigInt256; DIM]; DIM], delta: &BigInt256) {
     ];
     
     // Initialize Gram-Schmidt
-    b_star[0] = basis[0];
+    b_star[0] = basis[0].clone();
     
     let mut k = 1;
     while k < DIM {
@@ -525,18 +521,18 @@ pub fn lll_reduce(basis: &mut [[BigInt256; DIM]; DIM], delta: &BigInt256) {
         }
         
         // Recompute Gram-Schmidt orthogonalization for vector k
-        b_star[k] = basis[k];
+        b_star[k] = basis[k].clone();
         for j in 0..k {
             mu[k][j] = compute_mu(basis, k, j, &b_star);
             for d in 0..DIM {
-                b_star[k][d] = b_star[k][d] - mu[k][j] * b_star[j][d];
+                b_star[k][d] = b_star[k][d].clone() - mu[k][j].clone() * b_star[j][d].clone();
             }
         }
         
         // Lovasz condition: ||b*_k||^2 >= (delta - mu_{k,k-1}^2) * ||b*_{k-1}||^2
         let lovasz_lhs = norm_squared(&b_star[k]);
-        let mu_sq = if k > 0 { mu[k][k-1] * mu[k][k-1] } else { BigInt256::zero() };
-        let lovasz_rhs = (*delta - mu_sq) * norm_squared(&b_star[k-1]);
+        let mu_sq = if k > 0 { mu[k][k-1].clone() * mu[k][k-1].clone() } else { BigInt256::zero() };
+        let lovasz_rhs = (delta.clone() - mu_sq) * norm_squared(&b_star[k-1]);
         
         if lovasz_lhs >= lovasz_rhs {
             // Condition satisfied, move to next vector

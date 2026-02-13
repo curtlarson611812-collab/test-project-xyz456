@@ -732,8 +732,9 @@ impl KangarooManager {
                 let x_low = point.x[0] & ((1u64 << 20) - 1); // 20-bit DP check
 
                 // VOW-enhanced Rho on P2PK: parallel processing for 34k targets
-                if config.enable_vow_rho_p2pk {
-                    pubkeys.par_iter().map(vow_parallel_rho).collect::<Vec<_>>();
+                if self.config.enable_vow_rho_p2pk {
+                    // TODO: Implement proper VOW processing with pubkey conversion
+                    // self.targets.par_iter().map(|t| vow_parallel_rho(&t.point.into(), 4, 1.0 / 2f64.powf(24.0))).collect::<Vec<_>>();
                 }
 
                 if x_low == 0 {

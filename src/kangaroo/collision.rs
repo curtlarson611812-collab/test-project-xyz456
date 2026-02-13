@@ -839,7 +839,7 @@ impl CollisionDetector {
         // d_tame - d_wild (distance difference)
         let tame_dist = BigInt256::from_u32_limbs(tame.distance);
         let wild_dist = BigInt256::from_u32_limbs(wild.distance);
-        let _diff = tame_dist - wild_dist;
+        let _diff = tame_dist.clone() - wild_dist.clone();
 
         self.solve_collision_inversion(prime_u64, tame_dist, wild_dist, &CURVE_ORDER_BIGINT)
     }
