@@ -1390,6 +1390,17 @@ impl OverflowingAdd for BigInt256 {
     }
 }
 
+use std::ops::{Index, IndexMut};
+
+impl Index<usize> for BigInt256 {
+    type Output = u64;
+    fn index(&self, i: usize) -> &u64 { &self.limbs[i] }
+}
+
+impl IndexMut<usize> for BigInt256 {
+    fn index_mut(&mut self, i: usize) -> &mut u64 { &mut self.limbs[i] }
+}
+
 impl Sub for BigInt256 {
     type Output = Self;
 

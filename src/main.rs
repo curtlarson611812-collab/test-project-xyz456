@@ -23,6 +23,8 @@ use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::math::bigint::BigInt256;
 use speedbitcrack::types::Point;
+use rayon::prelude::*;
+use std::sync::Arc;
 
 // Chunk: Laptop Flag Parse (main.rs)
 /// Command line arguments
@@ -92,6 +94,8 @@ struct Args {
     enable_bias_hunting: bool,  // Enable advanced bias optimization for unsolved hunting
     #[arg(long, default_value_t = 0)]
     bias_mod: u64,  // Bias modulus for jump selection (0 = no bias)
+    #[arg(long)]
+    low_bias: bool,  // Enable low-bias optimizations for puzzles like #145
     #[arg(long)]
     magic9: bool,  // Enable magic 9 sniper mode for specific 9 pubkeys
     #[arg(long)]
@@ -318,6 +322,15 @@ async fn main() -> Result<()> {
     config.enable_smart_pruning = args.enable_smart_pruning;
     config.prime_spacing_with_entropy = args.prime_entropy;
     config.expanded_prime_spacing = args.expanded_primes;
+
+    // Low-bias optimizations for puzzles like #145
+    if args.low_bias {
+        config.dp_bits = 28;  // Higher DP bits for lower collision probability
+        config.herd_size = (1 << 23).min(config.herd_size);  // 8M kangaroos (fits 8GB VRAM)
+        config.jump_mean = 1 << 19;  // 524K mean jump size
+        info!("🔧 Applied low-bias optimizations: dp_bits={}, herd_size={}, jump_mean={}",
+              config.dp_bits, config.herd_size, config.jump_mean);
+    }
 
     // Special configuration for integration test
     if args.integration_test {
@@ -1726,9 +1739,28 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &
         // This is a simplified version - in practice would call the GPU kernels
         info!("🔄 Cycle {}: Running kangaroo steps...", cycle_count);
 
-        // Check for collisions (simplified - would need proper DP table in real implementation)
-        // For now, just continue the cycle
-        // TODO: Implement proper collision detection with DP table
+        // Check for collisions - optimized parallel detection
+        let collisions: Vec<_> = tame_kangaroos.par_iter()
+            .flat_map(|tame| {
+                wild_kangaroos.par_iter()
+                    .filter_map(move |wild| {
+                        // Simple distance-based collision check (placeholder for full DP table)
+                        // In production, this would use proper cryptographic collision detection
+                        if tame.distance == wild.distance {
+                            Some((tame.clone(), wild.clone()))
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect();
+
+        // Process any collisions found
+        for (tame, wild) in collisions {
+            info!("🎯 Potential collision detected between tame and wild kangaroo!");
+            // In production, this would call the full collision solver
+            // For now, just log and continue
+        }
 
         cycle_count += 1;
 
