@@ -107,6 +107,12 @@ struct Args {
     #[arg(long)]
     analyze_valuable_bias: bool,  // Analyze valuable_p2pk_pubkeys.txt and output high-bias filtered file
 
+    #[arg(long, value_name = "N")]
+    sample_bias_analysis: Option<usize>,  // Sample N keys for bias analysis testing (default: all)
+
+    #[arg(long, value_name = "THRESHOLD")]
+    bias_threshold: Option<f64>,  // Custom threshold for high-bias detection (default: adaptive)
+
     #[arg(long)]
     convert_valuable_uncompressed: bool,  // Convert valuable_p2pk_pubkeys.txt to all uncompressed format
     #[arg(long)]
@@ -1998,15 +2004,37 @@ fn convert_compressed_to_uncompressed(bytes: &[u8], line_num: usize, hex_str: &s
     }
 }
 
-/// Analyze valuable P2PK keys and output filtered high-bias file
+/// Analyze valuable P2PK keys and output filtered high-bias file using refined approach
 fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
-    use speedbitcrack::utils::bias::{analyze_comprehensive_bias, BiasAnalysis};
+    use speedbitcrack::utils::bias::{
+        analyze_comprehensive_bias, BiasAnalysis
+    };
     use speedbitcrack::math::secp::Secp256k1;
+    use speedbitcrack::types::Point;
     use std::fs;
     use std::io::Write;
 
-    println!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns...");
-    info!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns...");
+    // Calculate adaptive threshold based on score distribution
+    fn calculate_adaptive_threshold(scores: &[f64]) -> f64 {
+        if scores.is_empty() {
+            0.45  // Default fallback
+        } else {
+            let mean: f64 = scores.iter().sum::<f64>() / scores.len() as f64;
+            let variance: f64 = scores.iter()
+                .map(|&s| (s - mean).powi(2))
+                .sum::<f64>() / scores.len() as f64;
+            let std_dev = variance.sqrt();
+
+            // Adaptive threshold: mean + 1.5 * std_dev, but not below 0.35 or above 0.6
+            (mean + 1.5 * std_dev).max(0.35).min(0.6)
+        }
+    }
+
+    // Parse CLI arguments
+    let args = Args::parse();
+
+    println!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns (refined approach)...");
+    info!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns (refined approach)...");
 
     // Load the valuable P2PK file
     let content = match fs::read_to_string("valuable_p2pk_pubkeys.txt") {
@@ -2018,23 +2046,29 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
         }
     };
 
-    let lines: Vec<&str> = content.lines()
+    let all_lines: Vec<String> = content.lines()
         .filter(|l| !l.trim().is_empty())
+        .map(|s| s.trim().to_string())
         .collect();
 
-    println!("📊 Found {} valuable P2PK keys to analyze", lines.len());
-    info!("📊 Found {} valuable P2PK keys to analyze", lines.len());
+    // Apply sampling if requested
+    let lines = if let Some(sample_size) = args.sample_bias_analysis {
+        println!("🎯 Sampling {} keys for bias analysis (from {} total)", sample_size, all_lines.len());
+        all_lines.iter().take(sample_size).cloned().collect()
+    } else {
+        all_lines
+    };
+
+    println!("📊 Analyzing {} valuable P2PK keys", lines.len());
+    info!("📊 Analyzing {} valuable P2PK keys", lines.len());
 
     let curve = Secp256k1::new();
-    let mut high_bias_keys = Vec::new();
     let mut analysis_results = Vec::new();
     let mut compressed_count = 0;
     let mut uncompressed_count = 0;
 
-    // Analyze each key
-    for (i, line) in lines.iter().enumerate() {
-        let hex_str = line.trim();
-
+    // Analyze each key with refined bias detection
+    for (i, hex_str) in lines.iter().enumerate() {
         // Parse pubkey
         let point = match hex::decode(hex_str) {
             Ok(bytes) => {
@@ -2054,8 +2088,6 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
                     // Compressed format: 0x02/0x03 + 32 bytes x
                     // Decompress to uncompressed for full bias analysis
                     compressed_count += 1;
-                    println!("🔄 Decompressing compressed key to uncompressed at line {} (total compressed: {})",
-                             i + 1, compressed_count);
 
                     // Create k256 EncodedPoint from compressed bytes and decompress
                     match k256::EncodedPoint::from_bytes(bytes) {
@@ -2087,13 +2119,13 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
             }
         };
 
-        // Analyze bias
+        // Analyze bias with refined approach
         let analysis = analyze_comprehensive_bias(&point);
         let overall_score = analysis.overall_score();
         let is_high_bias = analysis.is_high_bias();
 
         // Store results
-        analysis_results.push((hex_str.to_string(), analysis, overall_score, is_high_bias));
+        analysis_results.push((hex_str.clone(), analysis, overall_score, is_high_bias));
 
         // Progress indicator
         if (i + 1) % 1000 == 0 {
@@ -2101,24 +2133,42 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
         }
     }
 
+    println!("✅ Analysis Complete: {} valid keys analyzed ({} uncompressed, {} compressed)",
+             analysis_results.len(), uncompressed_count, compressed_count);
+
     // Sort by bias score (highest first)
     analysis_results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
 
-    // Filter high-bias keys
-    for (pubkey_hex, analysis, score, is_high) in &analysis_results {
-        if *is_high {
-            high_bias_keys.push(pubkey_hex.clone());
+    // Calculate final statistics and adaptive threshold
+    let scores: Vec<f64> = analysis_results.iter().map(|(_, _, score, _)| *score).collect();
+    let adaptive_threshold = calculate_adaptive_threshold(&scores);
+    let actual_threshold = args.bias_threshold.unwrap_or(adaptive_threshold);
+
+    // Re-evaluate high bias keys with the actual threshold
+    let mut high_bias_keys = Vec::new();
+    for (hex_str, analysis, score, _) in &analysis_results {
+        if *score > actual_threshold {
+            high_bias_keys.push(hex_str.clone());
         }
     }
 
-    println!("🎯 Analysis Complete:");
+    // Calculate statistics
+    let mean_score = scores.iter().sum::<f64>() / scores.len() as f64;
+    let variance = scores.iter().map(|&s| (s - mean_score).powi(2)).sum::<f64>() / scores.len() as f64;
+    let std_score = variance.sqrt();
+
+    println!("🎯 Analysis Complete (Refined Approach):");
     println!("├─ Total keys analyzed: {}", analysis_results.len());
     println!("├─ Uncompressed keys: {}", uncompressed_count);
     println!("├─ Compressed keys: {} (decompressed for analysis)", compressed_count);
+    println!("├─ Score statistics: mean={:.3}, std={:.3}", mean_score, std_score);
+    println!("├─ Threshold used: {:.3} ({})",
+             actual_threshold,
+             if args.bias_threshold.is_some() { "custom" } else { "adaptive" });
     println!("├─ High-bias keys found: {} ({:.1}%)",
              high_bias_keys.len(),
              (high_bias_keys.len() as f64 / analysis_results.len() as f64) * 100.0);
-    println!("└─ Top bias score: {:.3}", analysis_results[0].2);
+    println!("├─ Top bias score: {:.3}", analysis_results[0].2);
 
     // Show top 10 most biased keys
     println!("\n🏆 Top 10 Most Biased Valuable P2PK Keys:");
@@ -2131,10 +2181,13 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     let mut output_file = fs::File::create(output_filename)?;
 
     writeln!(output_file, "# High-Bias Valuable P2PK Keys (filtered from valuable_p2pk_pubkeys.txt)")?;
-    writeln!(output_file, "# Generated by SpeedBitCrackV3 comprehensive bias analysis")?;
+    writeln!(output_file, "# Generated by SpeedBitCrackV3 refined bias analysis")?;
     writeln!(output_file, "# Total analyzed: {} ({} uncompressed, {} compressed/decompressed)",
              analysis_results.len(), uncompressed_count, compressed_count)?;
-    writeln!(output_file, "# High-bias threshold: >0.55 overall score")?;
+    writeln!(output_file, "# High-bias threshold: >{:.3} overall score ({})",
+             actual_threshold,
+             if args.bias_threshold.is_some() { "custom" } else { "adaptive" })?;
+    writeln!(output_file, "# Score stats: mean={:.3}, std={:.3}", mean_score, std_score)?;
     writeln!(output_file, "# High-bias keys: {} ({:.1}%)",
              high_bias_keys.len(),
              (high_bias_keys.len() as f64 / analysis_results.len() as f64) * 100.0)?;
@@ -2158,17 +2211,20 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     let mut gold_file = fs::File::create(gold_filename)?;
 
     writeln!(gold_file, "# GOLD TARGETS - Top 100 Most Biased Valuable P2PK Keys")?;
-    writeln!(gold_file, "# From SpeedBitCrackV3 comprehensive bias analysis")?;
+    writeln!(gold_file, "# From SpeedBitCrackV3 refined bias analysis")?;
     writeln!(gold_file, "# Total analyzed: {} ({} uncompressed, {} compressed/decompressed)",
              analysis_results.len(), uncompressed_count, compressed_count)?;
-    writeln!(gold_file, "# Bias scores: Basic + Mod3/9/27/81 + Golden Ratio + Population Count")?;
+    writeln!(gold_file, "# Bias scores: Basic + Mod3/9/27/81 + Golden Ratio + Population Count (60% mods)")?;
+    writeln!(gold_file, "# Threshold: {:.3} ({})", actual_threshold,
+             if args.bias_threshold.is_some() { "custom" } else { "adaptive" })?;
     writeln!(gold_file, "")?;
 
     for (i, (pubkey_hex, analysis, score, _)) in analysis_results.iter().take(100).enumerate() {
         writeln!(gold_file, "# Rank: {}, Overall Bias: {:.3}", i + 1, score)?;
-        writeln!(gold_file, "# Basic: {:.3}, Mod3: {:.3}, Mod9: {:.3}, GOLD: {:.3}, POP: {:.3}",
+        writeln!(gold_file, "# Basic: {:.3}, Mod3: {:.3}, Mod9: {:.3}, Mod27: {:.3}, Mod81: {:.3}",
                 analysis.basic_bias, analysis.mod3_bias, analysis.mod9_bias,
-                analysis.golden_bias, analysis.pop_bias)?;
+                analysis.mod27_bias, analysis.mod81_bias)?;
+        writeln!(gold_file, "# GOLD: {:.3}, POP: {:.3}", analysis.golden_bias, analysis.pop_bias)?;
         writeln!(gold_file, "{}", pubkey_hex)?;
         writeln!(gold_file, "")?;
     }

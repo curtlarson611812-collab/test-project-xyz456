@@ -14,6 +14,7 @@ pub use hash::fast_hash;
 pub use bias::{
     analyze_comprehensive_bias,
     BiasAnalysis,
+    is_high_bias_target,
     PUZZLE_145_BIAS,
     PUZZLE_135_BIAS,
     PUZZLE_145_MOD3_BIAS,
