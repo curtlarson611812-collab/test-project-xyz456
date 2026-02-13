@@ -21,6 +21,7 @@ chmod +x .git/hooks/pre-commit
 **Quality checks include:**
 - ✅ **Critical Blocker Detection** - No unimplemented! or blocking TODOs
 - ✅ **Clean Compilation** - `cargo check` passes
+- ✅ **GPU/CUDA/Vulkan Testing** - GPU hybrid tests pass (mandatory for GPU hybrid mode)
 - ✅ **Release Build** - `cargo build --release` succeeds
 - ✅ **Code Formatting** - `cargo fmt --check` passes
 - ✅ **Security Review** - No excessive unwrap/expect usage
@@ -126,12 +127,18 @@ git checkout -b fix-collision-detection
 # Unit tests
 cargo test
 
+# GPU/CUDA/Vulkan tests (mandatory for GPU hybrid mode)
+cargo test --test gpu_hybrid
+cargo test gpu::tests --features rustacuda  # CUDA tests
+cargo test gpu::tests --features wgpu       # Vulkan tests
+
 # Integration tests (when available)
 cargo test --test integration
 
 # Manual testing
 cargo run -- --help
 cargo run -- --puzzle 66 --validate-puzzle 66
+cargo run -- --puzzle 145 --low-bias        # Test low-bias optimizations
 ```
 
 ### 5. Commit with Quality
