@@ -855,4 +855,17 @@ mod tests {
             // Just verify it doesn't panic
         }
     }
+
+    #[test]
+    fn test_vow_integration() {
+        use crate::kangaroo::collision::vow_parallel_rho;
+        use k256::ProjectivePoint;
+
+        // Simple integration test
+        let dummy_point = ProjectivePoint::GENERATOR;
+        let _result = vow_parallel_rho(&dummy_point, 2, 1.0 / 2f64.powf(20.0));
+
+        // Just verify it completes without panic
+        println!("✅ VOW integration test passed");
+    }
 }

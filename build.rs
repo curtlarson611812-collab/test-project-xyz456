@@ -105,6 +105,8 @@ fn compile_cuda_kernels() {
         .include("src/gpu/cuda")
         .flag("-O3")
         .flag("-arch=sm_86") // Default RTX 3070; override via env
+        .flag("-maxrregcount=64") // Limit registers for better occupancy
+        .flag("-use_fast_math") // Use fast math for performance
         .flag("-diag-suppress=63") // Existing shift warnings
         .flag("-diag-suppress=177") // Unused declarations
         .flag("-diag-suppress=550") // Unused variables/shared mem

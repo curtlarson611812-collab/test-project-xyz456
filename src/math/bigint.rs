@@ -858,8 +858,6 @@ impl BigInt256 {
         result
     }
 
-}
-
 impl fmt::Display for BigInt256 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "0x")?;
@@ -2058,3 +2056,4 @@ mod tests {
         assert_eq!(bytes[6], 0x34);
         assert_eq!(bytes[7], 0x12);
     }
+}

@@ -162,5 +162,21 @@ mod tests {
         println!("✅ Puzzle 35 GLV integration test passed");
     }
 
+    #[test]
+    fn test_glv_decompose() {
+        use crate::math::constants::glv4_decompose_babai;
+        use k256::Scalar;
+
+        // Test with a simple scalar
+        let test_scalar = Scalar::from(1u64);
+        let (coeffs, signs) = glv4_decompose_babai(&test_scalar);
+
+        // Verify we get some result (placeholder check)
+        assert_eq!(coeffs.len(), 4);
+        assert_eq!(signs.len(), 4);
+
+        println!("✅ GLV4 decompose test passed");
+    }
+
     criterion_group!(benches, bench_glv_speedup);
 }

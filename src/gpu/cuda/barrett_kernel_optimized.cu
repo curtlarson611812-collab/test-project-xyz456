@@ -56,6 +56,10 @@ __constant__ uint32_t SECP256K1_MODULUS[8] = {
     0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE
 };
 
+// Shared memory for modulus constants to reduce global memory access
+__shared__ uint32_t shared_modulus[8];
+__shared__ uint32_t shared_mu[9];
+
 // Barrett reduce device function
 static __device__ void barrett_reduce_device(const uint32_t* x, const uint32_t* modulus, const uint32_t* mu, uint32_t* result) {
     // Simple Barrett reduction for device
