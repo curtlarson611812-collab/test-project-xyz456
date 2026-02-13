@@ -1843,6 +1843,12 @@ fn convert_valuable_p2pk_to_uncompressed() -> Result<()> {
 
     let lines: Vec<&str> = content.lines()
         .filter(|l| !l.trim().is_empty())
+        .filter(|l| {
+            let trimmed = l.trim();
+            // Skip lines that are too short/long to be valid keys
+            // Compressed: 66 hex chars (33 bytes), Uncompressed: 130 hex chars (65 bytes)
+            trimmed.len() >= 66 && trimmed.len() <= 132
+        })
         .collect();
 
     println!("📊 Processing {} valuable P2PK keys...", lines.len());
