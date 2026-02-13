@@ -795,7 +795,12 @@ impl BigInt256 {
 
     /// Convert k256 Scalar to BigInt256
     pub fn from_scalar(s: &k256::Scalar) -> Self {
-        BigInt256 { limbs: s.to_u64_array() }
+        let bytes = s.to_bytes();
+        let mut limbs = [0u64; 4];
+        for i in 0..4 {
+            limbs[i] = u64::from_be_bytes(bytes[i*8..(i+1)*8].try_into().unwrap());
+        }
+        BigInt256 { limbs }
     }
 
     /// Convert BigInt256 to GPU [u32; 8] limb format

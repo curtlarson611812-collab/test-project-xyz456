@@ -7,6 +7,7 @@ use num_bigint::BigUint;
 use log::{info, debug};
 use std::ops::Add;
 use std::collections::HashMap;
+use k256::{ProjectivePoint};
 
 #[derive(Clone)]
 pub struct Trap {
@@ -1141,6 +1142,82 @@ pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
     // Placeholder: In practice, would retrace kangaroo path
     // Return the collision point if found within step limit
     None // Not implemented in this summary
+}
+
+/// Van Oorschot-Weiner parallel rho for ECDLP
+/// m: number of processors, theta: DP probability (1/2^dp_bits)
+pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scalar {
+    use std::sync::mpsc;
+    use std::thread;
+
+    let (tx, rx) = mpsc::channel();
+    let mut handles = vec![];
+
+    // Start m parallel rho walkers
+    for i in 0..m {
+        let tx_clone = tx.clone();
+        let pubkey_clone = *pubkey;
+
+        let handle = thread::spawn(move || {
+            let mut point = pubkey_clone;
+            let mut steps = 0u64;
+
+            loop {
+                // Simple rho step (placeholder - in practice use proper jump table)
+                // For now, just add generator point repeatedly
+                let g = ProjectivePoint::GENERATOR;
+                point = point + g;
+
+                steps += 1;
+
+                // Check for DP (simplified)
+                let dp_bits = (1.0 / theta).log2() as u32;
+                let x_bytes = point.to_affine().x.to_bytes();
+                let hash = x_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+                let dp_value = hash & ((1u32 << dp_bits) - 1);
+
+                if dp_value == 0 {
+                    // Send DP to central processor
+                    let dp_entry = Trap {
+                        x: [0; 4], // Placeholder - should compute actual coordinates
+                        dist: steps.into(),
+                        is_tame: false,
+                        alpha: [0; 4], // Placeholder
+                    };
+                    let _ = tx_clone.send(dp_entry);
+                }
+
+                // Timeout check (placeholder)
+                if steps > 1000000 {
+                    break;
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Central collision detection
+    let mut dps = vec![];
+    for _ in 0..m {
+        if let Ok(dp) = rx.recv() {
+            dps.push(dp);
+        }
+    }
+
+    // Wait for all threads
+    for handle in handles {
+        let _ = handle.join();
+    }
+
+    // Simple collision detection (placeholder)
+    // In practice, sort by hash and find matches
+    if dps.len() >= 2 {
+        // Return dummy solution for now
+        Scalar::ONE
+    } else {
+        Scalar::ZERO
+    }
 }
 
 

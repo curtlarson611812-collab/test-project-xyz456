@@ -5,6 +5,8 @@
 use crate::types::Point;
 use crate::math::bigint::BigInt256;
 use std::sync::LazyLock;
+use k256::elliptic_curve::ops::Reduce;
+use k256::U256;
 
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
 // From ./SmallOddPrime_Precise_code.rs — locked, no adjustments.
@@ -100,29 +102,32 @@ use subtle::{Choice, ConditionallySelectable};
 /// lambda satisfies lambda^3 ≡ 1 mod n, lambda ≠ 1
 pub fn glv_lambda_scalar() -> Scalar {
     // lambda = 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72 (little-endian)
-    Scalar::from_bytes(&[
+    let bytes = [
         0x72, 0xbd, 0x23, 0x1b, 0x7c, 0x96, 0x02, 0xdf, 0x78, 0x66, 0x81, 0x20, 0xea, 0x22, 0x2e, 0x12,
         0x5a, 0x64, 0x12, 0x88, 0x02, 0x1c, 0x26, 0xa5, 0xe0, 0x30, 0x5c, 0xc0, 0x4c, 0xad, 0x63, 0x53,
-    ]).unwrap()
+    ];
+    Scalar::from_u256(U256::from_le_bytes(bytes)).reduce()
 }
 
 /// GLV beta scalar: corresponding field element where beta^3 ≡ 1 mod p, beta ≠ 1
 /// Used for the point endomorphism phi(P) = (beta * x, y)
 pub fn glv_beta_scalar() -> Scalar {
     // beta = 0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee (little-endian)
-    Scalar::from_bytes(&[
+    let bytes = [
         0xee, 0x01, 0x95, 0x71, 0x28, 0x6c, 0x39, 0xc1, 0x95, 0x89, 0xf5, 0x12, 0x75, 0x49, 0xf0, 0x9c,
         0x4e, 0x34, 0xac, 0x79, 0x44, 0x6e, 0x10, 0x07, 0x7c, 0x65, 0x2b, 0x6a, 0xe9, 0x7a, 0x63, 0x53,
-    ]).unwrap()
+    ];
+    Scalar::from_u256(U256::from_le_bytes(bytes)).reduce()
 }
 
 /// GLV basis vector v1: first component of reduced lattice basis (~sqrt(n)/2 length)
 pub fn glv_v1_scalar() -> Scalar {
     // v1 = 0x3086d221a7d46bcde86c90e49284eb15 (little-endian, padded)
-    Scalar::from_bytes(&[
+    let bytes = [
         0x15, 0xeb, 0x84, 0x92, 0xe4, 0x90, 0x6c, 0xe8, 0xcd, 0x6b, 0xd4, 0xa7, 0x21, 0xd2, 0x86, 0x30,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ]).unwrap()
+    ];
+    Scalar::from_u256(U256::from_le_bytes(bytes)).reduce()
 }
 
 /// GLV basis vector v2: second component of reduced lattice basis

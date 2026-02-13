@@ -18,6 +18,7 @@ use crate::kangaroo::generator::KangarooGenerator;
 use crate::kangaroo::stepper::KangarooStepper;
 use crate::kangaroo::collision::{CollisionDetector, CollisionResult};
 use crate::parity::ParityChecker;
+use k256::{Scalar, ProjectivePoint};
 use crate::targets::TargetLoader;
 use k256::elliptic_curve::Field; // Add this for Scalar operations
 use anyhow::anyhow;

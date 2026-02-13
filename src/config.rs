@@ -212,6 +212,14 @@ pub struct Config {
     /// Enable GOLD bias combo (primes + mod3/9/27/81 for instant attractor solving)
     #[arg(long)]
     pub gold_bias_combo: bool,
+
+    /// Enable strict linting (for CI/CD)
+    #[arg(long, default_value = "false")]
+    pub enable_strict_lints: bool,
+
+    /// Enable Vulkan shader precompilation
+    #[arg(long, default_value = "false")]
+    pub enable_shader_precompile: bool,
 }
 
 impl Default for Config {
@@ -256,6 +264,8 @@ impl Default for Config {
             enable_noise: false,
             preseed_pos_weights: vec![0.5, 0.25, 0.25],
             priority_list: None,
+            enable_strict_lints: false,
+            enable_shader_precompile: false,
         }
     }
 }
@@ -444,9 +454,4 @@ pub fn enable_nvidia_persistence() -> Result<bool> {
 
     let status = String::from_utf8_lossy(&query_output.stdout);
     Ok(status.contains("Enabled"))
-}    /// Enable strict linting (for CI/CD)
-    #[arg(long, default_value = "false")]
-    pub enable_strict_lints: bool,
-    /// Enable Vulkan shader precompilation
-    #[arg(long, default_value = "false")]
-    pub enable_shader_precompile: bool,
+}

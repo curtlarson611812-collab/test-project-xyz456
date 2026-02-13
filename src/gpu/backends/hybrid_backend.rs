@@ -172,7 +172,7 @@ impl HybridBackend {
         };
         
         #[cfg(not(feature = "wgpu"))]
-        let vulkan_fut = async { Ok(()) };
+        let vulkan_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>>>> = Box::pin(async { Ok(()) });
         
         // Launch CUDA precision operations (collisions, solves)
         #[cfg(feature = "rustacuda")]
@@ -185,7 +185,7 @@ impl HybridBackend {
         };
         
         #[cfg(not(feature = "rustacuda"))]
-        let cuda_fut = async { Ok(()) };
+        let cuda_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>>>> = Box::pin(async { Ok(()) });
         
         // Overlap execution (Vulkan steps while CUDA solves)
         tokio::try_join!(vulkan_fut, cuda_fut)?;
@@ -194,7 +194,7 @@ impl HybridBackend {
     }
 
     // Split herd for optimal hybrid dispatch
-    fn split_herd_for_hybrid(&self, herd: &[KangarooState]) -> (&[KangarooState], &[KangarooState]) {
+    fn split_herd_for_hybrid<'a>(&self, herd: &'a [KangarooState]) -> (&'a [KangarooState], &'a [KangarooState]) {
         // Simple 50-50 split; in practice, profile and split by workload
         let mid = herd.len() / 2;
         herd.split_at(mid)
