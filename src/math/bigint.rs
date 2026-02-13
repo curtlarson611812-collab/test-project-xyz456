@@ -846,6 +846,22 @@ impl BigInt256 {
     pub fn round_to_int(&self) -> Self {
         *self
     }
+
+    /// Negate (for unsigned BigInt, this is equivalent to two's complement)
+    pub fn neg(&self) -> Self {
+        // For unsigned arithmetic, negation is -x mod 2^256
+        // This is equivalent to (~x + 1) for two's complement
+        let mut result = [0u64; 4];
+        let mut carry = 1u64;
+
+        for i in 0..4 {
+            let negated = (!self.limbs[i]).wrapping_add(carry);
+            result[i] = negated & 0xFFFFFFFFFFFFFFFF;
+            carry = (negated >> 64) & 1;
+        }
+
+        BigInt256 { limbs: result }
+    }
 }
 
     /// Convert BigInt256 to GPU [u32; 8] limb format

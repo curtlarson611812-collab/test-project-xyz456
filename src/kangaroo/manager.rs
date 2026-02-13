@@ -985,11 +985,11 @@ fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
                 if bytes.len() == 33 {
                     match k256::EncodedPoint::from_bytes(&bytes) {
                         Ok(encoded) => {
-                            match k256::AffinePoint::decompress(&encoded.x(), encoded.y().unwrap_or_default()) {
+                            match encoded.decode() {
                                 Some(affine) => {
                                     let encoded_point = affine.to_encoded_point(true);
                                     let x_bytes = encoded_point.x().unwrap().as_bytes();
-                                    let y_bytes = encoded_point.y().unwrap().as_bytes();
+                                    let y_bytes = encoded_point.y().unwrap_or_else(|| [0u8; 32].into()).as_bytes();
                                     let point = crate::types::Point::from_affine(
                                         x_bytes.try_into().unwrap_or([0u8; 32]),
                                         y_bytes.try_into().unwrap_or([0u8; 32])

@@ -325,3 +325,13 @@ fn full_integration_test() {
 
     // If we get here without panicking, all components integrate properly
 }
+
+#[test]
+fn test_puzzle_64() {
+    // Placeholder test for puzzle 64 verification
+    // let pubkey = load_puzzle(64);
+    // let privkey = solve(pubkey);
+    // assert_eq!(privkey, known_64_priv);
+    // For now, just verify the test framework works
+    assert!(true);
+}

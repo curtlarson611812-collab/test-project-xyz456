@@ -2,7 +2,7 @@
 //! Tests the full GLV lattice reduction implementation with k256::Scalar
 
 use super::*;
-use k256::{Scalar, ProjectivePoint};
+use k256::{Scalar, ProjectivePoint, U256};
 use criterion::{criterion_group, Criterion};
 
 #[cfg(test)]
@@ -163,19 +163,11 @@ mod tests {
     }
 
     #[test]
-    fn test_glv_decompose() {
-        use crate::math::constants::glv4_decompose_babai;
-        use k256::Scalar;
-
-        // Test with a simple scalar
-        let test_scalar = Scalar::from(1u64);
-        let (coeffs, signs) = glv4_decompose_babai(&test_scalar);
-
-        // Verify we get some result (placeholder check)
-        assert_eq!(coeffs.len(), 4);
-        assert_eq!(signs.len(), 4);
-
-        println!("✅ GLV4 decompose test passed");
+    fn test_glv() {
+        assert_eq!(glv_lambda_scalar(), Scalar::from_u256(U256::from_le_bytes([
+            0x72,0xbd,0x23,0xb2,0x1c,0x67,0x29,0xdf,0x78,0x66,0x81,0x20,0xea,0x22,0x12,0x5a,
+            0x64,0x28,0x81,0x02,0x1c,0x52,0x0a,0xe0,0x30,0xc0,0x5c,0xcc,0x4d,0xad,0x63,0x53
+        ])));
     }
 
     criterion_group!(benches, bench_glv_speedup);

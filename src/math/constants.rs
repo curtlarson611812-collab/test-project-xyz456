@@ -6,6 +6,8 @@ use crate::types::Point;
 use crate::math::bigint::BigInt256;
 use std::sync::LazyLock;
 
+#[allow(unused_imports, unused_variables)]
+
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
 // From ./SmallOddPrime_Precise_code.rs — locked, no adjustments.
 pub const PRIME_MULTIPLIERS: [u64; 32] = [
@@ -209,8 +211,18 @@ pub static GLV4_BASIS: LazyLock<[[BigInt256; 4]; 4]> = LazyLock::new(|| {
 /// Gram-Schmidt orthogonalization for 4D GLV basis
 /// Returns (orthogonal_basis, mu_coefficients) where orthogonal_basis is B* and mu contains the projection coefficients
 pub fn gram_schmidt_4d(basis: &[[BigInt256; 4]; 4]) -> ([[BigInt256; 4]; 4], [[BigInt256; 4]; 4]) {
-    let mut b_star = [[BigInt256::zero(); 4]; 4];
-    let mut mu = [[BigInt256::zero(); 4]; 4];
+    let mut b_star = [
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+    ];
+    let mut mu = [
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+    ];
 
     // Initialize first basis vector
     b_star[0] = basis[0];
@@ -328,7 +340,7 @@ fn bigint_abs(x: &BigInt256) -> BigInt256 {
 pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
     // Convert k to BigInt256 target vector t = (k, 0, 0, 0)
     let mut t = [
-        BigInt256::from_scalar(*k),
+        BigInt256::from_scalar(k),
         BigInt256::zero(),
         BigInt256::zero(),
         BigInt256::zero(),
@@ -341,7 +353,7 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
     let (b_star, mu) = gram_schmidt_4d(basis);
 
     // Babai's nearest plane algorithm (multi-round for improved approximation)
-    let mut c = [BigInt256::zero(); 4];
+    let mut c = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
     for _round in 0..3 { // 3 rounds for convergence
         let mut u = t.clone();
         for i in (0..4).rev() {
@@ -366,7 +378,7 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
     }
 
     // Compute lattice point l = sum c_i * basis_i
-    let mut l = [BigInt256::zero(); 4];
+    let mut l = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
     for i in 0..4 {
         for d in 0..4 {
             l[d] = l[d] + c[i] * basis[i][d];
@@ -374,7 +386,7 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
     }
 
     // Small vector coefficients = t - l
-    let mut coeffs = [BigInt256::zero(); 4];
+    let mut coeffs = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
     coeffs[0] = t[0] - l[0];
     for i in 1..4 {
         coeffs[i] = l[i].neg(); // Note: negated as per user's specification
@@ -419,9 +431,9 @@ pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
                         temp[i] = if signs[i] > 0 {
                             scalar_coeffs[i]
                         } else {
-                            scalar_coeffs[i].neg()
+                            Scalar::ZERO - scalar_coeffs[i]
                         };
-                        let abs_val = bigint_abs(&BigInt256::from_scalar(temp[i]));
+                        let abs_val = bigint_abs(&BigInt256::from_scalar(&temp[i]));
                         if abs_val > current_max {
                             current_max = abs_val;
                         }
@@ -455,7 +467,7 @@ pub fn test_glv4_decomposition(k: &Scalar) -> bool {
 
     for i in 0..4 {
         let term = coeffs[i] * powers[i];
-        let signed_term = if signs[i] > 0 { term } else { term.neg() };
+        let signed_term = if signs[i] > 0 { term } else { Scalar::ZERO - term };
         reconstructed = reconstructed + signed_term;
     }
 
@@ -487,8 +499,18 @@ static LLL_DELTA: LazyLock<BigInt256> = LazyLock::new(|| {
 // Core LLL Reduction Algorithm
 // Lenstra-Lenstra-Lovasz polynomial-time lattice reduction
 pub fn lll_reduce(basis: &mut [[BigInt256; DIM]; DIM], delta: &BigInt256) {
-    let mut b_star = [[BigInt256::zero(); DIM]; DIM];
-    let mut mu = [[BigInt256::zero(); DIM]; DIM];
+    let mut b_star = [
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+    ];
+    let mut mu = [
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+        [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+    ];
     
     // Initialize Gram-Schmidt
     b_star[0] = basis[0];
