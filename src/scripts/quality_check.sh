@@ -173,6 +173,20 @@ check_gpu_tests() {
     return 0  # GPU tests shouldn't fail the build
 }
 
+# Function to run GPU hybrid test specifically
+check_gpu_hybrid_backend() {
+    echo "🔗 Testing GPU hybrid backend..."
+
+    # Run GPU hybrid tests (always enabled since run mode is GPU hybrid)
+    if cargo test --release --features gpu-hybrid --lib gpu::hybrid 2>/dev/null; then
+        echo -e "${GREEN}✓ GPU hybrid backend tests passed${NC}"
+    else
+        echo -e "${YELLOW}⚠️  GPU hybrid backend tests failed (may be expected without hardware)${NC}"
+    fi
+
+    return 0
+}
+
 # Function to check code formatting
 check_formatting() {
     echo "🎨 Checking code formatting..."
@@ -261,6 +275,7 @@ check_compilation || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 check_release_build || FAILED_CHECKS=$((FAILED_CHECKS + 1))
 check_tests
 check_gpu_tests
+check_gpu_hybrid_backend
 check_formatting
 check_linting
 check_security

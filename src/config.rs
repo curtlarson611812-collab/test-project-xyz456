@@ -54,6 +54,9 @@ pub enum BiasMode {
 }
 
 /// SpeedBitCrack V3 - Pollard's rho/kangaroo ECDLP solver for secp256k1
+///
+/// Config for high-bias mode: dp_bits=30, herd_size=16M, jump_mean=1M, vow_threads=8, poisson_lambda=1.3
+/// for puzzles like #145 with bias >0.55 (optimal for VOW-enhanced solving)
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(author, version, about, long_about = None)]
 pub struct Config {
