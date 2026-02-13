@@ -77,17 +77,47 @@ check_compilation() {
     fi
 }
 
-# Function to check for release build
+# Function to check for release build with ZERO errors
 check_release_build() {
-    echo "🚀 Checking release build..."
+    echo "🚀 Checking release build (STRICT: zero errors required)..."
 
-    if timeout 300 cargo build --release --quiet 2>/dev/null; then
-        echo -e "${GREEN}✓ Release build successful${NC}"
-        return 0
-    else
-        echo -e "${RED}❌ Release build failed or timed out${NC}"
+    # Capture full output to check for errors
+    BUILD_OUTPUT=$(timeout 300 cargo build --release 2>&1)
+    BUILD_EXIT_CODE=$?
+
+    if [ $BUILD_EXIT_CODE -ne 0 ]; then
+        echo -e "${RED}❌ Release build failed with exit code $BUILD_EXIT_CODE${NC}"
+        echo "Build output:"
+        echo "$BUILD_OUTPUT"
         return 1
     fi
+
+    # Check for compilation errors (not just warnings)
+    ERROR_COUNT=$(echo "$BUILD_OUTPUT" | grep -c "^error\[")
+    if [ $ERROR_COUNT -gt 0 ]; then
+        echo -e "${RED}❌ Release build has $ERROR_COUNT compilation errors${NC}"
+        echo "Error summary:"
+        echo "$BUILD_OUTPUT" | grep "^error\[" | head -5
+        echo -e "${RED}💥 STRICT POLICY: Zero errors required for release builds${NC}"
+        return 1
+    fi
+
+    # Check for any error messages
+    if echo "$BUILD_OUTPUT" | grep -q "^error:"; then
+        echo -e "${RED}❌ Release build contains error messages${NC}"
+        echo "Error output:"
+        echo "$BUILD_OUTPUT" | grep "^error:" | head -3
+        return 1
+    fi
+
+    # Count warnings for informational purposes
+    WARNING_COUNT=$(echo "$BUILD_OUTPUT" | grep -c "^warning:")
+    if [ $WARNING_COUNT -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  Release build has $WARNING_COUNT warnings (allowed but logged)${NC}"
+    fi
+
+    echo -e "${GREEN}✅ Release build successful with zero errors${NC}"
+    return 0
 }
 
 # Function to check tests

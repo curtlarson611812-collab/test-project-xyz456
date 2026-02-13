@@ -22,7 +22,7 @@ chmod +x .git/hooks/pre-commit
 - ✅ **Critical Blocker Detection** - No unimplemented! or blocking TODOs
 - ✅ **Clean Compilation** - `cargo check` passes
 - ✅ **GPU/CUDA/Vulkan Testing** - GPU hybrid tests pass (mandatory for GPU hybrid mode)
-- ✅ **Release Build** - `cargo build --release` succeeds
+- ✅ **STRICT Release Build** - `cargo build --release` passes with **ZERO ERRORS** (not just succeeds)
 - ✅ **Code Formatting** - `cargo fmt --check` passes
 - ✅ **Security Review** - No excessive unwrap/expect usage
 
@@ -151,7 +151,9 @@ git commit -m "fix: implement collision detection in execute_real()
 - Verify against known puzzle solutions
 
 Fixes critical blocker preventing puzzle solving.
-Closes PHASE1-CRITICAL-BLOCKER-1"
+Closes PHASE1-CRITICAL-BLOCKER-1
+
+Quality gates: ✅ compile, ✅ tests, ✅ GPU tests, ✅ release build (zero errors)"
 
 # Push and create PR
 git push origin fix-collision-detection
