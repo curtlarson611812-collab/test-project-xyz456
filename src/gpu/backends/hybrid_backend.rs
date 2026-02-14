@@ -1294,94 +1294,12 @@ impl HybridBackend {
         self.cpu.run_gpu_steps(num_steps, start_state)
     }
 
-    /// Production-ready GPU kangaroo state conversion
-    /// Mathematical derivation: Convert CPU Point format to GPU u32 limb arrays
-    /// Performance: Efficient limb extraction for GPU transfer
-    /// Security: Zero-copy conversion maintains data integrity
-    /// Usefulness: Enables seamless CPU↔GPU kangaroo state transitions
-    pub fn convert_kangaroo_to_gpu(&self, kangaroo: &crate::types::KangarooState) -> Result<[[u32; 8]; 3], Box<dyn std::error::Error>> {
-        // Convert position (Point) to GPU format: [x_limb0, x_limb1, ..., x_limb7, y_limb0, ..., z_limb7]
-        let pos_x_u32: [u32; 8] = [
-            (kangaroo.position.x[0] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.x[0] >> 32) as u32,
-            (kangaroo.position.x[1] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.x[1] >> 32) as u32,
-            (kangaroo.position.x[2] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.x[2] >> 32) as u32,
-            (kangaroo.position.x[3] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.x[3] >> 32) as u32,
-        ];
-
-        let pos_y_u32: [u32; 8] = [
-            (kangaroo.position.y[0] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.y[0] >> 32) as u32,
-            (kangaroo.position.y[1] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.y[1] >> 32) as u32,
-            (kangaroo.position.y[2] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.y[2] >> 32) as u32,
-            (kangaroo.position.y[3] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.y[3] >> 32) as u32,
-        ];
-
-        let pos_z_u32: [u32; 8] = [
-            (kangaroo.position.z[0] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.z[0] >> 32) as u32,
-            (kangaroo.position.z[1] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.z[1] >> 32) as u32,
-            (kangaroo.position.z[2] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.z[2] >> 32) as u32,
-            (kangaroo.position.z[3] & 0xFFFFFFFF) as u32,
-            (kangaroo.position.z[3] >> 32) as u32,
-        ];
-
-        Ok([pos_x_u32, pos_y_u32, pos_z_u32])
+    pub fn convert_to_gpu_limbs(u64_arr: &[u64; 4]) -> [u32; 8] {
+        let mut u32_arr = [0u32; 8]; for i in 0..4 { u32_arr[2*i] = u64_arr[i] as u32; u32_arr[2*i+1] = (u64_arr[i] >> 32) as u32; } u32_arr
     }
 
-    /// Production-ready GPU to CPU kangaroo state conversion
-    /// Mathematical derivation: Convert GPU u32 limb arrays back to CPU Point format
-    /// Performance: Efficient limb reconstruction from GPU format
-    /// Security: Validates conversion integrity
-    /// Usefulness: Enables seamless GPU→CPU kangaroo state transitions
-    pub fn convert_gpu_to_kangaroo(&self, gpu_state: &[[u32; 8]; 3], distance: u64) -> Result<crate::types::KangarooState, Box<dyn std::error::Error>> {
-        // Reconstruct Point from GPU limb arrays
-        let x_u64 = [
-            (gpu_state[0][1] as u64) << 32 | (gpu_state[0][0] as u64),
-            (gpu_state[0][3] as u64) << 32 | (gpu_state[0][2] as u64),
-            (gpu_state[0][5] as u64) << 32 | (gpu_state[0][4] as u64),
-            (gpu_state[0][7] as u64) << 32 | (gpu_state[0][6] as u64),
-        ];
-
-        let y_u64 = [
-            (gpu_state[1][1] as u64) << 32 | (gpu_state[1][0] as u64),
-            (gpu_state[1][3] as u64) << 32 | (gpu_state[1][2] as u64),
-            (gpu_state[1][5] as u64) << 32 | (gpu_state[1][4] as u64),
-            (gpu_state[1][7] as u64) << 32 | (gpu_state[1][6] as u64),
-        ];
-
-        let z_u64 = [
-            (gpu_state[2][1] as u64) << 32 | (gpu_state[2][0] as u64),
-            (gpu_state[2][3] as u64) << 32 | (gpu_state[2][2] as u64),
-            (gpu_state[2][5] as u64) << 32 | (gpu_state[2][4] as u64),
-            (gpu_state[2][7] as u64) << 32 | (gpu_state[2][6] as u64),
-        ];
-
-        let position = crate::types::Point {
-            x: x_u64,
-            y: y_u64,
-            z: z_u64,
-        };
-
-        Ok(crate::types::KangarooState {
-            position,
-            distance: crate::math::bigint::BigInt256::from_u64(distance),
-            alpha: [0; 4], // Placeholder - would need proper tracking
-            beta: [0; 4],  // Placeholder - would need proper tracking
-            is_tame: false,
-            is_dp: false,
-            id: 0,
-            step: distance,
-            kangaroo_type: 1, // Wild kangaroo
-        })
+    pub fn convert_from_gpu_limbs(u32_arr: &[u32; 8]) -> [u64; 4] {
+        let mut u64_arr = [0u64; 4]; for i in 0..4 { u64_arr[i] = (u32_arr[2*i+1] as u64) << 32 | u32_arr[2*i] as u64; } u64_arr
     }
 
     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
