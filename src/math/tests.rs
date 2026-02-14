@@ -252,15 +252,15 @@ fn test_lll_glv_with_puzzle() {
     let mut reconstructed = KScalar::ZERO;
     let powers = [k256::Scalar::ONE, lambda, lambda * lambda, lambda * lambda * lambda];
     
-    for i in 0..config.glv_dim {
-        let term = coeffs[i] * powers[i];
-        let signed_term = if signs[i] > 0 { term } else { term.neg() };
+    for i in 0..(config.glv_dim as usize) {
+        let idx = i as usize;
+        let term = coeffs[idx] * powers[idx];
+        let signed_term = if signs[idx] > 0 { term } else { term.neg() };
         reconstructed = reconstructed + signed_term;
     }
     
     assert_eq!(reconstructed, puzzle_scalar);
 }
-
 
 // LLL Algorithm Proof Verification
 // Tests for termination and approximation guarantees
