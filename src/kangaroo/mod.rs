@@ -15,6 +15,6 @@ pub mod tests;
 pub use manager::KangarooManager;
 pub use generator::KangarooGenerator;
 pub use stepper::KangarooStepper;
-pub use collision::{CollisionDetector, CollisionResult};
+pub use collision::{CollisionDetector, CollisionResult, vow_parallel_rho, fermat_ecdlp_diff};
 pub use search_config::SearchConfig;
 pub use controller::{KangarooController, ManagerStats};

@@ -1,4 +1,5 @@
 #[cfg(test)]
+use crate::kangaroo::vow_parallel_rho;
 use crate::math::BigInt256;
 use crate::types::Scalar;
 use crate::math::constants::lll_reduce;

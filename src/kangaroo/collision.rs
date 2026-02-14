@@ -1387,6 +1387,6 @@ pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
 /// Placeholder Fermat ECDLP factoring difference
 pub fn fermat_ecdlp_diff(p: &BigInt256, q: &BigInt256) -> k256::Scalar {
     // Simple difference for testing
-    let diff = q - p;
-    k256::Scalar::from_u64(diff.low_u64())
+    let diff = q.clone() - p.clone();
+    k256::Scalar::from(diff.low_u64())
 }

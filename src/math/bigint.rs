@@ -1,6 +1,5 @@
 //! Custom 256-bit integer helpers
 use crate::math::CURVE_ORDER_BIGINT;
-//! Custom 256-bit integer helpers if k256 insufficient for GPU interop
 
 use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
@@ -15,7 +14,7 @@ pub trait OverflowingAdd<Rhs = Self> {
 }
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct BigInt256 {
     /// Limbs in little-endian order (limb[0] is least significant)
     pub limbs: [u64; 4],
@@ -230,17 +229,9 @@ impl BigInt512 {
         // Return only the lower 8 limbs (512 bits) - higher limbs discarded for BigInt512
         BigInt512 { limbs: [
             result[0] as u64, result[1] as u64, result[2] as u64, result[3] as u64,
-            result[4] as u64, result[5] as u64, result[6] as u64, result[7] as u64
         ] }
-
-}
-    type Output = BigInt512;
-
-    fn mul(self, other: Self) -> Self::Output {
-        (&self).mul(&other)
     }
 }
-
 impl std::ops::Add for BigInt512 {
     type Output = BigInt512;
 
@@ -1149,7 +1140,7 @@ impl MontgomeryReducer {
 
         // MODULAR FIX BLOCK 1: Optimized REDC carry handling with SIMD-like limb processing
         let m_big = BigInt512::from_u64(m);
-        let mp = m_big.mul(BigInt512::from_bigint256(&self.modulus));
+        let mp = m_big.mul(&BigInt512::from_bigint256(&self.modulus));
 
         // Add t + m*p with full carry propagation (handles up to 513 bits)
         let mut result_limbs = [0u128; 9]; // Extra limb for carry
@@ -1583,6 +1574,7 @@ impl Rem for BigInt256 {
 #[cfg(test)]
 mod tests {
     use super::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
+    use crate::math::CURVE_ORDER_BIGINT;
     use std::ops::Sub;
 
     /// secp256k1 prime modulus
@@ -1662,9 +1654,9 @@ mod tests {
     /// Usefulness: Verifies high-bit arithmetic for #145-sized numbers
     #[test]
     fn test_mul_large() {
-        let a = CURVE_ORDER_BIGINT - BigInt256::one();
+        let a = (*CURVE_ORDER_BIGINT) - BigInt256::one();
         let b = BigInt256::from_u64(2);
-        let expected = (CURVE_ORDER_BIGINT - BigInt256::from_u64(2)) % CURVE_ORDER_BIGINT;
+        let expected = (((*CURVE_ORDER_BIGINT) - BigInt256::from_u64(2)) % (*CURVE_ORDER_BIGINT));
         assert_eq!((a * b) % CURVE_ORDER_BIGINT, expected);
     }
 
