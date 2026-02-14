@@ -1,5 +1,6 @@
 #[cfg(test)]
 use crate::math::BigInt256;
+use crate::types::Scalar;
 use crate::math::constants::lll_reduce;
 mod tests {
     use crate::math::bigint::MontgomeryReducer;

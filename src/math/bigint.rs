@@ -1,4 +1,5 @@
 //! Custom 256-bit integer helpers
+use crate::math::CURVE_ORDER_BIGINT;
 //! Custom 256-bit integer helpers if k256 insufficient for GPU interop
 
 use std::fmt;
@@ -1005,7 +1006,7 @@ impl BarrettReducer {
 
     /// Barrett modular multiplication: (a * b) mod modulus
     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
-        let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
+        let prod = BigInt512::from_bigint256(a).mul(&BigInt512::from_bigint256(b));
         self.reduce(&prod).expect("Mul reduce fail")
     }
 
@@ -1126,7 +1127,7 @@ impl MontgomeryReducer {
     /// Full REDC (REDCed) algorithm implementation
     pub fn mul(&self, a: &BigInt256, b: &BigInt256) -> BigInt256 {
         // Optimized REDC algorithm for R = 2^256 with proper carry handling
-        let prod = BigInt512::from_bigint256(a).mul(BigInt512::from_bigint256(b));
+        let prod = BigInt512::from_bigint256(a).mul(&BigInt512::from_bigint256(b));
 
         // m = (t_low * n_prime) % 2^64
         let t_low = prod.limbs[0];
@@ -1629,7 +1630,7 @@ mod tests {
         // Additional comprehensive multiplication tests for ECDLP correctness
         test_mul_small();
         test_mul_large();
-        test_mul_edge_cases();
+        test_mul_edge();
     }
 
     /// Small multiplication test with known vectors
