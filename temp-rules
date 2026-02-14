@@ -1,0 +1,343 @@
+---
+description: SpeedBitCrack strict FINAL-STAGE core rules for Pollard's rho/kangaroo ECDLP solver (secp256k1, Rust + hybrid GPU). Locked Feb 2026.
+alwaysApply: true
+---
+
+# SpeedBitCrack — .cursor Rules
+
+## (FINAL HARDENING & VALIDATION LOCK – February 2026 Edition)
+
+You are operating on **SpeedBitCrack**, a near-complete, high-performance, multi-target Pollard's rho/kangaroo ECDLP solver for secp256k1 using a hybrid GPU architecture (Vulkan/wgpu bulk + CUDA precision).
+
+This project is in **end-stage implementation, drift elimination, regression hardening, performance certification, and stability validation**.
+
+This is NOT early development.
+This is NOT architecture design.
+This is NOT experimental optimization.
+
+This is **production-grade cryptographic engine finalization**.
+
+These rules are STRICT and override all defaults.
+
+# Project Overview
+
+* Multi-target Pollard’s rho/kangaroo ECDLP solver
+* secp256k1
+* Rust 2021
+* Hybrid GPU backend:
+
+  * Vulkan/wgpu for bulk compute
+  * CUDA for precision math
+* Target hardware: RTX 5090 class GPUs
+* Goal: 2.5–3B ops/sec sustained
+* Targets:
+
+  * Early unspent P2PK outputs (blocks 1–500k, >1 BTC)
+  * Bitcoin puzzles
+
+# DEVELOPMENT PHASE — LOCKED STATE
+
+The architecture is complete.
+
+From this point forward:
+
+❌ No architectural redesign
+❌ No file tree restructuring
+❌ No algorithm swaps
+❌ No mathematical model changes
+❌ No randomness introduction
+❌ No speculative improvements
+
+Only:
+
+* Hardening
+* Profiling
+* Bug fixing
+* Drift elimination
+* Stability enforcement
+* Performance tuning (within allowed zones)
+
+# Core Development Philosophy (Final Stage)
+
+* Determinism over convenience
+* Parity before speed
+* Real puzzles only
+* Full targets always
+* Zero drift tolerated
+* Hybrid backend sacred
+* Every change regression-tested
+* Build cleanliness mandatory
+
+# Dependencies & Standards (Locked)
+
+Required Crates:
+
+* wgpu = "0.20"
+* k256 = "0.13"
+* rayon = "1.10"
+* tokio = { version = "1", features = ["full"] }
+* clap = { version = "4", features = ["derive"] }
+* cuckoofilter = "0.5"
+* log = "0.4"
+* env_logger = "0.11"
+* anyhow = "1.0"
+* hex = "0.4"
+* serde = { version = "1", features = ["derive"] }
+
+Rust Standards:
+
+* Edition = 2021
+* Minimum rust-version = 1.80
+* Clippy pedantic + nursery
+* No unwrap/panic in hot paths
+* #![deny(unsafe_code)] except explicit CUDA interop
+
+
+# 🚨 ABSOLUTE BUILD GATE (NON-NEGOTIABLE)
+
+Before ANY git commit:
+
+cargo clean
+cargo build --release
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --release
+
+ALL must succeed.
+
+Requirements:
+
+* Zero compile errors
+* Zero warnings
+* No denied lints
+* No unused imports
+* No dead code unless justified
+* No feature-flag breakage
+* No shader compile errors
+* No CUDA compile failures
+* No build.rs failure
+
+If ANY fail:
+
+❌ No commit
+❌ No summary
+❌ No continuation
+
+Build cleanliness is equal severity to parity correctness.
+
+# Strict File Structure & Responsibilities (Frozen)
+
+Project Root:
+├── Cargo.toml
+├── Cargo.lock
+├── build.rs
+├── speedbitcrack-core.mdc
+├── valuable_p2pk_pubkeys.txt
+├── puzzles.txt
+├── src/
+│   ├── main.rs                 # Thin entry point only (no logic growth allowed)
+│   ├── lib.rs
+│   ├── config.rs
+│   ├── types.rs
+│   ├── security.rs
+│   ├── puzzles.rs
+│   ├── math/
+│   │   ├── mod.rs
+│   │   ├── secp.rs              # Barrett + Montgomery hybrid ONLY
+│   │   ├── bigint.rs
+│   │   ├── constants.rs
+│   │   └── tests.rs
+│   ├── kangaroo/
+│   │   ├── mod.rs
+│   │   ├── manager.rs
+│   │   ├── generator.rs         # Deterministic wild/tame logic
+│   │   ├── stepper.rs
+│   │   ├── collision.rs
+│   │   ├── controller.rs
+│   │   ├── config.rs
+│   │   ├── search_config.rs
+│   │   └── tests.rs
+│   ├── gpu/
+│   │   ├── mod.rs
+│   │   ├── backend.rs
+│   │   ├── hybrid_manager.rs
+│   │   ├── shared.rs
+│   │   ├── backends/
+│   │   │   ├── backend_trait.rs
+│   │   │   ├── cpu_backend.rs
+│   │   │   ├── cuda_backend.rs
+│   │   │   ├── hybrid_backend.rs
+│   │   │   └── vulkan_backend.rs
+│   │   ├── vulkan/
+│   │   │   ├── pipeline.rs
+│   │   │   └── shaders/
+│   │   │       ├── kangaroo.wgsl
+│   │   │       ├── jump_table.wgsl
+│   │   │       ├── dp_check.wgsl
+│   │   │       └── utils.wgsl
+│   │   └── cuda/
+│   │       ├── solve.cu
+│   │       ├── inverse.cu
+│   │       ├── rho_kernel.cu
+│   │       └── [other locked CUDA kernels]
+│   ├── dp/
+│   │   ├── mod.rs
+│   │   ├── table.rs
+│   │   └── pruning.rs
+│   ├── parity/
+│   │   ├── mod.rs
+│   │   └── checker.rs
+│   ├── targets/
+│   │   ├── mod.rs
+│   │   └── loader.rs
+│   ├── utils/
+│   │   ├── logging.rs
+│   │   ├── hash.rs
+│   │   ├── bias.rs
+│   │   └── output.rs
+│   ├── test_basic.rs
+│   └── simple_test.rs
+├── tests/
+│   ├── bias_validation.rs
+│   ├── config.rs
+│   ├── fuzz_targets.rs
+│   ├── kangaroo.rs
+│   ├── magic9.rs
+│   ├── math.rs
+│   └── puzzle.rs
+├── benches/
+├── docs/
+├── profiling_output/
+└── scripts/
+
+No structural changes permitted without explicit discussion.
+
+# Core Must-Haves (Unchangeable)
+
+## Targets
+
+* Always load full 34,353 P2PK pubkeys
+* No shrinking unless --test-mode
+
+## Wild Starts
+
+* Original prime spacing only
+* Deterministic
+* No entropy
+
+## Tame Starts
+
+* From G
+* Deterministic
+* G-Link preserved
+
+## Modular Arithmetic
+
+* Barrett + Montgomery hybrid only
+
+## DP Logic
+
+* Trailing dp-bits mask
+* No skipping
+* No probabilistic shortcuts
+
+## Jump Table
+
+* 8 deterministic ops
+* No runtime randomness
+
+## Backend
+
+HYBRID MODE IS SACRED:
+
+Vulkan → bulk stepping
+CUDA → precision EC + solving
+
+# REGRESSION PROTOCOL (MANDATORY AFTER ANY CHANGE)
+
+1. 10M-step CPU/GPU parity
+2. Validate puzzles #64, #65, #66
+3. DP rate unchanged
+4. No drift
+5. Log ops/sec delta
+
+Any mismatch → revert.
+
+# PERFORMANCE OPTIMIZATION ZONES (ALLOWED)
+
+* Warp divergence reduction
+* Shared memory tuning
+* Kernel occupancy tuning
+* Memory coalescing
+* Async overlap
+* Register pressure reduction
+
+Forbidden:
+
+* Math changes
+* DP logic changes
+* Jump logic changes
+* Prime spacing changes
+* Collision math changes
+
+# STABILITY CERTIFICATION
+
+Before release:
+
+* 72-hour run
+* No memory leaks
+* No drift
+* No GPU context loss
+* No DP corruption
+
+# GIT PROTOCOL (MANDATORY)
+
+After successful build + tests:
+
+git add .
+git commit -m "Session YYYY-MM-DD: [Change Type] - Description - Validation performed"
+
+Must include:
+
+* Change classification
+* Validation steps run
+* Performance delta if relevant
+
+# CHANGE CLASSIFICATION
+
+All changes must be labeled:
+
+* PERF-TUNE
+* BUGFIX
+* DRIFT-FIX
+* VALIDATION
+* HARDENING
+* LOGGING
+* DOCUMENTATION
+
+Unclear classification → stop.
+
+# PARITY IS LAW
+
+If CPU ≠ GPU:
+
+GPU is wrong until proven otherwise.
+
+No tolerance for:
+
+* Limb carry mismatch
+* Reduction inconsistency
+* Alpha/Beta overflow
+* Negation symmetry break
+* Off-by-one drift
+
+# LOCKED STATE DECLARATION
+
+SpeedBitCrack is in:
+
+🔒 Final Hardening Mode
+🔒 Architecture Frozen
+🔒 Algorithm Frozen
+🔒 Determinism Enforced
+🔒 Release Build Cleanliness Mandatory
+
+All deviations require explicit discussion and update to this file.

@@ -1,0 +1,291 @@
+Got out of sync again in a very huge conversation. I wonder if you could catch up from the last conversation? SpeedBitCrackV3 online git, magic9, mod3/9/27/81/gold/brents, near collision calculated with walk fallback, hybrid cuda/vulkan...https://github.com/curtlarson611812-collab/test-project-xyz456 .
+ 
+.
+├── aaaaa
+├── basic_test.log
+├── bbbbb
+├── benches
+│   └── kangaroo.rs
+├── bias_analysis.log
+├── bias_analysis_reenabled.log
+├── build.rs
+├── build.txt
+├── cargocheck1
+├── cargocheck2
+├── cargocheck3
+├── Cargo.lock
+├── Cargo.lock.bak
+├── cargo_test_mont
+├── cargo_test_mont2
+├── cargo_test_mont3
+├── Cargo.toml
+├── Cargo.toml.bak
+├── cccc
+├── check_output.txt
+├── Coder_CPU_Eval.txt
+├── convert_homeless.py
+├── dddd
+├── docs
+│   ├── nsight_profiling.md
+│   └── profiling.md
+├── ffff
+├── GROK_GPU_list
+├── homeless.txt
+├── kangaroo_solve_36.log
+├── larger_test.txt
+├── logging.d
+├── magic9_biases.txt
+├── magic9_output.log
+├── nohup.out
+├── profiling_output
+│   └── ncu_output.log
+├── puzzle32_solve.log
+├── puzzle32_target.txt
+├── puzzle32_test.log
+├── puzzle_33_detailed_solve.log
+├── puzzle_33_solve.log
+├── Puzzles_run_curt.txt
+├── puzzles.txt
+├── README.md
+├── scripts
+│   ├── commit_phase10.sh
+│   ├── custom_mod_efficiency_rule.py
+│   ├── custom_nsight_rules.py
+│   ├── profile_and_analyze.sh
+│   └── setup_profiling.sh
+├── sequential_ranges.txt
+├── SmallOddPrime_Precise_code.rs
+├── speedbitcrack-core.mdc
+├── src
+│   ├── benches
+│   │   └── kangaroo.rs
+│   ├── config.rs
+│   ├── dp
+│   │   ├── mod.rs
+│   │   ├── pruning.rs
+│   │   └── table.rs
+│   ├── gpu
+│   │   ├── backend.rs
+│   │   ├── backends
+│   │   │   ├── backend_trait.rs
+│   │   │   ├── cpu_backend.rs
+│   │   │   ├── cuda_backend.rs
+│   │   │   ├── hybrid_backend.rs
+│   │   │   ├── mod.rs
+│   │   │   └── vulkan_backend.rs
+│   │   ├── cuda
+│   │   │   ├── barrett_kernel_optimized.cu
+│   │   │   ├── barrett_kernel_optimized.o
+│   │   │   ├── bias_bank_conflict_free.cu
+│   │   │   ├── bias_check_kernel.cu
+│   │   │   ├── bias_check_kernel.o
+│   │   │   ├── bias_kernel_optimized.cu
+│   │   │   ├── bigint_mul.cu
+│   │   │   ├── bigint_mul.o
+│   │   │   ├── carry_propagation.ptx
+│   │   │   ├── common_constants.h
+│   │   │   ├── custom_fft.ptx
+│   │   │   ├── fft_mul.cu
+│   │   │   ├── fused_mul_redc.ptx
+│   │   │   ├── gold_cluster.cu
+│   │   │   ├── gold_cluster.o
+│   │   │   ├── hybrid.cu
+│   │   │   ├── hybrid.o
+│   │   │   ├── inverse.cu
+│   │   │   ├── mod27_kernel.cu
+│   │   │   ├── mod27_kernel.o
+│   │   │   ├── mod81_kernel.cu
+│   │   │   ├── mod81_kernel.o
+│   │   │   ├── mod9_kernel.cu
+│   │   │   ├── mod.rs
+│   │   │   ├── prime_test_kernel.cu
+│   │   │   ├── refine_kernel.cu
+│   │   │   ├── rho_kernel.cu
+│   │   │   ├── rho_kernel_optimized.cu
+│   │   │   ├── rho_kernel_optimized.o
+│   │   │   ├── rho.o
+│   │   │   ├── solve.cu
+│   │   │   ├── solve.o
+│   │   │   ├── step.cu
+│   │   │   ├── step.o
+│   │   │   ├── texture_jump_kernel.cu
+│   │   │   └── texture_jump_optimized.cu
+│   │   ├── hybrid_manager.rs
+│   │   ├── mod.rs
+│   │   ├── shared.rs
+│   │   ├── tests.rs
+│   │   └── vulkan
+│   │   ├── mod.rs
+│   │   ├── pipeline.rs
+│   │   └── shaders
+│   │   ├── dp_check.wgsl
+│   │   ├── jump_table.wgsl
+│   │   ├── kangaroo.wgsl
+│   │   └── utils.wgsl
+│   ├── GrokNotes
+│   ├── GROK_Online_Complete_Implementation_Guide.txt
+│   ├── GROK_Online_GLVOptimization_Prompt.txt
+│   ├── kangaroo
+│   │   ├── collision.rs
+│   │   ├── config.rs
+│   │   ├── controller.rs
+│   │   ├── generator.rs
+│   │   ├── manager.rs
+│   │   ├── mod.rs
+│   │   ├── search_config.rs
+│   │   ├── stepper.rs
+│   │   └── tests.rs
+│   ├── lib.rs
+│   ├── main.rs
+│   ├── math
+│   │   ├── bigint.rs
+│   │   ├── constants.rs
+│   │   ├── mod.rs
+│   │   ├── secp.rs
+│   │   └── tests.rs
+│   ├── parity
+│   │   ├── checker.rs
+│   │   └── mod.rs
+│   ├── puzzles.rs
+│   ├── puzzles.txt
+│   ├── scripts
+│   │   └── profile_and_analyze.sh
+│   ├── security.rs
+│   ├── SHA256SUMS
+│   ├── SHA256SUMS.asc
+│   ├── simple_math_test
+│   ├── simple_puzzle_solver.rs
+│   ├── simple_test.rs
+│   ├── SmallOddPrime_Precise_code.rs
+│   ├── src
+│   │   ├── bin
+│   │   │   └── bias_analyze.rs
+│   │   └── tests
+│   │   ├── gpu_hybrid.rs
+│   │   └── mod.rs
+│   ├── targets
+│   │   ├── loader.rs
+│   │   └── mod.rs
+│   ├── temp_bias_sim
+│   ├── test_basic.rs
+│   ├── test_bias_analyze_sim
+│   ├── tests
+│   │   ├── bias_validation.rs
+│   │   ├── glv.rs
+│   │   └── puzzle.rs
+│   ├── types.rs
+│   └── utils
+│   ├── bias.rs
+│   ├── hash.rs
+│   ├── logging.rs
+│   ├── mod.rs
+│   ├── output.rs
+│   └── pubkey_loader.rs
+├── suggestions.json
+├── temp_first3.txt
+├── temp.log
+├── temp_manager.rs
+├── test_basic.rs
+├── test_hex.rs
+├── test_homeless_20.txt
+├── test_homeless.txt
+├── test_mont_assoc
+├── test_mont_assoc1
+├── test_mont_assoc2
+├── test_mont_assoc3
+├── test_mont_assoc4
+├── test_output.txt
+├── test_puzzle32_manual.rs
+├── test_puzzles.txt
+├── tests
+│   ├── bias_validation.rs
+│   ├── config.rs
+│   ├── fuzz_targets.rs
+│   ├── kangaroo.rs
+│   ├── magic9.rs
+│   ├── math.rs
+│   └── puzzle.rs
+├── V3_Prompt.md
+├── validate_puzzles.py
+├── valuable_p2pk_pubkeys.txt
+├── verify_homeless.py
+├── verify_homeless_rpc.py
+├── verify_pubkey.rs
+├── verify_puzzle_manual.sh
+├── verify_puzzles_bitcoincore.py
+├── verify_puzzles_local.py
+├── verify_puzzles.py
+└── verify_puzzles_simple.py
+24 directories, 192 files
+ 
+ 
+21 directories, 165 files
+curtlarson@pop-os:~/Projects/SpeedBitCrackV3$ cat SmallOddPrime_Precise_code.rs | wl-copy
+// ./SmallOddPrime_Precise_code.rs
+// EXACT original small odd prime kangaroo start logic from the Magic 9 discovery runs.
+// Locked — multiplicative prime offset on target_pubkey, no randomness, odd primes only.
+// Restore this if drift appears in starts or attractor convergence.
+// From the response labeled as "the exact, proven version".
+use k256::{ProjectivePoint, Scalar, AffinePoint};
+// Sacred 32 small odd primes (>128, odd, low hamming weight for fast mul).
+// Cycle via index % 32 — provides unique starts per kangaroo without bias.
+const PRIME_MULTIPLIERS: [u64; 32] = [
+    179, 257, 281, 349, 379, 419, 457, 499,
+    541, 599, 641, 709, 761, 809, 853, 911,
+    967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
+    1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
+];
+// Initialize starting point for a wild kangaroo
+// wild_start = prime_i * target_pubkey
+// Known offset allows inversion in collision solving: k = inv(prime) * (1 + d_tame - d_wild) mod N
+pub fn initialize_kangaroo_start(
+    target_pubkey: &ProjectivePoint,
+    kangaroo_index: usize,
+) -> ProjectivePoint {
+    let prime_index = kangaroo_index % PRIME_MULTIPLIERS.len();
+    let prime_scalar = Scalar::from(PRIME_MULTIPLIERS[prime_index]);
+    target_pubkey * prime_scalar
+}
+// Tame kangaroo start (no prime multiplier — clean from G)
+pub fn initialize_tame_start() -> ProjectivePoint {
+    ProjectivePoint::GENERATOR // or low scalar * G for interval searches
+}
+// Bucket selection — tame deterministic, wild state-mixed
+// Ensures tame paths reproducible for exact d_tame, wild exploratory.
+pub fn select_bucket(
+    point: &ProjectivePoint,
+    dist: Scalar,
+    seed: u32,
+    step: u32,
+    is_tame: bool,
+) -> u32 {
+    const WALK_BUCKETS: u32 = 32;
+    if is_tame {
+        step % WALK_BUCKETS // Deterministic for tame → exact distance
+    } else {
+        let affine = point.to_affine();
+        let x_bytes = affine.x.to_bytes();
+        let x0 = u32::from_le_bytes(x_bytes[0..4].try_into().unwrap());
+        let x1 = u32::from_le_bytes(x_bytes[4..8].try_into().unwrap());
+        let dist_bytes = dist.to_bytes();
+        let dist0 = u32::from_le_bytes(dist_bytes[0..4].try_into().unwrap());
+        let mix = x0 ^ x1 ^ dist0 ^ seed ^ step;
+        mix % WALK_BUCKETS // State-mixed for wild → avoids traps
+    }
+}
+// Example: Setup starts for multiple targets (early multi-target init)
+pub fn setup_kangaroos(
+    target_pubkeys: &[ProjectivePoint],
+    num_kangaroos_per_target: usize,
+) -> Vec<ProjectivePoint> {
+    let mut starts = Vec::with_capacity(target_pubkeys.len() * num_kangaroos_per_target);
+    for target in target_pubkeys {
+        for i in 0..num_kangaroos_per_target {
+            let start = initialize_kangaroo_start(target, i);
+            starts.push(start);
+        }
+    }
+    starts
+}
+
+You can absorb all of our code in order to give specifics, including our line numbers, at https://github.com/curtlarson611812-collab/test-project-xyz456 Plus to reinforce GROK Coders .cursor/rules/speedbitcrack-core.mdc:

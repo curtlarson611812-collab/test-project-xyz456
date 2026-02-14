@@ -20,7 +20,7 @@ This is the **STRICT CORE RULES** for ALL code generation, suggestions, and chan
 - Reproduce known successful behavior exactly before optimizing (especially Magic 9 prime spacing and G-based tames).
 - **Full targets always** — never shrink lists for convenience.
 - **Parity & correctness before speed** — no DP skips, no drift tolerated.
-- **Real puzzles** as the only valid unit/integration tests (#64–#66 solved puzzles mandatory).
+- **Real puzzles** as the only valid unit/integration tests.
 - Modular, pasteable files — no monolithic main.rs or shaders.
 - Incremental, auditable progress — checkpoints, logs, alerts on attractors/hopeless targets.
 - Boosters & advanced features **always optional, off by default, flag-gated**.
