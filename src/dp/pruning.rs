@@ -377,7 +377,7 @@ mod tests {
                     x: [hash, 0, 0, cluster_id as u64],
                     y: [hash + 1, 0, 0, 0],
                     z: [1, 0, 0, 0],
-                };/
+                };
                 let state = crate::types::KangarooState::new(
                     point.clone(),
                     BigInt256::from_u64(i as u64 * 100),

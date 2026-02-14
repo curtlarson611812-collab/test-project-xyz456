@@ -778,8 +778,8 @@ impl num_traits::Pow<u32> for BigInt256 {
         let mut base = self;
         let mut e = exp;
         while e > 0 {
-            if e & 1 == 1 { res = res * base; }
-            base = base * base;
+            if e & 1 == 1 { res = res * base.clone(); }
+            base = base.clone() * base;
             e >>= 1;
         }
         res
