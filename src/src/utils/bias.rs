@@ -159,6 +159,20 @@ pub fn aggregate_chi(counts: &[f64], expected_per_bin: f64) -> f64 {
     chi_squared / total_keys
 }
 
+/// Compute modular bins for statistical analysis (Big Brother's mod_bins function)
+pub fn mod_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> {
+    let mut bins = vec![0.0; num_bins];
+    for key in keys {
+        let hex_sample = &key.trim()[..key.trim().len().min(16)];
+        if let Ok(x) = u64::from_str_radix(hex_sample, 16) {
+            let bin = ((x % modulus) as usize * num_bins) / modulus as usize;
+            let bin_idx = bin.min(num_bins - 1);
+            bins[bin_idx] += 1.0;
+        }
+    }
+    bins
+}
+
 /// Count keys into modular bins for statistical analysis
 pub fn compute_modular_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> {
     let mut bins = vec![0.0; num_bins];
@@ -280,21 +294,21 @@ pub fn compute_global_bias_stats(keys: &[String], points: &[Point]) -> GlobalBia
     let pop_values: Vec<f64> = points.iter().map(calculate_pop_bias).collect();
     let (pop_mean, pop_std) = compute_global_stats(&pop_values);
 
-    // Compute modular bin distributions and chi-squared statistics
-    let mod3_bins = compute_modular_bins(keys, 3, 3);
-    let mod9_bins = compute_modular_bins(keys, 9, 9);
-    let mod27_bins = compute_modular_bins(keys, 27, 27);
-    let mod81_bins = compute_modular_bins(keys, 81, 81);
+    // Compute modular bin distributions and chi-squared statistics (Big Brother's exact approach)
+    let mod3_bins = mod_bins(keys, 3, 3);
+    let mod9_bins = mod_bins(keys, 9, 9);
+    let mod27_bins = mod_bins(keys, 27, 27);
+    let mod81_bins = mod_bins(keys, 81, 81);
 
-    let expected_per_bin_3 = keys.len() as f64 / 3.0;
-    let expected_per_bin_9 = keys.len() as f64 / 9.0;
-    let expected_per_bin_27 = keys.len() as f64 / 27.0;
-    let expected_per_bin_81 = keys.len() as f64 / 81.0;
+    let e3 = keys.len() as f64 / 3.0;
+    let e9 = keys.len() as f64 / 9.0;
+    let e27 = keys.len() as f64 / 27.0;
+    let e81 = keys.len() as f64 / 81.0;
 
-    let mod3_chi = aggregate_chi(&mod3_bins, expected_per_bin_3);
-    let mod9_chi = aggregate_chi(&mod9_bins, expected_per_bin_9);
-    let mod27_chi = aggregate_chi(&mod27_bins, expected_per_bin_27);
-    let mod81_chi = aggregate_chi(&mod81_bins, expected_per_bin_81);
+    let mod3_chi = aggregate_chi(&mod3_bins, e3);
+    let mod9_chi = aggregate_chi(&mod9_bins, e9);
+    let mod27_chi = aggregate_chi(&mod27_bins, e27);
+    let mod81_chi = aggregate_chi(&mod81_bins, e81);
 
     GlobalBiasStats {
         basic_mean,
@@ -329,59 +343,49 @@ pub fn get_high_bias_params() -> (usize, usize, u64, usize, f64) {
 /// Use for residue partitioning; pros: 3x search reduction on skew; cons: Coarse granularity
 pub fn calculate_mod3_bias_with_global(point: &Point, global_chi: f64, bins: &[f64]) -> f64 {
     let x_mod3 = (point.x.limbs[0] % 3) as usize;
-    let expected_per_bin = bins.iter().sum::<f64>() / 3.0;
+    let e = bins.iter().sum::<f64>() / 3.0;  // expected per bin
 
-    // Per-key score = global_chi * (1 + normalized_bin_deviation)
-    let bin_deviation = (bins[x_mod3] - expected_per_bin).abs() / expected_per_bin;
-    global_chi * (1.0 + bin_deviation).min(1.0) // Cap at 1.0 for [0-1] range
+    // Big Brother's exact formula: global_chi * (1 + abs(bin_count - expected) / expected)
+    global_chi * (1.0 + (bins[x_mod3] - e).abs() / e)
 }
 
 /// Calculate modular 9 bias for a point using global statistical context
 /// Use for mid-bin VOW optimization; pros: 9x faster on biased thirds; cons: Moderate compute
 pub fn calculate_mod9_bias_with_global(point: &Point, global_chi: f64, bins: &[f64]) -> f64 {
     let x_mod9 = (point.x.limbs[0] % 9) as usize;
-    let expected_per_bin = bins.iter().sum::<f64>() / 9.0;
+    let e = bins.iter().sum::<f64>() / 9.0;  // expected per bin
 
-    // Base score from global chi and bin deviation
-    let bin_deviation = (bins[x_mod9] - expected_per_bin).abs() / expected_per_bin;
-    let base_score = global_chi * (1.0 + bin_deviation).min(1.0);
+    // Big Brother's formula + trend penalty
+    let mut score = global_chi * (1.0 + (bins[x_mod9] - e).abs() / e);
+    score += trend_penalty(bins, 9, "linear") * 0.2;
 
-    // Add trend penalty for third-based clustering (Big Brother's refinement)
-    let trend_penalty = trend_penalty(bins, 9, "linear");
-
-    base_score + trend_penalty * 0.2 // Add up to 20% penalty for clustering
+    score
 }
 
 /// Calculate modular 27 bias for a point using global statistical context
 /// Use for deeper Poisson tuning; pros: 27x cut in high-skew; cons: O(n) time
 pub fn calculate_mod27_bias_with_global(point: &Point, global_chi: f64, bins: &[f64]) -> f64 {
     let x_mod27 = (point.x.limbs[0] % 27) as usize;
-    let expected_per_bin = bins.iter().sum::<f64>() / 27.0;
+    let e = bins.iter().sum::<f64>() / 27.0;  // expected per bin
 
-    // Base score from global chi and bin deviation
-    let bin_deviation = (bins[x_mod27] - expected_per_bin).abs() / expected_per_bin;
-    let base_score = global_chi * (1.0 + bin_deviation).min(1.0);
+    // Big Brother's formula + linear trend penalty
+    let mut score = global_chi * (1.0 + (bins[x_mod27] - e).abs() / e);
+    score += trend_penalty(bins, 27, "linear") * 0.15;
 
-    // Add linear trend penalty for 27-bin clustering patterns
-    let trend_penalty = trend_penalty(bins, 27, "linear");
-
-    base_score + trend_penalty * 0.15 // Add up to 15% penalty
+    score
 }
 
 /// Calculate modular 81 bias for a point using global statistical context
 /// Use for finest bias exploitation; pros: Up to 81x Rho speed; cons: Highest compute
 pub fn calculate_mod81_bias_with_global(point: &Point, global_chi: f64, bins: &[f64]) -> f64 {
     let x_mod81 = (point.x.limbs[0] % 81) as usize;
-    let expected_per_bin = bins.iter().sum::<f64>() / 81.0;
+    let e = bins.iter().sum::<f64>() / 81.0;  // expected per bin
 
-    // Base score from global chi and bin deviation
-    let bin_deviation = (bins[x_mod81] - expected_per_bin).abs() / expected_per_bin;
-    let base_score = global_chi * (1.0 + bin_deviation).min(1.0);
+    // Big Brother's formula + quadratic trend penalty
+    let mut score = global_chi * (1.0 + (bins[x_mod81] - e).abs() / e);
+    score += trend_penalty(bins, 81, "quadratic") * 0.1;
 
-    // Add quadratic trend penalty for 81-bin variance patterns
-    let trend_penalty = trend_penalty(bins, 81, "quadratic");
-
-    base_score + trend_penalty * 0.1 // Add up to 10% penalty
+    score
 }
 
 /// Calculate Golden ratio bias

@@ -4,6 +4,9 @@
 # Bias scores: Basic + Mod3/9/27/81 + Golden Ratio + Population Count (60% mods)
 # Threshold: 0.350 (adaptive)
 
+# RATIOS: Basic(entropy filter, 20% boost), Mod3(3x reduction), Mod9(9x thirds), Mod27(27x Poisson), Mod81(81x finest)
+# GOLD(RNG flaws, 8% edge), POP(bit density check)
+
 # Rank: 1, Overall Bias: 0.322
 # Basic: 0.307, Mod3: 0.333, Mod9: 0.120, Mod27: 0.120, Mod81: 0.012
 # GOLD: 0.983, POP: 0.480

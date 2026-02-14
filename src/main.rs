@@ -2120,7 +2120,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
         };
 
         // Analyze bias with refined approach
-        let analysis = analyze_comprehensive_bias(&point);
+        let analysis = analyze_comprehensive_bias_with_global(&point, &global_stats);
         let overall_score = analysis.overall_score();
         let is_high_bias = analysis.is_high_bias();
 
