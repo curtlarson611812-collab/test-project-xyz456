@@ -432,52 +432,76 @@ pub fn calculate_pop_bias(point: &Point) -> f64 {
 /// Calculate modular 3 bias for a point
 /// Use for residue class skew; pros: 3x search reduction; cons: Low granularity
 pub fn calculate_mod3_bias(point: &Point) -> f64 {
-    let x_mod3 = (point.x.limbs[0] % 3) as usize;
+    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+    let modulus = BigInt256::from_u64(3);
+    let x_mod = point.x.clone() % modulus;
+    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
 
-    // Simple heuristic: prefer certain residues
-    match x_mod3 {
-        0 => 0.52,  // Slightly more common in some curves
-        1 => 0.48,
-        2 => 0.50,
-        _ => 0.50,
+    // Return bias strength based on residue class
+    match x_mod_u64 {
+        0 => 0.65,  // High bias for mod 3 = 0 (preferred residue)
+        1 => 0.35,  // Low bias for mod 3 = 1
+        2 => 0.45,  // Medium bias for mod 3 = 2
+        _ => 0.50,  // Neutral fallback
     }
 }
 
 /// Calculate modular 9 bias for a point
 /// Use for mid-bin VOW optimization; pros: 9x faster on biased thirds; cons: Moderate compute
 pub fn calculate_mod9_bias(point: &Point) -> f64 {
-    let x_mod9 = (point.x.limbs[0] % 9) as usize;
+    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+    let modulus = BigInt256::from_u64(9);
+    let x_mod = point.x.clone() % modulus;
+    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
 
-    // Simple heuristic based on common patterns
-    match x_mod9 {
-        0 | 3 | 6 => 0.52,  // Slightly prefer multiples of 3
-        _ => 0.48,
+    // Bias detection for mod 9 patterns - prefer certain residue classes
+    match x_mod_u64 {
+        0 | 3 | 6 => 0.70,  // High bias for multiples of 3
+        1 | 4 | 7 => 0.30,  // Low bias
+        2 | 5 | 8 => 0.45,  // Medium bias
+        _ => 0.50,           // Neutral fallback
     }
 }
 
 /// Calculate modular 27 bias for a point
 /// Use for deeper Poisson tuning; pros: 27x cut in high-skew; cons: O(n) time
 pub fn calculate_mod27_bias(point: &Point) -> f64 {
-    let x_mod27 = (point.x.limbs[0] % 27) as usize;
+    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+    let modulus = BigInt256::from_u64(27);
+    let x_mod = point.x.clone() % modulus;
+    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
 
-    // Simple heuristic
-    if x_mod27 % 3 == 0 {
-        0.52
+    // Hierarchical bias detection for mod 27 patterns
+    if x_mod_u64 % 9 == 0 {
+        0.75  // Very high bias for multiples of 9
+    } else if x_mod_u64 % 3 == 0 {
+        0.60  // High bias for multiples of 3
+    } else if x_mod_u64 < 14 {
+        0.40  // Medium-low bias for lower residues
     } else {
-        0.48
+        0.25  // Low bias for higher residues
     }
 }
 
 /// Calculate modular 81 bias for a point
 /// Use for finest bias exploitation; pros: Up to 81x search cut; cons: Highest compute
 pub fn calculate_mod81_bias(point: &Point) -> f64 {
-    let x_mod81 = (point.x.limbs[0] % 81) as usize;
+    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+    let modulus = BigInt256::from_u64(81);
+    let x_mod = point.x.clone() % modulus;
+    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
 
-    // Simple heuristic
-    if x_mod81 % 9 == 0 {
-        0.52
+    // Finest granularity bias detection for mod 81 patterns
+    if x_mod_u64 % 27 == 0 {
+        0.80  // Extremely high bias for multiples of 27
+    } else if x_mod_u64 % 9 == 0 {
+        0.65  // High bias for multiples of 9
+    } else if x_mod_u64 % 3 == 0 {
+        0.50  // Medium bias for multiples of 3
+    } else if x_mod_u64 < 41 {
+        0.35  // Low-medium bias for lower residues
     } else {
-        0.48
+        0.20  // Low bias for higher residues
     }
 }
 
@@ -509,19 +533,19 @@ pub struct BiasAnalysis {
 impl BiasAnalysis {
     /// Calculate overall bias score combining all methods
     pub fn overall_score(&self) -> f64 {
-        // Weighted combination emphasizing modular biases (60%) for ECDLP partitioning
-        (self.basic_bias * 0.2) +           // Basic bias (reduced)
-        (self.mod3_bias * 0.15) +           // Modular biases (60% total)
-        (self.mod9_bias * 0.15) +
-        (self.mod27_bias * 0.13) +
-        (self.mod81_bias * 0.12) +
-        (self.golden_bias * 0.1) +          // Special patterns
-        (self.pop_bias * 0.05)
+        // Aggressive bias scoring prioritizing modular patterns for ECDLP effectiveness
+        let modular_score = (self.mod3_bias + self.mod9_bias + self.mod27_bias + self.mod81_bias) / 4.0;
+
+        // Weight modular patterns heavily (70%) as they enable search partitioning
+        (modular_score * 0.7) +
+        (self.basic_bias * 0.2) +           // Basic entropy patterns
+        (self.golden_bias * 0.05) +         // Special mathematical patterns
+        (self.pop_bias * 0.05)              // Population statistics
     }
 
     /// Determine if this is a high-bias target using adaptive threshold
     pub fn is_high_bias(&self) -> bool {
-        self.overall_score() > 0.45  // Adaptive default, can be overridden
+        self.overall_score() > 0.40  // Lower threshold for more aggressive detection
     }
 
     /// Determine if this is a high-bias target with custom threshold
