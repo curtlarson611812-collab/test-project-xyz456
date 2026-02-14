@@ -5,6 +5,7 @@
 
 use anyhow::{Result, anyhow};
 use clap::Parser;
+use hex;
 use log::{info, warn, error};
 
 use speedbitcrack::config::Config;
@@ -2007,7 +2008,9 @@ fn convert_compressed_to_uncompressed(bytes: &[u8], line_num: usize, hex_str: &s
 /// Analyze valuable P2PK keys and output filtered high-bias file using refined approach
 fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     use speedbitcrack::utils::bias::{
-        analyze_comprehensive_bias, BiasAnalysis
+        analyze_comprehensive_bias, analyze_comprehensive_bias_with_global,
+        BiasAnalysis, GlobalBiasStats, compute_global_stats, calculate_mod_bias,
+        calculate_point_bias, calculate_golden_ratio_bias, calculate_pop_bias
     };
     use speedbitcrack::math::secp::Secp256k1;
     use speedbitcrack::types::Point;
@@ -2151,13 +2154,42 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
         )?;
         let is_high_bias = overall_score > 0.40; // Lower threshold for statistical approach
 
-        // Store results (create dummy BiasAnalysis for compatibility)
-        let dummy_analysis = BiasAnalysis {
-            basic_bias: 0.28, // Placeholder
-            mod3_bias: 0.0, mod9_bias: 0.0, mod27_bias: 0.0, mod81_bias: 0.0,
-            golden_bias: 0.0, pop_bias: 0.0,
+        // Calculate individual bias components for proper analysis
+        let mod3_score = calculate_mod_bias(hex_str, &stats_mod3, 3, 3)?;
+        let mod9_score = calculate_mod_bias(hex_str, &stats_mod9, 9, 9)?;
+        let mod27_score = calculate_mod_bias(hex_str, &stats_mod27, 27, 27)?;
+        let mod81_score = calculate_mod_bias(hex_str, &stats_mod81, 81, 81)?;
+
+        // Create Point for additional bias calculations
+        let x_bytes = hex::decode(hex_str)?;
+        if x_bytes.len() < 64 {
+            return Err(anyhow!("Invalid key length"));
+        }
+        let mut x_limbs = [0u64; 4];
+        for i in 0..4 {
+            let start = i * 8;
+            let end = start + 8;
+            if end <= x_bytes.len() {
+                x_limbs[i] = u64::from_be_bytes(x_bytes[start..end].try_into().unwrap_or([0; 8]));
+            }
+        }
+        let point = Point {
+            x: x_limbs,
+            y: [0u64; 4], // Not needed for bias analysis
+            z: [1u64, 0, 0, 0], // Affine point (z=1)
         };
-        analysis_results.push((hex_str.clone(), dummy_analysis, overall_score, is_high_bias));
+
+        // Calculate all bias components
+        let analysis = BiasAnalysis {
+            basic_bias: calculate_point_bias(&point),
+            mod3_bias: mod3_score,
+            mod9_bias: mod9_score,
+            mod27_bias: mod27_score,
+            mod81_bias: mod81_score,
+            golden_bias: calculate_golden_ratio_bias(&point),
+            pop_bias: calculate_pop_bias(&point),
+        };
+        analysis_results.push((hex_str.clone(), analysis, overall_score, is_high_bias));
 
         // Progress indicator
         if (i + 1) % 1000 == 0 {
