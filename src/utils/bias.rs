@@ -6,6 +6,7 @@
 use crate::types::Point;
 use crate::math::bigint::BigInt256;
 use k256::Scalar;
+use std::error::Error as StdError;
 
 /// Global bias statistics for chi-squared analysis
 #[derive(Debug, Clone)]
@@ -33,36 +34,36 @@ pub fn trend_penalty(bins: &[f64], num_bins: usize) -> f64 {
 }
 
 /// Compute bin counts for modular analysis using full BigInt256 precision
-pub fn compute_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> {
+pub fn compute_bins(keys: &[String], modulus: u64, num_bins: usize) -> Result<Vec<f64>, Box<dyn StdError>> {
     let mut bins = vec![0.0; num_bins];
     for key in keys {
-        let x = BigInt256::from_hex(key).unwrap();
+        let x = BigInt256::from_hex(key.trim()).map_err(|e| format!("Invalid hex: {}", e))?;
         let x_mod = x.clone() % BigInt256::from_u64(modulus);
         let bin_size = modulus / num_bins as u64;
         let bin_idx = x_mod.to_u64() / bin_size;
-        if bin_idx < num_bins as u64 { bins[bin_idx as usize] += 1.0; }
+        if (bin_idx as usize) < num_bins { bins[bin_idx as usize] += 1.0; }
     }
-    bins
+    Ok(bins)
 }
 
 /// Compute global statistics for modular bias analysis
-pub fn compute_global_stats(keys: &[String], modulus: u64, num_bins: usize) -> GlobalBiasStats {
-    let bins = compute_bins(keys, modulus, num_bins);
+pub fn compute_global_stats(keys: &[String], modulus: u64, num_bins: usize) -> Result<GlobalBiasStats, Box<dyn StdError>> {
+    let bins = compute_bins(keys, modulus, num_bins)?;
     let expected = keys.len() as f64 / num_bins as f64;
     let chi = aggregate_chi(&bins, expected, keys.len() as f64);
     let penalty = trend_penalty(&bins, num_bins);
-    GlobalBiasStats { chi, bins, expected, penalty }
+    Ok(GlobalBiasStats { chi, bins, expected, penalty })
 }
 
 /// Calculate modular bias score using chi-squared statistical approach
-pub fn calculate_mod_bias(x_hex: &str, stats: &GlobalBiasStats, modulus: u64, num_bins: usize) -> f64 {
-    let x = BigInt256::from_hex(x_hex).unwrap();
+pub fn calculate_mod_bias(x_hex: &str, stats: &GlobalBiasStats, modulus: u64, num_bins: usize) -> Result<f64, Box<dyn StdError>> {
+    let x = BigInt256::from_hex(x_hex.trim()).map_err(|e| format!("Invalid hex: {}", e))?;
     let x_mod = x.clone() % BigInt256::from_u64(modulus);
     let bin_size = modulus / num_bins as u64;
     let bin_idx = x_mod.to_u64() / bin_size;
-    let bin_dev = if bin_idx < stats.bins.len() as u64 { (stats.bins[bin_idx as usize] - stats.expected).abs() / stats.expected } else { 0.0 };
+    let bin_dev = if (bin_idx as usize) < stats.bins.len() { (stats.bins[bin_idx as usize] - stats.expected).abs() / stats.expected } else { 0.0 };
     let score = stats.chi * (1.0 + bin_dev) + stats.penalty;
-    score.min(1.0)
+    Ok(score.min(1.0))
 }
 
 /// Comprehensive bias analysis with global statistical normalization
@@ -73,12 +74,13 @@ pub fn analyze_comprehensive_bias_with_global(
     stats_mod9: &GlobalBiasStats,
     stats_mod27: &GlobalBiasStats,
     stats_mod81: &GlobalBiasStats
-) -> f64 {
-    let mod3_score = calculate_mod_bias(x_hex, stats_mod3, 3, 3);
-    let mod9_score = calculate_mod_bias(x_hex, stats_mod9, 9, 9);
-    let mod27_score = calculate_mod_bias(x_hex, stats_mod27, 27, 27);
-    let mod81_score = calculate_mod_bias(x_hex, stats_mod81, 81, 81);
-    mod3_score * 0.18 + mod9_score * 0.15 + mod27_score * 0.13 + mod81_score * 0.11 + 0.33
+) -> Result<f64, Box<dyn StdError>> {
+    let mod3_score = calculate_mod_bias(x_hex, stats_mod3, 3, 3)?;
+    let mod9_score = calculate_mod_bias(x_hex, stats_mod9, 9, 9)?;
+    let mod27_score = calculate_mod_bias(x_hex, stats_mod27, 27, 27)?;
+    let mod81_score = calculate_mod_bias(x_hex, stats_mod81, 81, 81)?;
+    let overall = mod3_score * 0.18 + mod9_score * 0.15 + mod27_score * 0.13 + mod81_score * 0.11 + 0.33;
+    Ok(overall)
 }
 
 /// Comprehensive bias analysis results

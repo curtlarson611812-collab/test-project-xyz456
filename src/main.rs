@@ -2136,10 +2136,10 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
 
     // PHASE 2: Compute global chi-squared statistics for each modulus
     println!("🔬 Phase 2: Computing global chi-squared statistics for all moduli...");
-    let stats_mod3 = compute_global_stats(&valid_hex_strings, 3, 3);
-    let stats_mod9 = compute_global_stats(&valid_hex_strings, 9, 9);
-    let stats_mod27 = compute_global_stats(&valid_hex_strings, 27, 27);
-    let stats_mod81 = compute_global_stats(&valid_hex_strings, 81, 81);
+    let stats_mod3 = compute_global_stats(&valid_hex_strings, 3, 3)?;
+    let stats_mod9 = compute_global_stats(&valid_hex_strings, 9, 9)?;
+    let stats_mod27 = compute_global_stats(&valid_hex_strings, 27, 27)?;
+    let stats_mod81 = compute_global_stats(&valid_hex_strings, 81, 81)?;
     println!("✅ Phase 2 Complete: Global chi-squared statistics computed");
 
     // PHASE 3: Analyze each key using statistical deviation from global norms
@@ -2148,7 +2148,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
         // Analyze bias using global statistical context and chi-squared approach
         let overall_score = analyze_comprehensive_bias_with_global(
             hex_str, &stats_mod3, &stats_mod9, &stats_mod27, &stats_mod81
-        );
+        )?;
         let is_high_bias = overall_score > 0.40; // Lower threshold for statistical approach
 
         // Store results (create dummy BiasAnalysis for compatibility)
