@@ -2008,9 +2008,8 @@ fn convert_compressed_to_uncompressed(bytes: &[u8], line_num: usize, hex_str: &s
 /// Analyze valuable P2PK keys and output filtered high-bias file using refined approach
 fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     use speedbitcrack::utils::bias::{
-        analyze_comprehensive_bias, analyze_comprehensive_bias_with_global,
-        BiasAnalysis, GlobalBiasStats, compute_global_stats, calculate_mod_bias,
-        calculate_point_bias, calculate_golden_ratio_bias, calculate_pop_bias
+        BiasAnalysis, calculate_point_bias, calculate_golden_ratio_bias, calculate_pop_bias,
+        calculate_mod3_bias, calculate_mod9_bias, calculate_mod27_bias, calculate_mod81_bias
     };
     use speedbitcrack::math::secp::Secp256k1;
     use speedbitcrack::types::Point;
@@ -2137,30 +2136,10 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     println!("✅ Phase 1 Complete: {} valid keys parsed ({} uncompressed, {} compressed)",
              points.len(), uncompressed_count, compressed_count);
 
-    // PHASE 2: Compute global chi-squared statistics for each modulus
-    println!("🔬 Phase 2: Computing global chi-squared statistics for all moduli...");
-    let stats_mod3 = compute_global_stats(&valid_hex_strings, 3, 3)?;
-    let stats_mod9 = compute_global_stats(&valid_hex_strings, 9, 9)?;
-    let stats_mod27 = compute_global_stats(&valid_hex_strings, 27, 27)?;
-    let stats_mod81 = compute_global_stats(&valid_hex_strings, 81, 81)?;
-    println!("✅ Phase 2 Complete: Global chi-squared statistics computed");
-
-    // PHASE 3: Analyze each key using statistical deviation from global norms
-    println!("🎯 Phase 3: Analyzing per-key statistical deviations with chi-squared normalization...");
+    // PHASE 2: Analyze each key using comprehensive bias analysis
+    println!("🎯 Phase 2: Analyzing per-key bias patterns with multi-dimensional scoring...");
     for (i, hex_str) in valid_hex_strings.iter().enumerate() {
-        // Analyze bias using global statistical context and chi-squared approach
-        let overall_score = analyze_comprehensive_bias_with_global(
-            hex_str, &stats_mod3, &stats_mod9, &stats_mod27, &stats_mod81
-        )?;
-        let is_high_bias = overall_score > 0.40; // Lower threshold for statistical approach
-
-        // Calculate individual bias components for proper analysis
-        let mod3_score = calculate_mod_bias(hex_str, &stats_mod3, 3, 3)?;
-        let mod9_score = calculate_mod_bias(hex_str, &stats_mod9, 9, 9)?;
-        let mod27_score = calculate_mod_bias(hex_str, &stats_mod27, 27, 27)?;
-        let mod81_score = calculate_mod_bias(hex_str, &stats_mod81, 81, 81)?;
-
-        // Create Point for additional bias calculations
+        // Create Point for bias calculations
         let x_bytes = hex::decode(hex_str)?;
         if x_bytes.len() < 64 {
             return Err(anyhow!("Invalid key length"));
@@ -2179,16 +2158,20 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
             z: [1u64, 0, 0, 0], // Affine point (z=1)
         };
 
-        // Calculate all bias components
+        // Calculate all bias components using per-key analysis
         let analysis = BiasAnalysis {
             basic_bias: calculate_point_bias(&point),
-            mod3_bias: mod3_score,
-            mod9_bias: mod9_score,
-            mod27_bias: mod27_score,
-            mod81_bias: mod81_score,
+            mod3_bias: calculate_mod3_bias(&point),
+            mod9_bias: calculate_mod9_bias(&point),
+            mod27_bias: calculate_mod27_bias(&point),
+            mod81_bias: calculate_mod81_bias(&point),
             golden_bias: calculate_golden_ratio_bias(&point),
             pop_bias: calculate_pop_bias(&point),
         };
+
+        let overall_score = analysis.overall_score();
+        let is_high_bias = analysis.is_high_bias();
+
         analysis_results.push((hex_str.clone(), analysis, overall_score, is_high_bias));
 
         // Progress indicator
