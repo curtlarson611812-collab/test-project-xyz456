@@ -549,7 +549,7 @@ mod tests {
     fn test_add_dp() {
         let mut table = DpTable::new(4);
         let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0);
+        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
         let entry = DpEntry::new(point, state, 12345, 1);
 
         assert!(table.add_dp(entry).is_ok());
@@ -565,7 +565,7 @@ mod tests {
         // Fill table beyond capacity
         for i in 0..100 {
             let point = Point { x: [i as u64, 0, 0, 0], y: [i as u64 + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i, 0, 0);
             let entry = DpEntry::new(point, state, i as u64, (i % 5) as u32);
 
             // Override max_size for testing
@@ -595,7 +595,7 @@ mod tests {
         // Add some entries
         for i in 0..5 {
             let point = Point { x: [i as u64, 0, 0, 0], y: [i as u64 + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i, 0, 0);
             let entry = DpEntry::new(point, state, i as u64, (i % 2) as u32);
             let _ = table.add_dp(entry);
         }

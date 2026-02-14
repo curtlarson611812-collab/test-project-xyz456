@@ -129,6 +129,8 @@ mod tests {
             [0; 4], [0; 4], // alpha, beta
             true, false, // tame, not dp
             0, // id
+            0, // step
+            0, // kangaroo_type
         );
 
         // Test 10M steps (scaled down for test performance)
@@ -216,12 +218,17 @@ mod tests {
     }
 
     // Helper for mock start state
-    fn mock_start_state() -> crate::types::KangarooState {
-        // Simplified mock
         crate::types::KangarooState::new(
             Point::generator(),
             crate::math::BigInt256::zero(),
-            crate::types::AlphaBeta::default(),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        )
             0,
             true,
         )
