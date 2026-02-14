@@ -114,6 +114,9 @@ struct Args {
     #[arg(long, value_name = "THRESHOLD")]
     bias_threshold: Option<f64>,  // Custom threshold for high-bias detection (default: adaptive)
 
+    #[arg(long, value_name = "COMPONENTS")]
+    bias_components: Option<String>,  // Select bias components: all,mod3,mod9,mod27,mod81,gold,pop,basic (comma-separated, default: all)
+
     #[arg(long)]
     convert_valuable_uncompressed: bool,  // Convert valuable_p2pk_pubkeys.txt to all uncompressed format
     #[arg(long)]
@@ -2008,7 +2011,7 @@ fn convert_compressed_to_uncompressed(bytes: &[u8], line_num: usize, hex_str: &s
 /// Analyze valuable P2PK keys and output filtered high-bias file using refined approach
 fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     use speedbitcrack::utils::bias::{
-        BiasAnalysis, calculate_point_bias, calculate_golden_ratio_bias, calculate_pop_bias,
+        BiasAnalysis, BiasWeights, calculate_point_bias, calculate_golden_ratio_bias, calculate_pop_bias,
         calculate_mod3_bias, calculate_mod9_bias, calculate_mod27_bias, calculate_mod81_bias
     };
     use speedbitcrack::math::secp::Secp256k1;
@@ -2035,7 +2038,23 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     // Parse CLI arguments
     let args = Args::parse();
 
+    // Parse bias component weights
+    let bias_weights = if let Some(components) = &args.bias_components {
+        match BiasWeights::from_string(components) {
+            Ok(weights) => weights,
+            Err(e) => {
+                println!("❌ Invalid bias components: {}", e);
+                println!("💡 Valid components: all, basic, mod3, mod9, mod27, mod81, gold, pop");
+                println!("💡 Examples: --bias-components mod81,gold  or  --bias-components all");
+                return Err(anyhow!("Invalid bias components: {}", e));
+            }
+        }
+    } else {
+        BiasWeights::default()
+    };
+
     println!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns (refined approach)...");
+    println!("🎯 Bias Components: {:?}", bias_weights);
     info!("🔬 Analyzing valuable_p2pk_pubkeys.txt for bias patterns (refined approach)...");
 
     // Load the valuable P2PK file
@@ -2169,8 +2188,8 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
             pop_bias: calculate_pop_bias(&point),
         };
 
-        let overall_score = analysis.overall_score();
-        let is_high_bias = analysis.is_high_bias();
+        let overall_score = analysis.score_with_weights(&bias_weights);
+        let is_high_bias = overall_score > 0.5; // Use fixed threshold for custom weights
 
         analysis_results.push((hex_str.clone(), analysis, overall_score, is_high_bias));
 
@@ -2208,6 +2227,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     println!("├─ Total keys analyzed: {}", analysis_results.len());
     println!("├─ Uncompressed keys: {}", uncompressed_count);
     println!("├─ Compressed keys: {} (decompressed for analysis)", compressed_count);
+    println!("├─ Bias Components: {}", args.bias_components.as_deref().unwrap_or("all (default)"));
     println!("├─ Score statistics: mean={:.3}, std={:.3}", mean_score, std_score);
     println!("├─ Threshold used: {:.3} ({})",
              actual_threshold,

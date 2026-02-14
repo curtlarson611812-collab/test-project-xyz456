@@ -115,6 +115,139 @@ pub fn analyze_comprehensive_bias_with_global(
     Ok(modular_weighted)
 }
 
+/// Bias component weights for selective analysis
+#[derive(Debug, Clone)]
+pub struct BiasWeights {
+    pub basic: f64,
+    pub mod3: f64,
+    pub mod9: f64,
+    pub mod27: f64,
+    pub mod81: f64,
+    pub gold: f64,
+    pub pop: f64,
+}
+
+impl BiasWeights {
+    /// Default weights prioritizing modular patterns for ECDLP effectiveness
+    pub fn default() -> Self {
+        Self {
+            basic: 0.2,
+            mod3: 0.175,   // Part of 70% modular total
+            mod9: 0.175,   // Part of 70% modular total
+            mod27: 0.175,  // Part of 70% modular total
+            mod81: 0.175,  // Part of 70% modular total
+            gold: 0.05,
+            pop: 0.05,
+        }
+    }
+
+    /// Only basic entropy analysis
+    pub fn basic_only() -> Self {
+        Self {
+            basic: 1.0,
+            mod3: 0.0,
+            mod9: 0.0,
+            mod27: 0.0,
+            mod81: 0.0,
+            gold: 0.0,
+            pop: 0.0,
+        }
+    }
+
+    /// Only modular arithmetic analysis
+    pub fn modular_only() -> Self {
+        Self {
+            basic: 0.0,
+            mod3: 0.25,
+            mod9: 0.25,
+            mod27: 0.25,
+            mod81: 0.25,
+            gold: 0.0,
+            pop: 0.0,
+        }
+    }
+
+    /// Only mod81 bias analysis
+    pub fn mod81_only() -> Self {
+        Self {
+            basic: 0.0,
+            mod3: 0.0,
+            mod9: 0.0,
+            mod27: 0.0,
+            mod81: 1.0,
+            gold: 0.0,
+            pop: 0.0,
+        }
+    }
+
+    /// Only gold bias analysis
+    pub fn gold_only() -> Self {
+        Self {
+            basic: 0.0,
+            mod3: 0.0,
+            mod9: 0.0,
+            mod27: 0.0,
+            mod81: 0.0,
+            gold: 1.0,
+            pop: 0.0,
+        }
+    }
+
+    /// Parse from comma-separated string
+    pub fn from_string(s: &str) -> Result<Self, String> {
+        let mut weights = Self {
+            basic: 0.0,
+            mod3: 0.0,
+            mod9: 0.0,
+            mod27: 0.0,
+            mod81: 0.0,
+            gold: 0.0,
+            pop: 0.0,
+        };
+
+        if s.trim() == "all" {
+            return Ok(Self::default());
+        }
+
+        let components: Vec<&str> = s.split(',').map(|s| s.trim()).collect();
+
+        for component in components {
+            match component {
+                "basic" => weights.basic = 1.0,
+                "mod3" => weights.mod3 = 1.0,
+                "mod9" => weights.mod9 = 1.0,
+                "mod27" => weights.mod27 = 1.0,
+                "mod81" => weights.mod81 = 1.0,
+                "gold" => weights.gold = 1.0,
+                "pop" => weights.pop = 1.0,
+                _ => return Err(format!("Unknown bias component: {}", component)),
+            }
+        }
+
+        // If only one component is selected, give it full weight
+        let active_count = [weights.basic, weights.mod3, weights.mod9, weights.mod27, weights.mod81, weights.gold, weights.pop]
+            .iter().filter(|&&w| w > 0.0).count();
+
+        if active_count == 1 {
+            // Already set to 1.0, which is correct
+        } else if active_count > 1 {
+            // Normalize weights so they sum to 1.0
+            let total: f64 = weights.basic + weights.mod3 + weights.mod9 + weights.mod27 + weights.mod81 + weights.gold + weights.pop;
+            if total > 0.0 {
+                weights.basic /= total;
+                weights.mod3 /= total;
+                weights.mod9 /= total;
+                weights.mod27 /= total;
+                weights.mod81 /= total;
+                weights.gold /= total;
+                weights.pop /= total;
+            }
+        }
+
+        Ok(weights)
+    }
+}
+
 /// Comprehensive bias analysis results
 #[derive(Debug, Clone)]
 pub struct BiasAnalysis {
@@ -130,14 +263,48 @@ pub struct BiasAnalysis {
 impl BiasAnalysis {
     /// Calculate overall bias score combining all methods
     pub fn overall_score(&self) -> f64 {
-        // Aggressive bias scoring prioritizing modular patterns for ECDLP effectiveness
-        let modular_score = (self.mod3_bias + self.mod9_bias + self.mod27_bias + self.mod81_bias) / 4.0;
+        self.score_with_weights(&BiasWeights::default())
+    }
 
-        // Weight modular patterns heavily (70%) as they enable search partitioning
-        (modular_score * 0.7) +
-        (self.basic_bias * 0.2) +           // Basic entropy patterns
-        (self.golden_bias * 0.05) +         // Special mathematical patterns
-        (self.pop_bias * 0.05)              // Population statistics
+    /// Calculate bias score with custom component weights
+    pub fn score_with_weights(&self, weights: &BiasWeights) -> f64 {
+        let mut total_score = 0.0;
+        let mut total_weight = 0.0;
+
+        if weights.basic > 0.0 {
+            total_score += self.basic_bias * weights.basic;
+            total_weight += weights.basic;
+        }
+        if weights.mod3 > 0.0 {
+            total_score += self.mod3_bias * weights.mod3;
+            total_weight += weights.mod3;
+        }
+        if weights.mod9 > 0.0 {
+            total_score += self.mod9_bias * weights.mod9;
+            total_weight += weights.mod9;
+        }
+        if weights.mod27 > 0.0 {
+            total_score += self.mod27_bias * weights.mod27;
+            total_weight += weights.mod27;
+        }
+        if weights.mod81 > 0.0 {
+            total_score += self.mod81_bias * weights.mod81;
+            total_weight += weights.mod81;
+        }
+        if weights.gold > 0.0 {
+            total_score += self.golden_bias * weights.gold;
+            total_weight += weights.gold;
+        }
+        if weights.pop > 0.0 {
+            total_score += self.pop_bias * weights.pop;
+            total_weight += weights.pop;
+        }
+
+        if total_weight > 0.0 {
+            total_score / total_weight
+        } else {
+            0.0
+        }
     }
 
     /// Determine if this is a high-bias target using adaptive threshold

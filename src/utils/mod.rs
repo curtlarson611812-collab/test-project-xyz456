@@ -15,6 +15,7 @@ pub use bias::{
     analyze_comprehensive_bias,
     analyze_comprehensive_bias_with_global,
     BiasAnalysis,
+    BiasWeights,
     GlobalBiasStats,
     compute_global_stats,
     is_high_bias_target,
