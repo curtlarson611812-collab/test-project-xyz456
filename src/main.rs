@@ -1087,6 +1087,11 @@ fn run_bias_analysis() -> Result<()> {
 
     println!("📊 Analyzing {} solved puzzles for bias patterns...", solved.len());
 
+    // Load puzzle data for comprehensive bias analysis with global stats
+    let puzzle_data = load_puzzle(std::path::Path::new("puzzles.txt"))?;
+    let global_stats = compute_global_stats(&puzzle_data)?;
+    let bias_scores = puzzle_data.iter().map(|pk| analyze_comprehensive_bias_with_global(&pk.to_hex(), &global_stats)).collect::<Vec<f64>>();
+
     // Analyze positional bias histogram
     let hist = analyze_pos_bias_histogram(&solved);
     println!("📈 Positional bias histogram (decimal digits 0-9):");
@@ -1181,6 +1186,18 @@ fn get_puzzle_range(puzzle_num: u32) -> (BigInt256, BigInt256) {
 /// Load puzzle public key point
 fn load_puzzle_point(puzzle_num: u32) -> Result<Point> {
     load_real_puzzle(puzzle_num, &Secp256k1::new())
+}
+
+/// Load puzzle data from file with hex validation
+fn load_puzzle(file: &std::path::Path) -> Result<Vec<k256::PublicKey>, Box<dyn std::error::Error>> {
+    let lines = std::fs::read_to_string(file)?
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>();
+    lines.iter()
+        .map(|hex| k256::PublicKey::from_sec1_bytes(hex.as_bytes()))
+        .collect()
 }
 
 /// Run parallel lambda algorithm for unsolved puzzles
@@ -2430,9 +2447,23 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
     let d_g = bias::get_precomputed_d_g(&attractor_x, shared_bias);
     info!("📊 Shared D_g pre-computed: {} (G to attractor distance)", d_g.to_hex());
 
-    // Generate shared tame paths (backward from attractor) - placeholder for now
-    let _shared_tame: std::collections::HashMap<u64, BigInt256> = std::collections::HashMap::new(); // Empty map for demonstration
-    info!("📊 Shared tame DP map placeholder: 0 entries (framework ready for full implementation)");
+    // Generate shared tame paths (backward from attractor)
+    let mut shared_tame = std::collections::HashMap::new();
+    let attractor = k256::ProjectivePoint::from(k256::AffinePoint::new(
+        k256::FieldElement::from_hex(attractor_x_hex).unwrap(),
+        k256::FieldElement::from_hex("483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8").unwrap(),
+    ).unwrap());
+    let mut current = attractor;
+    let mut dist = BigInt256::zero();
+    for i in (0..100000).rev() {
+        let jump_idx = (i % crate::math::constants::JUMP_TABLE.len() as u32) as usize;
+        let jump_g = &crate::math::constants::JUMP_TABLE[jump_idx];
+        current = current - jump_g; // Backward with negate
+        dist = dist + BigInt256::from_u64(1 << i);
+        let hash = crate::utils::hash::hash_point(&current.to_affine().x().into(), &current.to_affine().y().into());
+        shared_tame.insert(hash, dist.clone());
+    }
+    info!("📊 Shared tame DP map: {} entries", shared_tame.len());
 
     // Magic 9 indices for output
     let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];

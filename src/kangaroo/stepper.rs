@@ -15,7 +15,7 @@ use anyhow::Result;
 pub struct KangarooStepper {
     curve: Secp256k1,
     _jump_table: Vec<Point>, // Precomputed jump points
-    // expanded_mode: bool, // TODO: Implement expanded jump mode
+    expanded_mode: bool, // Enable expanded jump table mode
     dp_bits: usize, // DP bits for negation check
     step_count: u32, // Global step counter for tame kangaroo bucket selection
     seed: u32, // Configurable seed for randomization
@@ -40,25 +40,41 @@ impl KangarooStepper {
         KangarooStepper {
             curve,
             _jump_table: jump_table,
+            expanded_mode,
             dp_bits,
             step_count: 0,
             seed,
         }
     }
 
+    /// Fibonacci number generator for expanded jump table
+    fn fib(n: usize) -> u64 {
+        let mut a = 0u64;
+        let mut b = 1u64;
+        for _ in 0..n {
+            let temp = a;
+            a = b;
+            b = temp + b;
+        }
+        a
+    }
+
     /// Build jump table for efficient stepping
     fn build_jump_table(curve: &Secp256k1, expanded: bool) -> Vec<Point> {
-        // Use precomputed g_multiples for efficiency (rule #6 synergy)
-        let mut table = curve.g_multiples.clone();
         if expanded {
-            // Add more multiples for expanded mode (17G through 32G)
-            let mut current = table.last().unwrap().clone();
-            for _i in 17..=32 {
-                current = curve.add(&current, &curve.g);
-                table.push(current.clone());
+            // Expanded mode: Fibonacci-based jumps for golden ratio bias
+            let size = 1 << 20; // 2^20 entries
+            let mut table = Vec::with_capacity(size);
+            for i in 0..size {
+                let fib_val = Self::fib(i % 30); // Cycle through first 30 fib numbers
+                let scalar = BigInt256::from_u64(fib_val);
+                table.push(curve.mul_scalar(&curve.g, &scalar));
             }
+            table
+        } else {
+            // Standard mode: Use precomputed g_multiples
+            curve.g_multiples.clone()
         }
-        table
     }
 
     /// Step a single kangaroo one jump

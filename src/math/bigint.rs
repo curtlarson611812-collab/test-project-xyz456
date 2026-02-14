@@ -1609,7 +1609,36 @@ mod tests {
         println!("Creating MontgomeryReducer...");
         let _mont = MontgomeryReducer::new(&p);
         println!("MontgomeryReducer created successfully");
-        // TODO: Add actual multiplication tests once creation works
+
+        // Test multiplication with known vectors from secp256k1 order
+        let order = BigInt256::from_hex("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141").unwrap();
+
+        // Test: (order-1) * 2 mod order should equal (order-2) mod order
+        let a = order.clone() - BigInt256::from_u64(1);
+        let b = BigInt256::from_u64(2);
+        let expected = (order.clone() - BigInt256::from_u64(2)) % order.clone();
+        assert_eq!(a.clone() * b.clone() % order.clone(), expected);
+
+        // Test: order * 0 = 0
+        assert_eq!(order.clone() * BigInt256::zero(), BigInt256::zero());
+
+        // Test: 1 * 1 = 1
+        assert_eq!(BigInt256::one() * BigInt256::one(), BigInt256::one());
+
+        // Additional large multiplication tests with secp256k1 order vectors
+        let order_minus_1 = order.clone() - BigInt256::from_u64(1);
+        let order_minus_2 = order.clone() - BigInt256::from_u64(2);
+        let order_minus_3 = order.clone() - BigInt256::from_u64(3);
+        let order_minus_6 = order.clone() - BigInt256::from_u64(6);
+
+        // Test: (order-1) * 2 = 2*order - 2 ≡ -2 mod order
+        assert_eq!((order_minus_1.clone() * BigInt256::from_u64(2)) % order.clone(), order_minus_2.clone());
+
+        // Test: (order-2) * 3 = 3*order - 6 ≡ -6 mod order
+        assert_eq!((order_minus_2.clone() * BigInt256::from_u64(3)) % order.clone(), order_minus_6.clone());
+
+        // Test: order * order = 0 mod order
+        assert_eq!((order.clone() * order.clone()) % order.clone(), BigInt256::zero());
     }
 
     #[test]

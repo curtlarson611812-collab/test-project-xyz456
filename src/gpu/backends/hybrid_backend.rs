@@ -297,9 +297,6 @@ impl HybridBackend {
 
     // Chunk: Metrics-Based Dynamic Optimization (src/gpu/backends/hybrid_backend.rs)
     // Dependencies: NsightMetrics, generate_metric_based_recommendations
-    pub fn optimize_based_on_metrics_placeholder(config: &mut GpuConfig, metrics: &logging::NsightMetrics) {
-        Self::optimize_based_on_metrics(config, metrics);
-    }
 
     pub fn optimize_based_on_metrics(config: &mut GpuConfig, metrics: &logging::NsightMetrics) {
         // Apply metric-based optimizations
@@ -459,10 +456,10 @@ impl HybridBackend {
     pub fn create_shared_buffer(&self, size: usize) -> anyhow::Result<SharedBuffer> {
         #[cfg(feature = "rustacuda")]
         {
-            // CUDA buffer allocation
-            use crate::gpu::backends::cuda_backend::CudaBackend;
-            // For now, return a placeholder - would need actual CUDA buffer
-            Err(anyhow::anyhow!("CUDA shared buffers not yet implemented"))
+            // CUDA unified buffer allocation
+            use rustacuda::memory::UnifiedBuffer;
+            let buffer = UnifiedBuffer::new(&vec![0u8; size])?;
+            Ok(SharedBuffer::Cuda(buffer))
         }
         #[cfg(all(not(feature = "rustacuda"), feature = "wgpu"))]
         {
@@ -487,7 +484,7 @@ impl HybridBackend {
 #[cfg(any(feature = "wgpu", feature = "rustacuda"))]
 pub enum SharedBuffer {
     #[cfg(feature = "rustacuda")]
-    Cuda(()), // Placeholder - would be actual CUDA buffer type
+    Cuda(rustacuda::memory::UnifiedBuffer<u8>),
     #[cfg(feature = "wgpu")]
     Vulkan(wgpu::Buffer),
 }

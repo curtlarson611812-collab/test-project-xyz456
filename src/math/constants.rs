@@ -39,10 +39,44 @@ pub static GENERATOR: LazyLock<Point> = LazyLock::new(|| {
 pub const DP_BITS: u32 = 24;
 pub const JUMP_TABLE_SIZE: usize = 256;
 
-// Jump table with proper EC operations
+// Jump table with proper EC operations - precomputed ProjectivePoint values
+pub static JUMP_TABLE: LazyLock<Vec<k256::ProjectivePoint>> = LazyLock::new(|| {
+    use k256::{ProjectivePoint, Scalar};
+
+    let mut jumps = Vec::with_capacity(JUMP_TABLE_SIZE);
+    let g = ProjectivePoint::GENERATOR;
+
+    // Small multiples for fine-grained movement: G, 2G, 3G, ..., 64G
+    for i in 1..=64 {
+        let scalar = Scalar::from(i as u32);
+        jumps.push(g * scalar);
+    }
+
+    // Powers of 2 for larger jumps: 2^6G, 2^7G, ..., 2^16G (covering up to 2^16)
+    for i in 6..=16 {
+        let scalar = Scalar::from(1u64 << i);
+        jumps.push(g * scalar);
+    }
+
+    // Prime-based jumps for mixing (deterministic from PRIME_MULTIPLIERS)
+    for &prime in PRIME_MULTIPLIERS.iter() {
+        let scalar = Scalar::from(prime);
+        jumps.push(g * scalar);
+    }
+
+    // Fill remaining slots with deterministic values
+    for i in jumps.len()..JUMP_TABLE_SIZE {
+        let val = (i as u64).wrapping_mul(0x9e3779b9) % (1u64 << 30); // Keep reasonable scalar size
+        let scalar = Scalar::from(val + 1); // +1 to avoid zero
+        jumps.push(g * scalar);
+    }
+
+    jumps
+});
+
+// Legacy function for backward compatibility
 pub fn jump_table() -> Vec<BigInt256> {
-    // For now, use simple powers of 2 and small multiples
-    // In production, these would be precomputed EC points
+    // Return scalar values for backward compatibility
     let mut jumps = Vec::with_capacity(JUMP_TABLE_SIZE);
 
     // Small multiples for fine-grained movement
@@ -51,16 +85,19 @@ pub fn jump_table() -> Vec<BigInt256> {
     }
 
     // Powers of 2 for larger jumps
-    for i in 1..=63 {
+    for i in 6..=16 {
         jumps.push(BigInt256::from_u64(1u64 << i));
     }
-    // For i=64, use BigInt256 directly
-    jumps.push(BigInt256::from_u64(1u64 << 63) * BigInt256::from_u64(2));
 
-    // Random-ish values for mixing (deterministic)
-    for i in 128..JUMP_TABLE_SIZE {
-        let val = (i as u64).wrapping_mul(0x9e3779b9) % (1u64 << 40); // Keep reasonable size
-        jumps.push(BigInt256::from_u64(val + 1)); // +1 to avoid zero
+    // Prime-based jumps
+    for &prime in PRIME_MULTIPLIERS.iter() {
+        jumps.push(BigInt256::from_u64(prime));
+    }
+
+    // Fill remaining slots
+    for i in jumps.len()..JUMP_TABLE_SIZE {
+        let val = (i as u64).wrapping_mul(0x9e3779b9) % (1u64 << 30);
+        jumps.push(BigInt256::from_u64(val + 1));
     }
 
     jumps

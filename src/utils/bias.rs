@@ -517,14 +517,49 @@ pub fn apply_biases(scalar: &BigInt256, target: (u8, u8, u8, u8, bool)) -> f64 {
 /// Generate pre-seed positional bias points using G * (small_prime * k)
 /// Returns 32*32 = 1024 normalized positions [0,1] within the puzzle range
 pub fn generate_preseed_pos(_range_min: &k256::Scalar, _range_width: &k256::Scalar) -> Vec<f64> {
-    // Simplified implementation for compatibility
-    vec![0.5; 1024]  // Return uniform distribution as placeholder
+    // Generate primes using sieve for curve-based non-uniform distribution
+    let primes = sieve_primes(1024);
+    let g = k256::ProjectivePoint::GENERATOR;
+
+    primes.iter().enumerate().map(|(i, &prime)| {
+        let scalar = k256::Scalar::from(prime);
+        let point = g * scalar;
+        let affine = point.to_affine();
+        // Convert x-coordinate to normalized position [0,1]
+        let x_bytes = affine.x().to_bytes();
+        let x_u64 = u64::from_be_bytes(x_bytes[24..32].try_into().unwrap()); // Lower 64 bits
+        (x_u64 as f64) / (u64::MAX as f64)
+    }).collect()
+}
+
+/// Sieve of Eratosthenes to generate primes up to n
+fn sieve_primes(n: usize) -> Vec<u64> {
+    let mut is_prime = vec![true; n + 1];
+    is_prime[0] = false;
+    if n > 0 {
+        is_prime[1] = false;
+    }
+
+    for i in 2..=((n as f64).sqrt() as usize) {
+        if is_prime[i] {
+            for multiple in ((i * i)..=n).step_by(i) {
+                is_prime[multiple] = false;
+            }
+        }
+    }
+
+    (2..=n).filter(|&i| is_prime[i]).map(|i| i as u64).collect()
 }
 
 /// Load empirical position data from bias log file
-pub fn load_empirical_pos(_log_path: &std::path::Path) -> Option<Vec<f64>> {
-    // Simplified implementation for compatibility
-    None
+pub fn load_empirical_pos(log_path: &std::path::Path) -> Option<Vec<f64>> {
+    use std::fs;
+    let content = fs::read_to_string(log_path).ok()?;
+    let pos = content
+        .lines()
+        .filter_map(|l| l.split("pos:").nth(1).and_then(|s| s.trim().parse::<f64>().ok()))
+        .collect();
+    Some(pos)
 }
 
 /// Blend pre-seed positions with random simulations and empirical data
@@ -615,3 +650,47 @@ pub const PUZZLE_145_MOD27_BIAS: f64 = 0.19;
 pub const PUZZLE_145_MOD81_BIAS: f64 = 0.15;
 pub const PUZZLE_145_GOLD_BIAS: f64 = 0.41;
 pub const PUZZLE_145_POP_BIAS: f64 = 0.67;
+
+/// Cascade histogram analysis for multi-scale bias detection
+/// Recursively slice data to find high-density regions
+pub fn cascade_histogram_analysis(positions: &[f64], bins: usize) -> Vec<f64> {
+    let mut current = positions.to_vec();
+    let mut result = Vec::new();
+
+    // Multi-scale analysis: start with coarse bins, progressively refine
+    for scale in [bins, bins/2, bins/4].iter().cloned().filter(|&b| b > 1) {
+        let hist = build_histogram(&current, scale);
+        current = slice_to_high_density(&current, &hist, 1.5);
+        result.extend_from_slice(&current);
+    }
+
+    result
+}
+
+/// Build histogram from position data
+fn build_histogram(positions: &[f64], bins: usize) -> Vec<usize> {
+    let mut hist = vec![0; bins];
+    for &pos in positions {
+        let bin = ((pos * bins as f64) as usize).min(bins - 1);
+        hist[bin] += 1;
+    }
+    hist
+}
+
+/// Slice positions to high-density regions based on histogram threshold
+fn slice_to_high_density(positions: &[f64], hist: &[usize], threshold: f64) -> Vec<f64> {
+    let mean_density = hist.iter().sum::<usize>() as f64 / hist.len() as f64;
+    positions.iter()
+        .filter(|&&pos| {
+            let bin = ((pos * hist.len() as f64) as usize).min(hist.len() - 1);
+            hist[bin] as f64 > threshold * mean_density
+        })
+        .cloned()
+        .collect()
+}
+
+/// Get histogram bin for a position
+fn get_hist_bin(pos: f64, hist: &[usize]) -> usize {
+    let bin = ((pos * hist.len() as f64) as usize).min(hist.len() - 1);
+    hist[bin]
+}

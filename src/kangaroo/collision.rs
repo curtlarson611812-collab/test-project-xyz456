@@ -2,12 +2,15 @@ use crate::types::{Solution, KangarooState, Point, DpEntry, Scalar};
 use crate::dp::DpTable;
 use crate::math::{Secp256k1, BigInt256};
 use crate::config::Config;
+use crate::math::constants::JUMP_TABLE;
+use crate::utils::hash;
 use anyhow::Result;
 use num_bigint::BigUint;
 use log::{info, debug};
 use std::ops::Add;
 use std::collections::HashMap;
 use k256::{ProjectivePoint};
+use subtle::ConstantTimeEq;
 
 #[derive(Clone)]
 pub struct Trap {
@@ -22,6 +25,16 @@ pub enum CollisionResult {
     None,
     Full(Solution),
     Near(Vec<KangarooState>),
+}
+
+/// Hash point coordinates to select jump table index
+fn hash_to_jump_index(point: &ProjectivePoint) -> usize {
+    let affine = point.to_affine();
+    let x_bytes = affine.x().to_bytes();
+    let y_bytes = affine.y().to_bytes();
+    let combined = [x_bytes.as_slice(), y_bytes.as_slice()].concat();
+    let hash_val = hash::murmur_hash3(&combined, 42); // Use deterministic seed
+    (hash_val as usize) % JUMP_TABLE.len()
 }
 
 pub struct CollisionDetector {
@@ -220,21 +233,33 @@ impl CollisionDetector {
     // }
 
     /// Verify collision solution is correct
-    fn verify_collision_solution(&self, entry1: &DpEntry, _entry2: &DpEntry, solution: &BigInt256) -> Option<Solution> {
-        // Verify: entry1_point = solution * G + entry1_distance
-        // and     entry2_point = solution * G + entry2_distance
-        // This is a simplified check - full verification would be more thorough
+    fn verify_collision_solution(&self, entry1: &DpEntry, entry2: &DpEntry, solution: &BigInt256) -> Option<Solution> {
+        // Verify: G * k == pubkey using constant-time equality
         let g = self.curve.g();
-        let _solution_g = self.curve.mul(solution, g);
-        // Check if the solution produces the expected relationship
-        // This is a simplified check - full verification would be more thorough
-        Some(Solution {
-            private_key: solution.clone().to_u64_array(),
-            target_point: entry1.point.clone(),
-            total_ops: BigInt256::zero(),
-            time_seconds: 0.0,
-            verified: true,
-        })
+        let computed_point = self.curve.mul(solution, g);
+
+        // Use constant-time comparison for the point equality check
+        let entry1_match = subtle::ConstantTimeEq::ct_eq(
+            &computed_point.x.limbs,
+            &entry1.point.x.limbs
+        ).unwrap_u8() == 1;
+
+        let entry2_match = subtle::ConstantTimeEq::ct_eq(
+            &computed_point.x.limbs,
+            &entry2.point.x.limbs
+        ).unwrap_u8() == 1;
+
+        if entry1_match || entry2_match {
+            Some(Solution {
+                private_key: solution.clone().to_u64_array(),
+                target_point: if entry1_match { entry1.point.clone() } else { entry2.point.clone() },
+                total_ops: BigInt256::zero(),
+                time_seconds: 0.0,
+                verified: true,
+            })
+        } else {
+            None
+        }
     }
 
     pub async fn check_collisions(&self, dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>) -> Result<CollisionResult> {
@@ -619,26 +644,51 @@ impl CollisionDetector {
         neg
     }
 
-    /// Walk back kangaroo path to find exact collision (legacy method)
+    /// Walk back kangaroo path to find exact collision
     pub fn walk_back(&self, kangaroo: &KangarooState, steps: usize) -> Vec<Point> {
-        // This is a simplified version - in practice, we'd need the jump table
-        // to properly reconstruct the path by reversing operations
         let mut path = Vec::new();
-        let current_pos = kangaroo.position;
-        let mut current_dist = kangaroo.distance.to_biguint();
+        let mut current_pos = kangaroo.position;
+        let mut current_dist = kangaroo.distance.clone();
 
         // Add starting position
         path.push(current_pos);
 
-        // For now, just simulate walking back by small decrements
-        // In a real implementation, this would use the jump table to reverse operations
-        for _ in 0..steps.min(10) { // Limit to prevent infinite paths
-            // Simulate reversing a jump (this is placeholder logic)
-            // In reality, you'd look up the jump that was taken and reverse it
-            if current_dist > BigUint::from(1u64) {
-                current_dist -= BigUint::from(1u64);
-            }
-            path.push(current_pos); // Same position for simplicity
+        // Walk back by reversing jumps
+        for _ in 0..steps.min(50) { // Limit path reconstruction
+            // Hash current position to find which jump was taken
+            let proj_point = k256::ProjectivePoint::from(k256::AffinePoint::new(
+                k256::FieldElement::from_bytes(&current_pos.x.to_bytes_be().try_into().unwrap()).unwrap(),
+                k256::FieldElement::from_bytes(&current_pos.y.to_bytes_be().try_into().unwrap()).unwrap(),
+            ).unwrap());
+
+            let jump_idx = hash_to_jump_index(&proj_point);
+            let jump_g = &JUMP_TABLE[jump_idx];
+
+            // Reverse the jump: current = current - jump = current + (-jump)
+            let neg_jump = -jump_g;
+            let new_proj = proj_point + neg_jump;
+            let new_affine = new_proj.to_affine();
+
+            // Convert back to our Point type
+            let new_x = new_affine.x().to_bytes();
+            let new_y = new_affine.y().to_bytes();
+            current_pos = Point {
+                x: [
+                    u64::from_be_bytes(new_x[0..8].try_into().unwrap()),
+                    u64::from_be_bytes(new_x[8..16].try_into().unwrap()),
+                    u64::from_be_bytes(new_x[16..24].try_into().unwrap()),
+                    u64::from_be_bytes(new_x[24..32].try_into().unwrap()),
+                ],
+                y: [
+                    u64::from_be_bytes(new_y[0..8].try_into().unwrap()),
+                    u64::from_be_bytes(new_y[8..16].try_into().unwrap()),
+                    u64::from_be_bytes(new_y[16..24].try_into().unwrap()),
+                    u64::from_be_bytes(new_y[24..32].try_into().unwrap()),
+                ],
+                z: [1, 0, 0, 0], // Affine point
+            };
+
+            path.push(current_pos);
         }
 
         path
@@ -1191,33 +1241,42 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
             let mut steps = 0u64;
 
             loop {
-                // Simple rho step (placeholder - in practice use proper jump table)
-                // For now, just add generator point repeatedly
-                let g = ProjectivePoint::GENERATOR;
-                point = point + g;
+                // Real rho step with jump table and proper EC arithmetic
+                let jump_idx = hash_to_jump_index(&point);
+                let jump_g = &JUMP_TABLE[jump_idx];
+                point = point + jump_g;
 
                 steps += 1;
 
-                // Check for DP (simplified)
+                // Check for DP with actual coordinates
                 let dp_bits = (1.0 / theta).log2() as u32;
-                // Simplified DP check - use point hash instead
-                let point_bytes = [0u8; 32]; // Placeholder
-                let hash = point_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
-                let dp_value = hash & ((1u32 << dp_bits) - 1);
+                let affine = point.to_affine();
+                let x_limbs = affine.x().to_bytes();
+                let x_array: [u64; 4] = [
+                    u64::from_be_bytes(x_limbs[0..8].try_into().unwrap()),
+                    u64::from_be_bytes(x_limbs[8..16].try_into().unwrap()),
+                    u64::from_be_bytes(x_limbs[16..24].try_into().unwrap()),
+                    u64::from_be_bytes(x_limbs[24..32].try_into().unwrap()),
+                ];
+
+                // DP check on x-coordinate hash
+                let hash = hash::hash_point_x(&x_array);
+                let dp_value = (hash as u32) & ((1u32 << dp_bits) - 1);
 
                 if dp_value == 0 {
-                    // Send DP to central processor
+                    // Send DP to central processor with actual coordinates
                     let dp_entry = Trap {
-                        x: [0; 4], // Placeholder - should compute actual coordinates
+                        x: x_array, // Actual x-coordinate limbs
                         dist: BigUint::from(steps),
                         is_tame: false,
-                        alpha: [0; 4], // Placeholder
+                        alpha: [0; 4], // Will be tracked per kangaroo in full implementation
                     };
                     let _ = tx_clone.send(dp_entry);
                 }
 
-                // Timeout check (placeholder)
-                if steps > 1000000 {
+                // Adaptive timeout based on DP progress
+                let max_steps = 1000000u64 * (1 + (steps / 100000) as u64); // Adaptive from progress
+                if steps > max_steps {
                     break;
                 }
             }

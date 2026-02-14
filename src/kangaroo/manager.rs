@@ -27,6 +27,40 @@ use bloomfilter::Bloom;
 use zerocopy::IntoBytes;
 use std::path::Path;
 
+/// Decompress compressed secp256k1 point using Tonelli-Shanks algorithm
+fn decompress_point(x_bytes: &[u8], sign: bool) -> Option<Point> {
+    use k256::FieldElement;
+
+    // Convert x coordinate
+    let x = FieldElement::from_bytes(x_bytes.try_into().ok()?)?;
+
+    // Compute y^2 = x^3 + 7 mod p
+    let x3 = x * x * x;
+    let seven = FieldElement::from(7u64);
+    let y_squared = x3 + seven;
+
+    // Check if y^2 is a quadratic residue (legendre symbol = 1)
+    if y_squared.legendre() != 1 {
+        return None; // Point not on curve
+    }
+
+    // Tonelli-Shanks square root
+    let y = y_squared.sqrt()?;
+
+    // Choose the correct square root based on sign bit
+    let correct_y = if y.is_odd() == sign { y } else { -y };
+
+    // Convert to our Point type
+    let x_bigint = BigInt256::from_bytes_be(&x.to_bytes());
+    let y_bigint = BigInt256::from_bytes_be(&correct_y.to_bytes());
+
+    Some(Point {
+        x: x_bigint.limbs,
+        y: y_bigint.limbs,
+        z: [1, 0, 0, 0], // Affine point
+    })
+}
+
 /// Concise Block: Precompute Small k*G Table for Nearest Adjust
 // struct NearMissTable {
 //     table: Vec<(BigInt256, u64)>, // (k*G.x, k)
@@ -735,10 +769,18 @@ impl KangarooManager {
 
                 // VOW-enhanced Rho on P2PK: parallel processing for 34k targets
                 if self.config.enable_vow_rho_p2pk {
-                    // TODO: Implement proper Point to ProjectivePoint conversion
-                    // self.targets.par_iter().map(|target| {
-                    //     vow_parallel_rho(&target.point.into(), 4, 1.0 / 2f64.powf(24.0))
-                    // }).collect::<Vec<_>>();
+                    // Convert Point to ProjectivePoint for VOW processing
+                    let projective_targets: Vec<k256::ProjectivePoint> = self.targets.par_iter().map(|target| {
+                        // Convert our custom Point to k256 ProjectivePoint
+                        let x = k256::FieldElement::from_bytes(&target.x.to_bytes_be().try_into().unwrap()).unwrap();
+                        let y = k256::FieldElement::from_bytes(&target.y.to_bytes_be().try_into().unwrap()).unwrap();
+                        k256::ProjectivePoint::from(k256::AffinePoint::new(x, y).unwrap())
+                    }).collect();
+
+                    // Run VOW parallel rho on converted targets
+                    let _results: Vec<_> = projective_targets.par_iter().map(|target| {
+                        vow_parallel_rho(target, 4, 1.0 / 2f64.powf(24.0))
+                    }).collect::<Vec<_>>();
                 }
 
                 if x_low == 0 {
@@ -991,16 +1033,15 @@ fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
 
         match hex::decode(line) {
             Ok(bytes) => {
-                // Convert to Point
-                // Assume bytes are compressed pubkey (33 bytes: 0x02/0x03 + 32-byte x)
+                // Convert to Point with proper compressed validation
                 if bytes.len() == 33 {
-                    match k256::PublicKey::from_sec1_bytes(&bytes) {
-                        Ok(public_key) => {
-                            // Convert public key to our custom Point type
-                            // For now, skip this complex conversion and use a placeholder
-                            warn!("Public key parsing not fully implemented yet: {}", line);
-                        }
-                        Err(_) => warn!("Invalid compressed pubkey format: {}", line),
+                    let sign = bytes[0] == 0x03;
+                    let x_bytes = &bytes[1..];
+                    if let Some(point) = decompress_point(x_bytes, sign) {
+                        targets.push(point);
+                        info!("Loaded target #{}: compressed pubkey validated", targets.len());
+                    } else {
+                        warn!("Invalid compressed pubkey - point not on curve: {}", line);
                     }
                 } else {
                     warn!("Invalid compressed pubkey length (expected 33): {}", bytes.len());
