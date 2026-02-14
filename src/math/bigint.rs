@@ -173,6 +173,10 @@ impl BigInt512 {
     }
 
     /// Clone (already implemented via derive, but explicit)
+    /// Create from u64
+    pub fn from_u64(x: u64) -> Self {
+        BigInt512 { limbs: [x, 0, 0, 0, 0, 0, 0, 0] }
+    }
     pub fn clone(&self) -> BigInt512 {
         BigInt512 { limbs: self.limbs }
     }
@@ -186,8 +190,8 @@ impl BigInt512 {
         }
         0
     }
-
     /// Create from u64
+    pub fn from_u64(x: u64) -> Self {
         BigInt512 { limbs: [x, 0, 0, 0, 0, 0, 0, 0] }
     }
 
@@ -230,7 +234,7 @@ impl BigInt512 {
             result[0] as u64, result[1] as u64, result[2] as u64, result[3] as u64,
             result[4] as u64, result[5] as u64, result[6] as u64, result[7] as u64
         ] }
-    }
+}
 
 impl std::ops::Mul for BigInt512 {
     type Output = BigInt512;
