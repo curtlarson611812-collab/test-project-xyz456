@@ -2066,6 +2066,8 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     let mut analysis_results: Vec<(String, BiasAnalysis, f64, bool)> = Vec::new();
     let mut compressed_count = 0;
     let mut uncompressed_count = 0;
+    let mut points = Vec::new();
+    let mut valid_hex_strings = Vec::new();
 
     // PHASE 1: Parse all points first
     println!("🔄 Phase 1: Parsing {} keys...", lines.len());
@@ -2120,8 +2122,28 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
             }
         };
 
-        // Analyze bias with refined approach
-        let analysis = analyze_comprehensive_bias(&point);
+        points.push(point);
+        valid_hex_strings.push(hex_str.clone());
+
+        // Progress indicator for parsing
+        if (i + 1) % 1000 == 0 {
+            println!("📈 Parsed {}/{} keys...", i + 1, lines.len());
+        }
+    }
+
+    println!("✅ Phase 1 Complete: {} valid keys parsed ({} uncompressed, {} compressed)",
+             points.len(), uncompressed_count, compressed_count);
+
+    // PHASE 2: Compute global bias statistics
+    println!("🔬 Phase 2: Computing global chi-squared statistics...");
+    let global_stats = compute_global_bias_stats(&valid_hex_strings, &points);
+    println!("✅ Phase 2 Complete: Global chi-squared statistics computed");
+
+    // PHASE 3: Analyze each key using global statistics
+    println!("🎯 Phase 3: Analyzing per-key statistical deviations...");
+    for (i, (hex_str, point)) in valid_hex_strings.iter().zip(points.iter()).enumerate() {
+        // Analyze bias using global statistical context
+        let analysis = analyze_comprehensive_bias_with_global(point, &global_stats);
         let overall_score = analysis.overall_score();
         let is_high_bias = analysis.is_high_bias();
 
@@ -2130,7 +2152,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
 
         // Progress indicator
         if (i + 1) % 1000 == 0 {
-            println!("📈 Analyzed {}/{} keys...", i + 1, lines.len());
+            println!("📈 Analyzed {}/{} keys...", i + 1, points.len());
         }
     }
 

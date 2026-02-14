@@ -80,34 +80,30 @@ pub fn calculate_adaptive_threshold(scores: &[f64]) -> f64 {
     }
 }
 
-/// Compute aggregate chi-squared deviation for modular arithmetic across all keys
+/// Aggregate chi-squared computation for statistical deviation analysis
 /// Returns normalized chi-squared score [0-1] where 1 = extreme skew from uniform
-pub fn compute_mod_chi_squared(keys: &[String], modulus: u64, bins: usize) -> (f64, Vec<f64>) {
-    let mut bin_counts = vec![0.0; bins];
-    let total_keys = keys.len() as f64;
-    let expected_per_bin = total_keys / bins as f64;
+pub fn aggregate_chi(bins: &[f64], expected_per_bin: f64, total_keys: f64) -> f64 {
+    let chi_squared: f64 = bins.iter()
+        .map(|&count| (count - expected_per_bin).powi(2) / expected_per_bin)
+        .sum();
+    // Normalize by total keys for [0-1] range
+    chi_squared / total_keys
+}
 
-    // Count keys in each bin
+/// Compute bin counts for modular analysis using full BigInt256 precision
+pub fn compute_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> {
+    let mut bins = vec![0.0; num_bins];
     for key in keys {
-        // Use the first 16 hex characters (64 bits) for modular analysis
-        let hex_part = &key.trim()[..key.trim().len().min(16)];
-        if let Ok(x) = u64::from_str_radix(hex_part, 16) {
-            let bin = (x % modulus) as usize;
-            let bin_idx = bin.min(bins - 1);
-            bin_counts[bin_idx] += 1.0;
+        // Parse full 256-bit key for accurate modular arithmetic
+        if let Ok(x) = BigInt256::from_str_radix(key, 16) {
+            let m = BigInt256::from_u64(modulus);
+            let bin_value = (x % m).to_u64().unwrap_or(0);
+            let bin_idx = (bin_value / (modulus / num_bins as u64)) as usize;
+            let safe_idx = bin_idx.min(num_bins - 1);
+            bins[safe_idx] += 1.0;
         }
     }
-
-    // Compute chi-squared statistic
-    let chi_squared: f64 = bin_counts.iter()
-        .map(|&observed| (observed - expected_per_bin).powi(2) / expected_per_bin)
-        .sum();
-
-    // Normalize to [0-1] range (chi_squared / (n^2 / k) for max normalization)
-    let max_chi = total_keys.powi(2) / bins as f64;
-    let normalized_chi = (chi_squared / max_chi).min(1.0);
-
-    (normalized_chi, bin_counts)
+    bins
 }
 
 /// Get per-key modular bias score based on global chi-squared deviation
@@ -120,6 +116,39 @@ pub fn per_key_mod_score(x: u64, global_chi: f64, modulus: u64, bins: usize, bin
     let bin_deviation = (bin_counts[bin_idx] - expected_per_bin).abs() / expected_per_bin;
 
     global_chi * bin_deviation.min(1.0)  // Scale by bin's relative deviation
+}
+
+/// Compute trend penalty for detecting clustering patterns
+/// Returns penalty factor [0-1] where 0 = uniform, 1 = extreme clustering
+pub fn trend_penalty(bins: &[f64], num_bins: usize, trend_type: &str) -> f64 {
+    let total: f64 = bins.iter().sum();
+    if total == 0.0 { return 0.0; }
+
+    match trend_type {
+        "linear" => {
+            // Linear trend: detect if low/high bins are over/under represented
+            let mut weighted_sum = 0.0;
+            for (i, &count) in bins.iter().enumerate() {
+                // Weight by distance from center (linear trend)
+                let distance_from_center = (i as f64 - (num_bins - 1) as f64 / 2.0).abs();
+                let max_distance = (num_bins - 1) as f64 / 2.0;
+                let weight = distance_from_center / max_distance; // [0-1]
+                let expected = total / num_bins as f64;
+                weighted_sum += (count - expected).abs() * weight;
+            }
+            (weighted_sum / total).min(1.0) // Normalize to [0-1]
+        },
+        "quadratic" => {
+            // Quadratic trend: detect variance in distribution
+            let mean = total / num_bins as f64;
+            let variance: f64 = bins.iter()
+                .map(|&count| (count - mean).powi(2))
+                .sum::<f64>() / num_bins as f64;
+            let expected_variance = mean; // Poisson-like expectation
+            (variance / expected_variance).min(2.0) / 2.0 // Normalize to [0-1]
+        },
+        _ => 0.0,
+    }
 }
 
 /// Compute global statistics for z-score normalization
@@ -229,7 +258,7 @@ pub fn trend_penalty(bins: &[f64], num_bins: usize, trend_type: &str) -> f64 {
     }
 }
 
-/// Comprehensive bias analysis with global statistics for proper normalization
+/// Comprehensive bias analysis with global statistical normalization
 /// Uses aggregate chi-squared analysis for accurate modular bias detection
 pub fn analyze_comprehensive_bias_with_global(
     point: &Point,
@@ -244,11 +273,23 @@ pub fn analyze_comprehensive_bias_with_global(
     let golden_bias = z_score_bias(golden_raw, global_stats.golden_mean, global_stats.golden_std);
     let pop_bias = z_score_bias(pop_raw, global_stats.pop_mean, global_stats.pop_std);
 
-    // Calculate chi-squared based modular biases
-    let mod3_bias = calculate_mod3_bias_with_global(point, global_stats.mod3_chi, &global_stats.mod3_bins);
-    let mod9_bias = calculate_mod9_bias_with_global(point, global_stats.mod9_chi, &global_stats.mod9_bins);
-    let mod27_bias = calculate_mod27_bias_with_global(point, global_stats.mod27_chi, &global_stats.mod27_bins);
-    let mod81_bias = calculate_mod81_bias_with_global(point, global_stats.mod81_chi, &global_stats.mod81_bins);
+    // Calculate statistical modular biases using global chi-squared deviation
+    let mod3_bias = calculate_mod3_bias_with_stats(
+        point, global_stats.mod3_chi, &global_stats.mod3_bins,
+        global_stats.mod3_bins.iter().sum::<f64>() / 3.0, 0.0
+    );
+    let mod9_bias = calculate_mod9_bias_with_stats(
+        point, global_stats.mod9_chi, &global_stats.mod9_bins,
+        global_stats.mod9_bins.iter().sum::<f64>() / 9.0, trend_penalty(&global_stats.mod9_bins, 9, "linear")
+    );
+    let mod27_bias = calculate_mod27_bias_with_stats(
+        point, global_stats.mod27_chi, &global_stats.mod27_bins,
+        global_stats.mod27_bins.iter().sum::<f64>() / 27.0, trend_penalty(&global_stats.mod27_bins, 27, "linear")
+    );
+    let mod81_bias = calculate_mod81_bias_with_stats(
+        point, global_stats.mod81_chi, &global_stats.mod81_bins,
+        global_stats.mod81_bins.iter().sum::<f64>() / 81.0, trend_penalty(&global_stats.mod81_bins, 81, "quadratic")
+    );
 
     BiasAnalysis {
         basic_bias,
@@ -305,10 +346,10 @@ pub fn compute_global_bias_stats(keys: &[String], points: &[Point]) -> GlobalBia
     let e27 = keys.len() as f64 / 27.0;
     let e81 = keys.len() as f64 / 81.0;
 
-    let mod3_chi = aggregate_chi(&mod3_bins, e3);
-    let mod9_chi = aggregate_chi(&mod9_bins, e9);
-    let mod27_chi = aggregate_chi(&mod27_bins, e27);
-    let mod81_chi = aggregate_chi(&mod81_bins, e81);
+    let mod3_chi = aggregate_chi(&mod3_bins, e3, keys.len() as f64);
+    let mod9_chi = aggregate_chi(&mod9_bins, e9, keys.len() as f64);
+    let mod27_chi = aggregate_chi(&mod27_bins, e27, keys.len() as f64);
+    let mod81_chi = aggregate_chi(&mod81_bins, e81, keys.len() as f64);
 
     GlobalBiasStats {
         basic_mean,
@@ -429,80 +470,56 @@ pub fn calculate_pop_bias(point: &Point) -> f64 {
     }
 }
 
-/// Calculate modular 3 bias for a point
-/// Use for residue class skew; pros: 3x search reduction; cons: Low granularity
-pub fn calculate_mod3_bias(point: &Point) -> f64 {
-    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+/// Calculate modular 3 bias using statistical deviation from global distribution
+/// Use for residue skew detection; pros: 3x ECDLP reduction; cons: Coarse
+pub fn calculate_mod3_bias_with_stats(point: &Point, global_dev: f64, bins: &[f64], expected: f64, penalty: f64) -> f64 {
     let modulus = BigInt256::from_u64(3);
     let x_mod = point.x.clone() % modulus;
-    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
+    let bin_idx = x_mod.to_u64().unwrap_or(0) as usize;
 
-    // Return bias strength based on residue class
-    match x_mod_u64 {
-        0 => 0.65,  // High bias for mod 3 = 0 (preferred residue)
-        1 => 0.35,  // Low bias for mod 3 = 1
-        2 => 0.45,  // Medium bias for mod 3 = 2
-        _ => 0.50,  // Neutral fallback
-    }
+    let bin_dev = (bins[bin_idx] - expected).abs() / expected;
+    let score = global_dev * (1.0 + bin_dev) + penalty;
+
+    score.min(1.0) // Cap at 1.0
 }
 
-/// Calculate modular 9 bias for a point
-/// Use for mid-bin VOW optimization; pros: 9x faster on biased thirds; cons: Moderate compute
-pub fn calculate_mod9_bias(point: &Point) -> f64 {
-    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+/// Calculate modular 9 bias using statistical deviation with trend penalty
+/// Use for mid-bin VOW; pros: 9x speed on skew; cons: Mod compute
+pub fn calculate_mod9_bias_with_stats(point: &Point, global_dev: f64, bins: &[f64], expected: f64, penalty: f64) -> f64 {
     let modulus = BigInt256::from_u64(9);
     let x_mod = point.x.clone() % modulus;
-    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
+    let bin_idx = (x_mod.to_u64().unwrap_or(0) / 3) as usize; // Group into thirds
 
-    // Bias detection for mod 9 patterns - prefer certain residue classes
-    match x_mod_u64 {
-        0 | 3 | 6 => 0.70,  // High bias for multiples of 3
-        1 | 4 | 7 => 0.30,  // Low bias
-        2 | 5 | 8 => 0.45,  // Medium bias
-        _ => 0.50,           // Neutral fallback
-    }
+    let bin_dev = (bins[bin_idx] - expected).abs() / expected;
+    let score = global_dev * (1.0 + bin_dev) + penalty * 0.2;
+
+    score.min(1.0)
 }
 
-/// Calculate modular 27 bias for a point
-/// Use for deeper Poisson tuning; pros: 27x cut in high-skew; cons: O(n) time
-pub fn calculate_mod27_bias(point: &Point) -> f64 {
-    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+/// Calculate modular 27 bias using statistical deviation with linear penalty
+/// Use for Poisson tuning; pros: 27x cut; cons: O(n) time
+pub fn calculate_mod27_bias_with_stats(point: &Point, global_dev: f64, bins: &[f64], expected: f64, penalty: f64) -> f64 {
     let modulus = BigInt256::from_u64(27);
     let x_mod = point.x.clone() % modulus;
-    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
+    let bin_idx = x_mod.to_u64().unwrap_or(0) as usize;
 
-    // Hierarchical bias detection for mod 27 patterns
-    if x_mod_u64 % 9 == 0 {
-        0.75  // Very high bias for multiples of 9
-    } else if x_mod_u64 % 3 == 0 {
-        0.60  // High bias for multiples of 3
-    } else if x_mod_u64 < 14 {
-        0.40  // Medium-low bias for lower residues
-    } else {
-        0.25  // Low bias for higher residues
-    }
+    let bin_dev = (bins[bin_idx] - expected).abs() / expected;
+    let score = global_dev * (1.0 + bin_dev) + penalty * 0.15;
+
+    score.min(1.0)
 }
 
-/// Calculate modular 81 bias for a point
-/// Use for finest bias exploitation; pros: Up to 81x search cut; cons: Highest compute
-pub fn calculate_mod81_bias(point: &Point) -> f64 {
-    // Use BigInt256 modulo operation for proper full-precision modular arithmetic
+/// Calculate modular 81 bias using statistical deviation with quadratic penalty
+/// Use for fine bias exploit; pros: 81x Rho speed; cons: High compute
+pub fn calculate_mod81_bias_with_stats(point: &Point, global_dev: f64, bins: &[f64], expected: f64, penalty: f64) -> f64 {
     let modulus = BigInt256::from_u64(81);
     let x_mod = point.x.clone() % modulus;
-    let x_mod_u64 = x_mod.to_u64().unwrap_or(0) as usize;
+    let bin_idx = x_mod.to_u64().unwrap_or(0) as usize;
 
-    // Finest granularity bias detection for mod 81 patterns
-    if x_mod_u64 % 27 == 0 {
-        0.80  // Extremely high bias for multiples of 27
-    } else if x_mod_u64 % 9 == 0 {
-        0.65  // High bias for multiples of 9
-    } else if x_mod_u64 % 3 == 0 {
-        0.50  // Medium bias for multiples of 3
-    } else if x_mod_u64 < 41 {
-        0.35  // Low-medium bias for lower residues
-    } else {
-        0.20  // Low bias for higher residues
-    }
+    let bin_dev = (bins[bin_idx] - expected).abs() / expected;
+    let score = global_dev * (1.0 + bin_dev) + penalty * 0.12;
+
+    score.min(1.0)
 }
 
 /// Comprehensive bias analysis combining all methods
