@@ -244,7 +244,7 @@ fn test_lll_glv_with_puzzle() {
     };
     
     // Test scalar from known puzzle (e.g., #64)
-    let puzzle_scalar = k256::Scalar::from(0x123456789ABCDEF0); // Placeholder
+    let puzzle_scalar = k256::Scalar::from(0x123456789ABCDEF0u64); // Placeholder
     
     // Decompose with LLL-reduced basis
     let (coeffs, signs) = crate::math::constants::glv4_decompose_babai(&puzzle_scalar);
@@ -272,7 +272,7 @@ const DIM: usize = 4;
 fn lll_potential(b_star: &[[BigInt256; DIM]; DIM]) -> BigInt256 {
     let mut phi = BigInt256::one();
     for i in 0..DIM {
-        phi = phi * norm_squared(&b_star[i]).pow(DIM - i);
+        phi = phi * norm_squared(&b_star[i]).pow((DIM - i) as u32);
     }
     phi
 }
@@ -310,7 +310,7 @@ fn compute_gs(basis: &[[BigInt256; DIM]; DIM]) -> ([[BigInt256; DIM]; DIM], [[Bi
         for j in 0..i {
             mu[i][j] = BigInt256::one(); // Simplified for test
             for d in 0..DIM {
-                b_star[i][d] = b_star[i][d] - mu[i][j].clone() * b_star[j][d];
+                b_star[i][d] = b_star[i][d].clone() - mu[i][j].clone() * b_star[j][d].clone();
             }
         }
     }
@@ -320,7 +320,7 @@ fn compute_gs(basis: &[[BigInt256; DIM]; DIM]) -> ([[BigInt256; DIM]; DIM], [[Bi
 fn dot(a: &[BigInt256; DIM], b: &[BigInt256; DIM]) -> BigInt256 {
     let mut sum = BigInt256::zero();
     for i in 0..DIM {
-        sum = sum + a[i] * b[i];
+        sum = sum + a[i].clone() * b[i].clone();
     }
     sum
 }
@@ -353,7 +353,7 @@ fn test_rho_with_lll_proofs() {
     if config.enable_rho_parallel {
         let result = parallel_rho(&dummy_pubkey, 2);
         // Verify rho completes without panic
-        assert_eq!(result, Scalar::ZERO); // Placeholder assertion
+        assert_eq!(result, KScalar::ZERO); // Placeholder assertion
     }
 }
 
@@ -398,7 +398,7 @@ fn test_babai_fermat_vow_integration() {
     
     if config.enable_fermat_ecdlp {
         let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
-        assert_eq!(diff, k256::Scalar::from(2));
+        assert_eq!(diff, k256::Scalar::from(2u64));
     }
     
     if config.enable_vow_rho_p2pk {
@@ -429,13 +429,13 @@ fn cuda_vulkan_integration_test() {
     
     if config.enable_fermat_ecdlp {
         let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
-        assert_eq!(diff, k256::Scalar::from(2));
+        assert_eq!(diff, k256::Scalar::from(2u64));
     }
     
     if config.enable_vow_rho_p2pk {
         let dummy_pubkey = k256::ProjectivePoint::GENERATOR; let result = crate::kangaroo::manager::vow_rho_p2pk(&vec![dummy_pubkey]);
         // Placeholder assertion for build verification
-        assert_eq!(result.len(), 1);
+        assert_eq!(result, KScalar::ZERO);
     }
 }
 

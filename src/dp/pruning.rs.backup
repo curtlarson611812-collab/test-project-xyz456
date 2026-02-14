@@ -363,17 +363,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[tokio::test]
     async fn test_dp_pruning_cluster_based() {
         let dp_table = Arc::new(Mutex::new(DpTable::new(24)));
         let pruner = DpPruning::new(dp_table.clone(), 0.8, 100);
 
-        // Fill table with clustered entries
-        {
-            let mut table = dp_table.lock().await;
-            for i in 0..500 {
-                let hash = i as u64;
-                let cluster_id = if i < 50 { 0 } else { (i / 50) as u32 }; // Small cluster vs larger ones
                 let point = crate::types::Point {
                     x: [hash, 0, 0, cluster_id as u64],
                     y: [hash + 1, 0, 0, 0],
@@ -392,7 +385,12 @@ mod tests {
                 );
                 let entry = crate::types::DpEntry::new(point, state, hash, cluster_id);
                 table.add_dp_async(entry).await.unwrap();
-            }
+                    i as u64,
+                    0, // step
+                    0, // kangaroo_type
+                );
+                let entry = crate::types::DpEntry::new(point, state, hash, cluster_id);
+                table.add_dp_async(entry).await.unwrap();
         }
 
         // Prune clusters
@@ -401,4 +399,4 @@ mod tests {
         // Should have removed some entries from small clusters
         // May be 0 if clustering doesn't identify clear outliers
     }
-    }
+}
