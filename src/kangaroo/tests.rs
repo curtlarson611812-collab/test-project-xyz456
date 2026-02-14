@@ -183,8 +183,9 @@ mod tests {
             true,   // is_tame
             false,  // is_dp
             0,      // id
+            0,      // step
+            0,      // kangaroo_type
         );
-
         let stepper = KangarooStepper::new(false);
         let new_tame_state = stepper.step_kangaroo_with_bias(&tame_state, None, 81);
 
@@ -193,7 +194,6 @@ mod tests {
         // Distance comparison for BigInt256 - check if greater than zero
         assert!(!new_tame_state.distance.is_zero());
 
-        // Test wild kangaroo step
         let wild_state = KangarooState::new(
             curve.g.clone(),
             BigInt256::zero(),   // distance as BigInt256
@@ -202,6 +202,8 @@ mod tests {
             false,  // is_tame
             false,  // is_dp
             1,      // id
+            0,      // step
+            0,      // kangaroo_type
         );
 
         let new_wild_state = stepper.step_kangaroo_with_bias(&wild_state, Some(&curve.g), 81);

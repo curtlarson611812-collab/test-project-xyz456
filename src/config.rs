@@ -218,6 +218,21 @@ pub struct Config {
     /// Enable VOW parallel method
     #[clap(long, default_value_t = false)]
     pub enable_vow_parallel: bool,
+    /// Enable LLL proof simulation
+    #[clap(long, default_value_t = false)]
+    pub enable_lll_proof_sim: bool,
+
+    /// Enable Babai proof simulation
+    #[clap(long, default_value_t = false)]
+    pub enable_babai_proof_sim: bool,
+
+    /// Enable Babai multi simulation
+    #[clap(long, default_value_t = false)]
+    pub enable_babai_multi_sim: bool,
+
+    /// Enable Fermat ECDLP
+    #[clap(long, default_value_t = false)]
+    pub enable_fermat_ecdlp: bool,
 
     /// GPU backend to use
     #[arg(long, default_value = "hybrid")]
@@ -258,6 +273,10 @@ impl Default for Config {
             mode: SearchMode::FullRange,
             p2pk_file: "valuable_p2pk_pubkeys.txt".into(),
             puzzles_file: "puzzles.txt".into(),
+            enable_lll_proof_sim: false,
+            enable_babai_proof_sim: false,
+            enable_babai_multi_sim: false,
+            enable_fermat_ecdlp: false,
             puzzle_mode: false,
             test_mode: false,
             dp_bits: 24,

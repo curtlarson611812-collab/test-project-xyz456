@@ -349,7 +349,8 @@ mod tests {
             [0; 4], // beta
             true,   // tame
             false,  // is_dp
-            0,                       // id
+            0,      // step
+            0,      // kangaroo_type
         );
 
         let stepped = stepper.step_kangaroo(&kangaroo, None);
