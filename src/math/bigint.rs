@@ -229,6 +229,7 @@ impl BigInt512 {
         // Return only the lower 8 limbs (512 bits) - higher limbs discarded for BigInt512
         BigInt512 { limbs: [
             result[0] as u64, result[1] as u64, result[2] as u64, result[3] as u64,
+            result[4] as u64, result[5] as u64, result[6] as u64, result[7] as u64,
         ] }
     }
 }
