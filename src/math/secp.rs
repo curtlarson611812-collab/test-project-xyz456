@@ -1022,7 +1022,7 @@ impl Secp256k1 {
     }
 
     /// Modular inverse approximation for scalars
-    fn mod_inverse_scalar(_s: &BigInt256) -> BigInt256 {/g
+    fn mod_inverse_scalar(_s: &BigInt256) -> BigInt256 {
         // Simplified inverse for approximation - in practice use proper modular inverse
         BigInt256::from_u64(1) // Placeholder
     }

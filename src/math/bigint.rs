@@ -63,7 +63,7 @@ impl BigInt512 {
         if other_high == BigInt256::zero() {
             // Divisor fits in 256 bits, do 256-bit division on high parts
             let (quotient, remainder_256) = self_high.div_rem(&BigInt256 { limbs: other.limbs[0..4].try_into().unwrap() });
-            let mut remainder = BigInt512::zero();
+            let mut remainder = Self::zero();
             remainder.limbs[0..4].copy_from_slice(&remainder_256.limbs);
             (quotient, remainder)
         } else {
@@ -71,7 +71,7 @@ impl BigInt512 {
             // This is a simplified case for GLV - in practice we'd need full 512-bit division
             let (quotient, _) = self_high.div_rem(&other_high);
             // Remainder approximation - not perfect but sufficient for GLV ranges
-            let remainder = BigInt512::zero();
+            let remainder = Self::zero();
             (quotient, remainder)
         }
     }
@@ -188,11 +188,6 @@ impl BigInt512 {
     }
 
     /// Create from u64
-    pub fn from_u64(x: u64) -> Self {
-    /// Create BigInt256 with maximum value (all bits set)
-    pub fn max_value() -> Self {
-        BigInt256 { limbs: [u64::MAX, u64::MAX, u64::MAX, u64::MAX] }
-    }
         BigInt512 { limbs: [x, 0, 0, 0, 0, 0, 0, 0] }
     }
 
@@ -236,7 +231,6 @@ impl BigInt512 {
             result[4] as u64, result[5] as u64, result[6] as u64, result[7] as u64
         ] }
     }
-}
 
 impl std::ops::Mul for BigInt512 {
     type Output = BigInt512;
@@ -331,11 +325,11 @@ impl BigInt256 {
     }
 
     /// Create from u64
-    pub fn from_u64(x: u64) -> Self {
     /// Create BigInt256 with maximum value (all bits set)
     pub fn max_value() -> Self {
         BigInt256 { limbs: [u64::MAX, u64::MAX, u64::MAX, u64::MAX] }
     }
+    pub fn from_u64(x: u64) -> Self {
         BigInt256 { limbs: [x, 0, 0, 0] }
     }
 
