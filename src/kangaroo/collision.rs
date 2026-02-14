@@ -37,15 +37,15 @@ pub struct CollisionWithDist {
 /// Mathematical basis: Uniform distribution over jump table for pseudo-random walk
 /// Security: Fast, deterministic hashing for jump selection
 fn hash_to_jump_index(point: &ProjectivePoint) -> usize {
-    // Simple hash based on x-coordinate for jump selection
-    let affine = point.to_affine();
-    let x_coord = affine.x();
-    let x_slice = x_coord.as_slice();
-    let hash_val = x_slice.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
-    (hash_val as usize) % JUMP_TABLE.len()
+    let encoded = point.to_encoded_point(false);
+    if let Some(x) = encoded.x() {
+        let x_bytes = x.as_slice();
+        let hash_val = x_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+        (hash_val as usize) % JUMP_TABLE.len()
+    } else {
+        0
+    }
 }
-
-/// Perform one step of Pollard Rho walk with full EC arithmetic
 /// Mathematical correctness: P' = P + J where J ∈ {G * 2^i} (group law associativity)
 /// Performance: O(1) per step with precomputed jumps
 /// Security: Constant-time addition via k256
@@ -1281,7 +1281,7 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
                 // DP condition: hash(x) ≡ 0 mod 2^dp_bits
                 // Expected DP rate: 2^(-dp_bits) ≈ 1 in 2^24 for dp_bits=24
                 let dp_bits = (1.0 / theta).log2() as u32;
-                let affine = point.to_affine();
+                let encoded = point.to_encoded_point(false);
 
                 // Convert affine x-coordinate to limbs for GPU compatibility
                 // Mathematical: x ∈ F_p represented as 4×64-bit limbs (little-endian)

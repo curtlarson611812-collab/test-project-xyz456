@@ -5,9 +5,7 @@
 use crate::types::Point;
 use crate::math::bigint::BigInt256;
 use std::sync::LazyLock;
-use k256::elliptic_curve::point::AffineCoordinates;
 
-#[allow(unused_imports, unused_variables, dead_code)]
 
 // Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
 // From ./SmallOddPrime_Precise_code.rs — locked, no adjustments.
@@ -136,10 +134,10 @@ pub static JUMP_TABLE_NEG: LazyLock<Vec<k256::ProjectivePoint>> = LazyLock::new(
 // Simple hash function for walk-back jump selection
 // Mathematical basis: Deterministic pseudo-random selection for path reconstruction
 // Performance: Fast murmur3 hash for O(1) lookup
-pub fn hash_to_index(point: &k256::ProjectivePoint) -> usize {
-    let x_coord = point.to_affine().x();
-    let x_slice = x_coord.as_slice();
-    let hash_val = x_slice.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+pub fn hash_to_index(point: &Point) -> usize {
+    // Simple hash based on x-coordinate for jump selection
+    let x_bytes = unsafe { std::slice::from_raw_parts(point.x.as_ptr() as *const u8, 32) };
+    let hash_val = x_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
     (hash_val as usize) % JUMP_TABLE.len()
 }
 
@@ -179,7 +177,6 @@ pub const GLV_WINDOW_SIZE: usize = 4;
 // These constants enable ~30-50% speedup in scalar multiplication via lattice decomposition
 
 use k256::Scalar;
-use subtle::Choice;
 
 /// GLV lambda scalar: root of x^2 + x + 1 = 0 mod n (order of secp256k1)
 /// lambda satisfies lambda^3 ≡ 1 mod n, lambda ≠ 1

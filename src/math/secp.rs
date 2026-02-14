@@ -16,7 +16,6 @@ use log::info;
 use k256;
 use k256::elliptic_curve::sec1::{ToEncodedPoint, FromEncodedPoint};
 
-#[allow(unused_variables, dead_code, unused_imports)]
 
 
 impl Secp256k1 {

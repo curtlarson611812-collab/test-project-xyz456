@@ -26,12 +26,12 @@ fn main() {
     ];
 
     // Generate GOLD cluster primes (mod81 == 0) - fixed size fallback
-    let gold_primes: Vec<u64> = primes.iter().filter(|&&p| p % 81 == 0).cloned().collect();
+    let gold_primes: Vec<u64> = primes.iter().filter(|&&p| p % 81 == 0).copied().collect();
     let gold_array = if gold_primes.len() >= 4 {
         format!("[{}, {}, {}, {}]", gold_primes[0], gold_primes[1], gold_primes[2], gold_primes[3])
     } else {
         // Use primes that are at least mod27==0 as fallback
-        let fallback: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).take(4).cloned().collect();
+        let fallback: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).take(4).copied().collect();
         if fallback.len() >= 4 {
             format!("[{}, {}, {}, {}]", fallback[0], fallback[1], fallback[2], fallback[3])
         } else {
@@ -41,7 +41,7 @@ fn main() {
     };
 
     // Generate secondary primes (mod27 == 0) for fallback - fixed 8 elements
-    let secondary_primes: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).cloned().collect();
+    let secondary_primes: Vec<u64> = primes.iter().filter(|&&p| p % 27 == 0).copied().collect();
     let secondary_array = if secondary_primes.len() >= 8 {
         format!("[{}, {}, {}, {}, {}, {}, {}, {}]",
                 secondary_primes[0], secondary_primes[1], secondary_primes[2], secondary_primes[3],
@@ -69,8 +69,8 @@ pub const SECONDARY_PRIMES: [u64; 8] = {};
     validate_vulkan_shaders();
 
     match std::fs::write(&dest_path, &output) {
-        Ok(_) => println!("Generated prime constants at {:?}", dest_path),
-        Err(e) => eprintln!("Error writing to {:?}: {}", dest_path, e),
+        Ok(_) => println!("Generated prime constants at {dest_path:?}"),
+        Err(e) => eprintln!("Error writing to {dest_path:?}: {e}"),
     }
 }
 
@@ -79,7 +79,7 @@ fn compile_cuda_kernels() {
     println!("cargo:warning=Starting CUDA kernel compilation with enhanced debugging...");
 
     let cuda_path = std::env::var("CUDA_HOME").unwrap_or("/usr/local/cuda".to_string());
-    println!("cargo:rustc-env=CUDA_HOME={}", cuda_path);
+    println!("cargo:rustc-env=CUDA_HOME={cuda_path}");
     println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
     println!("cargo:rustc-link-lib=cudart");
     println!("cargo:rustc-link-lib=cublas");
@@ -97,7 +97,7 @@ fn compile_cuda_kernels() {
             }
         }
     } else {
-        println!("cargo:warning=nvcc found at: {}", nvcc_path);
+        println!("cargo:warning=nvcc found at: {nvcc_path}");
     }
 
     let mut builder = cc::Build::new();
