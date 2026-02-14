@@ -1010,7 +1010,7 @@ impl Secp256k1 {
     }
 
     /// Scalar dot product approximation
-    fn scalar_dot(&self, a: &k256::Scalar, b: &k256::Scalar) -> BigInt256 {
+    fn scalar_dot(&self, _a: &k256::Scalar, _b: &k256::Scalar) -> BigInt256 {
         let a_big = BigInt256::zero();
         let b_big = BigInt256::zero();
         self.barrett_p.mul(&a_big, &b_big)
@@ -1022,7 +1022,7 @@ impl Secp256k1 {
     }
 
     /// Modular inverse approximation for scalars
-    fn mod_inverse_scalar(s: &BigInt256) -> BigInt256 {
+    fn mod_inverse_scalar(_s: &BigInt256) -> BigInt256 {/g
         // Simplified inverse for approximation - in practice use proper modular inverse
         BigInt256::from_u64(1) // Placeholder
     }

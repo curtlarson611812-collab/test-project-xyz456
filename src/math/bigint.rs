@@ -1,5 +1,4 @@
 //! Custom 256-bit integer helpers
-//!
 //! Custom 256-bit integer helpers if k256 insufficient for GPU interop
 
 use std::fmt;
@@ -190,6 +189,10 @@ impl BigInt512 {
 
     /// Create from u64
     pub fn from_u64(x: u64) -> Self {
+    /// Create BigInt256 with maximum value (all bits set)
+    pub fn max_value() -> Self {
+        BigInt256 { limbs: [u64::MAX, u64::MAX, u64::MAX, u64::MAX] }
+    }
         BigInt512 { limbs: [x, 0, 0, 0, 0, 0, 0, 0] }
     }
 
@@ -329,6 +332,10 @@ impl BigInt256 {
 
     /// Create from u64
     pub fn from_u64(x: u64) -> Self {
+    /// Create BigInt256 with maximum value (all bits set)
+    pub fn max_value() -> Self {
+        BigInt256 { limbs: [u64::MAX, u64::MAX, u64::MAX, u64::MAX] }
+    }
         BigInt256 { limbs: [x, 0, 0, 0] }
     }
 
@@ -1646,10 +1653,10 @@ mod tests {
     /// Usefulness: Verifies high-bit arithmetic for #145-sized numbers
     #[test]
     fn test_mul_large() {
-        let a = SECP_ORDER - BigInt256::one();
+        let a = CURVE_ORDER_BIGINT - BigInt256::one();
         let b = BigInt256::from_u64(2);
-        let expected = (SECP_ORDER - BigInt256::from_u64(2)) % SECP_ORDER;
-        assert_eq!((a * b) % SECP_ORDER, expected);
+        let expected = (CURVE_ORDER_BIGINT - BigInt256::from_u64(2)) % CURVE_ORDER_BIGINT;
+        assert_eq!((a * b) % CURVE_ORDER_BIGINT, expected);
     }
 
     /// Edge case multiplication tests
@@ -1658,7 +1665,7 @@ mod tests {
     #[test]
     fn test_mul_edge() {
         assert_eq!(BigInt256::zero() * BigInt256::max_value(), BigInt256::zero());
-        assert_eq!(BigInt256::one() * SECP_ORDER, SECP_ORDER);
+        assert_eq!(BigInt256::one() * CURVE_ORDER_BIGINT, CURVE_ORDER_BIGINT);
     }
 
     #[test]

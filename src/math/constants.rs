@@ -370,7 +370,7 @@ fn div_round(a: &BigInt256, b: &BigInt256) -> BigInt256 {
 // LLL Helper Functions
 
 // 4D dot product for BigInt256 vectors
-fn dot_4d(a: &[BigInt256; 4], b: &[BigInt256; 4]) -> BigInt256 {
+fn dot_4d(_a: &[BigInt256; 4], _b: &[BigInt256; 4]) -> BigInt256 {
     let mut sum = BigInt256::zero();
     for i in 0..4 {
         // Placeholder: should multiply a[i] * b[i] and add to sum
@@ -576,7 +576,7 @@ static LLL_DELTA: LazyLock<BigInt256> = LazyLock::new(|| {
 
 // Core LLL Reduction Algorithm
 // Lenstra-Lenstra-Lovasz polynomial-time lattice reduction
-pub fn lll_reduce(basis: &mut [[BigInt256; DIM]; DIM], delta: &BigInt256) {
+pub fn lll_reduce(_basis: fn lll_reduce(basis: &mut [[BigInt256; DIM]; DIM], delta: &BigInt256)mut [[BigInt256; DIM]; DIM], _delta: fn lll_reduce(basis: &mut [[BigInt256; DIM]; DIM], delta: &BigInt256)BigInt256) {
     let mut b_star = [
         [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
         [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],

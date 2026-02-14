@@ -243,7 +243,7 @@ mod tests {
         let prime = 2u64; // Even, non-co-prime to n (n odd)
         let d_tame = BigInt256::zero();
         let d_wild = BigInt256::zero();
-        let n = &CURVE_ORDER_BIGINT;
+        let _n = let n = &CURVE_ORDER_BIGINT;CURVE_ORDER_BIGINT;
         let detector = CollisionDetector::new();
         let k = detector.solve_collision_inversion(prime, d_tame, d_wild, &CURVE_ORDER_BIGINT);
         assert!(k.is_none()); // Fails inv

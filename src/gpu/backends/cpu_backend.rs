@@ -90,7 +90,7 @@ impl CpuBackend {
     /// Simplified point doubling for GLV precomputation (placeholder)
     pub fn point_double(point: &[[u32;8];3]) -> Result<[[u32;8];3]> {
         // Simplified doubling - real implementation needs full EC arithmetic
-        let mut result = point.clone();
+        let result = point.clone();
         // For now, just return the input point (parity stub)
         Ok(result)
     }
@@ -580,7 +580,7 @@ impl GpuBackend for CpuBackend {
 /// Simplified point doubling for GLV precomputation (placeholder)
 fn point_double(point: &[[u32;8];3]) -> Result<[[u32;8];3]> {
     // Simplified doubling - real implementation needs full EC arithmetic
-    let mut result = point.clone();
+    let result = point.clone();
     // For now, just return the input point (parity stub)
     Ok(result)
 }

@@ -1,4 +1,6 @@
 #[cfg(test)]
+use crate::math::BigInt256;
+use crate::math::constants::lll_reduce;
 mod tests {
     use crate::math::bigint::MontgomeryReducer;
     use crate::math::secp::Secp256k1;
@@ -236,15 +238,15 @@ fn test_lll_glv_with_puzzle() {
     };
     
     // Test scalar from known puzzle (e.g., #64)
-    let puzzle_scalar = crate::Scalar::from_u64(0x123456789ABCDEF0); // Placeholder
+    let puzzle_scalar = k256::Scalar::from_u64(0x123456789ABCDEF0); // Placeholder
     
     // Decompose with LLL-reduced basis
     let (coeffs, signs) = crate::math::constants::glv4_decompose_babai(&puzzle_scalar);
     
     // Reconstruct and verify
     let lambda = crate::math::constants::glv_lambda_scalar();
-    let mut reconstructed = crate::Scalar::ZERO;
-    let powers = [crate::Scalar::ONE, lambda, lambda * lambda, lambda * lambda * lambda];
+    let mut reconstructed = k256::Scalar::ZERO;
+    let powers = [k256::Scalar::ONE, lambda, lambda * lambda, lambda * lambda * lambda];
     
     for i in 0..config.glv_dim {
         let term = coeffs[i] * powers[i];
