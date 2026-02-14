@@ -201,7 +201,7 @@ mod tests {
 
         // Test small scalar: 3 * G
         let k = BigInt256::from_u64(3);
-        let result_opt = curve.mul_glv_opt(&k, &curve.g);
+        let result_opt = curve.mul_glv_opt(&curve.g, &k);
         let result_naive = curve.mul(&k, &curve.g);
 
         // Both should give same result
@@ -210,7 +210,7 @@ mod tests {
 
         // Test larger scalar
         let k_large = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0").expect("Invalid hex");
-        let result_opt_large = curve.mul_glv_opt(&k_large, &curve.g);
+        let result_opt_large = curve.mul_glv_opt(&curve.g, &k_large);
         let result_naive_large = curve.mul(&k_large, &curve.g);
 
         assert_eq!(result_opt_large.x, result_naive_large.x);
@@ -218,12 +218,12 @@ mod tests {
 
         // Test zero
         let k_zero = BigInt256::zero();
-        let result_zero = curve.mul_glv_opt(&k_zero, &curve.g);
+        let result_zero = curve.mul_glv_opt(&curve.g, &k_zero);
         assert!(result_zero.is_infinity());
 
         // Test infinity point
         let inf_point = crate::types::Point::infinity();
-        let result_inf = curve.mul_glv_opt(&k, &inf_point);
+        let result_inf = curve.mul_glv_opt(&inf_point, &k);
         assert!(result_inf.is_infinity());
 
         println!("GLV optimized multiplication test passed ✓");
@@ -239,7 +239,7 @@ fn test_lll_glv_with_puzzle() {
     };
     
     // Test scalar from known puzzle (e.g., #64)
-    let puzzle_scalar = k256::Scalar::from_u64(0x123456789ABCDEF0); // Placeholder
+    let puzzle_scalar = k256::Scalar::from(0x123456789ABCDEF0); // Placeholder
     
     // Decompose with LLL-reduced basis
     let (coeffs, signs) = crate::math::constants::glv4_decompose_babai(&puzzle_scalar);
@@ -389,11 +389,11 @@ fn test_babai_fermat_vow_integration() {
     }
     
     let dummy_p = k256::ProjectivePoint::GENERATOR;
-    let dummy_q = dummy_p * k256::Scalar::from_u64(2);
+    let dummy_q = dummy_p * k256::Scalar::from(2);
     
     if config.enable_fermat_ecdlp {
         let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
-        assert_eq!(diff, k256::Scalar::from_u64(2));
+        assert_eq!(diff, k256::Scalar::from(2));
     }
     
     if config.enable_vow_rho_p2pk {
@@ -420,11 +420,11 @@ fn cuda_vulkan_integration_test() {
     }
     
     let dummy_p = k256::ProjectivePoint::GENERATOR;
-    let dummy_q = dummy_p * k256::Scalar::from_u64(2);
+    let dummy_q = dummy_p * k256::Scalar::from(2);
     
     if config.enable_fermat_ecdlp {
         let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
-        assert_eq!(diff, k256::Scalar::from_u64(2));
+        assert_eq!(diff, k256::Scalar::from(2));
     }
     
     if config.enable_vow_rho_p2pk {

@@ -136,7 +136,7 @@ pub static JUMP_TABLE_NEG: LazyLock<Vec<k256::ProjectivePoint>> = LazyLock::new(
 // Performance: Fast murmur3 hash for O(1) lookup
 pub fn hash_to_index(point: &Point) -> usize {
     // Simple hash based on x-coordinate for jump selection
-    let x_bytes = unsafe { std::slice::from_raw_parts(point.x.as_ptr() as *const u8, 32) };
+    let x_bytes = bytemuck::cast_slice(&point.x);
     let hash_val = x_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
     (hash_val as usize) % JUMP_TABLE.len()
 }

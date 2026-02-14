@@ -203,6 +203,21 @@ pub struct Config {
     /// Log level
     #[arg(long, default_value = "info")]
     pub log_level: String,
+    /// GLV dimension for endomorphism optimization
+    #[clap(long, default_value_t = 2)]
+    pub glv_dim: u32,
+
+    /// Enable LLL lattice reduction
+    #[clap(long, default_value_t = false)]
+    pub enable_lll_reduction: bool,
+
+    /// Enable parallel rho method
+    #[clap(long, default_value_t = false)]
+    pub enable_rho_parallel: bool,
+
+    /// Enable VOW parallel method
+    #[clap(long, default_value_t = false)]
+    pub enable_vow_parallel: bool,
 
     /// GPU backend to use
     #[arg(long, default_value = "hybrid")]
@@ -254,6 +269,10 @@ impl Default for Config {
             enable_multi_herd_merge: false,
             enable_dp_feedback: false,
             near_g_thresh: 1048576,
+            glv_dim: 2,
+            enable_lll_reduction: false,
+            enable_rho_parallel: false,
+            enable_vow_parallel: false,
             max_ops: 1000000000000,
             wild_primes: vec![179, 257, 347, 461, 577, 691, 797, 919],
             prime_spacing_with_entropy: false,

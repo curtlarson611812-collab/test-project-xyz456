@@ -316,6 +316,9 @@ pub struct KangarooState {
     pub id: u64,
     /// Current step count for initialization and checking
     pub step: u64,
+    /// Kangaroo type (0=wild, 1=tame, etc.)
+    pub kangaroo_type: u32,
+    pub step: u64,
     /// Kangaroo type (0 = tame, 1 = wild) to match CUDA
     pub kangaroo_type: u32,
 }

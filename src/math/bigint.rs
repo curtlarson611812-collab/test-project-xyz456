@@ -15,7 +15,7 @@ pub trait OverflowingAdd<Rhs = Self> {
 }
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct BigInt256 {
     /// Limbs in little-endian order (limb[0] is least significant)
     pub limbs: [u64; 4],
@@ -779,6 +779,20 @@ impl std::ops::AddAssign<&BigInt256> for BigInt256 {
     }
 }
 
+impl num_traits::Pow<u32> for BigInt256 {
+    type Output = BigInt256;
+    fn pow(self, exp: u32) -> Self::Output {
+        let mut res = BigInt256::one();
+        let mut base = self;
+        let mut e = exp;
+        while e > 0 {
+            if e & 1 == 1 { res = res * base; }
+            base = base * base;
+            e >>= 1;
+        }
+        res
+    }
+}
 impl BigInt256 {
     /// Count trailing zeros in the binary representation
     pub fn trailing_zeros(&self) -> u32 {
