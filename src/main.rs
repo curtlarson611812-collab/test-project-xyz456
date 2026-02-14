@@ -2063,11 +2063,12 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     info!("📊 Analyzing {} valuable P2PK keys", lines.len());
 
     let curve = Secp256k1::new();
-    let mut analysis_results = Vec::new();
+    let mut analysis_results: Vec<(String, BiasAnalysis, f64, bool)> = Vec::new();
     let mut compressed_count = 0;
     let mut uncompressed_count = 0;
 
-    // Analyze each key with refined bias detection
+    // PHASE 1: Parse all points first
+    println!("🔄 Phase 1: Parsing {} keys...", lines.len());
     for (i, hex_str) in lines.iter().enumerate() {
         // Parse pubkey
         let point = match hex::decode(hex_str) {
@@ -2120,7 +2121,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
         };
 
         // Analyze bias with refined approach
-        let analysis = analyze_comprehensive_bias_with_global(&point, &global_stats);
+        let analysis = analyze_comprehensive_bias(&point);
         let overall_score = analysis.overall_score();
         let is_high_bias = analysis.is_high_bias();
 
@@ -2139,23 +2140,23 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     // Sort by bias score (highest first)
     analysis_results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
 
-    // Calculate final statistics and adaptive threshold
+    // Calculate final statistics
     let scores: Vec<f64> = analysis_results.iter().map(|(_, _, score, _)| *score).collect();
-    let adaptive_threshold = calculate_adaptive_threshold(&scores);
+    let mean_score = scores.iter().sum::<f64>() / scores.len() as f64;
+    let variance = scores.iter().map(|&s| (s - mean_score).powi(2)).sum::<f64>() / scores.len() as f64;
+    let std_score = variance.sqrt();
+
+    // Use adaptive threshold based on score distribution
+    let adaptive_threshold = mean_score + 1.5 * std_score;
     let actual_threshold = args.bias_threshold.unwrap_or(adaptive_threshold);
 
-    // Re-evaluate high bias keys with the actual threshold
+    // Filter high-bias keys
     let mut high_bias_keys = Vec::new();
     for (hex_str, analysis, score, _) in &analysis_results {
         if *score > actual_threshold {
             high_bias_keys.push(hex_str.clone());
         }
     }
-
-    // Calculate statistics
-    let mean_score = scores.iter().sum::<f64>() / scores.len() as f64;
-    let variance = scores.iter().map(|&s| (s - mean_score).powi(2)).sum::<f64>() / scores.len() as f64;
-    let std_score = variance.sqrt();
 
     println!("🎯 Analysis Complete (Refined Approach):");
     println!("├─ Total keys analyzed: {}", analysis_results.len());

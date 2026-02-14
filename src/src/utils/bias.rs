@@ -159,19 +159,19 @@ pub fn aggregate_chi(counts: &[f64], expected_per_bin: f64) -> f64 {
     chi_squared / total_keys
 }
 
-/// Compute modular bins for statistical analysis (Big Brother's mod_bins function)
-pub fn mod_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> {
-    let mut bins = vec![0.0; num_bins];
-    for key in keys {
-        let hex_sample = &key.trim()[..key.trim().len().min(16)];
-        if let Ok(x) = u64::from_str_radix(hex_sample, 16) {
-            let bin = ((x % modulus) as usize * num_bins) / modulus as usize;
-            let bin_idx = bin.min(num_bins - 1);
-            bins[bin_idx] += 1.0;
-        }
-    }
-    bins
-}
+// /// Compute modular bins for statistical analysis (Big Brother's mod_bins function)
+// pub fn mod_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> {
+//     let mut bins = vec![0.0; num_bins];
+//     for key in keys {
+//         let hex_sample = &key.trim()[..key.trim().len().min(16)];
+//         if let Ok(x) = u64::from_str_radix(hex_sample, 16) {
+//             let bin = ((x % modulus) as usize * num_bins) / modulus as usize;
+//             let bin_idx = bin.min(num_bins - 1);
+//             bins[bin_idx] += 1.0;
+//         }
+//     }
+//     bins
+// }
 
 /// Count keys into modular bins for statistical analysis
 pub fn compute_modular_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> {
