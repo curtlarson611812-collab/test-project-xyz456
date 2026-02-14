@@ -162,23 +162,20 @@ mod tests {
     #[cfg(feature = "wgpu")]
     #[test]
     fn test_vulkan_kangaroo_step() {
-        use crate::gpu::backends::hybrid_backend::HybridBackend;
         use crate::kangaroo::stepper::KangarooStepper;
         use crate::types::KangarooState;
 
         let hybrid = HybridBackend::new().unwrap();
-        let mut stepper = KangarooStepper::new(false);
-
         // Create mock wild kangaroo states
         let secp = Secp256k1::new();
         let target = secp.g.clone();
+        let wild_states = vec![
             KangarooState::new(
                 secp.g.clone(),
                 BigInt256::zero(),
                 [0; 4], [0; 4],
                 false, false, 0,
                 0, 0
-            )
             )
         ];
 
@@ -279,6 +276,7 @@ mod tests {
             0,
             0, // step
             0, // kangaroo_type
+        );
         let wild_state = crate::types::KangarooState::new(
             curve.g.clone(),
             BigInt256::zero(),
@@ -286,14 +284,10 @@ mod tests {
             [0; 4],
             false, // wild
             false,
-            1,
+            0,
             0, // step
             0, // kangaroo_type
         );
-            false,
-            1,
-        );
-
         // CPU reference implementation
         let stepper = crate::kangaroo::stepper::KangarooStepper::new(false);
         let cpu_tame = stepper.step_kangaroo_with_bias(&tame_state, None, 81);

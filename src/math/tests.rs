@@ -279,7 +279,7 @@ fn lll_potential(b_star: &[[BigInt256; DIM]; DIM]) -> BigInt256 {
 
 fn check_lovasz(k: usize, mu: &[[BigInt256; DIM]; DIM], b_star: &[[BigInt256; DIM]; DIM], delta: &BigInt256) -> bool {
     let lhs = norm_squared(&b_star[k]);
-    let rhs = (*delta - mu[k][k-1].clone() * mu[k][k-1].clone()) * norm_squared(&b_star[k-1]);
+    let rhs = (delta.clone() - mu[k][k-1].clone() * mu[k][k-1].clone()) * norm_squared(&b_star[k-1]);
     lhs >= rhs
 }
 
@@ -304,7 +304,7 @@ fn simulate_lll_proof() {
 }
 
 fn compute_gs(basis: &[[BigInt256; DIM]; DIM]) -> ([[BigInt256; DIM]; DIM], [[BigInt256; DIM]; DIM]) {
-    let mut b_star = *basis;
+    let mut b_star = core::array::from_fn(|i| core::array::from_fn(|j| basis[i][j].clone()));
     let mut mu: [[BigInt256; DIM]; DIM] = core::array::from_fn(|_| core::array::from_fn(|_| BigInt256::zero()));
     for i in 1..DIM {
         for j in 0..i {
@@ -370,7 +370,7 @@ fn test_vow_with_babai() {
     let dummy_pubkey = k256::ProjectivePoint::GENERATOR;
     if config.enable_vow_parallel {
         let result = vow_parallel_rho(&dummy_pubkey, 2, 1.0 / 2f64.powf(20.0));
-        assert_eq!(result, crate::types::Scalar::zero());
+        assert_eq!(result, crate::types::Scalar::new(crate::math::BigInt256::zero()));
     }
 }
 
@@ -439,4 +439,4 @@ fn simulate_babai_proof() { /* Placeholder implementation */ }
 fn simulate_babai_multi_round() { /* Placeholder implementation */ }
 fn parallel_rho(pubkey: &k256::ProjectivePoint, m: usize) -> k256::Scalar {
     k256::Scalar::ZERO // Test stub
-}/
+}

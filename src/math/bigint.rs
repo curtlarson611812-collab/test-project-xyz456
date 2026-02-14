@@ -1655,10 +1655,10 @@ mod tests {
     /// Usefulness: Verifies high-bit arithmetic for #145-sized numbers
     #[test]
     fn test_mul_large() {
-        let a = (*CURVE_ORDER_BIGINT) - BigInt256::one();
+        let n = (*CURVE_ORDER_BIGINT).clone(); let a = n.clone() - BigInt256::one();
         let b = BigInt256::from_u64(2);
-        let expected = (((*CURVE_ORDER_BIGINT) - BigInt256::from_u64(2)) % (*CURVE_ORDER_BIGINT));
-        assert_eq!((a * b) % CURVE_ORDER_BIGINT, expected);
+        let expected = ((n.clone() - BigInt256::from_u64(2)) % n.clone());
+        assert_eq!((a * b) % n.clone(), expected);
     }
 
     /// Edge case multiplication tests
@@ -1667,7 +1667,7 @@ mod tests {
     #[test]
     fn test_mul_edge() {
         assert_eq!(BigInt256::zero() * BigInt256::max_value(), BigInt256::zero());
-        assert_eq!(BigInt256::one() * (*CURVE_ORDER_BIGINT), *CURVE_ORDER_BIGINT);
+        assert_eq!(BigInt256::one() * (*CURVE_ORDER_BIGINT).clone(), (*CURVE_ORDER_BIGINT).clone());
     }
 
     #[test]
