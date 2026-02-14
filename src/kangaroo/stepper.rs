@@ -353,7 +353,6 @@ mod tests {
             0,      // step
             0,      // kangaroo_type
         );
-        );
 
         let stepped = stepper.step_kangaroo(&kangaroo, None);
 
