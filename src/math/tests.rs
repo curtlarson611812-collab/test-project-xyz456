@@ -3,6 +3,7 @@ use num_traits::Pow;
 use crate::kangaroo::vow_parallel_rho;
 use crate::math::BigInt256;
 use crate::types::Scalar;
+use k256::Scalar as KScalar;
 use crate::math::constants::lll_reduce;
 mod tests {
     use crate::math::bigint::MontgomeryReducer;
@@ -248,7 +249,7 @@ fn test_lll_glv_with_puzzle() {
     
     // Reconstruct and verify
     let lambda = crate::math::constants::glv_lambda_scalar();
-    let mut reconstructed = k256::Scalar::ZERO;
+    let mut reconstructed = KScalar::ZERO;
     let powers = [k256::Scalar::ONE, lambda, lambda * lambda, lambda * lambda * lambda];
     
     for i in 0..config.glv_dim {
@@ -296,7 +297,7 @@ fn simulate_lll_proof() {
     // Approximation check
     let min_vec_len = BigInt256::one(); // Simplified
     let approx_factor = norm_squared(&basis[0]) / min_vec_len;
-    let bound = BigInt256::from_u64(2).pow((DIM-1)/4);
+    let bound = BigInt256::from_u64(2).pow(((DIM-1)/4) as u32);
     assert!(approx_factor <= bound);
 }
 
@@ -371,7 +372,7 @@ fn test_vow_with_babai() {
     let dummy_pubkey = k256::ProjectivePoint::GENERATOR;
     if config.enable_vow_parallel {
         let result = vow_parallel_rho(&dummy_pubkey, 2, 1.0 / 2f64.powf(20.0));
-        assert_eq!(result, k256::Scalar::ZERO);
+        assert_eq!(result, KScalar::ZERO);
     }
 }
 
@@ -390,8 +391,8 @@ fn test_babai_fermat_vow_integration() {
         simulate_babai_multi_round();
     }
     
-    let dummy_p = k256::ProjectivePoint::GENERATOR;
-    let dummy_q = dummy_p * k256::Scalar::from(2);
+    let dummy_p = BigInt256::from_u64(1);
+    let dummy_q = BigInt256::from_u64(3);
     
     if config.enable_fermat_ecdlp {
         let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
@@ -401,7 +402,7 @@ fn test_babai_fermat_vow_integration() {
     if config.enable_vow_rho_p2pk {
         let result = crate::kangaroo::manager::vow_rho_p2pk(&vec![dummy_p]);
         // Placeholder assertion
-        assert_eq!(result, k256::Scalar::ZERO);
+        assert_eq!(result, KScalar::ZERO);
     }
 }
 
@@ -421,8 +422,8 @@ fn cuda_vulkan_integration_test() {
         simulate_babai_multi_round();
     }
     
-    let dummy_p = k256::ProjectivePoint::GENERATOR;
-    let dummy_q = dummy_p * k256::Scalar::from(2);
+    let dummy_p = BigInt256::from_u64(1);
+    let dummy_q = BigInt256::from_u64(3);
     
     if config.enable_fermat_ecdlp {
         let diff = crate::kangaroo::collision::fermat_ecdlp_diff(&dummy_p, &dummy_q);
@@ -436,3 +437,8 @@ fn cuda_vulkan_integration_test() {
     }
 }
 
+fn simulate_babai_proof() { /* Placeholder implementation */ }
+fn simulate_babai_multi_round() { /* Placeholder implementation */ }
+fn parallel_rho(pubkey: &k256::ProjectivePoint, m: usize) -> k256::Scalar {
+    vow_parallel_rho(pubkey, m, 1.0 / 2f64.powf(20.0))
+}

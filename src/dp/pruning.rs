@@ -348,6 +348,8 @@ mod tests {
                     true,
                     false,
                     i as u64,
+                    0, // step
+                    0, // kangaroo_type
                 );
                 let entry = crate::types::DpEntry::new(point, state, hash, (i % 10) as u32);
                 table.add_dp_async(entry).await.unwrap();
@@ -375,7 +377,7 @@ mod tests {
                     x: [hash, 0, 0, cluster_id as u64],
                     y: [hash + 1, 0, 0, 0],
                     z: [1, 0, 0, 0],
-                };
+                };/
                 let state = crate::types::KangarooState::new(
                     point.clone(),
                     BigInt256::from_u64(i as u64 * 100),
@@ -384,8 +386,9 @@ mod tests {
                     true,
                     false,
                     i as u64,
+                    0, // step
+                    0, // kangaroo_type
                 );
-                let entry = crate::types::DpEntry::new(point, state, hash, cluster_id);
                 table.add_dp_async(entry).await.unwrap();
             }
         }

@@ -14,7 +14,7 @@ pub trait OverflowingAdd<Rhs = Self> {
 }
 
 /// 256-bit integer represented as 4 u64 limbs (little-endian)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct BigInt256 {
     /// Limbs in little-endian order (limb[0] is least significant)
     pub limbs: [u64; 4],
