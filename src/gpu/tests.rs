@@ -134,7 +134,6 @@ mod tests {
         let mut stepper = KangarooStepper::new(false);
 
         // Create mock kangaroo states
-        let secp = Secp256k1::new();
         let tame_states = vec![
             KangarooState::new(
                 secp.g.clone(),
