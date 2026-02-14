@@ -1667,7 +1667,7 @@ mod tests {
     #[test]
     fn test_mul_edge() {
         assert_eq!(BigInt256::zero() * BigInt256::max_value(), BigInt256::zero());
-        assert_eq!(BigInt256::one() * n.clone(), n);
+        assert_eq!(BigInt256::one() * (*CURVE_ORDER_BIGINT), *CURVE_ORDER_BIGINT);
     }
 
     #[test]

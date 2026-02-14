@@ -611,7 +611,7 @@ mod tests {
     fn test_clustering() {
         let table = DpTable::new(4);
         let point = Point { x: [0x12345678, 0, 0, 0xABCD0000], y: [1, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0);
+        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
         let entry = DpEntry::new(point, state, 12345, 0);
 
         let cluster_id = table.assign_cluster(&entry);
@@ -624,7 +624,7 @@ mod tests {
     fn test_value_score() {
         let table = DpTable::new(4);
         let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(1000), [0; 4], [0; 4], true, false, 0);
+        let state = KangarooState::new(point.clone(), BigInt256::from_u64(1000), [0; 4], [0; 4], true, false, 0, 0, 0);
         let entry = DpEntry::new(point, state, 12345, 1);
 
         let score = table.calculate_value_score(&entry);
@@ -645,7 +645,7 @@ mod tests {
                 y: [(i + 1) as u64, 0, 0, 0],
                 z: [1, 0, 0, 0]
             };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(distance), [0; 4], [0; 4], true, false, i);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(distance), [0; 4], [0; 4], true, false, i, 0, 0);
             let entry = DpEntry::new(point, state, i as u64, cluster_id);
 
             assert!(table.add_dp(entry).is_ok());
@@ -697,7 +697,7 @@ mod tests {
 
         // Create a test entry
         let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0);
+        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
         let entry = DpEntry::new(point, state, 12345, 1);
 
         // Test spilling to disk
@@ -763,7 +763,7 @@ mod tests {
         for i in 0..5 {
             let hash = i as u64;
             let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
             let entry = DpEntry::new(point, state, hash, 0);
 
             entries.insert(hash, entry);
@@ -795,7 +795,7 @@ mod tests {
         for i in 0..CHUNK_SIZE {
             let hash = i as u64;
             let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64), [0; 4], [0; 4], true, false, (i % 100) as u64);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64), [0; 4], [0; 4], true, false, (i % 100) as u64, 0, 0);
             let entry = DpEntry::new(point, state, hash, (i % 100) as u32);
 
             entries.insert(hash, entry);
@@ -832,7 +832,7 @@ mod tests {
         for i in 0..2500 {
             let hash = i as u64;
             let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
             let entry = DpEntry::new(point, state, hash, (i % 10) as u32); // 10 clusters
 
             entries.insert(hash, entry);
@@ -917,7 +917,7 @@ mod tests {
         for i in 0..5 {
             let hash = i as u64;
             let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
             let entry = DpEntry::new(point, state, hash, 0);
 
             entries.insert(hash, entry);
@@ -948,7 +948,7 @@ mod tests {
         for i in 0..200 {
             let hash = 10000 + i as u64;
             let point = Point { x: [hash, 0, 0, dense_cluster_id as u64], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64), [0; 4], [0; 4], true, false, i as u64);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64), [0; 4], [0; 4], true, false, i as u64, 0, 0);
             let entry = DpEntry::new(point, state, hash, dense_cluster_id);
 
             entries.insert(hash, entry);
@@ -961,7 +961,7 @@ mod tests {
         for i in 0..50 {
             let hash = 20000 + i as u64;
             let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64);
+            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
             let entry = DpEntry::new(point, state, hash, i as u32);
 
             entries.insert(hash, entry);

@@ -140,7 +140,8 @@ mod tests {
                 secp.g.clone(),
                 BigInt256::zero(),
                 [0; 4], [0; 4],
-                true, false, 0
+                true, false, 0,
+                0, 0
             )
         ];
 
@@ -172,12 +173,13 @@ mod tests {
         // Create mock wild kangaroo states
         let secp = Secp256k1::new();
         let target = secp.g.clone();
-        let wild_states = vec![
             KangarooState::new(
                 secp.g.clone(),
                 BigInt256::zero(),
                 [0; 4], [0; 4],
-                false, false, 0
+                false, false, 0,
+                0, 0
+            )
             )
         ];
 
@@ -235,6 +237,8 @@ mod tests {
             true, // tame
             false,
             0,
+            0, // step
+            0, // kangaroo_type
         );
 
         let wild_state = crate::types::KangarooState::new(
@@ -245,6 +249,8 @@ mod tests {
             false, // wild
             false,
             0,
+            0, // step
+            0, // kangaroo_type
         );
 
         // Test CPU stepper with SmallOddPrime logic
@@ -264,8 +270,6 @@ mod tests {
     #[test]
     fn test_gpu_parity_kangaroo_step() {
         let curve = Secp256k1::new();
-
-        // Create test kangaroo states
         let tame_state = crate::types::KangarooState::new(
             curve.g.clone(),
             BigInt256::from_u64(1000), // distance as BigInt256
@@ -274,14 +278,19 @@ mod tests {
             true, // tame
             false,
             0,
-        );
-
+            0, // step
+            0, // kangaroo_type
         let wild_state = crate::types::KangarooState::new(
             curve.g.clone(),
             BigInt256::zero(),
             [0; 4],
             [0; 4],
             false, // wild
+            false,
+            1,
+            0, // step
+            0, // kangaroo_type
+        );
             false,
             1,
         );
