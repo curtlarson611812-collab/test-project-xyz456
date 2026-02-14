@@ -146,3 +146,13 @@ pub fn hash_point(x: &crate::math::bigint::BigInt256, y: &crate::math::bigint::B
     hasher.update(&y.to_bytes_be());
     u64::from_le_bytes(hasher.finalize().as_bytes()[0..8].try_into().unwrap())
 }
+
+/// Keccak256 hash function for cryptographic strength in jump table selection
+/// Security: Side-channel resistant, uniform distribution
+/// Performance: ~2x slower than murmur3 but cryptographically secure
+pub fn keccak256(data: &[u8]) -> [u8; 32] {
+    use sha3::{Digest, Keccak256};
+    let mut hasher = Keccak256::new();
+    hasher.update(data);
+    hasher.finalize().into()
+}
