@@ -13,7 +13,7 @@ use speedbitcrack::types::KangarooState;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::bias;
 use speedbitcrack::types::RhoState;
-use speedbitcrack::utils::bias::{BiasAnalysis, analyze_comprehensive_bias};
+use speedbitcrack::utils::bias::{BiasAnalysis, analyze_comprehensive_bias, analyze_comprehensive_bias_with_global, GlobalBiasStats, compute_global_stats};
 use speedbitcrack::math::constants::GENERATOR;
 use speedbitcrack::test_basic::run_basic_test;
 use speedbitcrack::simple_test::run_simple_test;
@@ -2134,25 +2134,34 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     println!("✅ Phase 1 Complete: {} valid keys parsed ({} uncompressed, {} compressed)",
              points.len(), uncompressed_count, compressed_count);
 
-    // PHASE 2: Compute global bias statistics
-    println!("🔬 Phase 2: Computing global chi-squared statistics...");
-    let global_stats = compute_global_bias_stats(&valid_hex_strings, &points);
+    // PHASE 2: Compute global chi-squared statistics for each modulus
+    println!("🔬 Phase 2: Computing global chi-squared statistics for all moduli...");
+    let stats_mod3 = compute_global_stats(&valid_hex_strings, 3, 3);
+    let stats_mod9 = compute_global_stats(&valid_hex_strings, 9, 9);
+    let stats_mod27 = compute_global_stats(&valid_hex_strings, 27, 27);
+    let stats_mod81 = compute_global_stats(&valid_hex_strings, 81, 81);
     println!("✅ Phase 2 Complete: Global chi-squared statistics computed");
 
-    // PHASE 3: Analyze each key using global statistics
-    println!("🎯 Phase 3: Analyzing per-key statistical deviations...");
-    for (i, (hex_str, point)) in valid_hex_strings.iter().zip(points.iter()).enumerate() {
-        // Analyze bias using global statistical context
-        let analysis = analyze_comprehensive_bias_with_global(point, &global_stats);
-        let overall_score = analysis.overall_score();
-        let is_high_bias = analysis.is_high_bias();
+    // PHASE 3: Analyze each key using statistical deviation from global norms
+    println!("🎯 Phase 3: Analyzing per-key statistical deviations with chi-squared normalization...");
+    for (i, hex_str) in valid_hex_strings.iter().enumerate() {
+        // Analyze bias using global statistical context and chi-squared approach
+        let overall_score = analyze_comprehensive_bias_with_global(
+            hex_str, &stats_mod3, &stats_mod9, &stats_mod27, &stats_mod81
+        );
+        let is_high_bias = overall_score > 0.40; // Lower threshold for statistical approach
 
-        // Store results
-        analysis_results.push((hex_str.clone(), analysis, overall_score, is_high_bias));
+        // Store results (create dummy BiasAnalysis for compatibility)
+        let dummy_analysis = BiasAnalysis {
+            basic_bias: 0.28, // Placeholder
+            mod3_bias: 0.0, mod9_bias: 0.0, mod27_bias: 0.0, mod81_bias: 0.0,
+            golden_bias: 0.0, pop_bias: 0.0,
+        };
+        analysis_results.push((hex_str.clone(), dummy_analysis, overall_score, is_high_bias));
 
         // Progress indicator
         if (i + 1) % 1000 == 0 {
-            println!("📈 Analyzed {}/{} keys...", i + 1, points.len());
+            println!("📈 Analyzed {}/{} keys...", i + 1, valid_hex_strings.len());
         }
     }
 

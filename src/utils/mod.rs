@@ -13,7 +13,10 @@ pub use logging::setup_logging;
 pub use hash::fast_hash;
 pub use bias::{
     analyze_comprehensive_bias,
+    analyze_comprehensive_bias_with_global,
     BiasAnalysis,
+    GlobalBiasStats,
+    compute_global_stats,
     is_high_bias_target,
     PUZZLE_145_BIAS,
     PUZZLE_135_BIAS,

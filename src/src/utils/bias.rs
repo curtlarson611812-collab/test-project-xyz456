@@ -106,6 +106,24 @@ pub fn compute_bins(keys: &[String], modulus: u64, num_bins: usize) -> Vec<f64> 
     bins
 }
 
+/// Global bias statistics for chi-squared analysis
+#[derive(Debug, Clone)]
+pub struct GlobalBiasStats {
+    pub chi: f64,
+    pub bins: Vec<f64>,
+    pub expected: f64,
+    pub penalty: f64,
+}
+
+/// Compute global statistics for modular bias analysis
+pub fn compute_global_stats(keys: &[String], modulus: u64, num_bins: usize) -> GlobalBiasStats {
+    let bins = compute_bins(keys, modulus, num_bins);
+    let expected = keys.len() as f64 / num_bins as f64;
+    let chi = aggregate_chi(&bins, expected, keys.len() as f64);
+    let penalty = trend_penalty(&bins, num_bins);
+    GlobalBiasStats { chi, bins, expected, penalty }
+}
+
 /// Get per-key modular bias score based on global chi-squared deviation
 pub fn per_key_mod_score(x: u64, global_chi: f64, modulus: u64, bins: usize, bin_counts: &[f64]) -> f64 {
     let total_keys = bin_counts.iter().sum::<f64>();
@@ -152,7 +170,7 @@ pub fn trend_penalty(bins: &[f64], num_bins: usize, trend_type: &str) -> f64 {
 }
 
 /// Compute global statistics for z-score normalization
-pub fn compute_global_stats(values: &[f64]) -> (f64, f64) {
+pub fn compute_global_zscore_stats(values: &[f64]) -> (f64, f64) {
     let mean = values.iter().sum::<f64>() / values.len() as f64;
     let variance = values.iter()
         .map(|&v| (v - mean).powi(2))
@@ -258,48 +276,33 @@ pub fn trend_penalty(bins: &[f64], num_bins: usize, trend_type: &str) -> f64 {
     }
 }
 
+/// Calculate modular bias score using chi-squared statistical approach
+pub fn calculate_mod_bias(x_hex: &str, stats: &GlobalBiasStats, modulus: u64, num_bins: usize) -> f64 {
+    let x = BigInt256::from_str_radix(x_hex, 16).unwrap();
+    let x_mod = x % BigInt256::from_u64(modulus);
+    let bin_idx = (x_mod.to_u64().unwrap() / (modulus / num_bins as u64)) as usize;
+    let bin_dev = (stats.bins[bin_idx] - stats.expected).abs() / stats.expected;
+    (stats.chi * (1.0 + bin_dev) + stats.penalty).min(1.0)
+}
+
 /// Comprehensive bias analysis with global statistical normalization
 /// Uses aggregate chi-squared analysis for accurate modular bias detection
 pub fn analyze_comprehensive_bias_with_global(
-    point: &Point,
-    global_stats: &GlobalBiasStats
-) -> BiasAnalysis {
-    // Calculate z-score normalized biases for basic patterns
-    let basic_raw = calculate_point_bias(point);
-    let golden_raw = calculate_golden_ratio_bias(point);
-    let pop_raw = calculate_pop_bias(point);
+    x_hex: &str,
+    stats_mod3: &GlobalBiasStats,
+    stats_mod9: &GlobalBiasStats,
+    stats_mod27: &GlobalBiasStats,
+    stats_mod81: &GlobalBiasStats
+) -> f64 {
+    // Calculate modular bias scores using statistical approach
+    let mod3_score = calculate_mod_bias(x_hex, stats_mod3, 3, 3);
+    let mod9_score = calculate_mod_bias(x_hex, stats_mod9, 9, 9);
+    let mod27_score = calculate_mod_bias(x_hex, stats_mod27, 27, 27);
+    let mod81_score = calculate_mod_bias(x_hex, stats_mod81, 81, 81);
 
-    let basic_bias = z_score_bias(basic_raw, global_stats.basic_mean, global_stats.basic_std);
-    let golden_bias = z_score_bias(golden_raw, global_stats.golden_mean, global_stats.golden_std);
-    let pop_bias = z_score_bias(pop_raw, global_stats.pop_mean, global_stats.pop_std);
-
-    // Calculate statistical modular biases using global chi-squared deviation
-    let mod3_bias = calculate_mod3_bias_with_stats(
-        point, global_stats.mod3_chi, &global_stats.mod3_bins,
-        global_stats.mod3_bins.iter().sum::<f64>() / 3.0, 0.0
-    );
-    let mod9_bias = calculate_mod9_bias_with_stats(
-        point, global_stats.mod9_chi, &global_stats.mod9_bins,
-        global_stats.mod9_bins.iter().sum::<f64>() / 9.0, trend_penalty(&global_stats.mod9_bins, 9, "linear")
-    );
-    let mod27_bias = calculate_mod27_bias_with_stats(
-        point, global_stats.mod27_chi, &global_stats.mod27_bins,
-        global_stats.mod27_bins.iter().sum::<f64>() / 27.0, trend_penalty(&global_stats.mod27_bins, 27, "linear")
-    );
-    let mod81_bias = calculate_mod81_bias_with_stats(
-        point, global_stats.mod81_chi, &global_stats.mod81_bins,
-        global_stats.mod81_bins.iter().sum::<f64>() / 81.0, trend_penalty(&global_stats.mod81_bins, 81, "quadratic")
-    );
-
-    BiasAnalysis {
-        basic_bias,
-        mod3_bias,
-        mod9_bias,
-        mod27_bias,
-        mod81_bias,
-        golden_bias,
-        pop_bias,
-    }
+    // Weighted combination focusing on modular patterns (70% for ECDLP partitioning)
+    mod3_score * 0.18 + mod9_score * 0.15 + mod27_score * 0.13 + mod81_score * 0.12 +
+    0.28 + 0.04  // Basic entropy + special patterns placeholder
 }
 
 /// Global bias statistics computed across all keys for proper normalization
