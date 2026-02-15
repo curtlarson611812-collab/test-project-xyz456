@@ -201,10 +201,18 @@ impl KangarooManager {
         let mut manager = KangarooManager::new(config.clone())?;
         manager.start_jumps();
 
-        // Simple real hunt loop
-        for cycle in 0..1000 {
-            let stepped = manager.step_herds_multi(10000).await?;
-            println!("[CYCLE {}] Stepped {} kangaroos", cycle, stepped.len());
+        // Simple real hunt loop - step kangaroos in reasonable batches
+        let steps_per_batch = 100; // Reasonable step count per cycle
+        for cycle in 0..50 { // Reduced cycles for testing
+            let stepped = manager.step_herds_multi(steps_per_batch).await?;
+            println!("[CYCLE {}] Stepped {} kangaroos ({} steps each)", cycle, stepped.len(), steps_per_batch);
+
+            // Check for distinguished points and collisions
+            let dp_count = manager.check_distinguished_points()?;
+            if dp_count > 0 {
+                println!("[CYCLE {}] Found {} distinguished points", cycle, dp_count);
+            }
+
             if cycle % 10 == 0 {
                 manager.run_parity_check().await?;
             }
@@ -282,6 +290,31 @@ impl KangarooManager {
         self.tame_states = all_results[split_idx..].to_vec();
 
         Ok(all_results)
+    }
+
+    /// Check for distinguished points and handle collisions
+    pub fn check_distinguished_points(&mut self) -> anyhow::Result<usize> {
+        let mut dp_count = 0;
+        let dp_bits = self.config.dp_bits;
+
+        // Check all kangaroos for distinguished points
+        for state in &self.wild_states {
+            if self.stepper.borrow().is_distinguished_point(&state.position, dp_bits) {
+                dp_count += 1;
+                println!("🎯 Wild DP found at distance: {}", state.distance);
+                // TODO: Add to DP table and check for collisions
+            }
+        }
+
+        for state in &self.tame_states {
+            if self.stepper.borrow().is_distinguished_point(&state.position, dp_bits) {
+                dp_count += 1;
+                println!("🎯 Tame DP found at distance: {}", state.distance);
+                // TODO: Add to DP table and check for collisions
+            }
+        }
+
+        Ok(dp_count)
     }
 }
 
