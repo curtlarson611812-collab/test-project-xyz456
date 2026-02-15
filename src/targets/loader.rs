@@ -109,25 +109,34 @@ impl TargetLoader {
         let mut invalid_count = 0;
 
         println!("DEBUG: Starting to parse {} lines", content.lines().count());
+        let mut processed_lines = 0;
         for (line_num, line) in content.lines().enumerate() {
             let line = line.trim();
-            println!("DEBUG: Processing line {}: {}", line_num + 1, &line[..std::cmp::min(line.len(), 10)]);
             if line.is_empty() || line.starts_with('#') {
-                println!("DEBUG: Skipping empty/comment line");
                 continue;
+            }
+            processed_lines += 1;
+
+            if processed_lines <= 3 { // Only debug first few lines
+                println!("DEBUG: Processing line {}: {}...", line_num + 1, &line[..std::cmp::min(line.len(), 20)]);
             }
 
             match self.parse_p2pk_line(line, line_num + 1) {
                 Ok(target) => {
-                    println!("DEBUG: Successfully parsed target {}", targets.len() + 1);
                     targets.push(target);
+                    if targets.len() <= 3 { // Only debug first few successful parses
+                        println!("DEBUG: Successfully parsed target {}", targets.len());
+                    }
                 }
                 Err(e) => {
-                    println!("DEBUG: Failed to parse line {}: {} (line: {})", line_num + 1, e, &line[..std::cmp::min(line.len(), 20)]);
+                    if processed_lines <= 3 { // Only debug first few errors
+                        println!("DEBUG: Failed to parse line {}: {}", line_num + 1, e);
+                    }
                     invalid_count += 1;
                 }
             }
         }
+        println!("DEBUG: Processed {} lines, loaded {} valid targets, {} invalid", processed_lines, targets.len(), invalid_count);
 
         info!("Loaded {} valid P2PK targets from {} (skipped {} invalid)",
               targets.len(), file_path.display(), invalid_count);

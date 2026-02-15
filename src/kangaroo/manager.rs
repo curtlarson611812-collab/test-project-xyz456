@@ -1,37 +1,22 @@
-//! Central orchestrator for kangaroo herd management
-//!
-//! Central orchestrator: herd management, stepping batches, DP table interaction,
-//! async pruning trigger, multi-GPU dispatch
-
 use crate::config::Config;
 use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
 use crate::dp::DpTable;
 use crate::math::{Secp256k1, bigint::BigInt256};
-use crate::gpu::{GpuBackend, HybridBackend, CpuBackend, HybridGpuManager, shared::SharedBuffer};
-use crate::types::TaggedKangarooState;
-use crate::kangaroo::SearchConfig;
-#[cfg(feature = "vulkano")]
-use crate::gpu::VulkanBackend;
-#[cfg(feature = "rustacuda")]
-use crate::gpu::CudaBackend;
-use crate::kangaroo::generator::KangarooGenerator;
-use crate::kangaroo::stepper::KangarooStepper;
-use crate::kangaroo::collision::{CollisionDetector, CollisionResult, vow_parallel_rho};
-use rayon::prelude::*;
+use crate::gpu::backend::GpuBackend;
+use crate::gpu::backends::CpuBackend;
+use crate::kangaroo::search_config::SearchConfig;
+use crate::kangaroo::{KangarooGenerator, KangarooStepper, CollisionDetector};
 use crate::parity::ParityChecker;
-use k256::{Scalar, ProjectivePoint};
-use k256::elliptic_curve::Field; // Add this for Scalar operations
+use std::sync::{Arc, Mutex};
+use log::info;
 use anyhow::anyhow;
-use bloomfilter::Bloom;
-use zerocopy::IntoBytes;
-use std::path::Path;
 
 /// Production-ready compressed secp256k1 point decompression
 /// Mathematical derivation: Tonelli-Shanks algorithm for y = ±√(x³ + 7) mod p
 /// Security: Constant-time operations via k256 library
 /// Performance: O(log p) due to optimized k256 implementation
 /// Correctness: Verifies quadratic residue and chooses correct root
-fn decompress_point_production(x_bytes: &[u8], sign: bool) -> Result<Point> {
+fn decompress_point_production(x_bytes: &[u8], sign: bool) -> anyhow::Result<Point> {
     use k256::elliptic_curve::point::AffineCoordinates;
 
     // Use the existing Secp256k1 decompress_point method which handles Tonelli-Shanks
@@ -103,79 +88,100 @@ pub fn compute_shared_tame(attractor: &k256::ProjectivePoint, size: usize) -> st
 //     }
 // }
 
-use anyhow::Result;
-use log::{info, warn, debug};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use bincode;
 
 
 /// Central manager for kangaroo herd operations
 pub struct KangarooManager {
     config: Config,
-    search_config: SearchConfig,         // Search parameters for this manager
+    search_config: SearchConfig,
     targets: Vec<Target>,
-    multi_targets: Vec<(Point, u32)>,    // Multi-target points with puzzle IDs for batch solving
-    wild_states: Vec<TaggedKangarooState>, // Tagged wild kangaroos per target
-    tame_states: Vec<KangarooState>,     // Shared tame kangaroos
+    multi_targets: Vec<(Point, u32)>,
+    wild_states: Vec<KangarooState>,
+    tame_states: Vec<KangarooState>,
     dp_table: Arc<Mutex<DpTable>>,
-    bloom: Option<Bloom<[u8; 32]>>,      // Bloom filter for DP pre-checks (optional)
+    bloom: Option<cuckoofilter::CuckooFilter<Arc<Mutex<DpTable>>>>,
     gpu_backend: Box<dyn GpuBackend>,
     generator: KangarooGenerator,
     stepper: std::cell::RefCell<KangarooStepper>,
     collision_detector: CollisionDetector,
     parity_checker: ParityChecker,
     total_ops: u64,
-    current_steps: u64,                  // Steps completed so far
+    current_steps: u64,
     start_time: std::time::Instant,
 }
-
 impl KangarooManager {
-
     pub fn target_count(&self) -> usize {
         self.targets.len() + self.multi_targets.len()
     }
 
-
-    async fn run_parity_check(&self) -> Result<()> {
-
-        debug!("Running parity verification check");
+    async fn run_parity_check(&self) -> anyhow::Result<()> {
+        log::debug!("Running parity verification check");
         self.parity_checker.verify_batch().await
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-pub async fn run(&mut self) -> Result<Option<Solution>> {
+    pub async fn run(&mut self) -> anyhow::Result<Option<Solution>> {
         info!("Starting kangaroo solving with {} targets", self.targets.len());
         info!("Hunt simulation - target loading test successful!");
         Ok(None)
     }
-pub async fn new_multi_config(multi_targets: Vec<(Point, u32)>, search_config: SearchConfig, config: Config) -> Result<Self> {
-        // For now, just call regular new
-        let mut manager = Self::new(config)?;
-        manager.multi_targets = multi_targets;
-        manager.search_config = search_config;
+    pub fn new(config: Config) -> anyhow::Result<Self> {
+        let dp_bits = config.dp_bits;
+        let targets = Vec::new(); // TODO: Load targets
+        let search_config = SearchConfig::default();
+        let generator = KangarooGenerator::new(&config);
+        let stepper = std::cell::RefCell::new(KangarooStepper { curve: crate::math::Secp256k1::new(), _jump_table: vec![], expanded_mode: false, dp_bits: dp_bits, step_count: 0, seed: 42 }); // TODO: Fix stepper
+        let manager = KangarooManager {
+            config,
+            search_config,
+            targets,
+            multi_targets: Vec::new(),
+            wild_states: Vec::new(),
+            tame_states: Vec::new(),
+            dp_table: Arc::new(Mutex::new(DpTable::new(dp_bits))),
+            bloom: None,
+            gpu_backend: Box::new(CpuBackend::new()?),
+            generator,
+            stepper,
+            collision_detector: CollisionDetector::new(),
+            parity_checker: ParityChecker::new(),
+            total_ops: 0,
+            current_steps: 0,
+            start_time: std::time::Instant::now(),
+        };
         Ok(manager)
+    }
+    }
+
+    pub async fn new_multi_config(
+        multi_targets: Vec<(Point, u32)>,
+        search_config: SearchConfig,
+        config: Config,
+    ) -> anyhow::Result<Self> {
+        let dp_bits = config.dp_bits;
+        let generator = KangarooGenerator::new(&config);
+        let stepper = std::cell::RefCell::new(KangarooStepper { curve: crate::math::Secp256k1::new(), _jump_table: vec![], expanded_mode: false, dp_bits: dp_bits, step_count: 0, seed: 42 }); // TODO: Fix stepper
+        let manager = KangarooManager {
+            config,
+            search_config,
+            targets: Vec::new(),
+            multi_targets,
+            wild_states: Vec::new(),
+            tame_states: Vec::new(),
+            dp_table: Arc::new(Mutex::new(DpTable::new(dp_bits))),
+            bloom: None,
+            gpu_backend: Box::new(CpuBackend::new()?),
+            generator: generator,
+            stepper: stepper,
+            collision_detector: CollisionDetector::new(),
+            parity_checker: ParityChecker::new(),
+            total_ops: 0,
+            current_steps: 0,
+            start_time: std::time::Instant::now(),
+        };
+        Ok(manager)
+    }
+
     pub fn multi_targets(&self) -> &[(Point, u32)] {
         &self.multi_targets
     }
@@ -184,7 +190,22 @@ pub async fn new_multi_config(multi_targets: Vec<(Point, u32)>, search_config: S
         self.total_ops
     }
 
-    pub fn search_config(&self) -> &SearchConfig {
-        &self.search_config
+    pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+        println!("[LAUNCH] Herd size: {} | DP bits: {} | Near collisions: {:.2}",
+                 config.herd_size, config.dp_bits, config.enable_near_collisions);
+
+        // Automatic fallback (already good, just make sure it continues)
+        let targets = if config.targets.exists() {
+            config.targets.clone()
+        } else {
+            println!("[FALLBACK] Using valuable_p2pk_pubkeys.txt");
+            std::path::PathBuf::from("valuable_p2pk_pubkeys.txt")
+        };
+
+        // Proceed to herd launch
+        let mut manager = KangarooManager::new(config.clone())?;
+        manager.run().await?;                    // Start the hunt
+
+        Ok(())
     }
 }

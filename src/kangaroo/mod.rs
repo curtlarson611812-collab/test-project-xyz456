@@ -4,10 +4,10 @@
 
 pub mod manager;
 pub mod generator;
-pub mod stepper;
+// pub mod stepper; // temporarily disabled
 pub mod collision;
 pub mod search_config;
-pub mod controller;
+// pub mod controller;
 #[cfg(test)]
 pub mod tests;
 
@@ -17,4 +17,4 @@ pub use generator::KangarooGenerator;
 pub use stepper::KangarooStepper;
 pub use collision::{CollisionDetector, CollisionResult, vow_parallel_rho, fermat_ecdlp_diff};
 pub use search_config::SearchConfig;
-pub use controller::{KangarooController, ManagerStats};
+// pub use controller::{KangarooController, ManagerStats};
