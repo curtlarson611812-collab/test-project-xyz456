@@ -232,27 +232,43 @@ impl KangarooManager {
         info!("Initialized {} wild and {} tame kangaroos", self.wild_states.len(), self.tame_states.len());
     }
 
-    /// Step all kangaroo herds by the specified number of steps
+    /// Step all kangaroo herds by the specified number of steps (memory-efficient)
     pub async fn step_herds_multi(&mut self, steps: usize) -> anyhow::Result<Vec<KangarooState>> {
-        let mut all_states = Vec::new();
-        all_states.extend_from_slice(&self.wild_states);
-        all_states.extend_from_slice(&self.tame_states);
+        // Process in chunks to avoid massive memory allocation
+        const CHUNK_SIZE: usize = 100000; // 100k kangaroos per chunk = ~21MB
 
-        // Step all kangaroos
-        for _ in 0..steps {
-            for state in &mut all_states {
-                // Use stepper to step each kangaroo
-                let bias_mod = 1u64; // Default bias
-                *state = self.stepper.borrow().step_kangaroo_with_bias(state, None, bias_mod);
+        let mut all_results = Vec::with_capacity(self.wild_states.len() + self.tame_states.len());
+
+        // Process wild states in chunks
+        for chunk in self.wild_states.chunks(CHUNK_SIZE) {
+            let mut chunk_states: Vec<KangarooState> = chunk.to_vec();
+            for _ in 0..steps {
+                for state in &mut chunk_states {
+                    let bias_mod = 1u64;
+                    *state = self.stepper.borrow().step_kangaroo_with_bias(state, None, bias_mod);
+                }
             }
+            all_results.extend(chunk_states);
+        }
+
+        // Process tame states in chunks
+        for chunk in self.tame_states.chunks(CHUNK_SIZE) {
+            let mut chunk_states: Vec<KangarooState> = chunk.to_vec();
+            for _ in 0..steps {
+                for state in &mut chunk_states {
+                    let bias_mod = 1u64;
+                    *state = self.stepper.borrow().step_kangaroo_with_bias(state, None, bias_mod);
+                }
+            }
+            all_results.extend(chunk_states);
         }
 
         // Update our stored states
         let split_idx = self.wild_states.len();
-        self.wild_states = all_states[..split_idx].to_vec();
-        self.tame_states = all_states[split_idx..].to_vec();
+        self.wild_states = all_results[..split_idx].to_vec();
+        self.tame_states = all_results[split_idx..].to_vec();
 
-        Ok(all_states)
+        Ok(all_results)
     }
 }
 

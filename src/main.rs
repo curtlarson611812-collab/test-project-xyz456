@@ -942,6 +942,15 @@ async fn main() -> Result<()> {
         config.herd_size = config.herd_size.min(2048); // Laptop memory limits
         info!("💻 Applied laptop optimizations: herd_size={}", config.herd_size);
     }
+
+    // Memory safety check - prevent OOM crashes
+    let estimated_memory_gb = (config.herd_size as f64 * 212.0 + (2u64.pow(config.dp_bits as u32) as f64 * 64.0)) / (1024.0 * 1024.0 * 1024.0);
+    if estimated_memory_gb > 64.0 {
+        let safe_herd_size = ((64.0 * 1024.0 * 1024.0 * 1024.0) / 212.0) as usize;
+        warn!("⚠️  Memory usage would be {:.1}GB! Reducing herd_size from {} to {} for safety",
+              estimated_memory_gb, config.herd_size, safe_herd_size);
+        config.herd_size = safe_herd_size;
+    }
     let gen = KangarooGenerator::new(&config);
     println!("DEBUG: Generator created, loading points");
 
