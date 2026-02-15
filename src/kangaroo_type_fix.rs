@@ -1,0 +1,1 @@
+                    if kangaroos[i].is_tame { 1 } else { 0 }, // kangaroo_type

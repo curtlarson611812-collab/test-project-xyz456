@@ -130,7 +130,7 @@ impl KangarooManager {
         let targets = Vec::new(); // TODO: Load targets
         let search_config = SearchConfig::default();
         let generator = KangarooGenerator::new(&config);
-        let stepper = std::cell::RefCell::new(KangarooStepper { curve: crate::math::Secp256k1::new(), _jump_table: vec![], expanded_mode: false, dp_bits: dp_bits, step_count: 0, seed: 42 }); // TODO: Fix stepper
+        let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, dp_bits));
         let manager = KangarooManager {
             config,
             search_config,
@@ -151,14 +151,15 @@ impl KangarooManager {
         };
         Ok(manager)
     }
-    }
+    
+    pub async fn new_multi_config(
         multi_targets: Vec<(Point, u32)>,
         search_config: SearchConfig,
         config: Config,
     ) -> anyhow::Result<Self> {
         let dp_bits = config.dp_bits;
         let generator = KangarooGenerator::new(&config);
-        let stepper = std::cell::RefCell::new(KangarooStepper { curve: crate::math::Secp256k1::new(), _jump_table: vec![], expanded_mode: false, dp_bits: dp_bits, step_count: 0, seed: 42 }); // TODO: Fix stepper
+        let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, dp_bits));
         let manager = KangarooManager {
             config,
             search_config,
@@ -169,19 +170,22 @@ impl KangarooManager {
             dp_table: Arc::new(Mutex::new(DpTable::new(dp_bits))),
             bloom: None,
             gpu_backend: Box::new(CpuBackend::new()?),
-            generator: generator,
-            stepper: stepper,
+            generator,
+            stepper,
             collision_detector: CollisionDetector::new(),
             parity_checker: ParityChecker::new(),
             total_ops: 0,
             current_steps: 0,
             start_time: std::time::Instant::now(),
         };
+        Ok(manager)
+    }
+
     pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-        println!("[LAUNCH] Starting 34k P2PK + Magic9 hunt | Herd: {} | DP: {}", 
+        println!("[LAUNCH] Starting 34k P2PK + Magic9 hunt | Herd: {} | DP: {}",
                  config.herd_size, config.dp_bits);
 
-        let mut manager = KangarooManager::new(config).await?;
+        let mut manager = KangarooManager::new(config.clone())?;
         manager.start_jumps();
 
         // Simple real hunt loop
@@ -194,18 +198,64 @@ impl KangarooManager {
         }
         Ok(())
     }
-        // Automatic fallback (already good, just make sure it continues)
-        let targets = if config.targets.exists() {
-            config.targets.clone()
-        } else {
-            println!("[FALLBACK] Using valuable_p2pk_pubkeys.txt");
-            std::path::PathBuf::from("valuable_p2pk_pubkeys.txt")
-        };
 
-        // Proceed to herd launch
-        let mut manager = KangarooManager::new(config.clone())?;
-        manager.run().await?;                    // Start the hunt
-
-        Ok(())
+    /// Standalone function for running full range hunt
+    pub async fn run_full_range_standalone(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+        Self::run_full_range(config).await
     }
+
+    /// Initialize kangaroo herds for the hunt
+    pub fn start_jumps(&mut self) {
+        // Generate initial tame and wild kangaroo states
+        self.tame_states = self.generator.generate_tame_batch(self.config.herd_size / 2);
+
+        // For wild states, create simple ones near targets
+        self.wild_states = Vec::new();
+        for i in 0..(self.config.herd_size / 2) {
+            if let Some(target) = self.targets.first() {
+                let wild_point = self.generator.initialize_wild_start(&target.point, i);
+                let wild_state = KangarooState::new(
+                    wild_point,
+                    BigInt256::zero(),
+                    [0; 4],
+                    [0; 4],
+                    false, // wild
+                    false,
+                    i as u64,
+                    0,
+                    1, // wild type
+                );
+                self.wild_states.push(wild_state);
+            }
+        }
+
+        info!("Initialized {} wild and {} tame kangaroos", self.wild_states.len(), self.tame_states.len());
+    }
+
+    /// Step all kangaroo herds by the specified number of steps
+    pub async fn step_herds_multi(&mut self, steps: usize) -> anyhow::Result<Vec<KangarooState>> {
+        let mut all_states = Vec::new();
+        all_states.extend_from_slice(&self.wild_states);
+        all_states.extend_from_slice(&self.tame_states);
+
+        // Step all kangaroos
+        for _ in 0..steps {
+            for state in &mut all_states {
+                // Use stepper to step each kangaroo
+                let bias_mod = 1u64; // Default bias
+                *state = self.stepper.borrow().step_kangaroo_with_bias(state, None, bias_mod);
+            }
+        }
+
+        // Update our stored states
+        let split_idx = self.wild_states.len();
+        self.wild_states = all_states[..split_idx].to_vec();
+        self.tame_states = all_states[split_idx..].to_vec();
+
+        Ok(all_states)
+    }
+}
+
+pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    KangarooManager::run_full_range(config).await
 }

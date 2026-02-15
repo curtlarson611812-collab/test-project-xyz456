@@ -21,7 +21,10 @@ pub struct KangarooStepper {
 }
 
 impl KangarooStepper {
-    pub fn new(expanded_mode: bool) -> Self {
+        pub fn new(expanded_mode: bool) -> Self {
+    KangarooStepper::with_dp_bits_and_seed(expanded_mode, 20, 42)
+    }
+
     pub fn with_dp_bits(expanded_mode: bool, dp_bits: usize) -> Self {
         KangarooStepper::with_dp_bits_and_seed(expanded_mode, dp_bits, 42)
     }
@@ -61,14 +64,14 @@ impl KangarooStepper {
         let (new_position, new_distance, alpha_update, beta_update) = if kangaroo.is_tame {
             let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), &self.curve.g).unwrap();
             let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-            let new_dist = kangaroo.distance + BigInt256::from_u64(jump_d);
-            ([jump_d as u64, 0, 0, 0], [0, 0, 0, 0])
+            let new_dist = kangaroo.distance.clone() + BigInt256::from_u64(jump_d);
+            (new_pos, new_dist, [jump_d as u64, 0, 0, 0], [0, 0, 0, 0])
         } else {
             if let Some(t) = target {
                 let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), t).unwrap();
                 let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-                let new_dist = kangaroo.distance * BigInt256::from_u64(jump_d) % self.curve.n;
-                ([0, 0, 0, 0], [jump_d as u64, 0, 0, 0])
+                let new_dist = kangaroo.distance.clone() * BigInt256::from_u64(jump_d) % self.curve.n.clone();
+                (new_pos, new_dist, [0, 0, 0, 0], [jump_d as u64, 0, 0, 0])
             } else {
                 (kangaroo.position.clone(), kangaroo.distance.clone(), [0;4], [0;4])
             }
@@ -125,6 +128,13 @@ impl KangarooStepper {
         let x_hash = self.hash_position(point);
         (x_hash & ((1u64 << dp_bits) - 1)) == 0
     }
+
+    /// Step a batch of kangaroos
+    pub fn step_batch(&self, kangaroos: &[KangarooState], target: Option<&Point>) -> Result<Vec<KangarooState>> {
+        kangaroos.iter()
+            .map(|k| Ok(self.step_kangaroo_with_bias(k, target, 1u64)))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -150,7 +160,7 @@ mod tests {
             0,      // kangaroo_type
         );
 
-        let stepped = stepper.step_kangaroo(&kangaroo, None);
+        let stepped = stepper.step_kangaroo_with_bias(&kangaroo, None, 1u64);
 
         // Position should have changed
         assert_ne!(stepped.position.x, kangaroo.position.x);

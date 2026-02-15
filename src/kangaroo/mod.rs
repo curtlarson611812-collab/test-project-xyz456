@@ -4,7 +4,7 @@
 
 pub mod manager;
 pub mod generator;
-// pub mod stepper; // temporarily disabled
+pub mod stepper; // temporarily disabled
 pub mod collision;
 pub mod search_config;
 // pub mod controller;

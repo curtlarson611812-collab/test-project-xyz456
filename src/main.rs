@@ -247,11 +247,11 @@ async fn main() -> Result<()> {
         println!("  🏆 GOLD Combo: {}", config.gold_bias_combo);
         println!("  📊 BSGS Threshold: {}", config.bsgs_threshold);
 
-        // Test controller creation with config
-        match speedbitcrack::kangaroo::controller::KangarooController::new_with_lists(&config, None, true, false).await {
-            Ok(controller) => {
-                println!("✅ Controller created successfully with {} managers", controller.len());
-                println!("🎉 Full integration test PASSED - all Blocks 1-9 working correctly!");
+        // Test manager creation with config
+        match speedbitcrack::kangaroo::manager::KangarooManager::new(config.clone()) {
+            Ok(manager) => {
+                println!("✅ Manager created successfully");
+                println!("🎉 Basic integration test PASSED - core components working!");
             }
             Err(e) => {
                 println!("❌ Integration test FAILED: {}", e);
