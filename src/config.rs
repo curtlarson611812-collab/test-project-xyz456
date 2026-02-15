@@ -48,9 +48,17 @@ impl std::fmt::Display for GpuBackend {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ValueEnum, Default)]
 pub enum BiasMode {
     #[default]
-    Uniform,
-    Magic9,
-    Primes,
+    Auto,        // Auto-detect best bias mode
+    Uniform,     // No bias optimization
+    Magic9,      // Original Magic9 cluster targeting
+    Primes,      // Prime-based kangaroo generation
+    Mod3,        // Modular 3 bias optimization
+    Mod9,        // Modular 9 bias optimization
+    Mod27,       // Modular 27 bias optimization
+    Mod81,       // Modular 81 bias optimization
+    Gold,        // Golden ratio bias optimization
+    Pos,         // Position-based optimization
+    Combined,    // Multi-bias combination mode
 }
 
 /// SpeedBitCrack V3 - Multi-target Pollard's rho/kangaroo ECDLP solver for secp256k1

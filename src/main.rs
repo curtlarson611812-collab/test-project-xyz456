@@ -1187,27 +1187,6 @@ fn compute_global_modulus_stats(pubkeys: &[k256::ProjectivePoint], modulus: u64)
 /// Mathematical derivation: Multi-modulus deviation scoring with penalty terms
 /// Security: No timing leaks, deterministic computation
 /// Usefulness: Identifies "gold" targets with 10-81x search reduction potential
-fn analyze_comprehensive_bias_with_global_stats(
-    x_hex: &str,
-    global_mod3: &[f64],
-    global_mod9: &[f64],
-    global_mod27: &[f64],
-    global_mod81: &[f64],
-) -> Result<f64> {
-    let x_bytes = hex::decode(x_hex)?;
-    let x_u64 = u64::from_be_bytes(x_bytes[24..32].try_into().unwrap());
-
-    // Compute per-modulus deviations from global mean
-    let dev_mod3 = ((x_u64 % 3) as f64 - global_mod3[1]).abs() / global_mod3[1];
-    let dev_mod9 = ((x_u64 % 9) as f64 - global_mod9[1]).abs() / global_mod9[1];
-    let dev_mod27 = ((x_u64 % 27) as f64 - global_mod27[1]).abs() / global_mod27[1];
-    let dev_mod81 = ((x_u64 % 81) as f64 - global_mod81[1]).abs() / global_mod81[1];
-
-    // Weighted average with bias toward higher moduli (more selective)
-    let score = (dev_mod3 * 0.1 + dev_mod9 * 0.2 + dev_mod27 * 0.3 + dev_mod81 * 0.4).min(1.0);
-
-    Ok(score)
-}
 
 /// Run parallel lambda algorithm for unsolved puzzles
 fn pollard_lambda_parallel(target: &Point, _range: (BigInt256, BigInt256)) -> Option<BigInt256> {
@@ -2046,21 +2025,6 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     use std::io::Write;
 
     // Calculate adaptive threshold based on score distribution
-    fn calculate_adaptive_threshold(scores: &[f64]) -> f64 {
-        if scores.is_empty() {
-            0.45  // Default fallback
-        } else {
-            let mean: f64 = scores.iter().sum::<f64>() / scores.len() as f64;
-            let variance: f64 = scores.iter()
-                .map(|&s| (s - mean).powi(2))
-                .sum::<f64>() / scores.len() as f64;
-            let std_dev = variance.sqrt();
-
-            // Adaptive threshold: mean + 1.5 * std_dev, but not below 0.35 or above 0.6
-            (mean + 1.5 * std_dev).max(0.35).min(0.6)
-        }
-    }
-
     // Parse CLI arguments
     let config = Config::parse()?;
 
