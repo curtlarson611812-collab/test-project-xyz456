@@ -18,9 +18,7 @@ pub struct TargetLoader {
 impl TargetLoader {
     /// Create new target loader
     pub fn new() -> Self {
-        println!("DEBUG: TargetLoader::new() called");
         let curve = Secp256k1::new();
-        println!("DEBUG: Secp256k1 created in TargetLoader");
         TargetLoader {
             curve,
         }
@@ -28,22 +26,38 @@ impl TargetLoader {
 
     /// Load all targets based on configuration - ALWAYS load FULL valuable_p2pk_publickey.txt
     pub fn load_targets(&self, config: &Config) -> Result<Vec<Target>> {
-        info!("DEBUG: load_targets called with puzzle_mode: {}, test_mode: {}", config.puzzle_mode, config.test_mode);
+        println!("DEBUG: ENTERING load_targets method");
+        println!("DEBUG: load_targets called with puzzle_mode: {}, test_mode: {}", config.puzzle_mode, config.test_mode);
+        println!("DEBUG: Current working directory: {:?}", std::env::current_dir().unwrap_or_default());
+        println!("DEBUG: Target file path: {:?}", config.targets);
         let mut targets = Vec::new();
 
         // Load P2PK targets - ALWAYS load the FULL file (~34,353 verified P2PK pubkeys)
         // NO shrinking to 1/10/test keys unless --test-mode flag is explicitly set
-        info!("DEBUG: P2PK file '{}' exists: {}", config.p2pk_file.display(), config.p2pk_file.exists());
-        if config.p2pk_file.exists() {
-            info!("DEBUG: Loading P2PK targets...");
-            let p2pk_targets = self.load_p2pk_targets(&config.p2pk_file)?;
+        // Use the --targets flag value for the main target file, with fallback
+        let target_file = if config.targets.exists() {
+            config.targets.clone()
+        } else {
+            let fallback = std::path::PathBuf::from("valuable_p2pk_pubkeys.txt");
+            if fallback.exists() {
+                println!("DEBUG: Specified target file '{}' not found, using fallback '{}'", config.targets.display(), fallback.display());
+                fallback
+            } else {
+                config.targets.clone()
+            }
+        };
+
+        println!("DEBUG: Using target file '{}' exists: {}", target_file.display(), target_file.exists());
+        if target_file.exists() {
+            println!("DEBUG: Loading targets from {}", target_file.display());
+            let p2pk_targets = self.load_p2pk_targets(&target_file)?;
             let p2pk_count = p2pk_targets.len();
             targets.extend(p2pk_targets);
-            info!("DEBUG: Loaded {} P2PK targets", p2pk_count);
+            println!("DEBUG: Loaded {} targets", p2pk_count);
         } else if config.mode == crate::config::SearchMode::FullRange && !config.test_mode && !config.puzzle_mode {
-            return Err(anyhow!("P2PK file not found: {} (required for full-range mode)", config.p2pk_file.display()));
+            return Err(anyhow!("Target file not found: {} (required for full-range mode)", target_file.display()));
         } else {
-            info!("DEBUG: Skipping P2PK targets (puzzle mode, test mode, or file not found)");
+            println!("DEBUG: Skipping targets (puzzle mode, test mode, or file not found)");
         }
 
         // Load puzzle targets if enabled - append to P2PK targets
