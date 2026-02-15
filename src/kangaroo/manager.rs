@@ -162,14 +162,6 @@ impl KangarooManager {
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
 
         // Initialize bloom filter if enabled
-        let bloom = if config.use_bloom {
-            let expected_dps = (config.herd_size as f64 * config.max_ops as f64) / 2f64.powi(config.dp_bits as i32);
-            Some(Bloom::new_for_fp_rate(expected_dps as usize, 0.01))
-        
-            } else {
-                loaded_targets
-            };
-            None
         };
 
         // Create appropriate GPU backend based on configuration
@@ -415,30 +407,18 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
                     y: [
                         ((pos[1][1] as u64) << 32) | pos[1][0] as u64,
                         ((pos[1][3] as u64) << 32) | pos[1][2] as u64,
+                    ],
                         ((pos[1][5] as u64) << 32) | pos[1][4] as u64,
                         ((pos[1][7] as u64) << 32) | pos[1][6] as u64,
-                    ],
-                    z: [
+z: [
                         ((pos[2][1] as u64) << 32) | pos[2][0] as u64,
                         ((pos[2][3] as u64) << 32) | pos[2][2] as u64,
                         ((pos[2][5] as u64) << 32) | pos[2][4] as u64,
                         ((pos[2][7] as u64) << 32) | pos[2][6] as u64,
                     ],
-                };
-
-                let distance = ((dist[1] as u64) << 32) | dist[0] as u64;
-
-                KangarooState::new(
-                    position,
-                    BigInt256::from_u64(distance), // distance as BigInt256
-                    kangaroos[i].alpha,
-                    kangaroos[i].beta,
-                    kangaroos[i].is_tame,
-                    kangaroos[i].is_dp,
-                    kangaroos[i].id,
-                    kangaroos[i].step,
-            .collect();
-
+};
+.collect();
+})
         // Process traps (distinguished points found)
         for trap in traps {
             // Convert trap back to DP entry and add to table
@@ -608,19 +588,6 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
     //             };
     //             let distance_u64 = Self::u32_array_to_u64_array(gpu_dist);
     //
-    //             KangarooState {
-    //                 position,
-    //                 distance: distance_u64[0], // Use first limb as distance
-    //                 alpha: original.alpha,
-    //                 beta: original.beta,
-    //                 is_tame: original.is_tame,
-    //                 id: original.id,
-    //             }
-    //         
-            } else {
-                loaded_targets
-            };
-    //             // Fallback to original if GPU data unavailable
     //             original.clone()
     //         }
     //     }).collect()
@@ -655,12 +622,6 @@ pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::E
 
     if let Some(sol) = solution {
         let private_key_bigint = BigInt256::from_u64_array(sol.private_key);
-        println!("[VICTORY] Solution found! Private key: {}", private_key_bigint.to_hex());
-    
-            } else {
-                loaded_targets
-            };
-        println!("[VICTORY] Full range hunt completed - no solution found.");
     }
 
     Ok(())
