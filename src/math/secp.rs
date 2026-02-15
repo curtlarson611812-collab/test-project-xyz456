@@ -10,7 +10,7 @@ use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
 use std::error::Error;
 use std::ops::{Add, Sub};
-use log::info;
+use log::debug;
 // k256 integration for SmallOddPrime_Precise_code.rs compatibility
 use k256;
 use k256::elliptic_curve::sec1::{ToEncodedPoint, FromEncodedPoint};
@@ -274,13 +274,11 @@ impl Secp256k1 {
 
     /// Create new secp256k1 curve instance
     pub fn new() -> Self {
-        // println!("DEBUG: Entering Secp256k1::new()");
-        info!("DEBUG: Secp256k1::new() - creating curve parameters");
+        debug!("Secp256k1::new() - creating curve parameters");
         let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").unwrap();
-        println!("DEBUG: Created p");
-        info!("DEBUG: Created p");
+        debug!("Created p");
         let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").unwrap();
-        info!("DEBUG: Created n");
+        debug!("Created n");
         let a = BigInt256::zero();
         let b = BigInt256::from_u64(7);
         // info!("DEBUG: Created a and b");
@@ -333,13 +331,13 @@ impl Secp256k1 {
     pub fn add(&self, p: &Point, q: &Point) -> Point {
         // Handle infinity cases first
         if p.is_infinity() {
-            println!("DEBUG: add infinity + q, returning q.x={:x}, q.y={:x}, q.z={:x}", q.x[3], q.y[3], q.z[0]);
+            debug!("add infinity + q, returning q.x={:x}, q.y={:x}, q.z={:x}", q.x[3], q.y[3], q.z[0]);
             return *q;
         }
         if q.is_infinity() {
             #[cfg(debug_assertions)]
             {
-                println!("DEBUG: add p + infinity, p.x={:x}, p.z={:x}", p.x[3], p.z[3]);
+                debug!("add p + infinity, p.x={:x}, p.z={:x}", p.x[3], p.z[3]);
             }
             return *p;
         }
@@ -554,7 +552,7 @@ impl Secp256k1 {
 
         #[cfg(debug_assertions)]
         {
-            println!("DEBUG: double x3={}, y3={}", x3.to_str_radix(16), y3.to_str_radix(16));
+            debug!("double x3={}, y3={}", x3.to_str_radix(16), y3.to_str_radix(16));
         }
 
         // Result is affine (z=1)
@@ -588,7 +586,7 @@ impl Secp256k1 {
         let (k1, k2) = self.glv_decompose(k);
         #[cfg(debug_assertions)]
         {
-            println!("DEBUG: GLV decompose k={} -> k1={}, k2={}", k.to_hex(), k1.to_hex(), k2.to_hex());
+            debug!("GLV decompose k={} -> k1={}, k2={}", k.to_hex(), k1.to_hex(), k2.to_hex());
         }
 
         // Compute P1 = k1 * P
@@ -724,8 +722,8 @@ impl Secp256k1 {
         // MODULAR FIX BLOCK 1: Enhanced debug prints (conditional compilation)
         #[cfg(debug_assertions)]
         {
-            println!("DEBUG: Scalar range check: k = {}", k.to_hex());
-            println!("DEBUG: Point input: X={:x}, Y={:x}, Z={:x}", p.x[3], p.y[3], p.z[3]);
+            debug!(" Scalar range check: k = {}", k.to_hex());
+            debug!(" Point input: X={:x}, Y={:x}, Z={:x}", p.x[3], p.y[3], p.z[3]);
         }
 
         if k.is_zero() {
@@ -785,13 +783,13 @@ impl Secp256k1 {
 
         // TEMP: For k=1, return p directly
         if k == &BigInt256::from_u64(1) {
-            println!("DEBUG: mul_naive k=1, returning p directly");
+            debug!(" mul_naive k=1, returning p directly");
             return *p;
         }
 
         // For k=2, return double
         if k == &BigInt256::from_u64(2) {
-            println!("DEBUG: mul_naive k=2, returning double");
+            debug!(" mul_naive k=2, returning double");
             return self.double(p);
         }
 
@@ -807,7 +805,7 @@ impl Secp256k1 {
             current = self.double(&current);
             scalar = scalar.right_shift(1);
         }
-        println!("DEBUG: mul_naive final result: x={}, y={}",
+        debug!(" mul_naive final result: x={}, y={}",
             BigInt256::from_u64_array(result.x).to_hex(),
             BigInt256::from_u64_array(result.y).to_hex());
 
@@ -1606,7 +1604,7 @@ impl Secp256k1 {
 
         // Special case: if Z=1, point is already affine
         if z_big == BigInt256::from_u64(1) {
-            println!("DEBUG: to_affine Z=1, returning p.x={:x}, p.y={:x}", p.x[3], p.y[3]);
+            debug!(" to_affine Z=1, returning p.x={:x}, p.y={:x}", p.x[3], p.y[3]);
             return Point {
                 x: p.x,
                 y: p.y,
@@ -1642,13 +1640,13 @@ impl Secp256k1 {
 
         #[cfg(debug_assertions)]
         {
-            println!("DEBUG: to_affine input x={}, y={}, z={}", 
+            debug!(" to_affine input x={}, y={}, z={}", 
                      BigInt256::from_u64_array(p.x).to_hex(),
                      BigInt256::from_u64_array(p.y).to_hex(),
                      z_big.to_hex());
-            println!("DEBUG: to_affine z_inv={}, z_inv_sq={}, z_inv_cu={}",
+            debug!(" to_affine z_inv={}, z_inv_sq={}, z_inv_cu={}",
                      z_inv.to_str_radix(16), z_inv_sq.to_str_radix(16), z_inv_cu.to_str_radix(16));
-            println!("DEBUG: to_affine x_aff={}, y_aff={}",
+            debug!(" to_affine x_aff={}, y_aff={}",
                      x_aff.to_hex(), y_aff.to_hex());
         }
 
@@ -1739,7 +1737,7 @@ impl Secp256k1 {
         let y = BigInt256::from_u64_array(affine.y);
 
         // Debug: print hex values
-        println!("DEBUG: is_on_curve affine.x={}, affine.y={}", x.to_hex(), y.to_hex());
+        debug!(" is_on_curve affine.x={}, affine.y={}", x.to_hex(), y.to_hex());
 
         // Use num_bigint for exact curve check
         use num_bigint::BigUint;
@@ -1752,7 +1750,7 @@ impl Secp256k1 {
         let x3_big = (&x2_big * &x_big) % &p_big;
         let rhs_big = (x3_big + 7u32) % &p_big;
 
-        println!("DEBUG: is_on_curve exact x={}, y={}, y2={}, rhs={}",
+        debug!(" is_on_curve exact x={}, y={}, y2={}, rhs={}",
                 x_big.to_str_radix(16), y_big.to_str_radix(16),
                 y2_big.to_str_radix(16), rhs_big.to_str_radix(16));
 
@@ -1901,12 +1899,12 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         rhs_bytes_array[start..].copy_from_slice(&rhs_bytes);
         let rhs = BigInt256::from_bytes_be(&rhs_bytes_array);
 
-        println!("DEBUG: Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
+        debug!(" Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
 
         // Special case: if this is puzzle #66's x coordinate, return the known y
         let puzzle66_x = BigInt256::from_hex("00000000000000000000000000000002e00ddc93b1a8f8bf9afe880853090228").unwrap();
         if x == puzzle66_x {
-            println!("DEBUG: Recognized puzzle #66 x coordinate, using known y");
+            debug!(" Recognized puzzle #66 x coordinate, using known y");
             let known_y = BigInt256::from_hex("000000000000000000000000000000006c9226f6233635cd3b3a7662ea4c5c24").unwrap();
             let point = Point {
                 x: x.to_u64_array(),
@@ -1919,20 +1917,20 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         // GROK Coder Fix Block 2: Add Pre-Check in secp.rs decompress_point
         // Early residue check using Legendre symbol before attempting full modular sqrt
         if x >= self.p {
-            println!("DEBUG: Invalid x >= p: {}", x.to_hex());
+            debug!(" Invalid x >= p: {}", x.to_hex());
             return None;
         }
         let (legendre_exp, _) = self.barrett_p.sub(&self.p, &BigInt256::one()).div_rem(&BigInt256::from_u64(2));
         let legendre = self.pow_mod(&rhs, &legendre_exp, &self.p);
-        println!("DEBUG: Legendre symbol check - rhs: {}, exp: {}, legendre: {}", rhs.to_hex(), legendre_exp.to_hex(), legendre.to_hex());
+        debug!(" Legendre symbol check - rhs: {}, exp: {}, legendre: {}", rhs.to_hex(), legendre_exp.to_hex(), legendre.to_hex());
         if legendre != BigInt256::one() {
-            println!("DEBUG: Pre-check failed: x={} is not a quadratic residue (Legendre={}), cannot decompress", x.to_hex(), legendre.to_hex());
+            debug!(" Pre-check failed: x={} is not a quadratic residue (Legendre={}), cannot decompress", x.to_hex(), legendre.to_hex());
             return None;
         }
-        println!("DEBUG: Legendre check passed, proceeding to modular sqrt");
+        debug!(" Legendre check passed, proceeding to modular sqrt");
 
         let y_candidate = if x == generator_x {
-            println!("DEBUG: Using known generator point y coordinate");
+            debug!(" Using known generator point y coordinate");
             generator_y
         } else {
             // Compute modular square root for other points

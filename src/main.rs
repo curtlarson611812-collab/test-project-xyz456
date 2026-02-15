@@ -258,9 +258,8 @@ async fn main() -> Result<()> {
         }
         return Ok(());
     }
-    if config.verbose {
-        log::set_max_level(log::LevelFilter::Debug);
-    }
+    // Let env_logger handle log levels based on RUST_LOG environment variable
+    // Removed manual log level override to respect RUST_LOG=info setting
 
     println!("SpeedBitCrackV3 starting with config: basic_test={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, integration_test={}, test_solved={:?}, verbose={}, laptop={}",
              config.basic_test, config.test_puzzles, config.real_puzzle, config.check_pubkeys, config.integration_test, config.test_solved, config.verbose, config.laptop);
