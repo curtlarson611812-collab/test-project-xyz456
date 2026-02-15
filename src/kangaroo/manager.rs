@@ -307,60 +307,8 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
                 warn!("Stopping due to max operations or time limit");
                 return Ok(None);
             }
-            };
-                // Check collisions concurrently
-                self.collision_detector.check_collisions(&self.dp_table).await
-            };
-
-            // Execute concurrently to demonstrate overlap concept
-            let (step_result, collision_result) = tokio::join!(step_fut, collision_fut);
-
-            let stepped_kangaroos = step_result?;
-            let collision_result = collision_result?;
-
-            // Handle different collision result types
-            let collision_solution = match collision_result {
-                CollisionResult::Full(solution) => Some(solution),
-                CollisionResult::Near(near_states) => {
-                    info!("🎯 Near collision detected with {} kangaroo states - activating boosters", near_states.len());
-
-                    // Sacred rule boosters: enable via config flags
-                    if self.config.enable_stagnant_restart {
-                        self.restart_stagnant_herds(&near_states).await?;
-                    }
-
-                    if self.config.enable_adaptive_jumps {
-                        self.adapt_jump_tables(&near_states).await?;
-                    }
-
-                    if self.config.enable_multi_herd_merge {
-                        self.merge_near_collision_herds(&near_states).await?;
-                    }
-
-                    if self.config.enable_dp_feedback {
-                        self.apply_dp_bit_feedback(&near_states).await?;
-                    }
-
-                    None
-                },
-                CollisionResult::None => None,
-            };
-
-            // Check for distinguished points
-            let dp_candidates = self.find_distinguished_points(&stepped_kangaroos).await?;
-
-            // Add to DP table (async)
-            {
-                let mut dp_table = self.dp_table.lock().await;
                 for candidate in dp_candidates {
-                    if let Err(e) = dp_table.add_dp_async(candidate).await {
-                        warn!("Failed to add DP entry: {}", e);
-                    }
-                }
-            }
 
-            // Check collision result
-            if let Some(solution) = collision_solution {
                 info!("COLLISION DETECTED!");
                 if self.verify_solution(&solution)? {
                     return Ok(Some(solution));
