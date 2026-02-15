@@ -11,6 +11,7 @@ use crate::types::Point;
 use crate::math::bigint::{BigInt256, BigInt512};
 use crate::math::secp::Secp256k1;
 use crate::kangaroo::SearchConfig;
+use log::warn;
 
 /// Preset Magic 9 filter function (verbatim from RS code, no adjustments)
 /// Filters keys based on hex ending, mod 9, and prime residue patterns
@@ -1068,12 +1069,11 @@ pub fn is_attractor_proxy(x: &BigInt256) -> bool {
     low < 10 // Basin proxy (<10% for depth)
 }
 
-/// Concise Block: Scan with CUDA Mod9 in Full Valuable
-pub fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
+/// Concise Block: Scan with CUDA Mod9 in Full Valuable (async version)
+pub async fn scan_full_valuable_for_attractors_async(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
     // Use CUDA mod9 check for acceleration
-    let rt = tokio::runtime::Runtime::new()?;
     let config = crate::config::Config::default();
-    let hybrid = rt.block_on(crate::gpu::HybridGpuManager::new(&config, 0.001, 5))?;
+    let hybrid = crate::gpu::HybridGpuManager::new(&config, 0.001, 5).await?;
     let x_limbs: Vec<[u64;4]> = points.iter().map(|p| p.x).collect();
     let mod9_results = hybrid.dispatch_mod9_check(&x_limbs)?;
 
@@ -1098,6 +1098,36 @@ pub fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, 
     Ok((count, percent, clusters))
 }
 
+/// Concise Block: Scan with CUDA Mod9 in Full Valuable (synchronous wrapper)
+pub fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
+    // Since we're already in an async context, we need to create a runtime
+    // But avoid nested runtime creation by using tokio::spawn if needed
+    // For now, return a simple fallback that doesn't use GPU
+    warn!("scan_full_valuable_for_attractors called synchronously - using CPU fallback");
+
+    let mut count = 0;
+    let mut clusters = vec![];
+    let mut cluster_start = None;
+
+    for (i, point) in points.iter().enumerate() {
+        if is_attractor_proxy(&point.x_bigint()) {
+            count += 1;
+            if cluster_start.is_none() { cluster_start = Some(i); }
+        } else if let Some(start) = cluster_start {
+            let len = i - start;
+            if len > 1 { clusters.push((start, len)); }
+            cluster_start = None;
+        }
+    }
+    if let Some(start) = cluster_start {
+        let len = points.len() - start;
+        if len > 1 { clusters.push((start, len)); }
+    }
+
+    let percent = if points.is_empty() { 0.0 } else { count as f64 / points.len() as f64 * 100.0 };
+    Ok((count, percent, clusters))
+}
+
 /// Load valuable P2PK pubkeys from file with default configuration
 /// Sorts by magic 9 priority for sooner hits
 pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConfig)> {
@@ -1107,9 +1137,9 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
     let magic_count = count_magic9_in_list(&points);
     println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
 
-    // Scan for attractors and clusters with CUDA mod9 acceleration
+    // Count attractors using CPU-based detection
     let (count, percent, clusters) = scan_full_valuable_for_attractors(&points).unwrap_or((0, 0.0, vec![]));
-    println!("CUDA-Accel Attractors: {} ({:.1}%), Clusters: {:?}", count, percent, clusters);
+    println!("Attractors: {} ({:.1}%), Clusters: {:?}", count, percent, clusters);
     if percent > 15.0 {
         println!("Confirmed MANY related keys—bias high!");
     }
