@@ -287,8 +287,8 @@ async fn main() -> Result<()> {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             if let Err(e) = manager::run_full_range(&config).await {
-                println!("❌ Hunt failed: {}", e);
-                return Ok(());
+                println!("❌ Hunt failed: {:?}", e);
+                return;
             }
         });
         println!("[VICTORY] Hunt completed successfully.");
