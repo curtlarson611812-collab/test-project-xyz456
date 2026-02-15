@@ -334,38 +334,6 @@ mod tests {
         assert!(duration < max_duration, "Test took too long: {:?}", duration);
     }
 
-    /// Test master-level GLV decompose correctness with k256::Scalar
-    #[test]
-    fn test_glv_master_decompose_correctness() {
-        let curve = Secp256k1::new();
-        let test_scalars = vec![
-            k256::Scalar::from(1u64),
-            k256::Scalar::from(123456789u64),
-            k256::Scalar::from_u128(12345678901234567890u128),
-            k256::Scalar::MAX,
-        ];
-
-        for k in test_scalars {
-            let (k1, k2, sign1, sign2) = curve.glv_decompose_master(&k);
-
-            // Reconstruct: k should equal sign1*k1 + sign2*k2 * lambda mod n
-            let lambda = curve.glv_lambda_scalar();
-            let k2_lambda = k2 * lambda;
-
-            let mut reconstructed = if sign1 > 0 { k1 } else { -k1 };
-            let k2_term = if sign2 > 0 { k2_lambda } else { -k2_lambda };
-            reconstructed = reconstructed + k2_term;
-
-            // Should equal k mod n
-            let expected = k.reduce();
-            let reconstructed_reduced = reconstructed.reduce();
-
-            assert_eq!(reconstructed_reduced, expected,
-                "GLV master reconstruction failed for scalar {:?}", k);
-        }
-
-        println!("✅ GLV master decompose reconstruction verified");
-    }
 
     /// Test master-level GLV endomorphism apply
     #[test]

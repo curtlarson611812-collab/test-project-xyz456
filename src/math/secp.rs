@@ -915,91 +915,7 @@ impl Secp256k1 {
         (k1_final, k2_final)
     }
 
-    /// Professor-level GLV2 decompose with Babai's Nearest Plane Algorithm
-    pub fn glv2_decompose_babai(&self, k: &k256::Scalar) -> (k256::Scalar, k256::Scalar, i8, i8) {
-        let _v1 = Self::glv_v1_scalar();
-        let _v2 = Self::glv_v2_scalar();
-        let r1 = Self::glv_r1_scalar();
-        let r2 = Self::glv_r2_scalar();
-        let lambda = Self::glv_lambda_scalar();
 
-        // Babai's Nearest Plane Algorithm for 2D GLV lattice
-        // Step 1: Orthogonalize basis (Gram-Schmidt)
-        // For GLV2, v1* = v1, v2* = v2 - mu21*v1 where mu21 = <v2,v1>/||v1||^2
-        // Since we're in scalar field, use precomputed approximations
-
-        // Placeholder calculations for Babai rounding
-        let _k_big = BigInt256::zero();
-        let _v1_big = BigInt256::zero();
-        let _v2_big = BigInt256::zero();
-
-        // Placeholder calculations for Babai rounding
-        let t1_big = BigInt256::zero();
-        let t2_big = BigInt256::zero();
-
-        // Placeholder calculations for Babai rounding
-        let _t1_rounded = t1_big;
-        let _t2_rounded = t2_big;
-
-        // Placeholder scalars for Babai rounding
-        let q1 = k256::Scalar::ONE;
-        let q2 = k256::Scalar::ZERO;
-
-        // Step 3: Compute initial decomposition k1 = k - q1*r1 - q2*r2
-        let q1_r1 = q1 * r1;
-        let q2_r2 = q2 * r2;
-        let mut k1 = *k - q1_r1 - q2_r2;
-
-        // k2 = q1 + q2 * lambda
-        let q2_lambda = q2 * lambda;
-        let mut k2 = q1 + q2_lambda;
-
-        // Step 4: Multi-round Babai - Improve approximation
-        // Project residual onto lattice plane and adjust
-        let _residual = k1 * r1 + k2 * r2;
-        let _residual_proj = k256::Scalar::ZERO; // Placeholder for residual projection
-        let adjust = k256::Scalar::ZERO; // Placeholder for residual adjustment
-        k1 = k1 - adjust * r1;
-        k2 = k2 + adjust;
-
-        // Step 5: 4-combination shortest vector selection
-        let combos = [
-            (k1, k2, 1i8, 1i8),
-            (-k1, k2, -1i8, 1i8),
-            (k1, -k2, 1i8, -1i8),
-            (-k1, -k2, -1i8, -1i8),
-        ];
-
-        let mut min_max = k256::Scalar::from(u64::MAX);
-        let mut best_combo = combos[0];
-
-        for combo in &combos {
-            let k1_abs = if combo.2 < 0 { -combo.0 } else { combo.0 };
-            let k2_abs = if combo.3 < 0 { -combo.1 } else { combo.1 };
-            let max_norm = if k1_abs > k2_abs { k1_abs } else { k2_abs };
-
-            if max_norm < min_max {
-                min_max = max_norm;
-                best_combo = *combo;
-            }
-        }
-
-        let (k1_final, k2_final, sign1, sign2) = best_combo;
-
-        // Bounds check: |k1|, |k2| should be <= sqrt(n) ≈ 2^128
-        let sqrt_n = Self::glv_sqrt_n_scalar();
-        assert!(k1_final <= sqrt_n && k2_final <= sqrt_n,
-            "Babai GLV2 decomposition bounds exceeded: k1={:?}, k2={:?}, sqrt_n={:?}",
-            k1_final, k2_final, sqrt_n);
-
-        (k1_final, k2_final, sign1, sign2)
-    }
-
-    /// Professor-level GLV4 decompose with 4D Babai's Nearest Plane
-    pub fn glv4_decompose_babai(k: &k256::Scalar) -> ([k256::Scalar; 4], [i8; 4]) {
-        // Use the implementation from constants.rs
-        crate::math::constants::glv4_decompose_babai(k)
-    }
 
     /// Gram-Schmidt orthogonalization for 4D basis
     #[allow(dead_code)]
@@ -1215,53 +1131,6 @@ impl Secp256k1 {
         transposed
     }
 
-    /// Master-level GLV decompose using k256::Scalar with sign handling
-    pub fn glv_decompose_master(k: &k256::Scalar) -> (k256::Scalar, k256::Scalar, bool, bool) {
-        // Use precomputed v1, v2, r1, r2 for optimal lattice reduction
-        // This follows the exact GLV algorithm from literature
-
-        // Placeholder scalars for GLV computation
-        let v1 = k256::Scalar::ONE;
-        let v2 = k256::Scalar::ZERO;
-        let r1 = k256::Scalar::ZERO;
-        let r2 = k256::Scalar::ONE;
-
-        // Step 1: Compute q1 = round(k * v1 / 2^256), q2 = round(k * v2 / 2^256)
-        // For master implementation, we use the exact rounding algorithm
-        let kv1 = *k * v1;
-        let kv2 = *k * v2;
-
-        // Round to nearest integer (simulate division by 2^256)
-        let q1 = Self::round_scalar_div_2_256(&kv1);
-        let q2 = Self::round_scalar_div_2_256(&kv2);
-
-        // Step 2: Compute k1 = k - q1 * r1 - q2 * r2 (exact reduction)
-        let q1_r1 = q1 * r1;
-        let q2_r2 = q2 * r2;
-        let mut k1 = *k - q1_r1 - q2_r2;
-
-        // Step 3: Compute k2 = q1 * lambda + q2 (using GLV lambda)
-        let lambda_scalar = k256::Scalar::ONE; // Placeholder lambda scalar
-        let q1_lambda = q1 * lambda_scalar;
-        let mut k2 = q1_lambda + q2;
-
-        // Step 4: Apply sign adjustment for shortest vectors
-        let sign1 = false; // Placeholder sign detection
-        let sign2 = false;
-
-        // Ensure k1, k2 are positive and minimal
-        if sign1 {
-            k1 = -k1; // Negate for positive representation
-        }
-        if sign2 {
-            k2 = -k2;
-        }
-
-        // Bounds check: |k1|, |k2| should be <= sqrt(n) ≈ 2^128
-        // This is automatically satisfied by the GLV construction
-
-        (k1, k2, sign1, sign2)
-    }
 
     /// Master-level GLV endomorphism application with Jacobian coordinates
     pub fn endomorphism_apply(p: &k256::ProjectivePoint) -> k256::ProjectivePoint {
@@ -1270,28 +1139,6 @@ impl Secp256k1 {
         *p
     }
 
-    /// Professor-level GLV4 optimized scalar multiplication
-    pub fn mul_glv4_opt_babai(p: &k256::ProjectivePoint, k: &k256::Scalar) -> k256::ProjectivePoint {
-        let (coeffs, signs) = Self::glv4_decompose_babai(k);
-
-        // Precompute endomorphisms: p, phi(p), phi^2(p), phi^3(p)
-        let endos = [
-            *p,
-            Self::endomorphism_apply(p),
-            Self::endomorphism_apply2(p),
-            Self::endomorphism_apply3(p),
-        ];
-
-        let mut result = k256::ProjectivePoint::IDENTITY;
-
-        for i in 0..4 {
-            let partial = endos[i] * &coeffs[i];
-            let signed_partial = Self::cond_neg_ct(&partial, (signs[i] < 0) as u8);
-            result = result + signed_partial;
-        }
-
-        result
-    }
 
     /// Second endomorphism application: phi^2(p) = phi(phi(p))
     pub fn endomorphism_apply2(p: &k256::ProjectivePoint) -> k256::ProjectivePoint {
@@ -1529,19 +1376,6 @@ impl Secp256k1 {
         quotient + round_up_mask
     }
 
-    /// Master-level GLV optimized scalar multiplication
-    pub fn mul_glv_opt_master(p: &k256::ProjectivePoint, k: &k256::Scalar) -> k256::ProjectivePoint {
-        let (k1, k2, sign1, sign2) = Self::glv_decompose_master(k);
-
-        let p1 = Self::mul_short_ct(p, &k1);
-        let p1_signed = Self::cond_neg_ct(&p1, sign1 as u8);
-
-        let p2_endo = Self::endomorphism_apply(p);
-        let p2 = Self::mul_short_ct(&p2_endo, &k2);
-        let p2_signed = Self::cond_neg_ct(&p2, sign2 as u8);
-
-        p1_signed + p2_signed
-    }
 
     /// Helper function for rounding scalar division by 2^256
     fn round_scalar_div_2_256(x: &k256::Scalar) -> k256::Scalar {
