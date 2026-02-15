@@ -14,8 +14,8 @@ fn main() {
     // All valuable keys and Magic9 keys must be loaded from external files at runtime
     // This prevents key information from being embedded in the executable
 
-    println!("cargo:warning=SECURITY: Key-derived biases no longer embedded in binary");
-    println!("cargo:warning=All valuable and Magic9 keys must be loaded from external files at runtime");
+    // Security notes: Key-derived biases no longer embedded in binary
+    // All valuable keys and Magic9 keys must be loaded from external files at runtime
 
     // Only embed non-sensitive prime arrays (these are public mathematical constants)
     let primes: [u64; 32] = [
@@ -76,7 +76,7 @@ pub const SECONDARY_PRIMES: [u64; 8] = {};
 
 // Compile CUDA kernels using cc crate with enhanced debugging
 fn compile_cuda_kernels() {
-    println!("cargo:warning=Starting CUDA kernel compilation with enhanced debugging...");
+    // Starting CUDA kernel compilation with enhanced debugging...
 
     let cuda_path = std::env::var("CUDA_HOME").unwrap_or("/usr/local/cuda".to_string());
     println!("cargo:rustc-env=CUDA_HOME={cuda_path}");
@@ -87,17 +87,17 @@ fn compile_cuda_kernels() {
     // Check if nvcc is available
     let nvcc_path = format!("{}/bin/nvcc", cuda_path);
     if !std::path::Path::new(&nvcc_path).exists() {
-        println!("cargo:warning=nvcc not found at {}, checking PATH...", nvcc_path);
+        // nvcc not found at {}, checking PATH...
         if let Ok(output) = std::process::Command::new("which").arg("nvcc").output() {
             if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                println!("cargo:warning=nvcc found in PATH: {}", path);
+                let _path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                // nvcc found in PATH: {}
             } else {
-                println!("cargo:warning=nvcc not found in PATH either!");
+                // nvcc not found in PATH either!
             }
         }
     } else {
-        println!("cargo:warning=nvcc found at: {nvcc_path}");
+        // nvcc found at: {nvcc_path}
     }
 
     let mut builder = cc::Build::new();
@@ -116,10 +116,10 @@ fn compile_cuda_kernels() {
 
     // Allow override via environment variable
     if let Ok(arch) = env::var("GPU_ARCH") {
-        println!("cargo:warning=Using custom GPU arch: {}", arch);
+        // Using custom GPU arch: {}
         builder.flag(&format!("-arch={}", arch));
     } else {
-        println!("cargo:warning=Using default GPU arch: sm_86");
+        // Using default GPU arch: sm_86
     }
 
     let cu_files = vec![
@@ -128,18 +128,18 @@ fn compile_cuda_kernels() {
         "bias_check_kernel", "gold_cluster", "mod27_kernel", "mod81_kernel", "glv_decomp"
     ];
 
-    println!("cargo:warning=Compiling {} CUDA files together with shared constants header:", cu_files.len());
+    // Compiling {} CUDA files together with shared constants header:
     for file in &cu_files {
         let file_path = format!("src/gpu/cuda/{}.cu", file);
         if std::path::Path::new(&file_path).exists() {
-            println!("cargo:warning=  - {}", file_path);
+            // Compiling: {}
             builder.file(&file_path);
         } else {
-            println!("cargo:warning=  - {} (NOT FOUND!)", file_path);
+            // {} (NOT FOUND!)
         }
     }
 
-    println!("cargo:warning=Starting CUDA compilation...");
+    // Starting CUDA compilation...
     let start_time = std::time::Instant::now();
 
     // Compile all files together (constants are now shared via common_constants.h)
@@ -147,11 +147,11 @@ fn compile_cuda_kernels() {
         builder.compile("gpu_kernels");
     }) {
         Ok(_) => {
-            let elapsed = start_time.elapsed();
-            println!("cargo:warning=CUDA compilation completed successfully in {:.2}s", elapsed.as_secs_f64());
+            let _elapsed = start_time.elapsed();
+            // CUDA compilation completed successfully in {:.2}s
         }
-        Err(e) => {
-            println!("cargo:warning=CUDA compilation failed: {:?}", e);
+        Err(_e) => {
+            // CUDA compilation failed: {:?}
             // Don't panic - let the build continue and show Rust compilation errors
         }
     }
@@ -169,8 +169,8 @@ fn validate_vulkan_shaders() {
             let shader_path = format!("src/gpu/vulkan/shaders/{}", shader_file);
             if let Ok(shader_source) = std::fs::read_to_string(&shader_path) {
                 match validator.validate(&naga::front::wgsl::parse_str(&shader_source).unwrap()) {
-                    Ok(_) => println!("cargo:warning=WGSL validation passed: {}", shader_file),
-                    Err(e) => println!("cargo:warning=WGSL validation failed for {}: {:?}", shader_file, e),
+                    Ok(_) => {} // WGSL validation passed
+                    Err(_e) => {} // WGSL validation failed
                 }
             }
         }
