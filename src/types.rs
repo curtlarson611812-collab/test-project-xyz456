@@ -5,7 +5,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use crate::math::bigint::BigInt256;
-use k256::elliptic_curve::point::AffineCoordinates;
 
 /// Rho algorithm state for GPU kernel execution (common definition)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

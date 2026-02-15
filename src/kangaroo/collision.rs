@@ -9,8 +9,7 @@ use num_bigint::BigUint;
 use log::{info, debug};
 use std::ops::Add;
 use std::collections::HashMap;
-use k256::{ProjectivePoint, elliptic_curve::{point::AffineCoordinates, sec1::ToEncodedPoint}};
-use subtle::ConstantTimeEq;
+use k256::{ProjectivePoint, elliptic_curve::sec1::ToEncodedPoint};
 
 #[derive(Clone)]
 pub struct Trap {
@@ -492,7 +491,7 @@ impl CollisionDetector {
     }
 
     /// Perform Baby-Step Giant-Step search for discrete log
-    fn bsgs_search(&self, target: &BigUint, base_point: &[u64; 4], _target_point: &[u64; 4]) -> Option<Solution> {
+    fn bsgs_search(&self, target: &BigUint, _base_point: &[u64; 4], _target_point: &[u64; 4]) -> Option<Solution> {
         // Simplified BSGS implementation for near collisions
         // In production, this would use full BSGS algorithm with precomputed tables
         use num_bigint::BigUint;
@@ -527,7 +526,7 @@ impl CollisionDetector {
             // In practice, this would need proper jump reversal or history tracking
             for test_jump in 1..=100 {  // Try small backward jumps
                 let jump_neg = BigInt256::from_u64(test_jump);
-                let jump_neg_u64 = test_jump;
+                let _jump_neg_u64 = test_jump;
                 match self.curve.mul_constant_time(&jump_neg, &tame_walk.position) {
                     Ok(back_point) => {
                         let back_pos = KangarooState {
@@ -569,7 +568,7 @@ impl CollisionDetector {
             // Simplified: try various jump sizes
             for test_jump in 1..=100 {
                 let jump_fwd = BigInt256::from_u64(test_jump);
-                let jump_fwd_u64 = test_jump;
+                let _jump_fwd_u64 = test_jump;
                 match self.curve.mul_constant_time(&jump_fwd, &wild_walk.position) {
                     Ok(fwd_point) => {
                         let fwd_pos = KangarooState {
@@ -1262,7 +1261,7 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
     let mut handles = vec![];
 
     // Start m parallel rho walkers
-    for i in 0..m {
+    for _i in 0..m {
         let tx_clone = tx.clone();
         let pubkey_clone = *pubkey;
 
@@ -1282,7 +1281,7 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
                 // DP condition: hash(x) ≡ 0 mod 2^dp_bits
                 // Expected DP rate: 2^(-dp_bits) ≈ 1 in 2^24 for dp_bits=24
                 let dp_bits = (1.0 / theta).log2() as u32;
-                let encoded = point.to_encoded_point(false);
+                let _encoded = point.to_encoded_point(false);
 
                 // Convert affine x-coordinate to limbs for GPU compatibility
                 // Mathematical: x ∈ F_p represented as 4×64-bit limbs (little-endian)
@@ -1347,9 +1346,9 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
 /// Security: Constant-time operations prevent timing analysis of paths
 /// Performance: O(path_length) reconstruction, typically fast for collision resolution
 /// Correctness: Derives from group law associativity and inverse operations
-pub fn walk_back(collision: &Point, steps: u64, jump_table_neg: &[ProjectivePoint]) -> Result<Vec<Point>, Error> {
+pub fn walk_back(collision: &Point, steps: u64, _jump_table_neg: &[ProjectivePoint]) -> Result<Vec<Point>, Error> {
     let mut path = vec![];
-    let mut current = *collision;
+    let current = *collision;
     let mut dist = BigInt256::from_u64(steps);
     for _ in 0..steps {
         let idx = (current.x[0] as usize) % JUMP_TABLE.len(); // Simple hash based on x coordinate

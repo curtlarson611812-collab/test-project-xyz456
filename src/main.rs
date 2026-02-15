@@ -4,7 +4,6 @@
 //! Supports multiple target types with optimized search parameters
 
 use anyhow::{Result, anyhow};
-use clap::Parser;
 use hex;
 use log::{info, warn, error};
 
@@ -14,7 +13,7 @@ use speedbitcrack::types::KangarooState;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::bias;
 use speedbitcrack::types::RhoState;
-use speedbitcrack::utils::bias::{BiasAnalysis, analyze_comprehensive_bias, analyze_comprehensive_bias_with_global, GlobalBiasStats, compute_global_stats};
+use speedbitcrack::utils::bias::{BiasAnalysis};
 use speedbitcrack::math::constants::GENERATOR;
 use speedbitcrack::test_basic::run_basic_test;
 use speedbitcrack::simple_test::run_simple_test;
@@ -22,13 +21,12 @@ use std::process::Command;
 use std::fs::read_to_string;
 use regex::Regex;
 use bincode;
-use k256::elliptic_curve::{point::AffineCoordinates, sec1::{FromEncodedPoint, ToEncodedPoint}};
+use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::math::bigint::BigInt256;
 use speedbitcrack::types::Point;
 use rayon::prelude::*;
-use std::sync::Arc;
 use bloomfilter::Bloom;
 
 // CLI configuration now handled by Config struct from config.rs
@@ -249,7 +247,7 @@ async fn main() -> Result<()> {
 
         // Test manager creation with config
         match speedbitcrack::kangaroo::manager::KangarooManager::new(config.clone()) {
-            Ok(manager) => {
+            Ok(_manager) => {
                 println!("✅ Manager created successfully");
                 println!("🎉 Basic integration test PASSED - core components working!");
             }
@@ -993,10 +991,10 @@ fn run_bias_analysis() -> Result<()> {
     info!("📊 Loaded {} pubkeys for bias analysis", puzzle_data.len());
 
     // Compute global statistics for multi-modulus bias detection
-    let global_mod3 = compute_global_modulus_stats(&puzzle_data, 3)?;
-    let global_mod9 = compute_global_modulus_stats(&puzzle_data, 9)?;
-    let global_mod27 = compute_global_modulus_stats(&puzzle_data, 27)?;
-    let global_mod81 = compute_global_modulus_stats(&puzzle_data, 81)?;
+    let _global_mod3 = compute_global_modulus_stats(&puzzle_data, 3)?;
+    let _global_mod9 = compute_global_modulus_stats(&puzzle_data, 9)?;
+    let _global_mod27 = compute_global_modulus_stats(&puzzle_data, 27)?;
+    let _global_mod81 = compute_global_modulus_stats(&puzzle_data, 81)?;
 
     // Analyze comprehensive bias for each pubkey using global statistics
     // TODO: Implement proper k256 coordinate extraction for bias analysis
@@ -1162,10 +1160,10 @@ fn compute_global_modulus_stats(pubkeys: &[k256::ProjectivePoint], modulus: u64)
     let mut counts = vec![0u64; modulus as usize];
 
     for pk in pubkeys {
-        let affine = pk.to_affine();
+        let _affine = pk.to_affine();
         // TODO: Fix k256 coordinate extraction
         let x_bytes = [0u8; 32]; // Placeholder
-        let x_u64 = u64::from_be_bytes(x_bytes[24..32].try_into().unwrap());
+        let _x_u64 = u64::from_be_bytes(x_bytes[24..32].try_into().unwrap());
         let x_u64 = u64::from_be_bytes(x_bytes[24..32].try_into().unwrap());
         let residue = (x_u64 % modulus) as usize;
         counts[residue] += 1;
@@ -1750,7 +1748,7 @@ fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt25
 }
 
 /// Execute real Bitcoin puzzle solving
-fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config: &Config) -> Result<()> {
+fn execute_real(_gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config: &Config) -> Result<()> {
     info!("🎯 Bitcoin Puzzle #{}: Searching for private key", puzzle_num);
     info!("🎯 Target point: x={}, y={}",
           BigInt256::from_u64_array(point.x).to_hex(),
@@ -1768,8 +1766,8 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config:
     info!("🎯 Range size: 2^{} keys", puzzle_num);
 
     // Run the kangaroo algorithm
-    let curve = Secp256k1::new();
-    let detector = CollisionDetector::new();
+    let _curve = Secp256k1::new();
+    let _detector = CollisionDetector::new();
 
     // Generate initial kangaroos for this puzzle
     let mut tame_kangaroos = Vec::new();
@@ -1846,7 +1844,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config:
             .collect();
 
         // Process any collisions found
-        for (tame, wild) in collisions {
+        for (_tame, _wild) in collisions {
             info!("🎯 Potential collision detected between tame and wild kangaroo!");
             // In production, this would call the full collision solver
             // For now, just log and continue
@@ -1984,7 +1982,7 @@ struct ConversionStats {
     invalid_hex: usize,
 }
 
-fn validate_uncompressed_key(bytes: &[u8], line_num: usize, hex_str: &str) -> Result<String> {
+fn validate_uncompressed_key(bytes: &[u8], _line_num: usize, hex_str: &str) -> Result<String> {
     // Validate uncompressed key format and EC validity
     if bytes.len() != 65 || bytes[0] != 0x04 {
         return Err(anyhow!("Invalid uncompressed format: len={}, prefix=0x{:02x}", bytes.len(), bytes.get(0).unwrap_or(&0)));
@@ -2016,7 +2014,7 @@ fn validate_uncompressed_key(bytes: &[u8], line_num: usize, hex_str: &str) -> Re
     }
 }
 
-fn convert_compressed_to_uncompressed(bytes: &[u8], line_num: usize, hex_str: &str) -> Result<String> {
+fn convert_compressed_to_uncompressed(bytes: &[u8], _line_num: usize, _hex_str: &str) -> Result<String> {
     // Convert compressed key to uncompressed format
     match k256::EncodedPoint::from_bytes(bytes) {
         Ok(encoded_point) => {
@@ -2112,7 +2110,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     println!("📊 Analyzing {} valuable P2PK keys", lines.len());
     info!("📊 Analyzing {} valuable P2PK keys", lines.len());
 
-    let curve = Secp256k1::new();
+    let _curve = Secp256k1::new();
     let mut analysis_results: Vec<(String, BiasAnalysis, f64, bool)> = Vec::new();
     let mut compressed_count = 0;
     let mut uncompressed_count = 0;
@@ -2246,7 +2244,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
 
     // Filter high-bias keys
     let mut high_bias_keys = Vec::new();
-    for (hex_str, analysis, score, _) in &analysis_results {
+    for (hex_str, _analysis, score, _) in &analysis_results {
         if *score > actual_threshold {
             high_bias_keys.push(hex_str.clone());
         }
@@ -2268,7 +2266,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
 
     // Show top 10 most biased keys
     println!("\n🏆 Top 10 Most Biased Valuable P2PK Keys:");
-    for (i, (pubkey_hex, analysis, score, _)) in analysis_results.iter().take(10).enumerate() {
+    for (i, (pubkey_hex, _analysis, score, _)) in analysis_results.iter().take(10).enumerate() {
         println!("{}. {:.3} - {}", i + 1, score, pubkey_hex);
     }
 
@@ -2292,7 +2290,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     // Write high-bias keys with their bias scores
     for (i, pubkey_hex) in high_bias_keys.iter().enumerate() {
         // Find the corresponding analysis for this key
-        if let Some((_, analysis, score, _)) = analysis_results.iter().find(|(hex, _, _, _)| hex == pubkey_hex) {
+        if let Some((_, _analysis, score, _)) = analysis_results.iter().find(|(hex, _, _, _)| hex == pubkey_hex) {
             writeln!(output_file, "# Rank: {}, Bias: {:.3}", i + 1, score)?;
             writeln!(output_file, "{}", pubkey_hex)?;
             writeln!(output_file, "")?;
@@ -2461,7 +2459,7 @@ fn execute_magic9(_gen: &KangarooGenerator, points: &[Point]) -> Result<()> {
 
     // Generate shared tame paths (backward from attractor)
     // TODO: Implement proper shared tame DP map with k256 integration
-    let shared_tame = std::collections::HashMap::<u64, BigInt256>::new();
+    let _shared_tame = std::collections::HashMap::<u64, BigInt256>::new();
     info!("📊 Shared tame DP map: placeholder (0 entries) - needs k256 integration");
 
     // Magic 9 indices for output

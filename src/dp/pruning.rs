@@ -7,7 +7,6 @@ use crate::math::bigint::BigInt256;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use anyhow::Result;
-use rayon::prelude::*;
 
 /// DP table pruning manager
 pub struct DpPruning {
@@ -251,7 +250,7 @@ impl DpPruning {
     }
 
     /// Run cluster-based pruning (prefer dense clusters)
-    pub async fn prune_cluster_based(&self, max_cluster_size: usize) -> Result<PruningStats> {
+    pub async fn prune_cluster_based(&self, _max_cluster_size: usize) -> Result<PruningStats> {
         let mut stats = PruningStats::default();
         // Simplified cluster analysis - identify dense clusters
         // In production, this would analyze DP table for spatial clustering

@@ -1,7 +1,7 @@
 use crate::config::Config;
-use crate::types::{KangarooState, Target, Solution, Point, DpEntry};
+use crate::types::{KangarooState, Target, Solution, Point};
 use crate::dp::DpTable;
-use crate::math::{Secp256k1, bigint::BigInt256};
+use crate::math::bigint::BigInt256;
 use crate::gpu::backend::GpuBackend;
 use crate::gpu::backends::CpuBackend;
 use crate::kangaroo::search_config::SearchConfig;
@@ -17,7 +17,6 @@ use anyhow::anyhow;
 /// Performance: O(log p) due to optimized k256 implementation
 /// Correctness: Verifies quadratic residue and chooses correct root
 fn decompress_point_production(x_bytes: &[u8], sign: bool) -> anyhow::Result<Point> {
-    use k256::elliptic_curve::point::AffineCoordinates;
 
     // Use the existing Secp256k1 decompress_point method which handles Tonelli-Shanks
     let curve = crate::math::Secp256k1::new();
@@ -45,7 +44,6 @@ fn validate_point_on_curve(point: &Point) -> bool {
 /// Memory: O(size) hash map for fast collision resolution
 pub fn compute_shared_tame(attractor: &k256::ProjectivePoint, size: usize) -> std::collections::HashMap<u64, BigInt256> {
     use crate::math::constants::JUMP_TABLE_NEG;
-    use crate::utils::hash;
 
     let mut shared = std::collections::HashMap::new();
     let mut current = *attractor;
@@ -88,7 +86,6 @@ pub fn compute_shared_tame(attractor: &k256::ProjectivePoint, size: usize) -> st
 //     }
 // }
 
-use bincode;
 
 
 /// Central manager for kangaroo herd operations

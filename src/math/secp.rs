@@ -8,7 +8,6 @@
 use super::bigint::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
 use crate::types::Point;
 use rand::{RngCore, rngs::OsRng};
-use k256::elliptic_curve::PrimeField;
 use std::error::Error;
 use std::ops::{Add, Sub};
 use log::info;
@@ -930,17 +929,17 @@ impl Secp256k1 {
         // Since we're in scalar field, use precomputed approximations
 
         // Placeholder calculations for Babai rounding
-        let k_big = BigInt256::zero();
-        let v1_big = BigInt256::zero();
-        let v2_big = BigInt256::zero();
+        let _k_big = BigInt256::zero();
+        let _v1_big = BigInt256::zero();
+        let _v2_big = BigInt256::zero();
 
         // Placeholder calculations for Babai rounding
         let t1_big = BigInt256::zero();
         let t2_big = BigInt256::zero();
 
         // Placeholder calculations for Babai rounding
-        let t1_rounded = t1_big;
-        let t2_rounded = t2_big;
+        let _t1_rounded = t1_big;
+        let _t2_rounded = t2_big;
 
         // Placeholder scalars for Babai rounding
         let q1 = k256::Scalar::ONE;
@@ -957,8 +956,8 @@ impl Secp256k1 {
 
         // Step 4: Multi-round Babai - Improve approximation
         // Project residual onto lattice plane and adjust
-        let residual = k1 * r1 + k2 * r2;
-        let residual_proj = k256::Scalar::ZERO; // Placeholder for residual projection
+        let _residual = k1 * r1 + k2 * r2;
+        let _residual_proj = k256::Scalar::ZERO; // Placeholder for residual projection
         let adjust = k256::Scalar::ZERO; // Placeholder for residual adjustment
         k1 = k1 - adjust * r1;
         k2 = k2 + adjust;

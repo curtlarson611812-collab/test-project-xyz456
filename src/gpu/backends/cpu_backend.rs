@@ -127,7 +127,7 @@ impl GpuBackend for CpuBackend {
         table.push(current.clone());
 
         // Compute successive doublings: base^(2*i+1) = base^(2*(i-1)+1) * base^2
-        for i in 1..num_points {
+        for _i in 1..num_points {
             // Double the current point for base^(2*i+1) = (base^(2*(i-1)+1))^2
             current = CpuBackend::point_double(&current)?;
             table.push(current.clone());
@@ -217,7 +217,7 @@ impl GpuBackend for CpuBackend {
         Ok(results)
     }
 
-    fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_solve(&self, dps: &Vec<DpEntry>, _targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
         // CPU implementation for batch collision solving from DP entries
         let mut results = Vec::with_capacity(dps.len());
 
@@ -328,7 +328,7 @@ impl GpuBackend for CpuBackend {
 
         // Barrett reduction: q = floor((x * mu) >> (2 * bit_length))
         let bit_len = modulus_big.bits();
-        let shift = 2 * bit_len;
+        let _shift = 2 * bit_len;
 
         // q1 = x >> (bit_len - 1)
         let q1 = &x_big >> (bit_len - 1);
@@ -559,15 +559,15 @@ impl GpuBackend for CpuBackend {
         Err(anyhow!("CPU backend not available"))
     }
 
-    fn generate_preseed_pos(&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+    fn generate_preseed_pos(&self, _range_min: &crate::math::BigInt256, _range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
         Err(anyhow!("CPU backend not available"))
     }
 
-    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    fn blend_proxy_preseed(&self, _preseed_pos: Vec<f64>, _num_random: usize, _empirical_pos: Option<Vec<f64>>, _weights: (f64, f64, f64)) -> Result<Vec<f64>> {
         Err(anyhow!("CPU backend not available"))
     }
 
-    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    fn analyze_preseed_cascade(&self, _proxy_pos: &[f64], _bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
         Err(anyhow!("CPU backend not available"))
     }
 

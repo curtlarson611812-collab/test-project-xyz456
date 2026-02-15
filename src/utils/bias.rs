@@ -5,7 +5,6 @@
 
 use crate::types::Point;
 use crate::math::bigint::BigInt256;
-use k256::Scalar;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -77,7 +76,7 @@ pub fn compute_global_stats(keys: &[String], modulus: u64, num_bins: usize) -> R
 
 /// Calculate modular bias score using direct residue analysis
 /// This provides per-key bias scores that vary based on modular properties
-pub fn calculate_mod_bias(x_hex: &str, _stats: &GlobalBiasStats, modulus: u64, num_bins: usize) -> Result<f64> {
+pub fn calculate_mod_bias(x_hex: &str, _stats: &GlobalBiasStats, modulus: u64, _num_bins: usize) -> Result<f64> {
     let x = BigInt256::from_hex(x_hex.trim()).map_err(|e| anyhow!("Invalid hex: {}", e))?;
     let modulus_big = BigInt256::from_u64(modulus);
     let x_mod_big = x % modulus_big;
@@ -619,7 +618,7 @@ pub fn validate_mod_chain(bias: (u8, u8, u8, u8)) -> Result<(), String> {
 /// Get or compute pre-computed D_g for bias pattern (GOLD cluster + future extensions)
 /// Get hierarchical biased primes for kangaroo initialization
 /// Returns primes filtered by modulus, with fallback warnings
-pub fn get_biased_primes(target_mod: u8, modulus: u64, min_primes: usize) -> Vec<u64> {
+pub fn get_biased_primes(_target_mod: u8, _modulus: u64, _min_primes: usize) -> Vec<u64> {
     // Simplified implementation for compatibility
     // In a real implementation, this would load from build-time generated primes
     vec![2, 3, 5, 7, 11, 13, 17, 19, 23] // Fallback primes

@@ -155,11 +155,11 @@ impl HybridBackend {
     pub async fn hybrid_step_herd(
         &self,
         herd: &mut [KangarooState],
-        jumps: &[BigInt256],
-        config: &Config,
+        _jumps: &[BigInt256],
+        _config: &Config,
     ) -> Result<()> {
         // Split herd between Vulkan (bulk) and CUDA (precision)
-        let (vulkan_batch, cuda_batch) = self.split_herd_for_hybrid(herd);
+        let (_vulkan_batch, _cuda_batch) = self.split_herd_for_hybrid(herd);
         
         // Launch Vulkan bulk stepping (async)
         #[cfg(feature = "wgpu")]
@@ -674,7 +674,7 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_solve(&self, _dps: &Vec<DpEntry>, _targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
         // Dispatch to CUDA for collision solving
         #[cfg(feature = "rustacuda")]
         {
@@ -850,7 +850,7 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn simulate_cuda_fail(&mut self, fail: bool) {
+    fn simulate_cuda_fail(&mut self, _fail: bool) {
         // Simulate CUDA failure for testing
         #[cfg(feature = "rustacuda")]
         {

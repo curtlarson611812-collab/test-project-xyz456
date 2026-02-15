@@ -6,7 +6,7 @@
 use super::shared::SharedBuffer;
 use super::backends::hybrid_backend::HybridBackend;
 use super::backends::backend_trait::GpuBackend;
-use crate::types::{Point, Solution, KangarooState, Scalar};
+use crate::types::{Point, Solution, KangarooState};
 use crate::math::bigint::BigInt256;
 use crate::kangaroo::collision::Trap;
 use crate::math::secp::Secp256k1;

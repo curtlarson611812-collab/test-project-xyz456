@@ -372,7 +372,7 @@ fn div_round(a: &BigInt256, b: &BigInt256) -> BigInt256 {
 // 4D dot product for BigInt256 vectors
 fn dot_4d(_a: &[BigInt256; 4], _b: &[BigInt256; 4]) -> BigInt256 {
     let mut sum = BigInt256::zero();
-    for i in 0..4 {
+    for _i in 0..4 {
         // Placeholder: should multiply a[i] * b[i] and add to sum
         // For now, return zero to avoid compilation errors
         sum = sum + BigInt256::zero();
@@ -417,7 +417,7 @@ fn bigint_abs(x: &BigInt256) -> BigInt256 {
 /// Returns ([k0, k1, k2, k3], [s0, s1, s2, s3]) where si are ±1 signs
 pub fn glv4_decompose_babai(k: &Scalar) -> ([Scalar; 4], [i8; 4]) {
     // Convert k to BigInt256 target vector t = (k, 0, 0, 0)
-    let mut t = [
+    let t = [
         BigInt256::from_scalar(k),
         BigInt256::zero(),
         BigInt256::zero(),
