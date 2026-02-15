@@ -284,13 +284,10 @@ async fn main() -> Result<()> {
         }
 
         use speedbitcrack::kangaroo::manager;
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            if let Err(e) = manager::run_full_range(&config).await {
-                println!("❌ Hunt failed: {:?}", e);
-                return;
-            }
-        });
+        if let Err(e) = manager::run_full_range(&config).await {
+            println!("❌ Hunt failed: {:?}", e);
+            return Ok(());
+        }
         println!("[VICTORY] Hunt completed successfully.");
         return Ok(());
     }
