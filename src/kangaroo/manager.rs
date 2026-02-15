@@ -132,17 +132,6 @@ pub struct KangarooManager {
 
 impl KangarooManager {
     /// Create new KangarooManager
-    pub fn new(config: Config) -> Result<Self> {
-        let collision_detector = CollisionDetector::new();
-        // Create appropriate GPU backend based on configuration
-        // Use CPU backend for now since GPU features are disabled by default
-        let gpu_backend: Box<dyn GpuBackend> = Box::new(CpuBackend::new()?);
-        let generator = KangarooGenerator::new(&config);
-        let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, config.dp_bits)); // Use standard jump table
-        let collision_detector = CollisionDetector::new();
-        let parity_checker = ParityChecker::new();
-        let parity_checker = ParityChecker::new();
-
         Ok(KangarooManager {
             config,
             search_config: SearchConfig::default(),
@@ -391,26 +380,6 @@ pub fn check_bias_convergence(rate_history: &Vec<f64>, target: f64) -> bool {
 }
 
 // Main hunt mode entry points
-pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    println!("[LAUNCH] Herd size: {} | DP bits: {} | Near collisions: {:.2}",
-             config.herd_size, config.dp_bits, config.enable_near_collisions);
-
-    // Initialize the kangaroo manager for full range hunt
-    let mut manager = KangarooManager::new(config.clone())?;
-
-    println!("[JUMPS] Initiated after key verification ✓");
-
-    // Run the full range hunt
-    let solution = manager.run().await?;
-
-    if let Some(sol) = solution {
-        let private_key_bigint = BigInt256::from_u64_array(sol.private_key);
-    }
-
-    Ok(())
-}
-
-pub async fn run_puzzle_mode(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     println!("[PUZZLE] Starting puzzle mode hunt...");
 
     // For now, delegate to existing puzzle logic
@@ -640,4 +609,5 @@ pub async fn run_magic9_attractor(config: &Config) -> Result<(), Box<dyn std::er
 //         // Basic test placeholder
 //         assert!(true);
 //     }
+}
 // }
