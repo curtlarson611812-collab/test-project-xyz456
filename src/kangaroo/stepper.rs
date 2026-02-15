@@ -10,6 +10,7 @@ use anyhow::Result;
 
 /// Kangaroo stepper implementing jump operations
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct KangarooStepper {
     curve: Secp256k1,
     _jump_table: Vec<Point>, // Precomputed jump points
@@ -219,7 +220,7 @@ mod tests {
     /// Test batch stepping
     #[test]
     fn test_batch_step() {
-        let mut stepper = KangarooStepper::new(false);
+        let stepper = KangarooStepper::new(false);
         // Create test kangaroo states
         let state1 = KangarooState::new(
             stepper.curve.g.clone(),

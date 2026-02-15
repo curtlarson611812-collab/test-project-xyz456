@@ -147,6 +147,7 @@ pub fn hash_to_index(point: &Point) -> usize {
 // Usefulness: Primes ensure coprimality with curve order, uniform distribution
 pub fn sieve_primes(n: usize) -> Vec<u64> {
     let mut is_prime = vec![true; n + 1];
+    #[allow(unused_comparisons)]
     if n >= 0 { is_prime[0] = false; }
     if n >= 1 { is_prime[1] = false; }
 
@@ -570,6 +571,7 @@ pub fn test_glv4_decomposition(k: &Scalar) -> bool {
 const DIM: usize = 4; // Configurable via glv_dim
 
 // LLL reduction delta parameter (Lovasz condition)
+#[allow(dead_code)]
 static LLL_DELTA: LazyLock<BigInt256> = LazyLock::new(|| {
     BigInt256::from_u64(3) / BigInt256::from_u64(4) // 3/4 for standard LLL
 });

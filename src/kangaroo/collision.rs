@@ -1346,6 +1346,7 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
 /// Security: Constant-time operations prevent timing analysis of paths
 /// Performance: O(path_length) reconstruction, typically fast for collision resolution
 /// Correctness: Derives from group law associativity and inverse operations
+#[allow(dead_code)]
 pub fn walk_back(collision: &Point, steps: u64, _jump_table_neg: &[ProjectivePoint]) -> Result<Vec<Point>, Error> {
     let mut path = vec![];
     let current = *collision;
@@ -1366,6 +1367,7 @@ pub fn walk_back(collision: &Point, steps: u64, _jump_table_neg: &[ProjectivePoi
 /// Mathematical basis: Near-collisions may resolve to full collisions with path reconstruction
 /// Performance: O(near_threshold) walk-back attempts
 /// Usefulness: Increases collision detection success rate by ~15-25%
+#[allow(dead_code)]
 pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
     // Attempt walk-back to find actual collision
     match walk_back(near_point, steps, &[]) {

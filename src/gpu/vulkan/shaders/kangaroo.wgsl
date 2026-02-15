@@ -55,10 +55,10 @@ fn init_kangaroo(targets: array<PointJacob, BATCH_SIZE>, primes: array<u32,32>, 
     let t_idx = id / KANGS_PER_TARGET;
     let k_idx = id % KANGS_PER_TARGET;
     let prime = primes[k_idx % 32u];
-    let target = targets[t_idx];
+    let target_point = targets[t_idx];
     // Phase 6: GLV mul for init
     let prime_sc = scalar_from_u32(prime);
-    let start_point = mul_glv_opt(target, prime_sc); // Wild
+    let start_point = mul_glv_opt(target_point, prime_sc); // Wild
     return Kangaroo { point: start_point, dist: zero_scalar(), alpha: one_scalar(), beta: prime_sc, target_idx: t_idx, is_tame: false };
 }
 

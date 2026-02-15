@@ -2,8 +2,8 @@
 //!
 //! Unified interface for GPU acceleration backends (CUDA, Vulkan, CPU)
 
-use crate::kangaroo::collision::Trap;
-use crate::types::DpEntry;
+pub use crate::kangaroo::collision::Trap;
+pub use crate::types::DpEntry;
 use anyhow::Result;
 
 #[derive(Debug, Clone)]

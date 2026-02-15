@@ -13,6 +13,7 @@ use speedbitcrack::types::KangarooState;
 use speedbitcrack::utils::logging::setup_logging;
 use speedbitcrack::utils::bias;
 use speedbitcrack::types::RhoState;
+#[allow(unused_imports)]
 use speedbitcrack::utils::bias::{BiasAnalysis};
 use speedbitcrack::math::constants::GENERATOR;
 use speedbitcrack::test_basic::run_basic_test;
@@ -21,6 +22,7 @@ use std::process::Command;
 use std::fs::read_to_string;
 use regex::Regex;
 use bincode;
+#[allow(unused_imports)]
 use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use std::ops::{Add, Sub};
 use speedbitcrack::math::secp::Secp256k1;
@@ -1842,6 +1844,7 @@ fn execute_real(_gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config
 /// Convert valuable P2PK keys to uncompressed format and verify validity
 fn convert_valuable_p2pk_to_uncompressed() -> Result<()> {
     use std::fs;
+    #[allow(unused_imports)]
     use k256::elliptic_curve::sec1::ToEncodedPoint;
 
     println!("🔄 Converting valuable_p2pk_pubkeys.txt to uncompressed format...");
@@ -2300,6 +2303,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
 /// Analyze comprehensive bias patterns for a single puzzle
 fn analyze_single_puzzle_bias(puzzle_num: u32) -> Result<()> {
     use speedbitcrack::utils::bias::{analyze_comprehensive_bias, PUZZLE_145_BIAS, PUZZLE_135_BIAS};
+    #[allow(unused_imports)]
     use speedbitcrack::math::constants::GENERATOR;
     use speedbitcrack::math::secp::Secp256k1;
 

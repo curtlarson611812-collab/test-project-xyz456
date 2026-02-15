@@ -1656,7 +1656,7 @@ mod tests {
     fn test_mul_large() {
         let n = (*CURVE_ORDER_BIGINT).clone(); let a = n.clone() - BigInt256::one();
         let b = BigInt256::from_u64(2);
-        let expected = ((n.clone() - BigInt256::from_u64(2)) % n.clone());
+        let expected = (n.clone() - BigInt256::from_u64(2)) % n.clone();
         assert_eq!((a * b) % n.clone(), expected);
     }
 

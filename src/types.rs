@@ -610,6 +610,7 @@ mod tests {
 /// Memory: 8×4 = 32 bytes per coordinate (x,y,z stored as [u32;8] each)
 #[cfg_attr(feature = "rustacuda", derive(rustacuda::memory::DeviceCopy))]
 #[derive(Clone, Debug, zeroize::Zeroize)]
+#[allow(dead_code)]
 pub struct GpuKangaroo {
     /// X coordinate as 8×32-bit limbs (little-endian)
     pub position_x: [u32; 8],
@@ -629,6 +630,7 @@ impl GpuKangaroo {
     /// Convert from CPU KangarooState to GPU format
     /// Mathematical correctness: Preserves all coordinate and distance information
     /// Performance: O(1) conversion, enables efficient GPU data transfer
+    #[allow(dead_code)]
     pub fn from_cpu_state(state: &KangarooState) -> Self {
         Self {
             position_x: state.position.x.iter().flat_map(|&x| [(x & 0xFFFFFFFF) as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),

@@ -4,7 +4,8 @@ use crate::dp::DpTable;
 use crate::math::bigint::BigInt256;
 use crate::gpu::backend::GpuBackend;
 use log::debug;
-use crate::gpu::backends::CpuBackend;
+#[allow(unused_imports)]
+use crate::gpu::backends::{HybridBackend, CpuBackend};
 use crate::kangaroo::search_config::SearchConfig;
 use crate::kangaroo::{KangarooGenerator, KangarooStepper, CollisionDetector};
 use crate::utils::pubkey_loader;
@@ -18,6 +19,7 @@ use anyhow::anyhow;
 /// Security: Constant-time operations via k256 library
 /// Performance: O(log p) due to optimized k256 implementation
 /// Correctness: Verifies quadratic residue and chooses correct root
+#[allow(dead_code)]
 fn decompress_point_production(x_bytes: &[u8], sign: bool) -> anyhow::Result<Point> {
 
     // Use the existing Secp256k1 decompress_point method which handles Tonelli-Shanks
@@ -34,6 +36,7 @@ fn decompress_point_production(x_bytes: &[u8], sign: bool) -> anyhow::Result<Poi
 /// Mathematical derivation: Verify y² ≡ x³ + 7 mod p
 /// Security: Uses subtle::ConstantTimeEq for side-channel resistance
 /// Performance: O(1) field operations
+#[allow(dead_code)]
 fn validate_point_on_curve(point: &Point) -> bool {
     let curve = crate::math::Secp256k1::new();
     curve.is_on_curve(point)
@@ -91,6 +94,7 @@ pub fn compute_shared_tame(attractor: &k256::ProjectivePoint, size: usize) -> st
 
 
 /// Central manager for kangaroo herd operations
+#[allow(dead_code)]
 pub struct KangarooManager {
     config: Config,
     search_config: SearchConfig,
@@ -100,7 +104,7 @@ pub struct KangarooManager {
     tame_states: Vec<KangarooState>,
     dp_table: Arc<Mutex<DpTable>>,
     bloom: Option<cuckoofilter::CuckooFilter<Arc<Mutex<DpTable>>>>,
-    gpu_backend: Box<dyn GpuBackend>,
+    gpu_backend: Option<Box<dyn GpuBackend>>,
     generator: KangarooGenerator,
     stepper: std::cell::RefCell<KangarooStepper>,
     collision_detector: CollisionDetector,
@@ -154,7 +158,7 @@ impl KangarooManager {
             tame_states: Vec::new(),
             dp_table: Arc::new(Mutex::new(DpTable::new(dp_bits))),
             bloom: None,
-            gpu_backend: Box::new(CpuBackend::new()?),
+            gpu_backend: None, // CPU backend not used for production
             generator,
             stepper,
             collision_detector: CollisionDetector::new(),
@@ -183,7 +187,7 @@ impl KangarooManager {
             tame_states: Vec::new(),
             dp_table: Arc::new(Mutex::new(DpTable::new(dp_bits))),
             bloom: None,
-            gpu_backend: Box::new(CpuBackend::new()?),
+            gpu_backend: None, // CPU backend not used for production
             generator,
             stepper,
             collision_detector: CollisionDetector::new(),
@@ -200,7 +204,7 @@ impl KangarooManager {
                  config.herd_size, config.dp_bits);
 
         let mut manager = KangarooManager::new(config.clone())?;
-        manager.start_jumps();
+        manager.start_jumps()?;
 
         // Simple real hunt loop - step kangaroos in reasonable batches
         let steps_per_batch = 100; // Reasonable step count per cycle
@@ -227,7 +231,7 @@ impl KangarooManager {
     }
 
     /// Initialize kangaroo herds for the hunt using GPU acceleration
-    pub fn start_jumps(&mut self) {
+    pub fn start_jumps(&mut self) -> anyhow::Result<()> {
         info!("GPU-accelerated kangaroo herd initialization (< 0.5 seconds)...");
 
         // Convert targets to GPU format for batch initialization
@@ -252,7 +256,8 @@ impl KangarooManager {
         // Use GPU batch initialization for lightning-fast kangaroo generation
         debug!("Calling batch_init_kangaroos with tame_count={}, wild_count={}, targets={}",
                self.config.herd_size / 2, self.config.herd_size / 2, gpu_targets.len());
-        let (positions, distances, alphas, betas, types) = self.gpu_backend
+        let gpu_backend = self.gpu_backend.as_ref().ok_or_else(|| anyhow!("GPU backend not available - CPU backend not supported for production"))?;
+        let (positions, distances, alphas, betas, types) = gpu_backend
             .batch_init_kangaroos(
                 self.config.herd_size / 2, // tame_count
                 self.config.herd_size / 2, // wild_count
@@ -322,6 +327,7 @@ impl KangarooManager {
 
         info!("GPU-initialized {} wild and {} tame kangaroos in < 0.5 seconds!",
               self.wild_states.len(), self.tame_states.len());
+        Ok(())
     }
 
     /// Step all kangaroo herds by the specified number of steps (memory-efficient)

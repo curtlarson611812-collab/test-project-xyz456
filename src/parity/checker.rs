@@ -2,18 +2,22 @@
 //!
 //! CPU vs GPU bit-for-bit verification
 
+#[allow(unused_imports)]
 use crate::types::{KangarooState, Point};
+#[allow(unused_imports)]
 use crate::math::bigint::BigInt256;
 use crate::kangaroo::stepper::KangarooStepper;
+#[allow(unused_imports)]
 use crate::gpu::{GpuBackend, CpuBackend};
 use anyhow::Result;
+#[allow(unused_imports)]
 use std::time::Instant;
+#[allow(unused_imports)]
 use log::{warn, debug};
-
-/// Parity checker for CPU vs GPU verification
+#[allow(dead_code)]
 pub struct ParityChecker {
     cpu_stepper: KangarooStepper,
-    // gpu_backend: Box<dyn GpuBackend>, // TODO: Implement GPU parity checking
+    cpu_backend: CpuBackend,
     test_steps: usize,
 }
 
@@ -23,10 +27,11 @@ impl ParityChecker {
         // TODO: Initialize with proper config
         let _config = crate::config::Config::default();
         let cpu_stepper = KangarooStepper::new(false); // Use standard jump table
-        let _gpu_backend: Box<dyn GpuBackend> = Box::new(CpuBackend);
+        let cpu_backend = CpuBackend::new().unwrap();
 
         ParityChecker {
             cpu_stepper,
+            cpu_backend,
             test_steps: 10_000_000, // 10M steps
         }
     }
@@ -165,9 +170,9 @@ impl ParityChecker {
     pub async fn run_quick_test(&self) -> Result<bool> {
         // Temporarily reduce test steps
         let _original_steps = self.test_steps;
-        // This would require mutable self, so we'll create a temp checker
         let mut quick_checker = ParityChecker {
             cpu_stepper: self.cpu_stepper.clone(),
+            cpu_backend: CpuBackend::new().unwrap(),
             test_steps: 1000,
         };
 

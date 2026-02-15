@@ -577,6 +577,7 @@ pub fn analyze_preseed_cascade(_proxy_pos: &[f64], _bins: usize) -> Vec<(f64, f6
 // ============================================================================
 
 /// Pre-computed D_g cache for different bias patterns (GOLD cluster + future extensions)
+#[allow(dead_code)]
 static D_G_CACHE: std::sync::OnceLock<Mutex<HashMap<(u8, u8, u8, u8), BigInt256>>> =
     std::sync::OnceLock::new();
 
@@ -682,6 +683,7 @@ fn slice_to_high_density(positions: &[f64], hist: &[usize], threshold: f64) -> V
 }
 
 /// Get histogram bin for a position
+#[allow(dead_code)]
 fn get_hist_bin(pos: f64, hist: &[usize]) -> usize {
     let bin = ((pos * hist.len() as f64) as usize).min(hist.len() - 1);
     hist[bin]

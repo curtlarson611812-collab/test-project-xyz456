@@ -17,6 +17,7 @@ use k256::elliptic_curve::sec1::{ToEncodedPoint, FromEncodedPoint};
 
 
 
+#[allow(dead_code)]
 impl Secp256k1 {
     /// Known G*3 x-coordinate for testing (standard from ecdsa tool)
     pub fn known_3g_x() -> BigInt256 {
@@ -207,6 +208,7 @@ pub struct Secp256k1 {
     pub mont_b: BigInt256,
 }
 
+#[allow(dead_code)]
 impl Secp256k1 {
     /// Get the prime modulus p
     pub fn modulus(&self) -> &BigInt256 {

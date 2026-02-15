@@ -47,6 +47,7 @@ impl NsightRuleResult {
 
 /// Hybrid backend that dispatches operations to appropriate GPUs
 /// Uses Vulkan for bulk operations (step_batch) and CUDA for precision math
+#[allow(dead_code)]
 pub struct HybridBackend {
     #[cfg(feature = "wgpu")]
     vulkan: WgpuBackend,
@@ -231,14 +232,14 @@ impl HybridBackend {
     /// Optimized dispatch with dynamic load balancing
     pub async fn dispatch_step_batch(
         &self,
-        positions: &mut Vec<[[u32; 8]; 3]>,
-        distances: &mut Vec<[u32; 8]>,
-        types: &Vec<u32>,
-        _batch_size: usize,
+        #[allow(unused_variables)] positions: &mut Vec<[[u32; 8]; 3]>,
+        #[allow(unused_variables)] distances: &mut Vec<[u32; 8]>,
+        #[allow(unused_variables)] types: &Vec<u32>,
+        #[allow(unused_variables)] _batch_size: usize,
     ) -> Result<Vec<Trap>> {
         let (_cuda_ratio, _vulkan_ratio) = self.profile_device_performance().await;
 
-        #[allow(unused_assignments)]
+        #[allow(unused_assignments, unused_mut, unused_variables)]
         let mut all_traps = Vec::new();
 
         #[cfg(feature = "rustacuda")]
@@ -319,11 +320,13 @@ impl HybridBackend {
         }
 
         // If no GPU backends available, use CPU for everything
+        // PRESERVED: This fallback code is kept for future CPU-only operation modes
         #[cfg(not(any(feature = "rustacuda", feature = "wgpu")))]
         {
             return Err(anyhow!("No GPU backends available for step_batch! CPU backend not allowed for production GPU operations."));
         }
 
+        #[allow(unreachable_code)]
         Ok(all_traps)
     }
 
@@ -575,6 +578,7 @@ pub enum SharedBuffer {
 }
 
 #[async_trait::async_trait]
+#[allow(dead_code)]
 impl GpuBackend for HybridBackend {
     async fn new() -> Result<Self> {
         Self::new().await
@@ -594,7 +598,7 @@ impl GpuBackend for HybridBackend {
         return self.cpu.batch_init_kangaroos(tame_count, wild_count, targets);
     }
 
-    fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>> {
+    fn precomp_table(&self, #[allow(unused_variables)] base: [[u32;8];3], #[allow(unused_variables)] window: u32) -> Result<Vec<[[u32;8];3]>> {
         // Dispatch to CUDA for precision GLV precomputation (if available)
         #[cfg(feature = "rustacuda")]
         {
@@ -614,7 +618,7 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn precomp_table_glv(&self, base: [u32;8*3], window: u32) -> Result<Vec<[[u32;8];3]>> {
+    fn precomp_table_glv(&self, #[allow(unused_variables)] base: [u32;8*3], #[allow(unused_variables)] window: u32) -> Result<Vec<[[u32;8];3]>> {
         // Dispatch to CUDA for precision GLV precomputation (if available)
         #[cfg(feature = "rustacuda")]
         {
@@ -634,7 +638,7 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+    fn step_batch(&self, #[allow(unused_variables)] positions: &mut Vec<[[u32;8];3]>, #[allow(unused_variables)] distances: &mut Vec<[u32;8]>, #[allow(unused_variables)] types: &Vec<u32>) -> Result<Vec<Trap>> {
         // Dispatch to Vulkan for bulk stepping operations
         #[cfg(feature = "wgpu")]
         {
@@ -646,7 +650,7 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+    fn step_batch_bias(&self, #[allow(unused_variables)] positions: &mut Vec<[[u32;8];3]>, #[allow(unused_variables)] distances: &mut Vec<[u32;8]>, #[allow(unused_variables)] types: &Vec<u32>, #[allow(unused_variables)] config: &crate::config::Config) -> Result<Vec<Trap>> {
         // Dispatch to Vulkan for bias-enhanced bulk stepping operations
         #[cfg(feature = "wgpu")]
         {
@@ -1213,6 +1217,7 @@ impl HybridBackend {
 
 
 
+    #[allow(dead_code)]
     fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         #[cfg(feature = "rustacuda")]
         if self.cuda_available {
@@ -1225,6 +1230,7 @@ impl HybridBackend {
         self.cpu.mul_glv_opt(_p, _k)
     }
 
+    #[allow(dead_code)]
     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
         #[cfg(feature = "rustacuda")]
         if self.cuda_available {
@@ -1237,6 +1243,7 @@ impl HybridBackend {
         self.cpu.mod_inverse(a, modulus)
     }
 
+    #[allow(dead_code)]
     fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
         // Dispatch to CUDA for multiplication
         #[cfg(feature = "rustacuda")]
@@ -1250,15 +1257,18 @@ impl HybridBackend {
         self.cpu.bigint_mul(a, b)
     }
 
+    #[allow(dead_code)]
     fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
         // Use Barrett reduction
         self.barrett_reduce(a, modulus, &compute_mu_big(modulus))
     }
 
+    #[allow(dead_code)]
     fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
         self.mul_glv_opt(_p, _k)
     }
 
+    #[allow(dead_code)]
     fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
         let x_extended = _x.map(|v| [v, 0,0,0,0,0,0,0,0]).concat();
         let modulus_bytes = _modulus.to_le_bytes();
@@ -1267,10 +1277,12 @@ impl HybridBackend {
         Ok(res[0] as u32 % _modulus)
     }
 
+    #[allow(dead_code)]
     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
         points.iter().map(|p| self.mod_small(p[0], modulus)).collect()
     }
 
+    #[allow(dead_code)]
     fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
         // Stub implementation
         Ok(super::backend_trait::RhoWalkResult {
@@ -1280,16 +1292,19 @@ impl HybridBackend {
         })
     }
 
+    #[allow(dead_code)]
     fn solve_post_walk(&self, _walk_result: &super::backend_trait::RhoWalkResult, _targets: &Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
         // Stub
         Ok(Some([42,0,0,0,0,0,0,0]))
     }
 
 
+    #[allow(dead_code)]
     fn simulate_cuda_fail(&mut self, fail: bool) {
         self.cuda_available = !fail;
     }
 
+    #[allow(dead_code)]
     fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
         #[cfg(feature = "rustacuda")]
         if self.cuda_available {
@@ -1310,6 +1325,7 @@ impl HybridBackend {
         let mut u64_arr = [0u64; 4]; for i in 0..4 { u64_arr[i] = (u32_arr[2*i+1] as u64) << 32 | u32_arr[2*i] as u64; } u64_arr
     }
 
+    #[allow(dead_code)]
     fn generate_preseed_pos(&self, range_min: &BigInt256, range_width: &BigInt256) -> Result<Vec<f64>> {
         #[cfg(feature = "rustacuda")]
         if self.cuda_available {
@@ -1325,6 +1341,7 @@ impl HybridBackend {
         Ok(crate::utils::bias::generate_preseed_pos(&min_scalar, &width_scalar))
     }
 
+    #[allow(dead_code)]
     fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
         #[cfg(feature = "rustacuda")]
         if self.cuda_available {
@@ -1338,6 +1355,7 @@ impl HybridBackend {
         Ok(crate::utils::bias::blend_proxy_preseed(preseed_pos, num_random, empirical_pos, weights, false))
     }
 
+    #[allow(dead_code)]
     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
         #[cfg(feature = "rustacuda")]
         if self.cuda_available {
@@ -1356,10 +1374,12 @@ impl HybridBackend {
 }
 
 // Helper functions
+#[allow(dead_code)]
 fn compute_mu_big(_modulus: &[u32;8]) -> [u32;16] {
     [0;16] // Placeholder
 }
 
+#[allow(dead_code)]
 fn compute_mu_small(_modulus: u32) -> [u32;16] {
     [0;16] // Placeholder
 }
