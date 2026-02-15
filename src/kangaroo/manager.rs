@@ -3,6 +3,7 @@ use crate::types::{KangarooState, Target, Solution, Point};
 use crate::dp::DpTable;
 use crate::math::bigint::BigInt256;
 use crate::gpu::backend::GpuBackend;
+use log::debug;
 use crate::gpu::backends::CpuBackend;
 use crate::kangaroo::search_config::SearchConfig;
 use crate::kangaroo::{KangarooGenerator, KangarooStepper, CollisionDetector};
@@ -249,6 +250,8 @@ impl KangarooManager {
             .collect();
 
         // Use GPU batch initialization for lightning-fast kangaroo generation
+        debug!("Calling batch_init_kangaroos with tame_count={}, wild_count={}, targets={}",
+               self.config.herd_size / 2, self.config.herd_size / 2, gpu_targets.len());
         let (positions, distances, alphas, betas, types) = self.gpu_backend
             .batch_init_kangaroos(
                 self.config.herd_size / 2, // tame_count
@@ -256,6 +259,7 @@ impl KangarooManager {
                 &gpu_targets
             )
             .expect("GPU batch initialization failed");
+        debug!("batch_init_kangaroos returned {} kangaroos", positions.len());
 
         // Convert GPU format back to CPU KangarooState format
         self.tame_states = Vec::new();

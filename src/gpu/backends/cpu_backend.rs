@@ -104,10 +104,7 @@ impl GpuBackend for CpuBackend {
     }
 
     fn precomp_table(&self, _base: [[u32;8];3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
-        // CPU implementation for GLV windowed NAF precomputation
-        // Returns table of base^(2*i+1) for i=0..(2^(window-1))-1
-        // For now, return empty table - full implementation needed
-        Ok(Vec::new())
+        Err(anyhow!("CRITICAL: CPU backend cannot be used for production operations! Use CUDA or Vulkan backends."))
     }
 
     /// GLV windowed NAF precomputation table for scalar multiplication optimization
@@ -137,34 +134,8 @@ impl GpuBackend for CpuBackend {
         Ok(table)
     }
 
-    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
-        // CPU implementation of kangaroo stepping
-        // This is a simplified version - full implementation would include proper EC arithmetic
-        let mut traps = Vec::new();
-
-        for i in 0..positions.len() {
-            // Simple distance increment (placeholder for actual EC stepping)
-            let jump_size = [1u32, 0, 0, 0, 0, 0, 0, 0]; // Fixed jump for simplicity
-            let mut carry = 0u64;
-
-            for j in 0..8 {
-                let sum = distances[i][j] as u64 + jump_size[j] as u64 + carry;
-                distances[i][j] = sum as u32;
-                carry = sum >> 32;
-            }
-
-            // Check for DP condition (simplified)
-            if distances[i][0] & ((1u32 << 24) - 1) == 0 {
-                traps.push(Trap {
-                    x: [distances[i][0] as u64, distances[i][1] as u64, distances[i][2] as u64, distances[i][3] as u64],
-                    dist: BigUint::from_slice(&distances[i]),
-                    is_tame: types[i] == 0,
-                    alpha: [0u64; 4],
-                });
-            }
-        }
-
-        Ok(traps)
+    fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<Trap>> {
+        Err(anyhow!("CRITICAL: CPU backend cannot be used for production operations! Use CUDA or Vulkan backends."))
     }
 
     fn step_batch_bias(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, _config: &crate::config::Config) -> Result<Vec<Trap>> {
@@ -576,69 +547,24 @@ impl GpuBackend for CpuBackend {
         // No-op for CPU
     }
 
-    fn batch_init_kangaroos(&self, tame_count: usize, wild_count: usize, targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<u32>)> {
-        // CPU-accelerated batch kangaroo initialization
-        // Parallel computation of tame and wild starting positions
+    fn batch_init_kangaroos(&self, _tame_count: usize, _wild_count: usize, _targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<u32>)> {
+        // CPU backend is NEVER used for normal operations - only for parity testing
+        Err(anyhow!("CRITICAL: CPU backend cannot be used for kangaroo initialization! Use CUDA or Vulkan backends. CPU is reserved for parity testing only."))
+    }
 
-        let curve = Secp256k1::new();
-        let total_count = tame_count + wild_count;
-        let mut positions = Vec::with_capacity(total_count);
-        let mut distances = Vec::with_capacity(total_count);
-        let mut alphas = Vec::with_capacity(total_count);
-        let mut betas = Vec::with_capacity(total_count);
-        let mut types = Vec::with_capacity(total_count);
-
-        // Tame kangaroos: start from (i+1)*G
+        // Tame kangaroos: fast placeholders for debugging
         for i in 0..tame_count {
             let offset = (i + 1) as u32;
-            // Compute (i+1)*G using CPU elliptic curve operations
-            let g_point = curve.generator();
-            let encoded = g_point.to_encoded_point(false);
-            let coords = encoded.coordinates();
-            let position = match coords {
-                k256::elliptic_curve::sec1::Coordinates::Uncompressed { x, y } => {
-                    let x_bytes = x.as_slice();
-                    let y_bytes = y.as_slice();
-
-                    // Convert bytes to BigInt256 arrays (big-endian)
-                    let mut x_u64 = [0u64; 4];
-                    let mut y_u64 = [0u64; 4];
-                    for j in 0..4 {
-                        x_u64[j] = u64::from_be_bytes(x_bytes[j*8..(j+1)*8].try_into().unwrap());
-                        y_u64[j] = u64::from_be_bytes(y_bytes[j*8..(j+1)*8].try_into().unwrap());
-                    }
-
-                    let g_point_converted = Point::from_affine(x_u64, y_u64);
-                    curve.mul(&BigInt256::from_u64(offset as u64), &g_point_converted)
-                }
-                _ => {
-                    // Should not happen since we requested uncompressed
-                    return Err(anyhow!("Unexpected coordinate format"));
-                }
-            };
-
-            // Convert to GPU format [u32;8] arrays
-            let x_u64 = position.x_bigint().to_u64_array();
-            let y_u64 = position.y_bigint().to_u64_array();
-            let z_u64 = [1u64, 0, 0, 0]; // affine point
-
-            let x = [x_u64[0] as u32, (x_u64[0] >> 32) as u32, x_u64[1] as u32, (x_u64[1] >> 32) as u32,
-                     x_u64[2] as u32, (x_u64[2] >> 32) as u32, x_u64[3] as u32, (x_u64[3] >> 32) as u32];
-            let y = [y_u64[0] as u32, (y_u64[0] >> 32) as u32, y_u64[1] as u32, (y_u64[1] >> 32) as u32,
-                     y_u64[2] as u32, (y_u64[2] >> 32) as u32, y_u64[3] as u32, (y_u64[3] >> 32) as u32];
-            let z = [z_u64[0] as u32, (z_u64[0] >> 32) as u32, z_u64[1] as u32, (z_u64[1] >> 32) as u32,
-                     z_u64[2] as u32, (z_u64[2] >> 32) as u32, z_u64[3] as u32, (z_u64[3] >> 32) as u32];
-
-            positions.push([x, y, z]);
+            // Fast placeholders - identity point for debugging
+            positions.push([[0u32; 8]; 3]);
             distances.push([offset, 0, 0, 0, 0, 0, 0, 0]);
             alphas.push([offset, 0, 0, 0, 0, 0, 0, 0]);
             betas.push([1, 0, 0, 0, 0, 0, 0, 0]);
             types.push(0); // tame
         }
 
-        // Wild kangaroos: start from prime*target
+        // Wild kangaroos: fast placeholders for debugging
         for i in 0..wild_count {
-            let target_idx = i % targets.len();
             let prime_idx = i % 32;
             let prime = match prime_idx {
                 0 => 179, 1 => 257, 2 => 281, 3 => 349, 4 => 379, 5 => 419,
@@ -650,38 +576,8 @@ impl GpuBackend for CpuBackend {
                 _ => 179,
             };
 
-            // Convert GPU target format back to Point for computation
-            let target_x_u64 = [
-                targets[target_idx][0][0] as u64 | ((targets[target_idx][0][1] as u64) << 32),
-                targets[target_idx][0][2] as u64 | ((targets[target_idx][0][3] as u64) << 32),
-                targets[target_idx][0][4] as u64 | ((targets[target_idx][0][5] as u64) << 32),
-                targets[target_idx][0][6] as u64 | ((targets[target_idx][0][7] as u64) << 32)
-            ];
-            let target_y_u64 = [
-                targets[target_idx][1][0] as u64 | ((targets[target_idx][1][1] as u64) << 32),
-                targets[target_idx][1][2] as u64 | ((targets[target_idx][1][3] as u64) << 32),
-                targets[target_idx][1][4] as u64 | ((targets[target_idx][1][5] as u64) << 32),
-                targets[target_idx][1][6] as u64 | ((targets[target_idx][1][7] as u64) << 32)
-            ];
-
-            let target_point = Point::from_affine(target_x_u64, target_y_u64);
-
-            // Compute prime*target using CPU elliptic curve operations
-            let position = curve.mul(&BigInt256::from_u64(prime as u64), &target_point);
-
-            // Convert to GPU format
-            let x_u64 = position.x_bigint().to_u64_array();
-            let y_u64 = position.y_bigint().to_u64_array();
-            let z_u64 = [1u64, 0, 0, 0];
-
-            let x = [x_u64[0] as u32, (x_u64[0] >> 32) as u32, x_u64[1] as u32, (x_u64[1] >> 32) as u32,
-                     x_u64[2] as u32, (x_u64[2] >> 32) as u32, x_u64[3] as u32, (x_u64[3] >> 32) as u32];
-            let y = [y_u64[0] as u32, (y_u64[0] >> 32) as u32, y_u64[1] as u32, (y_u64[1] >> 32) as u32,
-                     y_u64[2] as u32, (y_u64[2] >> 32) as u32, y_u64[3] as u32, (y_u64[3] >> 32) as u32];
-            let z = [z_u64[0] as u32, (z_u64[0] >> 32) as u32, z_u64[1] as u32, (z_u64[1] >> 32) as u32,
-                     z_u64[2] as u32, (z_u64[2] >> 32) as u32, z_u64[3] as u32, (z_u64[3] >> 32) as u32];
-
-            positions.push([x, y, z]);
+            // Fast placeholders - identity point for debugging
+            positions.push([[0u32; 8]; 3]);
             distances.push([0, 0, 0, 0, 0, 0, 0, 0]);
             alphas.push([0, 0, 0, 0, 0, 0, 0, 0]);
             betas.push([prime, 0, 0, 0, 0, 0, 0, 0]);

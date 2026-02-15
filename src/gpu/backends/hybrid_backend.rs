@@ -270,30 +270,26 @@ impl HybridBackend {
                                             Ok(cuda_traps) => all_traps.extend(cuda_traps),
                                             Err(e) => {
                                                 log::warn!("CUDA unified batch failed: {}", e);
-                                                // Fallback to CPU
-                                                let cpu_traps = self.cpu.step_batch(&mut cuda_positions_vec, &mut cuda_distances_vec, &cuda_types_vec)?;
-                                                all_traps.extend(cpu_traps);
+                                                // CRITICAL: Never fallback to CPU backend for GPU operations
+                                                return Err(anyhow!("CUDA batch processing failed and no CPU fallback allowed! Check GPU status."));
                                             }
                                         }
                                     }
                                     Err(_) => {
                                         log::warn!("Failed to allocate unified types buffer, using CPU");
-                                        let cpu_traps = self.cpu.step_batch(&mut cuda_positions_vec, &mut cuda_distances_vec, &cuda_types_vec)?;
-                                        all_traps.extend(cpu_traps);
+                                        return Err(anyhow!("CUDA batch processing failed and no CPU fallback allowed! Check GPU status."));
                                     }
                                 }
                             }
                             Err(_) => {
                                 log::warn!("Failed to allocate unified distances buffer, using CPU");
-                                let cpu_traps = self.cpu.step_batch(&mut cuda_positions_vec, &mut cuda_distances_vec, &cuda_types_vec)?;
-                                all_traps.extend(cpu_traps);
+                                return Err(anyhow!("CUDA batch processing failed and no CPU fallback allowed! Check GPU status."));
                             }
                         }
                     }
                     Err(_) => {
                         log::warn!("Failed to allocate unified positions buffer, using CPU");
-                        let cpu_traps = self.cpu.step_batch(&mut cuda_positions_vec, &mut cuda_distances_vec, &cuda_types_vec)?;
-                        all_traps.extend(cpu_traps);
+                        return Err(anyhow!("CUDA batch processing failed and no CPU fallback allowed! Check GPU status."));
                     }
                 }
             }
@@ -316,8 +312,7 @@ impl HybridBackend {
                     Err(e) => {
                         log::warn!("Vulkan batch failed, falling back to CPU: {}", e);
                         // Fallback to CPU for this portion
-                        let cpu_traps = self.cpu.step_batch(&mut vulkan_positions_vec, &mut vulkan_distances_vec, &vulkan_types_vec)?;
-                        all_traps.extend(cpu_traps);
+                        return Err(anyhow!("Vulkan batch processing failed and no CPU fallback allowed! Check GPU status."));
                     }
                 }
             }
@@ -326,7 +321,7 @@ impl HybridBackend {
         // If no GPU backends available, use CPU for everything
         #[cfg(not(any(feature = "rustacuda", feature = "wgpu")))]
         {
-            all_traps = self.cpu.step_batch(positions, distances, types)?;
+            return Err(anyhow!("No GPU backends available for step_batch! CPU backend not allowed for production GPU operations."));
         }
 
         Ok(all_traps)
@@ -614,7 +609,7 @@ impl GpuBackend for HybridBackend {
             }
             #[cfg(not(feature = "wgpu"))]
             {
-                self.cpu.precomp_table(base, window)
+                Err(anyhow!("No GPU backends available for precomputation! CPU backend not allowed for production."))
             }
         }
     }
@@ -634,7 +629,7 @@ impl GpuBackend for HybridBackend {
             }
             #[cfg(not(feature = "wgpu"))]
             {
-                self.cpu.precomp_table_glv(base, window)
+                Err(anyhow!("No GPU backends available for GLV precomputation! CPU backend not allowed for production."))
             }
         }
     }
@@ -647,7 +642,7 @@ impl GpuBackend for HybridBackend {
         }
         #[cfg(not(feature = "wgpu"))]
         {
-            self.cpu.step_batch(positions, distances, types)
+            Err(anyhow!("CRITICAL: No GPU backend available! Vulkan not compiled in. Use CUDA or Vulkan for production."))
         }
     }
 
@@ -659,7 +654,7 @@ impl GpuBackend for HybridBackend {
         }
         #[cfg(not(feature = "wgpu"))]
         {
-            self.cpu.step_batch_bias(positions, distances, types, config)
+            Err(anyhow!("CRITICAL: No GPU backend available! Vulkan not compiled in. Use CUDA or Vulkan for production."))
         }
     }
 

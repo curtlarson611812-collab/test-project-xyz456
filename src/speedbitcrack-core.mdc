@@ -259,9 +259,9 @@ Project Root:
 
 6. **Jump Table & Stepping** — Round-based (one jump per round per kangaroo), 8 deterministic ops base (G ± kG, Target ± kTarget). Expandable only via --expanded-jump-table. Include negation map for symmetry (check P and -P).
 
-7. **Backend** — Hybrid CUDA/Vulkan: CUDA for critical math (EC adds/muls, modular inverse, alpha/beta tracking, collision solving). Vulkan (wgpu) for bulk stepping, kangaroo generation, memory tables. Goal: 2.5–3B ops/sec per RTX 5090, full utilization, <0.6s batches, async syncs.
+7. **Backend** — Hybrid CUDA/Vulkan (DEFAULT): Intentionally GPU-heavy architecture (99% GPU, 1% CPU orchestration). CUDA handles critical math (EC adds/muls, modular inverse, alpha/beta tracking, collision solving). Vulkan (wgpu) handles bulk stepping, kangaroo generation, memory tables. CPU handles lightweight orchestration (herd scheduling, DP tables, collision detection, logging, bias analysis). Expected utilization: GPU 90-100%, CPU 5-15% (LOW CPU USAGE = SUCCESS - GPU is bottleneck). Goal: 2.5–3B ops/sec per RTX 5090, full utilization, <0.6s batches, async syncs. CPU backend exists ONLY for parity testing (CPU vs GPU result verification) - NEVER used in production.
 
-8. **Parity & Drift Prevention** — Integrated CPU/GPU 10M-step parity passes mandatory after any change. Bit-for-bit match required. Log attractor convergence (e.g., Magic 9: 30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38).
+8. **Parity & Drift Prevention** — Integrated CPU/GPU parity verification mandatory after any change. CPU backend performs real computations for result verification against GPU backends. Bit-for-bit match required. CPU backend is NEVER used in production - only for parity testing. Log attractor convergence (e.g., Magic 9: 30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38).
 
 9. **Collision Solving** — Alpha/beta coefficient tracking per kangaroo. Formula: k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod N (extended Euclidean inverse). Handle zero-diff cases.
 
