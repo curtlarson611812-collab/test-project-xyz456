@@ -738,7 +738,7 @@ mod tests {
 
         let hash = 12345u64;
         let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0);
+        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
         let entry = DpEntry::new(point, state, hash, 0);
 
         entries.insert(hash, entry);
@@ -892,7 +892,7 @@ mod tests {
 
         let hash = 12345u64;
         let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0);
+        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
         let entry = DpEntry::new(point, state, hash, 0);
 
         entries.insert(hash, entry);

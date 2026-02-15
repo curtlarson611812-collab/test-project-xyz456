@@ -363,7 +363,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[tokio::test]
     async fn test_dp_pruning_cluster_based() {
         let dp_table = Arc::new(Mutex::new(DpTable::new(24)));
         let pruner = DpPruning::new(dp_table.clone(), 0.8, 100);
