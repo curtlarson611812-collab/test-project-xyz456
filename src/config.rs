@@ -53,41 +53,180 @@ pub enum BiasMode {
     Primes,
 }
 
-/// SpeedBitCrack V3 - Pollard's rho/kangaroo ECDLP solver for secp256k1
+/// SpeedBitCrack V3 - Multi-target Pollard's rho/kangaroo ECDLP solver for secp256k1
 ///
-/// Config for high-bias mode: dp_bits=30, herd_size=16M, jump_mean=1M, vow_threads=8, poisson_lambda=1.3
-/// for puzzles like #145 with bias >0.55 (optimal for VOW-enhanced solving)
+/// High-performance implementation targeting early unspent P2PK outputs (blocks 1–500k, >1 BTC)
+/// and Bitcoin puzzle addresses with hybrid GPU acceleration (Vulkan/wgpu + CUDA).
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(author, version, about, long_about = None)]
 pub struct Config {
-    /// Search mode: full-range (default for P2PK/Magic 9) or interval=low-high (for puzzles)
-    #[arg(long, default_value = "full-range")]
+    // **General / Core**
+    /// Primary operating mode
+    #[arg(short = 'm', long, default_value = "full-range", env = "SBC_MODE")]
     pub mode: SearchMode,
 
-    /// Path to valuable P2PK public keys file
-    #[arg(long, default_value = "valuable_p2pk_pubkeys.txt")]
-    pub p2pk_file: PathBuf,
+    /// Target public keys file (one per line)
+    #[arg(short = 't', long, default_value = "pubkeys.txt", env = "SBC_TARGETS")]
+    pub targets: PathBuf,
 
-    /// Path to Bitcoin puzzles file
-    #[arg(long, default_value = "puzzles.txt")]
-    pub puzzles_file: PathBuf,
-
-    /// Enable puzzle mode (append puzzles to P2PK targets)
-    #[arg(long)]
-    pub puzzle_mode: bool,
-
-    /// Test mode (shrink target list to 1/10 for testing)
-    #[arg(long)]
-    pub test_mode: bool,
-
-    /// DP bits for distinguished points (default 24)
-    #[arg(long, default_value = "24")]
+    /// Distinguished point bits (tradeoff: higher = fewer DPs)
+    #[arg(short = 'd', long, default_value = "26", env = "SBC_DP_BITS")]
     pub dp_bits: usize,
 
-    /// Herd size (number of kangaroos)
-    #[arg(long, default_value = "100000")]
+    /// Kangaroo herd size (GPU memory limited)
+    #[arg(short = 'H', long, default_value = "500000000", env = "SBC_HERD_SIZE")]
     pub herd_size: usize,
 
+    /// GPU kernel batch size (power of 2)
+    #[arg(short = 'B', long, default_value = "131072", env = "SBC_GPU_BATCH")]
+    pub gpu_batch: u32,
+
+    /// CPU threads for hybrid/DP management
+    #[arg(short = 'T', long, default_value = "256", env = "SBC_THREADS")]
+    pub threads: u32,
+
+    /// Max cycles before forced stop
+    #[arg(long, default_value = "0", env = "SBC_MAX_CYCLES")]
+    pub max_cycles: u64,
+
+    // **Testing & Validation**
+    /// Run basic functionality smoke test
+    #[arg(long, env = "SBC_BASIC_TEST")]
+    pub basic_test: bool,
+
+    /// Run all puzzle validation suite
+    #[arg(long, env = "SBC_TEST_PUZZLES")]
+    pub test_puzzles: bool,
+
+    /// Validate a specific puzzle number (e.g. 66)
+    #[arg(short = 'p', long, env = "SBC_REAL_PUZZLE")]
+    pub real_puzzle: Option<u32>,
+
+    /// Validate all target pubkeys are on-curve
+    #[arg(long, env = "SBC_CHECK_PUBKEYS")]
+    pub check_pubkeys: bool,
+
+    /// Full integration test suite
+    #[arg(long, env = "SBC_INTEGRATION_TEST")]
+    pub integration_test: bool,
+
+    /// Test a known solved key (for regression)
+    #[arg(long, env = "SBC_TEST_SOLVED")]
+    pub test_solved: Option<String>,
+
+    // **Bias & Magic Hunting**
+    /// Bias distribution mode
+    #[arg(long, default_value = "uniform", env = "SBC_BIAS_MODE")]
+    pub bias_mode: BiasMode,
+
+    /// Enable advanced bias hunting
+    #[arg(long, env = "SBC_ENABLE_BIAS_HUNTING")]
+    pub enable_bias_hunting: bool,
+
+    /// Use gold-cluster + bias combo
+    #[arg(long, env = "SBC_GOLD_BIAS_COMBO")]
+    pub gold_bias_combo: bool,
+
+    /// Enable Magic 9 attractor mode
+    #[arg(short = 'M', long, env = "SBC_MAGIC9")]
+    pub magic9: bool,
+
+    /// Prime-based entropy biasing
+    #[arg(long, env = "SBC_PRIME_ENTROPY")]
+    pub prime_entropy: bool,
+
+    /// Use expanded prime set for bias
+    #[arg(long, env = "SBC_EXPANDED_PRIMES")]
+    pub expanded_primes: bool,
+
+    // **Performance & Tuning**
+    /// Near-collision probability (0.0–1.0)
+    #[arg(short = 'n', long, default_value = "0.0", env = "SBC_NEAR_COLLISIONS")]
+    pub enable_near_collisions: f64,
+
+    /// Number of walk-back steps on stagnation
+    #[arg(long, default_value = "0", env = "SBC_WALK_BACKS")]
+    pub enable_walk_backs: u32,
+
+    /// Enable cluster-based DP pruning
+    #[arg(long, env = "SBC_SMART_PRUNING")]
+    pub enable_smart_pruning: bool,
+
+    /// Auto-restart herd on stagnation
+    #[arg(long, env = "SBC_STAGNANT_RESTART")]
+    pub enable_stagnant_restart: bool,
+
+    /// Dynamically adjust jump table
+    #[arg(long, env = "SBC_ADAPTIVE_JUMPS")]
+    pub enable_adaptive_jumps: bool,
+
+    /// Use Bloom filter for DP deduplication
+    #[arg(long, env = "SBC_USE_BLOOM")]
+    pub use_bloom: bool,
+
+    /// Hybrid BSGS for final solve
+    #[arg(long, env = "SBC_USE_HYBRID_BSGS")]
+    pub use_hybrid_bsgs: bool,
+
+    /// Switch to BSGS at this many DPs
+    #[arg(long, default_value = "4294967296", env = "SBC_BSGS_THRESHOLD")]
+    pub bsgs_threshold: u64,
+
+    // **Analysis & Debug**
+    /// Run full bias analysis
+    #[arg(long, env = "SBC_BIAS_ANALYSIS")]
+    pub bias_analysis: bool,
+
+    /// Analyze bias from a targets file
+    #[arg(long, env = "SBC_ANALYZE_BIASES")]
+    pub analyze_biases: Option<PathBuf>,
+
+    /// Special analysis for valuable keys
+    #[arg(long, env = "SBC_ANALYZE_VALUABLE")]
+    pub analyze_valuable_bias: bool,
+
+    /// Sample size for bias analysis
+    #[arg(long, default_value = "10000", env = "SBC_SAMPLE_BIAS")]
+    pub sample_bias_analysis: u32,
+
+    /// Minimum bias strength to report
+    #[arg(long, default_value = "0.01", env = "SBC_BIAS_THRESHOLD")]
+    pub bias_threshold: f64,
+
+    /// Number of GLV components for bias
+    #[arg(long, default_value = "4", env = "SBC_BIAS_COMPONENTS")]
+    pub bias_components: u32,
+
+    /// Verbose output
+    #[arg(short = 'v', long, env = "SBC_VERBOSE")]
+    pub verbose: bool,
+
+    /// Laptop-optimized settings (lower memory)
+    #[arg(long, env = "SBC_LAPTOP")]
+    pub laptop: bool,
+
+    // **Utility**
+    /// Only process unsolved puzzles
+    #[arg(long, env = "SBC_UNSOLVED")]
+    pub unsolved: bool,
+
+    /// Force crack mode on unsolved
+    #[arg(long, env = "SBC_CRACK_UNSOLVED")]
+    pub crack_unsolved: bool,
+
+    /// Convert valuable keys to uncompressed format
+    #[arg(long, env = "SBC_CONVERT_VALUABLE")]
+    pub convert_valuable_uncompressed: bool,
+
+    /// Custom range low bound
+    #[arg(long, default_value = "1", env = "SBC_CUSTOM_LOW")]
+    pub custom_low: String,
+
+    /// Custom range high bound
+    #[arg(long, default_value = "ffffffffffffffff", env = "SBC_CUSTOM_HIGH")]
+    pub custom_high: String,
+
+    // Legacy compatibility fields
     /// Jump mean (expected jump size)
     #[arg(long, default_value = "1000")]
     pub jump_mean: u64,
@@ -95,14 +234,6 @@ pub struct Config {
     /// Near collision threshold (distance units, default 1000)
     #[arg(long, default_value = "1000")]
     pub near_threshold: u64,
-
-    /// Enable stagnant herd auto-restart booster (sacred rule)
-    #[arg(long)]
-    pub enable_stagnant_restart: bool,
-
-    /// Enable adaptive jump table booster (sacred rule)
-    #[arg(long)]
-    pub enable_adaptive_jumps: bool,
 
     /// Enable multi-herd merging booster (sacred rule)
     #[arg(long)]
@@ -139,14 +270,6 @@ pub struct Config {
     /// Attractor start offset for tame kangaroos
     #[arg(long)]
     pub attractor_start: Option<i64>,
-
-    /// Enable near collision detection (threshold 0.75-0.85)
-    #[arg(long, value_name = "THRESHOLD")]
-    pub enable_near_collisions: Option<f64>,
-
-    /// Enable walk backs/forwards (max steps)
-    #[arg(long, value_name = "STEPS")]
-    pub enable_walk_backs: Option<u64>,
 
     /// Enable pre-seeded POS baseline (always active per rules, but configurable weights)
     #[arg(long, num_args = 3, default_values = ["0.5", "0.25", "0.25"])]
@@ -270,58 +393,97 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            // General / Core
             mode: SearchMode::FullRange,
-            p2pk_file: "valuable_p2pk_pubkeys.txt".into(),
-            puzzles_file: "puzzles.txt".into(),
-            enable_lll_proof_sim: false,
-            enable_babai_proof_sim: false,
-            enable_babai_multi_sim: false,
-            enable_fermat_ecdlp: false,
-            puzzle_mode: false,
-            test_mode: false,
-            dp_bits: 24,
-            herd_size: 100000,
-            jump_mean: 1000,
-            near_threshold: 1000,
+            targets: "pubkeys.txt".into(),
+            dp_bits: 26,
+            herd_size: 500000000,
+            gpu_batch: 131072,
+            threads: 256,
+            max_cycles: 0,
+
+            // Testing & Validation
+            basic_test: false,
+            test_puzzles: false,
+            real_puzzle: None,
+            check_pubkeys: false,
+            integration_test: false,
+            test_solved: None,
+
+            // Bias & Magic Hunting
+            bias_mode: BiasMode::Uniform,
+            enable_bias_hunting: false,
+            gold_bias_combo: false,
+            magic9: false,
+            prime_entropy: false,
+            expanded_primes: false,
+
+            // Performance & Tuning
+            enable_near_collisions: 0.0,
+            enable_walk_backs: 0,
+            enable_smart_pruning: false,
             enable_stagnant_restart: false,
             enable_adaptive_jumps: false,
+            use_bloom: false,
+            use_hybrid_bsgs: false,
+            bsgs_threshold: 4294967296,
+
+            // Analysis & Debug
+            bias_analysis: false,
+            analyze_biases: None,
+            analyze_valuable_bias: false,
+            sample_bias_analysis: 10000,
+            bias_threshold: 0.01,
+            bias_components: 4,
+            verbose: false,
+            laptop: false,
+
+            // Utility
+            unsolved: false,
+            crack_unsolved: false,
+            convert_valuable_uncompressed: false,
+            custom_low: "1".into(),
+            custom_high: "ffffffffffffffff".into(),
+
+            // Legacy compatibility
+            jump_mean: 1000,
+            near_threshold: 1000,
             enable_multi_herd_merge: false,
             enable_dp_feedback: false,
             near_g_thresh: 1048576,
-            glv_dim: 2,
-            enable_lll_reduction: false,
-            enable_rho_parallel: false,
-            enable_vow_parallel: false,
             max_ops: 1000000000000,
             wild_primes: vec![179, 257, 347, 461, 577, 691, 797, 919],
             prime_spacing_with_entropy: false,
             expanded_prime_spacing: false,
             expanded_jump_table: false,
             attractor_start: None,
-            enable_near_collisions: None,
-            enable_walk_backs: None,
-            enable_smart_pruning: false,
+
+            // Additional legacy fields
+            preseed_pos_weights: vec![0.5, 0.25, 0.25],
+            bias_log: None,
+            enable_noise: false,
+            enable_vow_rho_p2pk: false,
+            vow_threads: 8,
+            poisson_lambda: 1.3,
+            priority_list: None,
             enable_target_eviction: false,
             validate_puzzle: None,
             force_continue: false,
             output_dir: "output".into(),
             checkpoint_interval: 4294967296,
             log_level: "info".into(),
+            glv_dim: 2,
+            enable_lll_reduction: false,
+            enable_rho_parallel: false,
+            enable_vow_parallel: false,
+            enable_lll_proof_sim: false,
+            enable_babai_proof_sim: false,
+            enable_babai_multi_sim: false,
+            enable_fermat_ecdlp: false,
             gpu_backend: GpuBackend::Hybrid,
-            bias_mode: BiasMode::Uniform,
-            use_bloom: true,
-            use_hybrid_bsgs: true,
-            bsgs_threshold: 4294967296,
             gold_bias_combo: false,
-            bias_log: None,
-            enable_noise: false,
-            enable_vow_rho_p2pk: false,
-            preseed_pos_weights: vec![0.5, 0.25, 0.25],
-            priority_list: None,
             enable_strict_lints: false,
             enable_shader_precompile: false,
-            vow_threads: 8,
-            poisson_lambda: 1.3,
         }
     }
 }
@@ -384,17 +546,13 @@ impl Config {
         // No additional validation needed
 
         // Validate near collision threshold
-        if let Some(threshold) = self.enable_near_collisions {
-            if !(0.0..=1.0).contains(&threshold) {
-                return Err(anyhow!("Near collision threshold must be between 0.0 and 1.0"));
-            }
+        if self.enable_near_collisions < 0.0 || self.enable_near_collisions > 1.0 {
+            return Err(anyhow!("Near collision threshold must be between 0.0 and 1.0, got {}", self.enable_near_collisions));
         }
 
         // Validate walk backs steps
-        if let Some(steps) = self.enable_walk_backs {
-            if steps == 0 {
-                return Err(anyhow!("Walk backs steps must be > 0"));
-            }
+        if self.enable_walk_backs > 0 && self.enable_walk_backs < 1000 {
+            return Err(anyhow!("Walk backs steps must be 0 (disabled) or >= 1000, got {}", self.enable_walk_backs));
         }
 
         // Validate puzzle number

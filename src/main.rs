@@ -31,109 +31,7 @@ use rayon::prelude::*;
 use std::sync::Arc;
 use bloomfilter::Bloom;
 
-// Chunk: Laptop Flag Parse (main.rs)
-/// Command line arguments
-#[derive(Parser)]
-struct Args {
-    #[arg(long)]
-    basic_test: bool,
-    #[arg(long)]
-    valuable: bool,  // Run on valuable_p2pk_pubkeys.txt
-    #[arg(long)]
-    test_puzzles: bool,  // Run on test_puzzles.txt
-    #[arg(long)]
-    real_puzzle: Option<u32>,  // Run on specific unsolved, e.g. 150
-    #[arg(long)]
-    check_pubkeys: bool,  // Check all puzzle pubkey validity
-    #[arg(long, default_value_t = true)]
-    gpu: bool,  // Enable GPU hybrid acceleration
-    #[arg(long, default_value_t = 0)]  // 0 = unlimited cycles
-    max_cycles: u64,
-    #[arg(long)]
-    unsolved: bool,  // Skip private key verification for unsolved puzzles
-
-    // Block 9: Full integration test
-    #[arg(long)]
-    integration_test: bool,  // Run full integration test with all features
-
-    // Block 1-8: Bias and optimization flags
-    #[arg(long, default_value = "uniform")]
-    bias_mode: String,  // Bias strategy: uniform, magic9, primes
-
-    #[arg(long, default_value_t = true)]
-    use_bloom: bool,  // Enable Bloom filter DP deduplication
-
-    #[arg(long, default_value_t = true)]
-    use_hybrid_bsgs: bool,  // Enable hybrid BSGS for near-collisions
-
-    #[arg(long, default_value = "4294967296")]
-    bsgs_threshold: u64,  // Max difference for BSGS solving
-
-    #[arg(long, default_value_t = false)]
-    gold_bias_combo: bool,  // Enable GOLD hierarchical factoring
-
-    // Additional Block 1 flags
-    #[arg(long)]
-    enable_stagnant_restart: bool,  // Enable stagnant herd auto-restart booster
-    #[arg(long)]
-    enable_adaptive_jumps: bool,  // Enable adaptive jump table booster
-    #[arg(long, value_name = "THRESHOLD")]
-    enable_near_collisions: Option<f64>,  // Enable near collision detection with threshold
-    #[arg(long, value_name = "STEPS")]
-    enable_walk_backs: Option<u64>,  // Enable walk backs with max steps
-    #[arg(long)]
-    enable_smart_pruning: bool,  // Enable smart pruning
-    #[arg(long, default_value_t = false)]
-    prime_entropy: bool,  // Add entropy to prime spacing
-    #[arg(long, default_value_t = false)]
-    expanded_primes: bool,  // Use expanded prime list
-    #[arg(long)]
-    bias_analysis: bool,  // Run complete bias analysis on unsolved puzzles
-    #[arg(long, value_name = "TARGETS")]
-    analyze_biases: Vec<String>,  // Analyze bias patterns: puzzle numbers or file paths (can specify multiple times)
-    #[arg(long)]
-    crack_unsolved: bool,  // Auto pick and crack most likely unsolved puzzle
-    #[arg(long, default_value_t = 8)]
-    num_kangaroos: usize,  // Number of kangaroos for parallel execution
-    #[arg(long)]
-    enable_bias_hunting: bool,  // Enable advanced bias optimization for unsolved hunting
-    #[arg(long, default_value_t = 0)]
-    bias_mod: u64,  // Bias modulus for jump selection (0 = no bias)
-    #[arg(long)]
-    high_bias: bool,  // Enable high-bias optimizations for puzzles like #145
-
-    #[arg(long)]
-    analyze_bias: Option<u32>,  // Analyze bias patterns for a specific puzzle
-
-    #[arg(long)]
-    analyze_valuable_bias: bool,  // Analyze valuable_p2pk_pubkeys.txt and output high-bias filtered file
-
-    #[arg(long, value_name = "N")]
-    sample_bias_analysis: Option<usize>,  // Sample N keys for bias analysis testing (default: all)
-
-    #[arg(long, value_name = "THRESHOLD")]
-    bias_threshold: Option<f64>,  // Custom threshold for high-bias detection (default: adaptive)
-
-    #[arg(long, value_name = "COMPONENTS")]
-    bias_components: Option<String>,  // Select bias components: all,mod3,mod9,mod27,mod81,gold,pop,basic (comma-separated, default: all)
-
-    #[arg(long)]
-    convert_valuable_uncompressed: bool,  // Convert valuable_p2pk_pubkeys.txt to all uncompressed format
-    #[arg(long)]
-    magic9: bool,  // Enable magic 9 sniper mode for specific 9 pubkeys
-    #[arg(long)]
-    verbose: bool,  // Enable verbose logging
-    #[arg(long)]
-    laptop: bool,  // Enable laptop optimizations (sm_86, lower resources)
-    #[arg(long)]
-    puzzle: Option<u32>,  // Specific puzzle to crack, e.g. 67
-    #[arg(long)]
-    test_solved: Option<u32>,  // Test solved puzzle verification, e.g. 32, 64, 66
-    #[arg(long)]
-    custom_low: Option<String>,  // Custom search range low (hex)
-    #[arg(long)]
-    custom_high: Option<String>,  // Custom search range high (hex)
-}
+// CLI configuration now handled by Config struct from config.rs
 
 // Chunk: Thermal Log Spawn (main.rs)
 pub fn start_thermal_log() {
@@ -196,7 +94,7 @@ pub struct PuzzleEntry {
 /// Trait for puzzle modes to enable polymorphism and extensibility
 trait PuzzleMode {
     fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>>;
-    fn execute(&self, gen: &KangarooGenerator, points: &[Point], args: &Args) -> Result<()>;
+    fn execute(&self, gen: &KangarooGenerator, points: &[Point], config: &Config) -> Result<()>;
 }
 
 /// Valuable P2PK mode for bias exploitation
@@ -205,7 +103,7 @@ impl PuzzleMode for ValuableMode {
     fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>> {
         load_valuable_p2pk(curve)
     }
-    fn execute(&self, gen: &KangarooGenerator, points: &[Point], _args: &Args) -> Result<()> {
+    fn execute(&self, gen: &KangarooGenerator, points: &[Point], _config: &Config) -> Result<()> {
         execute_valuable(gen, points)
     }
 }
@@ -216,7 +114,7 @@ impl PuzzleMode for TestMode {
     fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>> {
         load_test_puzzles(curve)
     }
-    fn execute(&self, gen: &KangarooGenerator, points: &[Point], _args: &Args) -> Result<()> {
+    fn execute(&self, gen: &KangarooGenerator, points: &[Point], _config: &Config) -> Result<()> {
         execute_test(gen, points)
     }
 }
@@ -229,8 +127,8 @@ impl PuzzleMode for RealMode {
     fn load(&self, curve: &Secp256k1) -> Result<Vec<Point>> {
         Ok(vec![load_real_puzzle(self.n, curve)?])
     }
-    fn execute(&self, gen: &KangarooGenerator, points: &[Point], args: &Args) -> Result<()> {
-        execute_real(gen, &points[0], self.n, args)
+    fn execute(&self, gen: &KangarooGenerator, points: &[Point], config: &Config) -> Result<()> {
+        execute_real(gen, &points[0], self.n, config)
     }
 }
 
@@ -320,45 +218,13 @@ fn crack_loop(_target: &BigInt256, _range: (BigInt256, BigInt256), config: &mut 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments first
-    let args = Args::parse();
+    let mut config = Config::parse()?;
 
     // Initialize logging
     let _ = setup_logging();
 
-    // Create config from parsed arguments (Blocks 1-8 integration)
-    let mut config = Config::default();
-    // Ensure proper defaults for clap-overridden fields
-    config.dp_bits = 24;
-    config.bias_mode = match args.bias_mode.as_str() {
-        "magic9" => speedbitcrack::config::BiasMode::Magic9,
-        "primes" => speedbitcrack::config::BiasMode::Primes,
-        _ => speedbitcrack::config::BiasMode::Uniform,
-    };
-    config.use_bloom = args.use_bloom;
-    config.use_hybrid_bsgs = args.use_hybrid_bsgs;
-    config.bsgs_threshold = args.bsgs_threshold;
-    config.gold_bias_combo = args.gold_bias_combo;
-    config.enable_stagnant_restart = args.enable_stagnant_restart;
-    config.enable_adaptive_jumps = args.enable_adaptive_jumps;
-    config.enable_near_collisions = args.enable_near_collisions;
-    config.enable_walk_backs = args.enable_walk_backs;
-    config.enable_smart_pruning = args.enable_smart_pruning;
-    config.prime_spacing_with_entropy = args.prime_entropy;
-    config.expanded_prime_spacing = args.expanded_primes;
-
-    // High-bias optimizations for puzzles like #145 (high bias confirmed: 0.62 vs 0.48 standard)
-    if args.high_bias {
-        config.dp_bits = 30;  // Higher DP bits for lower collision probability (<1e-9)
-        config.herd_size = (1 << 24).min(config.herd_size);  // 16M kangaroos for high-bias exploitation
-        config.vow_threads = 8;  // VOW threads for optimized parallel solving
-        config.jump_mean = 1 << 20;  // 1M mean jump size for bias exploitation
-        config.poisson_lambda = 1.3;  // Tuned lambda for #145 bias patterns (20-30% faster convergence)
-        info!("🔧 Applied high-bias optimizations for #145: dp_bits={}, herd_size={}, jump_mean={}, vow_threads={}, lambda={}",
-              config.dp_bits, config.herd_size, config.jump_mean, config.vow_threads, config.poisson_lambda);
-    }
-
     // Special configuration for integration test
-    if args.integration_test {
+    if config.integration_test {
         // Configure for full feature testing
         config.bias_mode = speedbitcrack::config::BiasMode::Magic9;
         config.gold_bias_combo = true;
@@ -371,7 +237,7 @@ async fn main() -> Result<()> {
     }
 
     // Handle full integration test (Block 9)
-    if args.integration_test {
+    if config.integration_test {
 
         println!("🚀 Running full integration test with all Blocks 1-9 features enabled");
         println!("📊 Configuration:");
@@ -394,15 +260,15 @@ async fn main() -> Result<()> {
         }
         return Ok(());
     }
-    if args.verbose {
+    if config.verbose {
         log::set_max_level(log::LevelFilter::Debug);
     }
 
-    println!("SpeedBitCrackV3 starting with args: basic_test={}, valuable={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, bias_analysis={}, crack_unsolved={}, gpu={}, max_cycles={}, unsolved={}, num_kangaroos={}, bias_mod={}, magic9={}, verbose={}, laptop={}, puzzle={:?}, test_solved={:?}",
-             args.basic_test, args.valuable, args.test_puzzles, args.real_puzzle, args.check_pubkeys, args.bias_analysis, args.crack_unsolved, args.gpu, args.max_cycles, args.unsolved, args.num_kangaroos, args.bias_mod, args.magic9, args.verbose, args.laptop, args.puzzle, args.test_solved);
+    println!("SpeedBitCrackV3 starting with config: basic_test={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, integration_test={}, test_solved={:?}, bias_analysis={}, analyze_biases={:?}, analyze_valuable_bias={}, sample_bias_analysis={}, bias_threshold={}, bias_components={}, verbose={}, laptop={}, unsolved={}, crack_unsolved={}, convert_valuable_uncompressed={}, custom_low={}, custom_high={}",
+             config.basic_test, config.test_puzzles, config.real_puzzle, config.check_pubkeys, config.integration_test, config.test_solved, config.bias_analysis, config.analyze_biases, config.analyze_valuable_bias, config.sample_bias_analysis, config.bias_threshold, config.bias_components, config.verbose, config.laptop, config.unsolved, config.crack_unsolved, config.convert_valuable_uncompressed, config.custom_low, config.custom_high);
 
     // Enable thermal logging and NVIDIA persistence for laptop mode
-    if args.laptop {
+    if config.laptop {
         start_thermal_log();
 
         // Enable NVIDIA persistence mode for stable GPU performance
@@ -415,7 +281,7 @@ async fn main() -> Result<()> {
 
 
     // Handle solved puzzle testing with full bias integration
-    if let Some(puzzle_num) = args.test_solved {
+    if let Some(puzzle_num) = config.test_solved {
         println!("🧪 Testing solved puzzle #{} with full bias integration enabled", puzzle_num);
         println!("  🎯 Bias Mode: {:?}", config.bias_mode);
         println!("  🏮 Bloom Filter: {}", config.use_bloom);
@@ -1849,7 +1715,7 @@ fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt25
 }
 
 /// Execute real Bitcoin puzzle solving
-fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, args: &Args) -> Result<()> {
+fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config: &Config) -> Result<()> {
     info!("🎯 Bitcoin Puzzle #{}: Searching for private key", puzzle_num);
     info!("🎯 Target point: x={}, y={}",
           BigInt256::from_u64_array(point.x).to_hex(),
