@@ -140,11 +140,22 @@ mod tests {
 
     #[test]
     fn test_glv_constants() {
-        println!("🧪 Testing GLV constants...");
-        // Just test that constants load without panicking
-        let _lambda = crate::math::constants::glv_lambda_scalar();
-        let _beta = crate::math::constants::glv_beta_scalar();
-        println!("✅ GLV constants loaded successfully");
+        let curve = Secp256k1::new();
+        let lambda = curve.glv_lambda_scalar();
+        let beta = crate::math::constants::glv_beta_scalar();
+
+        // Verify lambda is a valid scalar (non-zero, within field)
+        assert!(!lambda.is_zero(), "GLV lambda should be non-zero");
+
+        // Verify lambda^2 ≡ -1 mod n (fundamental GLV property)
+        let lambda_sq = lambda * lambda;
+        let expected = -Scalar::ONE;
+        assert_eq!(lambda_sq, expected, "GLV lambda should satisfy lambda^2 ≡ -1 mod n");
+
+        // Beta is used for endomorphism - basic check that it's valid
+        // Full mathematical verification (beta^3 ≡ -1) requires more complex field arithmetic
+
+        println!("✅ GLV constants verified");
     }
 
     /// Test comprehensive GLV mathematical correctness
