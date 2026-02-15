@@ -6,6 +6,7 @@ use crate::gpu::backend::GpuBackend;
 use crate::gpu::backends::CpuBackend;
 use crate::kangaroo::search_config::SearchConfig;
 use crate::kangaroo::{KangarooGenerator, KangarooStepper, CollisionDetector};
+use crate::utils::pubkey_loader;
 use crate::parity::ParityChecker;
 use std::sync::{Arc, Mutex};
 use log::info;
@@ -124,7 +125,22 @@ impl KangarooManager {
     }
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let dp_bits = config.dp_bits;
-        let targets = Vec::new(); // TODO: Load targets
+        // Load targets from the specified file
+        let targets = pubkey_loader::load_pubkeys_from_file(config.targets.to_str().unwrap_or("pubkeys.txt"))
+            .map_err(|e| anyhow!("Failed to load targets from {:?}: {}", config.targets, e))?
+            .into_iter()
+            .enumerate()
+            .map(|(i, point)| Target {
+                point,
+                key_range: None, // Full range for P2PK
+                id: i as u64,
+                priority: 1.0, // Equal priority for all P2PK
+                address: None,
+                value_btc: None,
+            })
+            .collect::<Vec<_>>();
+
+        info!("Loaded {} targets from {:?}", targets.len(), config.targets);
         let search_config = SearchConfig::default();
         let generator = KangarooGenerator::new(&config);
         let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, dp_bits));
