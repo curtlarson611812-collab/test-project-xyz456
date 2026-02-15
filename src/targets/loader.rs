@@ -116,17 +116,14 @@ impl TargetLoader {
         Ok(targets)
     }
 
-    /// Parse P2PK target line: pubkey_hex,btc_value,address
+    /// Parse P2PK target line: just pubkey_hex (no CSV format)
     fn parse_p2pk_line(&self, line: &str, line_num: usize) -> Result<Target> {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() < 2 {
-            return Err(anyhow!("Invalid P2PK line format (expected pubkey,btc_value[,address]): {}", line));
-        }
+        // For simple hex-only format, just use the entire line as pubkey_hex
+        let pubkey_hex = line.trim();
 
-        let pubkey_hex = parts[0].trim();
-        let btc_value = parts[1].trim().parse::<f64>()
-            .map_err(|e| anyhow!("Invalid BTC value '{}': {}", parts[1], e))?;
-        let address = parts.get(2).map(|s| s.trim().to_string());
+        // Default values for targets without CSV metadata
+        let btc_value = 0.0; // Unknown BTC value
+        let address = None; // No address provided
 
         // Parse compressed public key (33 bytes)
         let pubkey_bytes = hex::decode(pubkey_hex)
@@ -153,7 +150,7 @@ impl TargetLoader {
             point,
             key_range: None, // P2PK has no specific key range
             id: line_num as u64,
-            priority: btc_value, // Higher BTC value = higher priority
+            priority: 1.0, // Default priority for raw hex keys
             address,
             value_btc: Some(btc_value),
         })
