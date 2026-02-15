@@ -20,7 +20,6 @@ use crate::kangaroo::collision::{CollisionDetector, CollisionResult, vow_paralle
 use rayon::prelude::*;
 use crate::parity::ParityChecker;
 use k256::{Scalar, ProjectivePoint};
-use crate::targets::TargetLoader;
 use k256::elliptic_curve::Field; // Add this for Scalar operations
 use anyhow::anyhow;
 use bloomfilter::Bloom;
@@ -138,48 +137,10 @@ impl KangarooManager {
         println!("DEBUG: Entered KangarooManager::new");
         println!("DEBUG: Starting target loading...");
         // Load targets properly - no early returns
-        println!("DEBUG: Loading targets properly");
-        use crate::targets::TargetLoader;
-        let target_loader = TargetLoader::new();
-        let targets = target_loader.load_targets(&config)?;
-        info!("Loaded {} targets", targets.len());
+
+        info!("Loaded {} targets", loaded_targets.len());
 
         // Load targets with priority support
-        let targets = if let Some(priority_path) = &config.priority_list {
-            info!("Loading high-priority targets from {}", priority_path.display());
-            match load_pubkeys_from_file(priority_path) {
-                Ok(priority_points) => {
-                    info!("Loaded {} high-priority points", priority_points.len());
-                    if priority_points.len() < targets.len() / 10 {
-                        warn!("Priority list very small ({}), may not be optimal", priority_points.len());
-                    }
-                    // Convert points to targets
-                    priority_points.into_iter().enumerate().map(|(i, point)| {
-                        Target::new(point, i as u64)
-                    }).collect()
-                }
-                Err(e) => {
-                    warn!("Failed to load priority list: {}, falling back to full list", e);
-                    targets
-                }
-            }
-        } else {
-            targets
-        };
-
-        // Initialize POS pre-seed baseline (always active per rules)
-        info!("Initializing POS pre-seed baseline for unsolved puzzles...");
-        let preseed_pos = if let Some(first_target) = targets.first() {
-            // Use first target range as representative
-            let range_min = k256::Scalar::ZERO;
-            let range_width = k256::Scalar::from(2u64).pow_vartime(&[20]); // 2^20
-            crate::utils::bias::generate_preseed_pos(&range_min, &range_width)
-        } else {
-            vec![] // Fallback if no targets
-        };
-        info!("Generated {} pre-seed POS positions", preseed_pos.len());
-
-        // Blend with empirical data if available
         let empirical_pos = config.bias_log.as_ref()
             .map(|log_path| crate::utils::bias::load_empirical_pos(log_path))
             .unwrap_or(None);
@@ -204,7 +165,10 @@ impl KangarooManager {
         let bloom = if config.use_bloom {
             let expected_dps = (config.herd_size as f64 * config.max_ops as f64) / 2f64.powi(config.dp_bits as i32);
             Some(Bloom::new_for_fp_rate(expected_dps as usize, 0.01))
-        } else {
+        
+            } else {
+                loaded_targets
+            };
             None
         };
 
@@ -291,12 +255,6 @@ impl KangarooManager {
         let dp_table = Arc::new(Mutex::new(DpTable::new(config.dp_bits)));
 
         // Initialize bloom filter if enabled
-        let bloom = if config.use_bloom {
-            let expected_dps = (config.herd_size as f64 * config.max_ops as f64) / 2f64.powi(config.dp_bits as i32);
-            Some(Bloom::new_for_fp_rate(expected_dps as usize, 0.01))
-        } else {
-            None
-        };
         let generator = KangarooGenerator::new(&config).with_search_config(search_config.clone());
         let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, config.dp_bits));
         let collision_detector = CollisionDetector::new();
@@ -308,12 +266,9 @@ impl KangarooManager {
         // Concise Block: Sort Targets by Attractor Proxy in Init
         let mut targets_only: Vec<Point> = multi_targets.iter().map(|(p, _)| *p).collect();
         use crate::utils::pubkey_loader::is_attractor_proxy;
-        targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1 }); // Attractors first
-
         // Concise Block: Skip GPU Prime Mul Test on Manager Init (causes runtime conflicts)
+targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1 }); // Attractors first
         // TODO: Re-enable GPU testing after fixing tokio runtime issues
-        // let hybrid = HybridGpuManager::new(&config, 0.001, 5).await?;
-        // let test_target = if targets_only.is_empty() { Secp256k1::new().g.clone() } else { targets_only[0] };
         // if !hybrid.test_prime_mul_gpu(&test_target)? {
         //     println!("GPU prime mul drift detected! Fallback to CPU.");
         //     // Would set flag for CPU-only mode here
@@ -352,34 +307,7 @@ impl KangarooManager {
                 warn!("Stopping due to max operations or time limit");
                 return Ok(None);
             }
-
-            // Generate new kangaroo batch - distribute herd size across targets
-            let kangaroos_per_target = if self.targets.is_empty() {
-                warn!("No targets loaded – using fallback single target");
-                1  // Use single kangaroo for fallback
-            } else {
-                std::cmp::max(1, self.config.herd_size / self.targets.len() as usize)
             };
-            let target_points: Vec<_> = if self.targets.is_empty() {
-                // Fallback: use generator point
-                vec![self.curve.g.clone()]
-            } else {
-                self.targets.iter().map(|t| t.point).collect()
-            };
-            let kangaroos = self.generator.generate_batch(&target_points, kangaroos_per_target)?;
-
-            // Use GPU acceleration when available (hybrid backend with optimizations)
-            let step_fut = async {
-                if matches!(self.config.gpu_backend, crate::config::GpuBackend::Hybrid) {
-                    // Use optimized GPU dispatch for hybrid backend
-                    self.step_kangaroos_gpu(&kangaroos).await
-                } else {
-                    // Fall back to CPU stepping
-                    self.stepper.borrow_mut().step_batch(&kangaroos, target_points.first())
-                }
-            };
-
-            let collision_fut = async {
                 // Check collisions concurrently
                 self.collision_detector.check_collisions(&self.dp_table).await
             };
@@ -539,7 +467,10 @@ impl KangarooManager {
             let mut dp_table = self.dp_table.lock().await;
             if let Err(e) = dp_table.prune_entries_async().await {
                 warn!("DP pruning failed: {}", e);
+            
             } else {
+                loaded_targets
+            };
                 debug!("DP table pruned successfully");
             }
         }
@@ -599,7 +530,10 @@ impl KangarooManager {
                 db.insert("checkpoint", serialized)?;
                 db.flush()?;
                 info!("Checkpoint saved at {} ops with {} DP entries", self.total_ops, dp_entries_count);
+            
             } else {
+                loaded_targets
+            };
                 warn!("Checkpoint not saved - disk storage not enabled");
             }
         }
@@ -633,7 +567,10 @@ impl KangarooManager {
             .collect();
 
         let types: Vec<u32> = kangaroos.iter()
-            .map(|k| if k.is_tame { 1 } else { 0 })
+            .map(|k| if k.is_tame { 1 
+            } else {
+                loaded_targets
+            }; 0 })
             .collect();
 
         // Use the GPU backend for stepping
@@ -676,7 +613,10 @@ impl KangarooManager {
                     kangaroos[i].is_dp,
                     kangaroos[i].id,
                     kangaroos[i].step,
-                    if kangaroos[i].is_tame { 1 } else { 0 }, // kangaroo_type
+                    if kangaroos[i].is_tame { 1 
+            } else {
+                loaded_targets
+            }; 0 }, // kangaroo_type
                 )
             })
             .collect();
@@ -705,7 +645,10 @@ impl KangarooManager {
                 ((trap_distance_bytes[2] as u64) << 16) |
                 ((trap_distance_bytes[1] as u64) << 8) |
                 (trap_distance_bytes[0] as u64)
+            
             } else {
+                loaded_targets
+            };
                 0
             };
 
@@ -719,7 +662,10 @@ impl KangarooManager {
                 true, // is_dp - this is a distinguished point
                 0, // id not provided
                 0, // step not provided
-                if trap.is_tame { 1 } else { 0 }, // kangaroo_type
+                if trap.is_tame { 1 
+            } else {
+                loaded_targets
+            }; 0 }, // kangaroo_type
             );
 
             // Add to DP table
@@ -846,7 +792,10 @@ impl KangarooManager {
             info!("✅ Solution verified: private key {:032x}{:032x}{:032x}{:032x}",
                   solution.private_key[3], solution.private_key[2],
                   solution.private_key[1], solution.private_key[0]);
-        } else {
+        
+            } else {
+                loaded_targets
+            };
             warn!("❌ Solution verification failed");
         }
 
@@ -894,7 +843,10 @@ impl KangarooManager {
     //                 is_tame: original.is_tame,
     //                 id: original.id,
     //             }
-    //         } else {
+    //         
+            } else {
+                loaded_targets
+            };
     //             // Fallback to original if GPU data unavailable
     //             original.clone()
     //         }
@@ -931,7 +883,10 @@ pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::E
     if let Some(sol) = solution {
         let private_key_bigint = BigInt256::from_u64_array(sol.private_key);
         println!("[VICTORY] Solution found! Private key: {}", private_key_bigint.to_hex());
-    } else {
+    
+            } else {
+                loaded_targets
+            };
         println!("[VICTORY] Full range hunt completed - no solution found.");
     }
 
@@ -967,7 +922,10 @@ pub async fn run_magic9_attractor(config: &Config) -> Result<(), Box<dyn std::er
     if let Some(sol) = solution {
         let private_key_bigint = BigInt256::from_u64_array(sol.private_key);
         println!("[VICTORY] Magic 9 solution found! Private key: {}", private_key_bigint.to_hex());
-    } else {
+    
+            } else {
+                loaded_targets
+            };
         println!("[VICTORY] Magic 9 hunt completed - no solution found.");
     }
 
@@ -1057,7 +1015,10 @@ impl KangarooManager {
                     let existing_x = BigInt256::from_u64_array(existing_affine.x);
                     let x_diff = if state_x > existing_x {
                         (state_x - existing_x).low_u32() as u64
-                    } else {
+                    
+            } else {
+                loaded_targets
+            };
                         (existing_x - state_x).low_u32() as u64
                     };
 
@@ -1112,7 +1073,10 @@ fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
                                     if points.len() % 1000 == 0 {
                                         info!("Loaded {} targets from valuable_p2pk_pubkeys.txt", points.len());
                                     }
-                                } else {
+                                
+            } else {
+                loaded_targets
+            };
                                     warn!("Point not on curve after decompression: {}", line);
                                 }
                             }
@@ -1136,10 +1100,16 @@ fn load_pubkeys_from_file(path: &std::path::Path) -> Result<Vec<Point>> {
                             };
                             if validate_point_on_curve(&point) {
                                 points.push(point);
-                            } else {
+                            
+            } else {
+                loaded_targets
+            };
                                 warn!("Uncompressed point not on curve: {}", line);
                             }
-                        } else {
+                        
+            } else {
+                loaded_targets
+            };
                             warn!("Invalid uncompressed pubkey prefix (expected 0x04): {}", line);
                         }
                     }

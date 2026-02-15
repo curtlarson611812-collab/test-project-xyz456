@@ -2,9 +2,9 @@
 //!
 //! Load & parse valuable_p2pk_publickey.txt + puzzles.txt, validate pubkeys
 
-use crate::types::Target;
+use crate::types::{Target, Point};
 use crate::config::Config;
-use crate::math::Secp256k1;
+use crate::math::{Secp256k1, bigint::BigInt256};
 use anyhow::{anyhow, Result};
 use log::{info, warn};
 use std::fs;
@@ -91,21 +91,33 @@ impl TargetLoader {
 
     /// Load P2PK targets from valuable_p2pk_publickey.txt
     fn load_p2pk_targets(&self, file_path: &Path) -> Result<Vec<Target>> {
-        info!("Loading P2PK targets from {}", file_path.display());
+        println!("DEBUG: load_p2pk_targets called for {}", file_path.display());
+        if !file_path.exists() {
+            println!("DEBUG: File does not exist!");
+            return Err(anyhow!("File does not exist: {}", file_path.display()));
+        }
         let content = fs::read_to_string(file_path)?;
+        println!("DEBUG: File content length: {}", content.len());
+        println!("DEBUG: First 100 chars: {}", &content[..std::cmp::min(content.len(), 100)]);
         let mut targets = Vec::new();
         let mut invalid_count = 0;
 
+        println!("DEBUG: Starting to parse {} lines", content.lines().count());
         for (line_num, line) in content.lines().enumerate() {
             let line = line.trim();
+            println!("DEBUG: Processing line {}: {}", line_num + 1, &line[..std::cmp::min(line.len(), 10)]);
             if line.is_empty() || line.starts_with('#') {
+                println!("DEBUG: Skipping empty/comment line");
                 continue;
             }
 
             match self.parse_p2pk_line(line, line_num + 1) {
-                Ok(target) => targets.push(target),
+                Ok(target) => {
+                    println!("DEBUG: Successfully parsed target {}", targets.len() + 1);
+                    targets.push(target);
+                }
                 Err(e) => {
-                    warn!("Skipping invalid P2PK line {}: {}", line_num + 1, e);
+                    println!("DEBUG: Failed to parse line {}: {} (line: {})", line_num + 1, e, &line[..std::cmp::min(line.len(), 20)]);
                     invalid_count += 1;
                 }
             }
@@ -125,21 +137,33 @@ impl TargetLoader {
         let btc_value = 0.0; // Unknown BTC value
         let address = None; // No address provided
 
-        // Parse compressed public key (33 bytes)
+        // Parse public key (compressed 33 bytes or uncompressed 65 bytes)
         let pubkey_bytes = hex::decode(pubkey_hex)
             .map_err(|e| anyhow!("Invalid hex pubkey '{}': {}", pubkey_hex, e))?;
 
-        if pubkey_bytes.len() != 33 {
-            return Err(anyhow!("Invalid compressed pubkey length: {} (expected 33)", pubkey_bytes.len()));
-        }
-
-        // Convert to fixed-size array
-        let pubkey_array: [u8; 33] = pubkey_bytes.as_slice().try_into()
-            .map_err(|_| anyhow!("Invalid pubkey length: expected 33 bytes, got {}", pubkey_bytes.len()))?;
-
-        // Decompress to validate and get affine point
-        let point = self.curve.decompress_point(&pubkey_array)
-            .ok_or_else(|| anyhow!("Failed to decompress pubkey (not on curve)"))?;
+        let point = if pubkey_bytes.len() == 33 {
+            // Compressed key - decompress it
+            let pubkey_array: [u8; 33] = pubkey_bytes.as_slice().try_into()
+                .map_err(|_| anyhow!("Invalid compressed pubkey length: expected 33 bytes, got {}", pubkey_bytes.len()))?;
+            self.curve.decompress_point(&pubkey_array)
+                .ok_or_else(|| anyhow!("Failed to decompress pubkey (not on curve)"))?
+        } else if pubkey_bytes.len() == 65 {
+            // Uncompressed key - parse directly
+            if pubkey_bytes[0] != 0x04 {
+                return Err(anyhow!("Invalid uncompressed pubkey prefix: expected 0x04, got 0x{:02x}", pubkey_bytes[0]));
+            }
+            // Extract x and y coordinates
+            let x_bytes: [u8; 32] = pubkey_bytes[1..33].try_into().unwrap();
+            let y_bytes: [u8; 32] = pubkey_bytes[33..65].try_into().unwrap();
+            let x_big = BigInt256::from_bytes_be(&x_bytes);
+            let y_big = BigInt256::from_bytes_be(&y_bytes);
+            // Convert to u64 arrays for Point
+            let x_array = x_big.to_u64_array();
+            let y_array = y_big.to_u64_array();
+            Point::from_affine(x_array, y_array)
+        } else {
+            return Err(anyhow!("Invalid pubkey length: {} (expected 33 compressed or 65 uncompressed)", pubkey_bytes.len()));
+        };
 
         // Additional validation - ensure point is on curve
         if !self.curve.is_on_curve(&point) {
