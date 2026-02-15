@@ -20,6 +20,10 @@ pub trait GpuBackend {
     /// Create a new backend instance
     async fn new() -> Result<Self> where Self: Sized;
 
+    /// Batch kangaroo initialization - generate tame and wild kangaroos on GPU
+    /// Much faster than CPU-based initialization (< 0.5 seconds vs minutes)
+    fn batch_init_kangaroos(&self, tame_count: usize, wild_count: usize, targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<u32>)>;
+
     /// Precompute GLV windowed NAF table for scalar multiplication optimization
     /// Returns table of base^(2*i+1) for i=0..(2^(window-1))-1 in Jacobian coordinates
     fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>>;

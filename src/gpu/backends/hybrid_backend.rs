@@ -585,6 +585,20 @@ impl GpuBackend for HybridBackend {
         Self::new().await
     }
 
+    fn batch_init_kangaroos(&self, tame_count: usize, wild_count: usize, targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<u32>)> {
+        // Hybrid backend delegates to CUDA if available, otherwise Vulkan, then CPU
+        #[cfg(feature = "rustacuda")]
+        if self.cuda_available {
+            return self.cuda.batch_init_kangaroos(tame_count, wild_count, targets);
+        }
+
+        #[cfg(feature = "wgpu")]
+        return self.vulkan.batch_init_kangaroos(tame_count, wild_count, targets);
+
+        #[cfg(not(feature = "wgpu"))]
+        return self.cpu.batch_init_kangaroos(tame_count, wild_count, targets);
+    }
+
     fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>> {
         // Dispatch to CUDA for precision GLV precomputation (if available)
         #[cfg(feature = "rustacuda")]
@@ -893,7 +907,6 @@ impl GpuBackend for HybridBackend {
             self.cpu.analyze_preseed_cascade(proxy_pos, bins)
         }
     }
-
 
 }
 
@@ -1344,8 +1357,6 @@ impl HybridBackend {
         let (positions, densities): (Vec<f64>, Vec<f64>) = result.into_iter().unzip();
         Ok((positions, densities))
     }
-
-
 
 }
 

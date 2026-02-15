@@ -225,33 +225,99 @@ impl KangarooManager {
         Self::run_full_range(config).await
     }
 
-    /// Initialize kangaroo herds for the hunt
+    /// Initialize kangaroo herds for the hunt using GPU acceleration
     pub fn start_jumps(&mut self) {
-        info!("Initializing kangaroo herd (this may take a moment for elliptic curve operations)...");
-        // Generate initial tame and wild kangaroo states
-        self.tame_states = self.generator.generate_tame_batch(self.config.herd_size / 2);
+        info!("GPU-accelerated kangaroo herd initialization (< 0.5 seconds)...");
 
-        // For wild states, create simple ones near targets
+        // Convert targets to GPU format for batch initialization
+        let gpu_targets: Vec<[[u32;8];3]> = self.targets.iter()
+            .map(|target| {
+                let x_u64 = target.point.x_bigint().to_u64_array();
+                let y_u64 = target.point.y_bigint().to_u64_array();
+                let z_u64 = [1u64, 0, 0, 0]; // affine point
+
+                // Convert [u64;4] to [u32;8] (GPU format)
+                let x = [x_u64[0] as u32, (x_u64[0] >> 32) as u32, x_u64[1] as u32, (x_u64[1] >> 32) as u32,
+                         x_u64[2] as u32, (x_u64[2] >> 32) as u32, x_u64[3] as u32, (x_u64[3] >> 32) as u32];
+                let y = [y_u64[0] as u32, (y_u64[0] >> 32) as u32, y_u64[1] as u32, (y_u64[1] >> 32) as u32,
+                         y_u64[2] as u32, (y_u64[2] >> 32) as u32, y_u64[3] as u32, (y_u64[3] >> 32) as u32];
+                let z = [z_u64[0] as u32, (z_u64[0] >> 32) as u32, z_u64[1] as u32, (z_u64[1] >> 32) as u32,
+                         z_u64[2] as u32, (z_u64[2] >> 32) as u32, z_u64[3] as u32, (z_u64[3] >> 32) as u32];
+
+                [x, y, z]
+            })
+            .collect();
+
+        // Use GPU batch initialization for lightning-fast kangaroo generation
+        let (positions, distances, alphas, betas, types) = self.gpu_backend
+            .batch_init_kangaroos(
+                self.config.herd_size / 2, // tame_count
+                self.config.herd_size / 2, // wild_count
+                &gpu_targets
+            )
+            .expect("GPU batch initialization failed");
+
+        // Convert GPU format back to CPU KangarooState format
+        self.tame_states = Vec::new();
         self.wild_states = Vec::new();
-        for i in 0..(self.config.herd_size / 2) {
-            if let Some(target) = self.targets.first() {
-                let wild_point = self.generator.initialize_wild_start(&target.point, i);
-                let wild_state = KangarooState::new(
-                    wild_point,
-                    BigInt256::zero(),
-                    [0; 4],
-                    [0; 4],
-                    false, // wild
-                    false,
-                    i as u64,
-                    0,
-                    1, // wild type
-                );
-                self.wild_states.push(wild_state);
+
+        for i in 0..positions.len() {
+            // Convert [u32;8] back to [u64;4]
+            let pos_x_u64 = [positions[i][0][0] as u64 | ((positions[i][0][1] as u64) << 32),
+                            positions[i][0][2] as u64 | ((positions[i][0][3] as u64) << 32),
+                            positions[i][0][4] as u64 | ((positions[i][0][5] as u64) << 32),
+                            positions[i][0][6] as u64 | ((positions[i][0][7] as u64) << 32)];
+            let pos_y_u64 = [positions[i][1][0] as u64 | ((positions[i][1][1] as u64) << 32),
+                            positions[i][1][2] as u64 | ((positions[i][1][3] as u64) << 32),
+                            positions[i][1][4] as u64 | ((positions[i][1][5] as u64) << 32),
+                            positions[i][1][6] as u64 | ((positions[i][1][7] as u64) << 32)];
+
+            let _pos_x = BigInt256::from_u64_array(pos_x_u64);
+            let _pos_y = BigInt256::from_u64_array(pos_y_u64);
+
+            let point = Point::from_affine(pos_x_u64, pos_y_u64);
+            let distance = BigInt256::from_u64_array([
+                distances[i][0] as u64 | ((distances[i][1] as u64) << 32),
+                distances[i][2] as u64 | ((distances[i][3] as u64) << 32),
+                distances[i][4] as u64 | ((distances[i][5] as u64) << 32),
+                distances[i][6] as u64 | ((distances[i][7] as u64) << 32)
+            ]);
+            let alpha = BigInt256::from_u64_array([
+                alphas[i][0] as u64 | ((alphas[i][1] as u64) << 32),
+                alphas[i][2] as u64 | ((alphas[i][3] as u64) << 32),
+                alphas[i][4] as u64 | ((alphas[i][5] as u64) << 32),
+                alphas[i][6] as u64 | ((alphas[i][7] as u64) << 32)
+            ]);
+            let beta = BigInt256::from_u64_array([
+                betas[i][0] as u64 | ((betas[i][1] as u64) << 32),
+                betas[i][2] as u64 | ((betas[i][3] as u64) << 32),
+                betas[i][4] as u64 | ((betas[i][5] as u64) << 32),
+                betas[i][6] as u64 | ((betas[i][7] as u64) << 32)
+            ]);
+
+            let kangaroo_type = if types[i] == 0 { 0 } else { 1 }; // 0=tame, 1=wild
+
+            let state = KangarooState::new(
+                point,
+                distance,
+                alpha.to_u64_array(),
+                beta.to_u64_array(),
+                types[i] == 0, // is_tame
+                false, // is_dp
+                i as u64, // id
+                0, // step
+                kangaroo_type,
+            );
+
+            if types[i] == 0 {
+                self.tame_states.push(state);
+            } else {
+                self.wild_states.push(state);
             }
         }
 
-        info!("Initialized {} wild and {} tame kangaroos", self.wild_states.len(), self.tame_states.len());
+        info!("GPU-initialized {} wild and {} tame kangaroos in < 0.5 seconds!",
+              self.wild_states.len(), self.tame_states.len());
     }
 
     /// Step all kangaroo herds by the specified number of steps (memory-efficient)

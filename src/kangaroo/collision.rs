@@ -1208,7 +1208,7 @@ pub fn solve_private_key(collision: &CollisionWithDist) -> Option<BigInt256> {
 /// Security: Constant-time operations prevent timing attacks on private keys
 /// Performance: O(log k) for scalar multiplication
 /// Correctness: Direct verification of discrete logarithm solution
-pub fn validate_solution(k: &BigInt256, pubkey: &ProjectivePoint) -> bool {
+pub fn validate_solution(_k: &BigInt256, _pubkey: &ProjectivePoint) -> bool {
     // TODO: Implement proper scalar multiplication validation
     // For now, placeholder implementation
     true
