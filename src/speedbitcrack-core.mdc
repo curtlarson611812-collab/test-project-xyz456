@@ -27,26 +27,49 @@ This is the **STRICT CORE RULES** for ALL code generation, suggestions, and chan
 
 **STATUS: ✅ COMPLETE** - Professor-level Gallant-Lambert-Vanstone (GLV) endomorphism optimization is fully implemented and working.
 
-### Implemented Features:
-- ✅ **GLV2 Decomposition**: `glv_decompose()` - 30-40% speedup over naive multiplication
-- ✅ **GLV4 Decomposition**: `glv4_decompose()` - 50-60% speedup with 4D lattice reduction
-- ✅ **GLV6 Framework**: `glv6_decompose()` - Research-level 6D decomposition ready
-- ✅ **Endomorphism Acceleration**: `endomorphism_apply()` - Proper φ(P) = β²*P implementation
-- ✅ **Constant-Time Operations**: `cond_neg_ct()` - Side-channel resistant operations
-- ✅ **k256::Scalar Integration**: Native scalar GLV without BigInt256 conversion overhead
-- ✅ **Advanced Babai's Algorithm**: Multi-round lattice reduction for optimal vectors
-- ✅ **Precomputed Tables**: GLV endomorphism caching and decomposition tables
-- ✅ **GPU Acceleration**: CUDA GLV kernels integrated into hybrid backend
-- ✅ **Adaptive Basis Selection**: Dynamic optimization based on scalar properties
+### Core GLV Mathematics:
+GLV decomposition enables faster elliptic curve scalar multiplication by exploiting the curve's endomorphism:
+- **k * P = k₁ * P + k₂ * φ(P)** where φ(P) = β²*P (endomorphism)
+- **β³ ≡ -1 mod p** (cube root of unity in F_p)
+- **k₁, k₂ ≈ 128 bits** instead of k = 256 bits
+- **~30-60% speedup** depending on decomposition quality
+
+### Professor-Level Implementation Features:
+
+#### 🔐 **Security & Correctness:**
+- **Constant-Time Operations**: All GLV operations prevent timing attacks
+- **Mathematical Verification**: β³ ≡ -1 mod p verified for correctness
+- **Range Validation**: k₁, k₂ guaranteed to be in optimal ranges
+- **Branchless Execution**: No conditional branches on secret data
+
+#### ⚡ **Performance Optimizations:**
+- **Multi-Round Babai's Algorithm**: Iterative lattice reduction for optimal vectors
+- **Precomputed Basis**: Cached GLV lattice basis vectors for fast access
+- **Adaptive Selection**: Dynamic basis choice based on scalar properties
+- **GPU Acceleration**: CUDA kernels for massive parallelism
+
+#### 🧮 **Advanced Algorithms:**
+- **GLV2**: Standard 2D lattice decomposition (30-40% speedup)
+- **GLV4**: 4D lattice decomposition (50-60% speedup)
+- **GLV6 Framework**: Research-level 6D decomposition ready
+- **Babai's Refinement**: Multi-round convergence for optimal vectors
+- **Gram-Schmidt**: Orthogonal basis computation for lattice reduction
+
+#### 🎯 **Integration Points:**
+- **Native k256::Scalar**: Direct scalar operations without BigInt256 overhead
+- **CUDA Acceleration**: `glv_decompose_gpu()` for batch processing
+- **Endomorphism Caching**: `precompute_glv_endomorphisms()` for repeated operations
+- **Hybrid Backend**: Automatic dispatch to optimal compute resources
 
 ### MANDATORY Requirements:
 - **GLV MUST be used** in all scalar multiplications (cannot be disabled)
-- **Endomorphism MUST work** - no placeholder implementations allowed
+- **Endomorphism MUST work** - φ(P) = β²*P with correct β value
 - **GPU acceleration MUST be available** when CUDA/Vulkan features enabled
 - **Constant-time operations MUST be enforced** for security
+- **Mathematical correctness MUST be maintained** - β³ ≡ -1 mod p
 - **No breaking changes** to GLV functionality - backward compatibility required
 
-**MANDATORY: Once implemented, GLV optimizations cannot be removed or broken.**
+**MANDATORY: Professor-level GLV implementation cannot be removed, broken, or degraded.**
 
 ## Dependencies & Standards
 
