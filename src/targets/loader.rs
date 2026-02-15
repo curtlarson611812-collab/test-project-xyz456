@@ -49,8 +49,9 @@ impl TargetLoader {
 
         println!("DEBUG: Using target file '{}' exists: {}", target_file.display(), target_file.exists());
         if target_file.exists() {
-            println!("DEBUG: Loading targets from {}", target_file.display());
+            println!("DEBUG: About to call load_p2pk_targets");
             let p2pk_targets = self.load_p2pk_targets(&target_file)?;
+            println!("DEBUG: load_p2pk_targets returned {} targets", p2pk_targets.len());
             let p2pk_count = p2pk_targets.len();
             targets.extend(p2pk_targets);
             println!("DEBUG: Loaded {} targets", p2pk_count);
@@ -93,11 +94,16 @@ impl TargetLoader {
     fn load_p2pk_targets(&self, file_path: &Path) -> Result<Vec<Target>> {
         println!("DEBUG: load_p2pk_targets called for {}", file_path.display());
         if !file_path.exists() {
-            println!("DEBUG: File does not exist!");
+            println!("DEBUG: File does not exist: {}", file_path.display());
             return Err(anyhow!("File does not exist: {}", file_path.display()));
         }
+        println!("DEBUG: File exists, attempting to read...");
         let content = fs::read_to_string(file_path)?;
-        println!("DEBUG: File content length: {}", content.len());
+        println!("DEBUG: Successfully read file, content length: {}", content.len());
+        if content.is_empty() {
+            println!("DEBUG: File is empty!");
+            return Ok(vec![]);
+        }
         println!("DEBUG: First 100 chars: {}", &content[..std::cmp::min(content.len(), 100)]);
         let mut targets = Vec::new();
         let mut invalid_count = 0;

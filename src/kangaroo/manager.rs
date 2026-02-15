@@ -298,100 +298,6 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
     }
 
     /// Run the main solving loop
-    pub async fn run(&mut self) -> Result<Option<Solution>> {
-        info!("Starting kangaroo solving with {} targets", self.targets.len());
-
-        loop {
-            // Check if we should stop
-            if self.should_stop() {
-                warn!("Stopping due to max operations or time limit");
-                return Ok(None);
-            }
-                for candidate in dp_candidates {
-
-                info!("COLLISION DETECTED!");
-                if self.verify_solution(&solution)? {
-                    return Ok(Some(solution));
-                }
-            }
-
-            // Periodic maintenance
-            self.periodic_maintenance().await?;
-
-            // Update statistics
-            self.total_ops += stepped_kangaroos.len() as u64;
-        }
-    }
-
-
-    /// Find distinguished points in kangaroo batch
-    async fn find_distinguished_points(&mut self, kangaroos: &[KangarooState]) -> Result<Vec<crate::types::DpEntry>> {
-        let mut dp_candidates = Vec::new();
-        for kangaroo in kangaroos {
-            let curve = Secp256k1::new();
-            let affine_point = kangaroo.position.to_affine(&curve);
-            let point_x_bytes = affine_point.x.as_bytes();
-            let point_x: [u8; 32] = point_x_bytes.try_into().unwrap(); // [u8;32] LE
-
-            // Bloom pre-check for duplicates
-            if let Some(bloom) = &mut self.bloom {
-                if bloom.check(&point_x) {
-                    continue; // Probable duplicate, skip
-                }
-            }
-
-            if self.is_distinguished_point(&kangaroo.position) {
-                let x_low_bits = kangaroo.position.x[0] & ((1u64 << self.config.dp_bits) - 1);
-                let cluster_id = (kangaroo.position.x[3] >> 16) as u32; // x-coord high bits
-                let dp_entry = crate::types::DpEntry::new(
-                    kangaroo.position,
-                    kangaroo.clone(),
-                    x_low_bits,
-                    cluster_id,
-                );
-                dp_candidates.push(dp_entry);
-
-                // Insert to Bloom after confirming it's a new DP
-                if let Some(bloom) = &mut self.bloom {
-                    bloom.set(&point_x);
-                }
-            }
-        }
-        Ok(dp_candidates)
-    }
-
-    /// Add DP entry asynchronously with bloom filter check
-    #[allow(dead_code)]
-    async fn add_dp_async(&mut self, dp: crate::types::DpEntry) -> Result<()> {
-        let curve = Secp256k1::new();
-        let affine_point = dp.point.to_affine(&curve);
-        let point_x_bytes = affine_point.x.as_bytes();
-        let point_x: [u8; 32] = point_x_bytes.try_into().unwrap();
-
-        if let Some(bloom) = &self.bloom {
-            if bloom.check(&point_x) {
-                return Ok(()); // Dup
-            }
-        }
-
-        {
-            let mut table = self.dp_table.lock().await;
-            table.add_dp(dp)?;
-        }
-
-        if let Some(bloom) = &mut self.bloom {
-            bloom.set(&point_x);
-        }
-        Ok(())
-    }
-
-    /// Check if point is distinguished (trailing dp_bits of x-coordinate are zero)
-    fn is_distinguished_point(&self, point: &crate::types::Point) -> bool {
-        // Rule: DP determined by trailing dp-bits on point x-coord (no hash needed)
-        let mask = (1u64 << self.config.dp_bits) - 1;
-        (point.x[0] & mask) == 0
-    }
-
     /// Check if we should stop the search
     fn should_stop(&self) -> bool {
         self.total_ops >= self.config.max_ops ||
@@ -411,18 +317,6 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
             let dp_table = self.dp_table.lock().await;
             dp_table.stats().utilization
         };
-        if dp_utilization > 0.8 {
-            let mut dp_table = self.dp_table.lock().await;
-            if let Err(e) = dp_table.prune_entries_async().await {
-                warn!("DP pruning failed: {}", e);
-            
-            } else {
-                loaded_targets
-            };
-                debug!("DP table pruned successfully");
-            }
-        }
-
         // Sync bloom filter after pruning
         if let Some(bloom) = &mut self.bloom {
             bloom.clear();
@@ -472,19 +366,6 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
 
         // Serialize and save to sled database
         let serialized = bincode::serialize(&checkpoint)?;
-        {
-            let dp_table = self.dp_table.lock().await;
-            if let Some(db) = dp_table.sled_db() {
-                db.insert("checkpoint", serialized)?;
-                db.flush()?;
-                info!("Checkpoint saved at {} ops with {} DP entries", self.total_ops, dp_entries_count);
-            
-            } else {
-                loaded_targets
-            };
-                warn!("Checkpoint not saved - disk storage not enabled");
-            }
-        }
 
         Ok(())
     }
@@ -515,11 +396,6 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
             .collect();
 
         let types: Vec<u32> = kangaroos.iter()
-            .map(|k| if k.is_tame { 1 
-            } else {
-                loaded_targets
-            }; 0 })
-            .collect();
 
         // Use the GPU backend for stepping
         let traps = self.gpu_backend.step_batch(&mut positions, &mut distances, &types)?;
@@ -561,12 +437,6 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
                     kangaroos[i].is_dp,
                     kangaroos[i].id,
                     kangaroos[i].step,
-                    if kangaroos[i].is_tame { 1 
-            } else {
-                loaded_targets
-            }; 0 }, // kangaroo_type
-                )
-            })
             .collect();
 
         // Process traps (distinguished points found)
@@ -588,51 +458,6 @@ targets_only.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1
                 ((trap_distance_bytes[7] as u64) << 56) |
                 ((trap_distance_bytes[6] as u64) << 48) |
                 ((trap_distance_bytes[5] as u64) << 40) |
-                ((trap_distance_bytes[4] as u64) << 32) |
-                ((trap_distance_bytes[3] as u64) << 24) |
-                ((trap_distance_bytes[2] as u64) << 16) |
-                ((trap_distance_bytes[1] as u64) << 8) |
-                (trap_distance_bytes[0] as u64)
-            
-            } else {
-                loaded_targets
-            };
-                0
-            };
-
-            // Create kangaroo state for the trap
-            let trap_state = KangarooState::new(
-                trap_point,
-                BigInt256::from_u64(trap_distance), // distance as BigInt256
-                [0; 4], // alpha not provided
-                [0; 4], // beta not provided
-                trap.is_tame,
-                true, // is_dp - this is a distinguished point
-                0, // id not provided
-                0, // step not provided
-                if trap.is_tame { 1 
-            } else {
-                loaded_targets
-            }; 0 }, // kangaroo_type
-            );
-
-            // Add to DP table
-            let mut table = self.dp_table.lock().await;
-            let dp_entry = DpEntry::new(trap_point, trap_state, 0, 0); // x_hash and cluster_id simplified
-            table.add_dp(dp_entry)?;
-        }
-
-        Ok(stepped_kangaroos)
-    }
-
-    /// Step kangaroos using refined hybrid GPU with drift mitigation
-    pub async fn step_herds_hybrid_refined(&mut self, total_steps: u64) -> Result<()> {
-        // Create shared buffers for cross-API memory access
-        let mut shared_points = SharedBuffer::<Point>::new(self.config.herd_size);
-        let mut shared_distances = SharedBuffer::<u64>::new(self.config.herd_size);
-
-        // Initialize with current kangaroo state
-        {
             let points_slice = shared_points.as_mut_slice();
             let distances_slice = shared_distances.as_mut_slice();
 
