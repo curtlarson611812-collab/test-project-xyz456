@@ -227,6 +227,7 @@ impl KangarooManager {
 
     /// Initialize kangaroo herds for the hunt
     pub fn start_jumps(&mut self) {
+        info!("Initializing kangaroo herd (this may take a moment for elliptic curve operations)...");
         // Generate initial tame and wild kangaroo states
         self.tame_states = self.generator.generate_tame_batch(self.config.herd_size / 2);
 

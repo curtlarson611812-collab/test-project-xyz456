@@ -644,7 +644,8 @@ impl KangarooGenerator {
             // For tame kangaroos, we start at different offsets from G
             let offset = BigInt256::from_u64(i as u64);
             let curve = Secp256k1::new();
-            let actual_start = curve.add(&start_position, &curve.mul(&offset, &curve.g));
+            let offset_point = curve.mul(&offset, &curve.g);
+            let actual_start = curve.add(&start_position, &offset_point);
 
             let alpha = offset.to_u64_array();
             let beta = [1, 0, 0, 0]; // Beta coefficient
