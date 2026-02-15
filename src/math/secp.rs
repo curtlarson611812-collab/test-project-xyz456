@@ -918,8 +918,8 @@ impl Secp256k1 {
 
     /// Professor-level GLV2 decompose with Babai's Nearest Plane Algorithm
     pub fn glv2_decompose_babai(&self, k: &k256::Scalar) -> (k256::Scalar, k256::Scalar, i8, i8) {
-        let v1 = Self::glv_v1_scalar();
-        let v2 = Self::glv_v2_scalar();
+        let _v1 = Self::glv_v1_scalar();
+        let _v2 = Self::glv_v2_scalar();
         let r1 = Self::glv_r1_scalar();
         let r2 = Self::glv_r2_scalar();
         let lambda = Self::glv_lambda_scalar();
@@ -1082,9 +1082,9 @@ impl Secp256k1 {
     /// Professor-level Babai's Nearest Plane for GLV2
     pub fn babai_nearest_plane_glv2(
         target: (BigInt256, BigInt256),
-        basis: &[[BigInt256; 2]; 2],
-        gs: &[[BigInt256; 2]; 2],
-        mu: &[[BigInt256; 2]; 2]
+        _basis: &[[BigInt256; 2]; 2],
+        _gs: &[[BigInt256; 2]; 2],
+        _mu: &[[BigInt256; 2]; 2]
     ) -> (BigInt256, BigInt256) {
         let mut coeffs = (BigInt256::zero(), BigInt256::zero());
         let mut residual = target;
@@ -1127,7 +1127,7 @@ impl Secp256k1 {
     }
 
     /// 2D dot product
-    fn dot_2d(a: &(BigInt256, BigInt256), b: &(BigInt256, BigInt256)) -> BigInt256 {
+    fn dot_2d(_a: &(BigInt256, BigInt256), _b: &(BigInt256, BigInt256)) -> BigInt256 {
         BigInt256::zero() + BigInt256::zero() // Placeholder dot product
     }
 
@@ -1383,7 +1383,7 @@ impl Secp256k1 {
         }
 
         for i in 1..count {
-            let odd_multiple = 2 * i + 1;
+            let _odd_multiple = 2 * i + 1;
             precomp[i] = precomp[i-1] + *p + *p;  // Add 2*P each time
         }
 

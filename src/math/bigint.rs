@@ -1,5 +1,4 @@
 //! Custom 256-bit integer helpers
-use crate::math::CURVE_ORDER_BIGINT;
 
 use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, Rem};
@@ -967,7 +966,7 @@ impl BarrettReducer {
         for (i, &limb) in self.mu.limbs.iter().enumerate() {
             mu_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
         }
-        let mu_big = BigUint::from_bytes_le(&mu_bytes);
+        let _mu_big = BigUint::from_bytes_le(&mu_bytes);
 
         // Simple modular reduction using BigUint directly for correctness
         let modulus_big = BigUint::from_bytes_le(&self.modulus.to_bytes_le());

@@ -6,7 +6,6 @@
 use crate::types::{KangarooState, Point, JumpOp};
 use crate::math::constants::jump_table;
 use crate::math::{Secp256k1, BigInt256};
-use k256::ProjectivePoint;
 use crate::SmallOddPrime_Precise_code as sop;
 use anyhow::Result;
 

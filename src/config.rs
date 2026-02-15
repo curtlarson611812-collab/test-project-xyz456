@@ -62,171 +62,204 @@ pub enum BiasMode {
 pub struct Config {
     // **General / Core**
     /// Primary operating mode
-    #[arg(short = 'm', long, default_value = "full-range", env = "SBC_MODE")]
+    #[arg(short = 'm', long, default_value = "full-range")]
     pub mode: SearchMode,
 
     /// Target public keys file (one per line)
-    #[arg(short = 't', long, default_value = "pubkeys.txt", env = "SBC_TARGETS")]
+    #[arg(short = 't', long, default_value = "pubkeys.txt")]
     pub targets: PathBuf,
 
+    /// Path to valuable P2PK public keys file (legacy compatibility)
+    #[arg(long, default_value = "valuable_p2pk_pubkeys.txt")]
+    pub p2pk_file: PathBuf,
+
+    /// Path to Bitcoin puzzles file
+    #[arg(long, default_value = "puzzles.txt")]
+    pub puzzles_file: PathBuf,
+
+    /// Enable puzzle mode (append puzzles to P2PK targets)
+    #[arg(long)]
+    pub puzzle_mode: bool,
+
+    /// Test mode (shrink target list to 1/10 for testing)
+    #[arg(long)]
+    pub test_mode: bool,
+
+    /// Run on valuable_p2pk_pubkeys.txt (legacy compatibility)
+    #[arg(long)]
+    pub valuable: bool,
+
     /// Distinguished point bits (tradeoff: higher = fewer DPs)
-    #[arg(short = 'd', long, default_value = "26", env = "SBC_DP_BITS")]
+    #[arg(short = 'd', long, default_value = "26")]
     pub dp_bits: usize,
 
     /// Kangaroo herd size (GPU memory limited)
-    #[arg(short = 'H', long, default_value = "500000000", env = "SBC_HERD_SIZE")]
+    #[arg(short = 'H', long, default_value = "500000000")]
     pub herd_size: usize,
 
     /// GPU kernel batch size (power of 2)
-    #[arg(short = 'B', long, default_value = "131072", env = "SBC_GPU_BATCH")]
+    #[arg(short = 'B', long, default_value = "131072")]
     pub gpu_batch: u32,
 
     /// CPU threads for hybrid/DP management
-    #[arg(short = 'T', long, default_value = "256", env = "SBC_THREADS")]
+    #[arg(short = 'T', long, default_value = "256")]
     pub threads: u32,
 
     /// Max cycles before forced stop
-    #[arg(long, default_value = "0", env = "SBC_MAX_CYCLES")]
+    #[arg(long, default_value = "0")]
     pub max_cycles: u64,
 
     // **Testing & Validation**
     /// Run basic functionality smoke test
-    #[arg(long, env = "SBC_BASIC_TEST")]
+    #[arg(long)]
     pub basic_test: bool,
 
     /// Run all puzzle validation suite
-    #[arg(long, env = "SBC_TEST_PUZZLES")]
+    #[arg(long)]
     pub test_puzzles: bool,
 
     /// Validate a specific puzzle number (e.g. 66)
-    #[arg(short = 'p', long, env = "SBC_REAL_PUZZLE")]
+    #[arg(short = 'p', long)]
     pub real_puzzle: Option<u32>,
 
     /// Validate all target pubkeys are on-curve
-    #[arg(long, env = "SBC_CHECK_PUBKEYS")]
+    #[arg(long)]
     pub check_pubkeys: bool,
 
     /// Full integration test suite
-    #[arg(long, env = "SBC_INTEGRATION_TEST")]
+    #[arg(long)]
     pub integration_test: bool,
 
     /// Test a known solved key (for regression)
-    #[arg(long, env = "SBC_TEST_SOLVED")]
+    #[arg(long)]
     pub test_solved: Option<String>,
 
     // **Bias & Magic Hunting**
     /// Bias distribution mode
-    #[arg(long, default_value = "uniform", env = "SBC_BIAS_MODE")]
+    #[arg(long, default_value = "uniform")]
     pub bias_mode: BiasMode,
 
     /// Enable advanced bias hunting
-    #[arg(long, env = "SBC_ENABLE_BIAS_HUNTING")]
+    #[arg(long)]
     pub enable_bias_hunting: bool,
 
     /// Use gold-cluster + bias combo
-    #[arg(long, env = "SBC_GOLD_BIAS_COMBO")]
+    #[arg(long)]
     pub gold_bias_combo: bool,
 
     /// Enable Magic 9 attractor mode
-    #[arg(short = 'M', long, env = "SBC_MAGIC9")]
+    #[arg(short = 'M', long)]
     pub magic9: bool,
 
     /// Prime-based entropy biasing
-    #[arg(long, env = "SBC_PRIME_ENTROPY")]
+    #[arg(long)]
     pub prime_entropy: bool,
 
     /// Use expanded prime set for bias
-    #[arg(long, env = "SBC_EXPANDED_PRIMES")]
+    #[arg(long)]
     pub expanded_primes: bool,
 
     // **Performance & Tuning**
     /// Near-collision probability (0.0–1.0)
-    #[arg(short = 'n', long, default_value = "0.0", env = "SBC_NEAR_COLLISIONS")]
+    #[arg(short = 'n', long, default_value = "0.0")]
     pub enable_near_collisions: f64,
 
     /// Number of walk-back steps on stagnation
-    #[arg(long, default_value = "0", env = "SBC_WALK_BACKS")]
+    #[arg(long, default_value = "0")]
     pub enable_walk_backs: u32,
 
     /// Enable cluster-based DP pruning
-    #[arg(long, env = "SBC_SMART_PRUNING")]
+    #[arg(long)]
     pub enable_smart_pruning: bool,
 
     /// Auto-restart herd on stagnation
-    #[arg(long, env = "SBC_STAGNANT_RESTART")]
+    #[arg(long)]
     pub enable_stagnant_restart: bool,
 
     /// Dynamically adjust jump table
-    #[arg(long, env = "SBC_ADAPTIVE_JUMPS")]
+    #[arg(long)]
     pub enable_adaptive_jumps: bool,
 
+    /// Enable target eviction on hopeless targets
+    #[arg(long)]
+    pub enable_target_eviction: bool,
+
+    /// Enable Magic 9 attractor mode (alternative to --magic9)
+    #[arg(long)]
+    pub enable_magic9_attractor: bool,
+
     /// Use Bloom filter for DP deduplication
-    #[arg(long, env = "SBC_USE_BLOOM")]
+    #[arg(long)]
     pub use_bloom: bool,
 
     /// Hybrid BSGS for final solve
-    #[arg(long, env = "SBC_USE_HYBRID_BSGS")]
+    #[arg(long)]
     pub use_hybrid_bsgs: bool,
 
     /// Switch to BSGS at this many DPs
-    #[arg(long, default_value = "4294967296", env = "SBC_BSGS_THRESHOLD")]
+    #[arg(long, default_value = "4294967296")]
     pub bsgs_threshold: u64,
 
     // **Analysis & Debug**
     /// Run full bias analysis
-    #[arg(long, env = "SBC_BIAS_ANALYSIS")]
+    #[arg(long)]
     pub bias_analysis: bool,
 
     /// Analyze bias from a targets file
-    #[arg(long, env = "SBC_ANALYZE_BIASES")]
+    #[arg(long)]
     pub analyze_biases: Option<PathBuf>,
 
     /// Special analysis for valuable keys
-    #[arg(long, env = "SBC_ANALYZE_VALUABLE")]
+    #[arg(long)]
     pub analyze_valuable_bias: bool,
 
+    /// Analyze bias patterns for a specific puzzle
+    #[arg(long)]
+    pub analyze_bias: Option<u32>,
+
+    /// Select bias components: all,mod3,mod9,mod27,mod81,gold,pop,basic (comma-separated, default: all)
+    #[arg(long)]
+    pub bias_components: Option<String>,
+
     /// Sample size for bias analysis
-    #[arg(long, default_value = "10000", env = "SBC_SAMPLE_BIAS")]
+    #[arg(long, default_value = "10000")]
     pub sample_bias_analysis: u32,
 
     /// Minimum bias strength to report
-    #[arg(long, default_value = "0.01", env = "SBC_BIAS_THRESHOLD")]
+    #[arg(long, default_value = "0.01")]
     pub bias_threshold: f64,
 
-    /// Number of GLV components for bias
-    #[arg(long, default_value = "4", env = "SBC_BIAS_COMPONENTS")]
-    pub bias_components: u32,
 
     /// Verbose output
-    #[arg(short = 'v', long, env = "SBC_VERBOSE")]
+    #[arg(short = 'v', long)]
     pub verbose: bool,
 
     /// Laptop-optimized settings (lower memory)
-    #[arg(long, env = "SBC_LAPTOP")]
+    #[arg(long)]
     pub laptop: bool,
 
     // **Utility**
     /// Only process unsolved puzzles
-    #[arg(long, env = "SBC_UNSOLVED")]
+    #[arg(long)]
     pub unsolved: bool,
 
     /// Force crack mode on unsolved
-    #[arg(long, env = "SBC_CRACK_UNSOLVED")]
+    #[arg(long)]
     pub crack_unsolved: bool,
 
     /// Convert valuable keys to uncompressed format
-    #[arg(long, env = "SBC_CONVERT_VALUABLE")]
+    #[arg(long)]
     pub convert_valuable_uncompressed: bool,
 
     /// Custom range low bound
-    #[arg(long, default_value = "1", env = "SBC_CUSTOM_LOW")]
+    #[arg(long, default_value = "1")]
     pub custom_low: String,
 
     /// Custom range high bound
-    #[arg(long, default_value = "ffffffffffffffff", env = "SBC_CUSTOM_HIGH")]
+    #[arg(long, default_value = "ffffffffffffffff")]
     pub custom_high: String,
 
-    // Legacy compatibility fields
+    // Legacy compatibility fields (keeping for existing code)
     /// Jump mean (expected jump size)
     #[arg(long, default_value = "1000")]
     pub jump_mean: u64,
@@ -299,14 +332,6 @@ pub struct Config {
     #[arg(long)]
     pub priority_list: Option<PathBuf>,
 
-    /// Enable smart DP pruning (combo:bloom-value-cluster)
-    #[arg(long)]
-    pub enable_smart_pruning: bool,
-
-    /// Enable target eviction on hopeless targets
-    #[arg(long)]
-    pub enable_target_eviction: bool,
-
     /// Validate specific puzzle (runs Tier 1 test)
     #[arg(long, value_name = "PUZZLE_NUM")]
     pub validate_puzzle: Option<u32>,
@@ -361,26 +386,6 @@ pub struct Config {
     #[arg(long, default_value = "hybrid")]
     pub gpu_backend: GpuBackend,
 
-    /// Bias mode for walks (uniform, magic9 for mod9/27/81 attractors, primes for small odd factoring)
-    #[arg(long, default_value = "uniform")]
-    pub bias_mode: BiasMode,
-
-    /// Enable Bloom filters for DP pre-checks (reduces false positives)
-    #[arg(long, default_value_t = true)]
-    pub use_bloom: bool,
-
-    /// Enable hybrid BSGS for near-collision resolution
-    #[arg(long, default_value_t = true)]
-    pub use_hybrid_bsgs: bool,
-
-    /// BSGS threshold for mini-ECDLP on near-collision diffs (default 2^32)
-    #[arg(long, default_value = "4294967296")]
-    pub bsgs_threshold: u64,
-
-    /// Enable GOLD bias combo (primes + mod3/9/27/81 for instant attractor solving)
-    #[arg(long)]
-    pub gold_bias_combo: bool,
-
     /// Enable strict linting (for CI/CD)
     #[arg(long, default_value = "false")]
     pub enable_strict_lints: bool,
@@ -396,6 +401,11 @@ impl Default for Config {
             // General / Core
             mode: SearchMode::FullRange,
             targets: "pubkeys.txt".into(),
+            p2pk_file: "valuable_p2pk_pubkeys.txt".into(),
+            puzzles_file: "puzzles.txt".into(),
+            puzzle_mode: false,
+            test_mode: false,
+            valuable: false,
             dp_bits: 26,
             herd_size: 500000000,
             gpu_batch: 131072,
@@ -424,6 +434,8 @@ impl Default for Config {
             enable_smart_pruning: false,
             enable_stagnant_restart: false,
             enable_adaptive_jumps: false,
+            enable_target_eviction: false,
+            enable_magic9_attractor: false,
             use_bloom: false,
             use_hybrid_bsgs: false,
             bsgs_threshold: 4294967296,
@@ -432,9 +444,10 @@ impl Default for Config {
             bias_analysis: false,
             analyze_biases: None,
             analyze_valuable_bias: false,
+            analyze_bias: None,
+            bias_components: None,
             sample_bias_analysis: 10000,
             bias_threshold: 0.01,
-            bias_components: 4,
             verbose: false,
             laptop: false,
 
@@ -466,7 +479,6 @@ impl Default for Config {
             vow_threads: 8,
             poisson_lambda: 1.3,
             priority_list: None,
-            enable_target_eviction: false,
             validate_puzzle: None,
             force_continue: false,
             output_dir: "output".into(),
@@ -481,7 +493,6 @@ impl Default for Config {
             enable_babai_multi_sim: false,
             enable_fermat_ecdlp: false,
             gpu_backend: GpuBackend::Hybrid,
-            gold_bias_combo: false,
             enable_strict_lints: false,
             enable_shader_precompile: false,
         }

@@ -145,7 +145,7 @@ impl KangarooManager {
         info!("Loaded {} targets", targets.len());
 
         // Load targets with priority support
-        let mut targets = if let Some(priority_path) = &config.priority_list {
+        let targets = if let Some(priority_path) = &config.priority_list {
             info!("Loading high-priority targets from {}", priority_path.display());
             match load_pubkeys_from_file(priority_path) {
                 Ok(priority_points) => {

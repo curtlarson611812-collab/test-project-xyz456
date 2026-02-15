@@ -177,7 +177,7 @@ impl PuzzleMode for Magic9Mode {
 
         Ok(points)
     }
-    fn execute(&self, gen: &KangarooGenerator, points: &[Point], _args: &Args) -> Result<()> {
+    fn execute(&self, gen: &KangarooGenerator, points: &[Point], _config: &Config) -> Result<()> {
         execute_magic9(gen, points)
     }
 }
@@ -264,8 +264,8 @@ async fn main() -> Result<()> {
         log::set_max_level(log::LevelFilter::Debug);
     }
 
-    println!("SpeedBitCrackV3 starting with config: basic_test={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, integration_test={}, test_solved={:?}, bias_analysis={}, analyze_biases={:?}, analyze_valuable_bias={}, sample_bias_analysis={}, bias_threshold={}, bias_components={}, verbose={}, laptop={}, unsolved={}, crack_unsolved={}, convert_valuable_uncompressed={}, custom_low={}, custom_high={}",
-             config.basic_test, config.test_puzzles, config.real_puzzle, config.check_pubkeys, config.integration_test, config.test_solved, config.bias_analysis, config.analyze_biases, config.analyze_valuable_bias, config.sample_bias_analysis, config.bias_threshold, config.bias_components, config.verbose, config.laptop, config.unsolved, config.crack_unsolved, config.convert_valuable_uncompressed, config.custom_low, config.custom_high);
+    println!("SpeedBitCrackV3 starting with config: basic_test={}, test_puzzles={}, real_puzzle={:?}, check_pubkeys={}, integration_test={}, test_solved={:?}, verbose={}, laptop={}",
+             config.basic_test, config.test_puzzles, config.real_puzzle, config.check_pubkeys, config.integration_test, config.test_solved, config.verbose, config.laptop);
 
     // Enable thermal logging and NVIDIA persistence for laptop mode
     if config.laptop {
@@ -281,7 +281,8 @@ async fn main() -> Result<()> {
 
 
     // Handle solved puzzle testing with full bias integration
-    if let Some(puzzle_num) = config.test_solved {
+    if let Some(puzzle_num_str) = &config.test_solved {
+        let puzzle_num: u32 = puzzle_num_str.parse().map_err(|_| anyhow!("Invalid puzzle number: {}", puzzle_num_str))?;
         println!("🧪 Testing solved puzzle #{} with full bias integration enabled", puzzle_num);
         println!("  🎯 Bias Mode: {:?}", config.bias_mode);
         println!("  🏮 Bloom Filter: {}", config.use_bloom);
@@ -293,7 +294,7 @@ async fn main() -> Result<()> {
     }
 
     // Handle specific puzzle cracking
-    if let Some(puzzle_num) = args.puzzle {
+    if let Some(puzzle_num) = config.real_puzzle {
         println!("🎯 Starting puzzle #{} solving process...", puzzle_num);
 
         // Load puzzle from flat file
@@ -407,7 +408,7 @@ async fn main() -> Result<()> {
             println!("🎯 Target address: {}", puzzle.target_address);
 
             // Enable unsolved mode - skip verification for real hunting
-            if args.unsolved {
+            if config.unsolved {
                 println!("🔓 UNSOLVED MODE ENABLED: Running full kangaroo algorithm without known key verification");
                 println!("🎯 This is REAL PUZZLE HUNTING - no shortcuts, no verification!");
             } else {
@@ -424,12 +425,12 @@ async fn main() -> Result<()> {
             println!("DEBUG: Target point created successfully");
 
             // Set up kangaroo parameters
-            let gpu_config = if args.laptop {
+            let gpu_config = if config.laptop {
                 speedbitcrack::config::laptop_3070_config()
             } else {
                 speedbitcrack::config::GpuConfig {
                     arch: "sm_120".to_string(),
-                    max_kangaroos: args.num_kangaroos,
+                    max_kangaroos: config.herd_size as usize,
                     dp_size: 1<<20,
                     dp_bits: 24,
                     max_regs: 64,
@@ -471,7 +472,7 @@ async fn main() -> Result<()> {
             // FULL CONFIGURATION with ALL features enabled
             let _search_config = speedbitcrack::config::Config {
                 dp_bits: 24,
-                enable_near_collisions: Some(0.8), // 80% threshold for near collision detection
+                enable_near_collisions: 0.8, // 80% threshold for near collision detection
                 enable_smart_pruning: true, // DP table smart pruning
                 ..Default::default()
             };
@@ -545,8 +546,8 @@ async fn main() -> Result<()> {
 
             // MAIN KANGAROO LOOP with ALL features FULLY ACTIVE
             let mut steps = 0u64;
-            let max_steps = if args.unsolved { 1_000_000u64 } else { 100_000u64 }; // Longer run for unsolved mode
-            println!("🎯 Max steps set to {} for {}", max_steps, if args.unsolved { "unsolved hunting" } else { "demo mode" });
+            let max_steps = if config.unsolved { 1_000_000u64 } else { 100_000u64 }; // Longer run for unsolved mode
+            println!("🎯 Max steps set to {} for {}", max_steps, if config.unsolved { "unsolved hunting" } else { "demo mode" });
 
             while steps < max_steps && !all_kangaroos.is_empty() {
                 let mut new_kangaroos = Vec::new();
@@ -745,7 +746,7 @@ async fn main() -> Result<()> {
             // FINAL COMPREHENSIVE REPORT with ALL metrics
             let final_dp_stats = dp_table.lock().unwrap().stats();
             println!("⏰ Maximum steps ({}) reached - FINAL COMPREHENSIVE STATISTICS:", max_steps);
-            println!("🔓 Unsolved Mode: {}", if args.unsolved { "ENABLED - Real puzzle hunting active!" } else { "DISABLED - Demo mode completed" });
+            println!("🔓 Unsolved Mode: {}", if config.unsolved { "ENABLED - Real puzzle hunting active!" } else { "DISABLED - Demo mode completed" });
             println!("🎯 DP Detection: {} hits, table size {} entries ({} clusters)", dp_hits, final_dp_stats.total_entries, final_dp_stats.cluster_count);
             println!("🎯 Near Collision Detection: {} events processed with walk fallback", near_collisions_found);
             println!("🎲 Small Odd Primes: MAGIC9 primes (3,5,7,11,13,17,19,23...) used in generation and spacing");
@@ -767,50 +768,50 @@ async fn main() -> Result<()> {
     }
 
     // Check if pubkey validation is requested
-    if args.check_pubkeys {
+    if config.check_pubkeys {
         check_puzzle_pubkeys()?;
         return Ok(());
     }
 
     // Check if bias analysis is requested
-    if args.bias_analysis {
+    if config.bias_analysis {
         run_bias_analysis()?;
         return Ok(());
     }
 
     // Check if bias pattern analysis is requested
-    if !args.analyze_biases.is_empty() {
-        analyze_puzzle_biases(&args.analyze_biases);
+    if let Some(ref biases) = config.analyze_biases {
+        analyze_puzzle_biases(&vec![biases.to_string_lossy().to_string()]);
         return Ok(());
     }
 
     // Check if comprehensive bias analysis is requested for a specific puzzle
-    if let Some(puzzle_num) = args.analyze_bias {
+    if let Some(puzzle_num) = config.analyze_bias {
         analyze_single_puzzle_bias(puzzle_num)?;
         return Ok(());
     }
 
     // Check if valuable P2PK bias analysis and filtering is requested
-    if args.analyze_valuable_bias {
+    if config.analyze_valuable_bias {
         analyze_and_filter_valuable_p2pk_bias()?;
         return Ok(());
     }
 
     // Check if valuable P2PK conversion to uncompressed is requested
-    if args.convert_valuable_uncompressed {
+    if config.convert_valuable_uncompressed {
         convert_valuable_p2pk_to_uncompressed()?;
         return Ok(());
     }
 
     // Check if crack unsolved is requested
-    if args.crack_unsolved {
-        run_crack_unsolved(&args)?;
+    if config.crack_unsolved {
+        run_crack_unsolved(&config)?;
         return Ok(());
     }
 
     // Check if unsolved mode is enabled for specific puzzles
-    if args.unsolved && args.puzzle.is_some() {
-        let puzzle_num = args.puzzle.unwrap();
+    if config.unsolved && config.real_puzzle.is_some() {
+        let puzzle_num = config.real_puzzle.unwrap();
         println!("🔓 UNSOLVED MODE: Starting real puzzle hunt for #{}", puzzle_num);
 
         // Load puzzle data
@@ -841,8 +842,8 @@ async fn main() -> Result<()> {
         println!("🎯 Target range: {} to {}", range.0.to_hex(), range.1.to_hex());
 
         // Configure for unsolved hunting
-        let num_kangaroos = if args.enable_bias_hunting { 2000 } else { 1000 };
-        let use_bias = args.enable_bias_hunting;
+        let num_kangaroos = if config.enable_bias_hunting { 2000 } else { 1000 };
+        let use_bias = config.enable_bias_hunting;
 
         // Run the hunt
         println!("🏹 Starting kangaroo hunt with {} parallel kangaroos (bias: {})...",
@@ -863,14 +864,14 @@ async fn main() -> Result<()> {
     }
 
     // Check if basic test is requested
-    if args.basic_test {
+    if config.basic_test {
         run_basic_test();
         run_simple_test();
         return Ok(());
     }
 
     // Handle custom range mode first
-    if let (Some(low_hex), Some(high_hex)) = (args.custom_low.clone(), args.custom_high.clone()) {
+    if let (Some(low_hex), Some(high_hex)) = (Some(config.custom_low.clone()), Some(config.custom_high.clone())) {
         info!("🎯 Custom range mode: [{}, {}]", low_hex, high_hex);
 
         // Parse hex values
@@ -885,22 +886,22 @@ async fn main() -> Result<()> {
         let curve = Secp256k1::new();
         let target_point = curve.g.clone(); // Use generator as default target
 
-        let _laptop_config = if args.laptop { config.clone() } else { config.clone() };
+        let _laptop_config = if config.laptop { config.clone() } else { config.clone() };
         let gen = KangarooGenerator::new(&Config::default());
 
-        execute_custom_range(&gen, &target_point, (low, high), &args)?;
+        execute_custom_range(&gen, &target_point, (low, high), &config)?;
         return Ok(());
     }
 
     // Handle puzzle mode options using trait-based polymorphism
     println!("DEBUG: Creating puzzle mode");
-    let mode: Box<dyn PuzzleMode> = if args.magic9 {
+    let mode: Box<dyn PuzzleMode> = if config.magic9 {
         Box::new(Magic9Mode)
-    } else if args.valuable {
+    } else if config.valuable {
         Box::new(ValuableMode)
-    } else if args.test_puzzles {
+    } else if config.test_puzzles {
         Box::new(TestMode)
-    } else if let Some(n) = args.real_puzzle {
+    } else if let Some(n) = config.real_puzzle {
         println!("DEBUG: About to create RealMode");
         Box::new(RealMode { n })
     } else {
@@ -911,7 +912,7 @@ async fn main() -> Result<()> {
 
     println!("DEBUG: Creating curve and generator");
     let curve = Secp256k1::new();
-    if args.laptop {
+    if config.laptop {
         // Apply laptop-specific optimizations
         config.herd_size = config.herd_size.min(2048); // Laptop memory limits
         info!("💻 Applied laptop optimizations: herd_size={}", config.herd_size);
@@ -921,7 +922,7 @@ async fn main() -> Result<()> {
 
     let points = mode.load(&curve)?;
     println!("DEBUG: Loaded {} points, calling mode.execute()", points.len());
-    mode.execute(&gen, &points, &args)?;
+    mode.execute(&gen, &points, &config)?;
 
     info!("SpeedBitCrack V3 puzzle mode completed successfully!");
     Ok(())
@@ -1034,7 +1035,7 @@ fn run_bias_analysis() -> Result<()> {
 
     Ok(())
 }
-fn run_crack_unsolved(args: &Args) -> Result<()> {
+fn run_crack_unsolved(config: &Config) -> Result<()> {
     println!("🎯 Auto-selecting and cracking most likely unsolved puzzle...");
 
     let most_likely = pick_most_likely_unsolved();
@@ -1047,7 +1048,7 @@ fn run_crack_unsolved(args: &Args) -> Result<()> {
     let gen = KangarooGenerator::new(&Config::default());
 
     let point = mode.load(&curve)?;
-    mode.execute(&gen, &point, args)?;
+    mode.execute(&gen, &point, config)?;
 
     Ok(())
 }
@@ -1686,7 +1687,7 @@ fn score_bias(biases: &std::collections::HashMap<u32, f64>) -> f64 {
 }
 
 /// Execute custom range mode for user-defined search spaces
-fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt256, BigInt256), args: &Args) -> Result<()> {
+fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt256, BigInt256), config: &Config) -> Result<()> {
     info!("🎯 Custom range mode: Searching [{}, {}]", range.0.to_hex(), range.1.to_hex());
     info!("🎯 Target point: x={}, y={}", BigInt256::from_u64_array(point.x).to_hex(), BigInt256::from_u64_array(point.y).to_hex());
 
@@ -1705,7 +1706,7 @@ fn execute_custom_range(gen: &KangarooGenerator, point: &Point, range: (BigInt25
     };
 
     // For custom ranges, we run a short test to demonstrate the system works
-    info!("🔬 Running short custom range test ({} kangaroos, {} steps)", args.num_kangaroos, args.max_cycles);
+    info!("🔬 Running short custom range test ({} kangaroos, {} steps)", config.herd_size, config.max_cycles);
 
     // In a real implementation, this would call pollard_lambda_parallel
     // For now, just log the setup
@@ -1755,7 +1756,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config:
     });
 
     // Create wild kangaroos starting from target point
-    for i in 0..args.num_kangaroos.saturating_sub(1) {
+    for i in 0..(config.herd_size as usize).saturating_sub(1) {
         wild_kangaroos.push(KangarooState {
             position: point.clone(),
             distance: max_range.clone(),
@@ -1773,7 +1774,7 @@ fn execute_real(gen: &KangarooGenerator, point: &Point, puzzle_num: u32, config:
 
     // Run the algorithm
     let mut cycle_count = 0u64;
-    let max_cycles = if args.max_cycles > 0 { args.max_cycles } else { u64::MAX };
+    let max_cycles = if config.max_cycles > 0 { config.max_cycles } else { u64::MAX };
 
     while cycle_count < max_cycles {
         // Step kangaroos
@@ -2030,10 +2031,10 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     }
 
     // Parse CLI arguments
-    let args = Args::parse();
+    let config = Config::parse()?;
 
     // Parse bias component weights
-    let bias_weights = if let Some(components) = &args.bias_components {
+    let bias_weights = if let Some(components) = &config.bias_components {
         match BiasWeights::from_string(components) {
             Ok(weights) => weights,
             Err(e) => {
@@ -2067,9 +2068,9 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
         .collect();
 
     // Apply sampling if requested
-    let lines = if let Some(sample_size) = args.sample_bias_analysis {
-        println!("🎯 Sampling {} keys for bias analysis (from {} total)", sample_size, all_lines.len());
-        all_lines.iter().take(sample_size).cloned().collect()
+    let lines = if config.sample_bias_analysis > 0 {
+        println!("🎯 Sampling {} keys for bias analysis (from {} total)", config.sample_bias_analysis, all_lines.len());
+        all_lines.iter().take(config.sample_bias_analysis as usize).cloned().collect()
     } else {
         all_lines
     };
@@ -2207,7 +2208,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
 
     // Use adaptive threshold based on score distribution
     let adaptive_threshold = mean_score + 1.5 * std_score;
-    let actual_threshold = args.bias_threshold.unwrap_or(adaptive_threshold);
+    let actual_threshold = Some(config.bias_threshold).unwrap_or(adaptive_threshold);
 
     // Filter high-bias keys
     let mut high_bias_keys = Vec::new();
@@ -2221,11 +2222,11 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
     println!("├─ Total keys analyzed: {}", analysis_results.len());
     println!("├─ Uncompressed keys: {}", uncompressed_count);
     println!("├─ Compressed keys: {} (decompressed for analysis)", compressed_count);
-    println!("├─ Bias Components: {}", args.bias_components.as_deref().unwrap_or("all (default)"));
+    println!("├─ Bias Components: {}", config.bias_components.as_deref().unwrap_or("all (default)"));
     println!("├─ Score statistics: mean={:.3}, std={:.3}", mean_score, std_score);
     println!("├─ Threshold used: {:.3} ({})",
              actual_threshold,
-             if args.bias_threshold.is_some() { "custom" } else { "adaptive" });
+             if Some(config.bias_threshold).is_some() { "custom" } else { "adaptive" });
     println!("├─ High-bias keys found: {} ({:.1}%)",
              high_bias_keys.len(),
              (high_bias_keys.len() as f64 / analysis_results.len() as f64) * 100.0);
@@ -2247,7 +2248,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
              analysis_results.len(), uncompressed_count, compressed_count)?;
     writeln!(output_file, "# High-bias threshold: >{:.3} overall score ({})",
              actual_threshold,
-             if args.bias_threshold.is_some() { "custom" } else { "adaptive" })?;
+             if Some(config.bias_threshold).is_some() { "custom" } else { "adaptive" })?;
     writeln!(output_file, "# Score stats: mean={:.3}, std={:.3}", mean_score, std_score)?;
     writeln!(output_file, "# High-bias keys: {} ({:.1}%)",
              high_bias_keys.len(),
@@ -2277,7 +2278,7 @@ fn analyze_and_filter_valuable_p2pk_bias() -> Result<()> {
              analysis_results.len(), uncompressed_count, compressed_count)?;
     writeln!(gold_file, "# Bias scores: Basic + Mod3/9/27/81 + Golden Ratio + Population Count (60% mods)")?;
     writeln!(gold_file, "# Threshold: {:.3} ({})", actual_threshold,
-             if args.bias_threshold.is_some() { "custom" } else { "adaptive" })?;
+             if Some(config.bias_threshold).is_some() { "custom" } else { "adaptive" })?;
     writeln!(gold_file, "")?;
 
     // Add concise rationales header

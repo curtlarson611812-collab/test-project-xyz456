@@ -39,7 +39,8 @@ pub struct CollisionWithDist {
 fn hash_to_jump_index(point: &ProjectivePoint) -> usize {
     let encoded = point.to_encoded_point(false);
     if let Some(x) = encoded.x() {
-        let x_bytes = x.as_slice();
+        // Use to_vec() instead of deprecated as_slice()
+        let x_bytes = x.to_vec();
         let hash_val = x_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
         (hash_val as usize) % JUMP_TABLE.len()
     } else {
