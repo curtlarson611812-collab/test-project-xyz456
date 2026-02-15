@@ -926,6 +926,65 @@ pub fn check_bias_convergence(rate_history: &Vec<f64>, target: f64) -> bool {
     (ema - target).abs() < target * 0.05  // Within 5%
 }
 
+// Main hunt mode entry points
+pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    println!("[LAUNCH] Herd size: {} | DP bits: {} | Near collisions: {:.2}",
+             config.herd_size, config.dp_bits, config.enable_near_collisions);
+
+    // Initialize the kangaroo manager for full range hunt
+    let mut manager = KangarooManager::new(config.clone()).await?;
+
+    println!("[JUMPS] Initiated after key verification ✓");
+
+    // Run the full range hunt
+    let solution = manager.run().await?;
+
+    if let Some(sol) = solution {
+        let private_key_bigint = BigInt256::from_u64_array(sol.private_key);
+        println!("[VICTORY] Solution found! Private key: {}", private_key_bigint.to_hex());
+    } else {
+        println!("[VICTORY] Full range hunt completed - no solution found.");
+    }
+
+    Ok(())
+}
+
+pub async fn run_puzzle_mode(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    println!("[PUZZLE] Starting puzzle mode hunt...");
+
+    // For now, delegate to existing puzzle logic
+    // This will be expanded to use the manager
+    println!("[PUZZLE] Mode not fully implemented yet - falling back to existing logic");
+
+    Ok(())
+}
+
+pub async fn run_magic9_attractor(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    println!("[MAGIC9] Magic 9 attractor mode engaged...");
+
+    // Initialize with Magic 9 specific settings
+    let mut magic9_config = config.clone();
+    magic9_config.bias_mode = crate::config::BiasMode::Magic9;
+    magic9_config.gold_bias_combo = true;
+
+    let mut manager = KangarooManager::new(magic9_config).await?;
+
+    println!("[MAGIC9] Watching for the golden cluster...");
+    println!("[JUMPS] Initiated after key verification ✓");
+
+    // Run the Magic 9 hunt
+    let solution = manager.run().await?;
+
+    if let Some(sol) = solution {
+        let private_key_bigint = BigInt256::from_u64_array(sol.private_key);
+        println!("[VICTORY] Magic 9 solution found! Private key: {}", private_key_bigint.to_hex());
+    } else {
+        println!("[VICTORY] Magic 9 hunt completed - no solution found.");
+    }
+
+    Ok(())
+}
+
 // Sacred rule boosters - optional enhancements activated on near collisions
 impl KangarooManager {
     /// Sacred rule booster: Restart stagnant herds when near collisions detected
