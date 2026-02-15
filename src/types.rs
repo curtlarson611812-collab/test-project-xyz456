@@ -192,12 +192,12 @@ impl Point {
         let y = super::math::bigint::BigInt256::from_u64_array(self.y);
 
         // Compute y²
-        let y_squared = curve.montgomery_p.mul(&y, &y);
+        let y_squared = curve.barrett_p.mul(&y, &y);
 
         // Compute x³ + ax + b
-        let x_squared = curve.montgomery_p.mul(&x, &x);
-        let x_cubed = curve.montgomery_p.mul(&x_squared, &x);
-        let ax = curve.montgomery_p.mul(&curve.a, &x);
+        let x_squared = curve.barrett_p.mul(&x, &x);
+        let x_cubed = curve.barrett_p.mul(&x_squared, &x);
+        let ax = curve.barrett_p.mul(&curve.a, &x);
         let rhs = curve.barrett_p.add(&x_cubed, &ax);
         let rhs = curve.barrett_p.add(&rhs, &curve.b);
 

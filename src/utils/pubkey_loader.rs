@@ -90,7 +90,7 @@ fn parse_uncompressed(bytes: &[u8]) -> io::Result<Point> {
     // Validate point is on curve
     let curve = Secp256k1::new();
     let point = Point::from_affine(x.to_u64_array(), y.to_u64_array());
-    if !point.validate_curve(&curve) {
+    if !curve.is_on_curve(&point) {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Point not on secp256k1 curve"));
     }
 
@@ -146,7 +146,7 @@ fn parse_compressed_bytes(bytes: &[u8]) -> io::Result<Point> {
     };
 
     let point = Point::from_affine(x.to_u64_array(), y.to_u64_array());
-    if !point.validate_curve(&curve) {
+    if !curve.is_on_curve(&point) {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Decompressed point not on curve"));
     }
 
