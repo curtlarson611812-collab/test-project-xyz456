@@ -132,13 +132,15 @@ pub struct KangarooManager {
 
 impl KangarooManager {
     /// Create new KangarooManager
-
+    pub fn new(config: Config) -> Result<Self> {
+        let collision_detector = CollisionDetector::new();
         // Create appropriate GPU backend based on configuration
         // Use CPU backend for now since GPU features are disabled by default
         let gpu_backend: Box<dyn GpuBackend> = Box::new(CpuBackend::new()?);
         let generator = KangarooGenerator::new(&config);
         let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, config.dp_bits)); // Use standard jump table
         let collision_detector = CollisionDetector::new();
+        let parity_checker = ParityChecker::new();
         let parity_checker = ParityChecker::new();
 
         Ok(KangarooManager {
@@ -434,7 +436,6 @@ pub async fn run_magic9_attractor(config: &Config) -> Result<(), Box<dyn std::er
     // Run the Magic 9 hunt
     let solution = manager.run().await?;
 
-    }
 
     Ok(())
 }
