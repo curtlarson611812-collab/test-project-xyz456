@@ -1397,7 +1397,7 @@ extern "C" void launch_kangaroo_step_batch(
     cudaStream_t stream
 ) {
     launch_kangaroo_step_bias(d_positions, (uint64_t*)d_distances, d_types, d_jumps, d_traps,
-        num_kangaroos, num_jumps, 20, 1, 0, 0, 9, stream);
+        num_kangaroos, num_jumps, 20, 1, 0, 0, 9, 0ULL, stream);
 }
 
 // SOP bucket selection
