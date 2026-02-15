@@ -47,7 +47,7 @@ pub fn load_pubkeys_from_file(path: &str) -> io::Result<Vec<Point>> {
 
     for line_result in lines {
         let hex_str = line_result?.trim().to_string();
-        if hex_str.is_empty() {
+        if hex_str.is_empty() || hex_str.starts_with('#') {
             continue;
         }
 
