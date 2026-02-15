@@ -152,8 +152,6 @@ impl KangarooManager {
         Ok(manager)
     }
     }
-
-    pub async fn new_multi_config(
         multi_targets: Vec<(Point, u32)>,
         search_config: SearchConfig,
         config: Config,
@@ -179,21 +177,23 @@ impl KangarooManager {
             current_steps: 0,
             start_time: std::time::Instant::now(),
         };
-        Ok(manager)
-    }
-
-    pub fn multi_targets(&self) -> &[(Point, u32)] {
-        &self.multi_targets
-    }
-
-    pub fn total_ops(&self) -> u64 {
-        self.total_ops
-    }
-
     pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-        println!("[LAUNCH] Herd size: {} | DP bits: {} | Near collisions: {:.2}",
-                 config.herd_size, config.dp_bits, config.enable_near_collisions);
+        println!("[LAUNCH] Starting 34k P2PK + Magic9 hunt | Herd: {} | DP: {}", 
+                 config.herd_size, config.dp_bits);
 
+        let mut manager = KangarooManager::new(config).await?;
+        manager.start_jumps();
+
+        // Simple real hunt loop
+        for cycle in 0..1000 {
+            let stepped = manager.step_herds_multi(10000).await?;
+            println!("[CYCLE {}] Stepped {} kangaroos", cycle, stepped.len());
+            if cycle % 10 == 0 {
+                manager.run_parity_check().await?;
+            }
+        }
+        Ok(())
+    }
         // Automatic fallback (already good, just make sure it continues)
         let targets = if config.targets.exists() {
             config.targets.clone()

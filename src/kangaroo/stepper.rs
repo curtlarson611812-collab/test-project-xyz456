@@ -6,7 +6,7 @@
 use crate::types::{KangarooState, Point, JumpOp};
 use crate::math::constants::jump_table;
 use crate::math::{Secp256k1, BigInt256};
-use crate::SmallOddPrime_Precise_code as sop;
+// use crate::SmallOddPrime_Precise_code as sop; // Module not found
 use anyhow::Result;
 
 /// Kangaroo stepper implementing jump operations
@@ -21,21 +21,14 @@ pub struct KangarooStepper {
 }
 
 impl KangarooStepper {
-    /// Create new stepper with optional expanded jump table
     pub fn new(expanded_mode: bool) -> Self {
-        Self::with_dp_bits_and_seed(expanded_mode, 20, 42) // Default 20 bits, seed 42
-    }
-
-    /// Create new stepper with dp_bits
     pub fn with_dp_bits(expanded_mode: bool, dp_bits: usize) -> Self {
-        Self::with_dp_bits_and_seed(expanded_mode, dp_bits, 42)
+        KangarooStepper::with_dp_bits_and_seed(expanded_mode, dp_bits, 42)
     }
 
-    /// Create new stepper with dp_bits and configurable seed
     pub fn with_dp_bits_and_seed(expanded_mode: bool, dp_bits: usize, seed: u32) -> Self {
         let curve = Secp256k1::new();
         let jump_table = Self::build_jump_table(&curve, expanded_mode);
-
         KangarooStepper {
             curve,
             _jump_table: jump_table,
@@ -46,79 +39,45 @@ impl KangarooStepper {
         }
     }
 
-    /// Production-ready expanded jump table precomputation
-    /// Mathematical derivation: Cumulative prime products for pseudo-random spread
-    /// Performance: O(size) precomputation, enables 2^20 table size for bias adaptation
-    /// Security: Deterministic prime-based multipliers, no entropy required
-    /// Usefulness: Adapts to bias patterns, 20-30% faster convergence on skewed distributions
-    pub fn precompute_jumps_expanded(_size: usize) -> Vec<Point> {
-        // TODO: Implement proper expanded jump table
-        vec![Point::infinity(); 1024] // Placeholder
-    }
-
-    /// Fibonacci number generator for expanded jump table
-    fn fib(n: usize) -> u64 {
-        let mut a = 0u64;
-        let mut b = 1u64;
-        for _ in 0..n {
-            let temp = a;
-            a = b;
-            b = temp + b;
+    fn build_jump_table(curve: &Secp256k1, expanded: bool) -> Vec<Point> {
+        if expanded {
+            Self::precompute_jumps_expanded(32)
+        } else {
+            (0..16).map(|i| curve.mul_constant_time(&BigInt256::from_u64(i as u64 + 1), &curve.g).unwrap()).collect()
         }
-        a
     }
 
-    /// Build jump table for efficient stepping
-    fn build_jump_table(_curve: &Secp256k1, _expanded: bool) -> Vec<Point> {
-        // Use standard precomputed table for now
-        // TODO: Implement expanded mode properly
-        vec![Point::infinity(); 256] // Placeholder
+    pub fn precompute_jumps_expanded(size: usize) -> Vec<Point> {
+        let curve = Secp256k1::new();
+        (0..size).map(|i| curve.mul_constant_time(&BigInt256::from_u64(i as u64 + 1), &curve.g).unwrap()).collect()
     }
 
-    /// Step a single kangaroo one jump
-    /// Returns updated position and coefficients
-    pub fn step_kangaroo(&self, kangaroo: &KangarooState, target: Option<&Point>) -> KangarooState {
-        self.step_kangaroo_with_bias(kangaroo, target, 0) // Default no bias
-    }
-
-    /// Step a single kangaroo one jump with SmallOddPrime sacred logic
     pub fn step_kangaroo_with_bias(&self, kangaroo: &KangarooState, target: Option<&Point>, bias_mod: u64) -> KangarooState {
-        // Use SmallOddPrime sacred bucket selection
         let bucket = self.select_sop_bucket(kangaroo, target, bias_mod);
-        let jump_d = sop::get_biased_prime(bucket as usize, bias_mod.max(81)); // Default to 81 if no bias
+        // Simple prime selection (replace sop::get_biased_prime)
+        let primes = [3u64, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137];
+        let jump_d = primes[(bucket as usize).min(primes.len() - 1)];
 
         let (new_position, new_distance, alpha_update, beta_update) = if kangaroo.is_tame {
-            // Tame: position += jump_d * G, distance += jump_d
             let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), &self.curve.g).unwrap();
             let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-            let current_dist_bigint = kangaroo.distance.clone();
-            let new_dist_bigint = crate::kangaroo::generator::additive_tame_jump(&current_dist_bigint, jump_d);
-            let new_dist = new_dist_bigint;
-            let alpha_update = [jump_d as u64, 0, 0, 0]; // Simple alpha update for tame
-            let beta_update = [0, 0, 0, 0];
-            (new_pos, new_dist, alpha_update, beta_update)
+            let new_dist = kangaroo.distance + BigInt256::from_u64(jump_d);
+            ([jump_d as u64, 0, 0, 0], [0, 0, 0, 0])
         } else {
-            // Wild: position += jump_d * target, distance *= jump_d mod n
-            if let Some(target_point) = target {
-                let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), target_point).unwrap();
+            if let Some(t) = target {
+                let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), t).unwrap();
                 let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-                // For wild: multiplicative distance update (scalar *= jump_d mod n)
-                let current_dist_bigint = kangaroo.distance.clone();
-                let new_dist_bigint = crate::kangaroo::generator::multiplicative_wild_jump(&current_dist_bigint, jump_d);
-                let new_dist = new_dist_bigint;
-                let alpha_update = [0, 0, 0, 0];
-                let beta_update = [jump_d as u64, 0, 0, 0]; // Simple beta update for wild
-                (new_pos, new_dist, alpha_update, beta_update)
+                let new_dist = kangaroo.distance * BigInt256::from_u64(jump_d) % self.curve.n;
+                ([0, 0, 0, 0], [jump_d as u64, 0, 0, 0])
             } else {
-                // Fallback if no target (shouldn't happen for wild)
-                (kangaroo.position.clone(), kangaroo.distance.clone(), [0, 0, 0, 0], [0, 0, 0, 0])
+                (kangaroo.position.clone(), kangaroo.distance.clone(), [0;4], [0;4])
             }
         };
 
         let new_alpha = self.update_coefficient(&kangaroo.alpha, &alpha_update, true);
         let new_beta = self.update_coefficient(&kangaroo.beta, &beta_update, false);
 
-        let mut new_state = KangarooState {
+        KangarooState {
             position: new_position,
             distance: new_distance,
             alpha: new_alpha,
@@ -128,205 +87,43 @@ impl KangarooStepper {
             id: kangaroo.id,
             step: kangaroo.step + 1,
             kangaroo_type: kangaroo.kangaroo_type,
-        };
-
-        // Apply negation map symmetry check (rule #6)
-        if true { // TODO: Make configurable
-            let neg_pos = new_state.position.negate(&self.curve);
-            if self.is_distinguished_point(&neg_pos, self.dp_bits) {
-                new_state.position = neg_pos;
-            }
-        }
-        new_state
-    }
-
-    /// Select appropriate jump operation
-    fn select_jump_operation(&self, kangaroo: &KangarooState, _target: Option<&Point>) -> JumpOp {
-        // Use position hash to deterministically select jump operation
-        let pos_hash = self.hash_position(&kangaroo.position);
-
-        match kangaroo.is_tame {
-            true => {
-                // Tame kangaroo: jumps toward target (simplified: use position hash)
-                match pos_hash % 4 {
-                    0 => JumpOp::AddG,
-                    1 => JumpOp::SubG,
-                    2 => JumpOp::AddKG,
-                    _ => JumpOp::SubKG,
-                }
-            }
-            false => {
-                // Wild kangaroo: jumps toward generator
-                match pos_hash % 4 {
-                    0 => JumpOp::AddG,
-                    1 => JumpOp::SubG,
-                    2 => JumpOp::AddKG,
-                    _ => JumpOp::SubKG,
-                }
-            }
         }
     }
 
-    /// Select bias-aware jump operation with configurable modulus preference
-    /// bias_mod = 0 means no bias (uniform), bias_mod > 0 means prefer jumps where hash % bias_mod == 0
-    /// Select bucket using SmallOddPrime sacred logic
+    // ... keep your other methods (select_sop_bucket, update_coefficient, etc.)
+
     pub fn select_sop_bucket(&self, kangaroo: &KangarooState, _target: Option<&Point>, _bias_mod: u64) -> u32 {
         if kangaroo.is_tame {
-            // Tame: deterministic based on step count
             self.step_count % 32
         } else {
-            // Wild: state-mixed using SmallOddPrime logic
-            // For now, use simplified version due to k256 API issues
-            // TODO: Use full sop::select_bucket when k256 conversions are fixed
             let pos_hash = self.hash_position(&kangaroo.position);
-            let dist_hash = self.hash_position(&Point::infinity()); // Simplified distance hash
+            let dist_hash = self.hash_position(&Point::infinity());
             let seed = self.seed;
             let step = self.step_count;
-
-            // Simplified state mixing (mimic sop logic)
             let mix = pos_hash ^ dist_hash ^ (seed as u64) ^ (step as u64);
             (mix % 32) as u32
         }
     }
 
-    pub fn select_bias_aware_jump(&self, kangaroo: &KangarooState, target: Option<&Point>, bias_mod: u64) -> JumpOp {
-        if bias_mod == 0 {
-            // No bias, use standard selection
-            return self.select_jump_operation(kangaroo, target);
+    fn update_coefficient(&self, current: &[u64; 4], update: &[u64; 4], _is_alpha: bool) -> [u64; 4] {
+        let mut result = *current;
+        for i in 0..4 {
+            result[i] = result[i].wrapping_add(update[i]);
         }
-
-        // Use bias-aware selection
-        let pos_hash = self.hash_position(&kangaroo.position);
-
-        // Check if position satisfies bias condition
-        let is_biased = (pos_hash as u64 % bias_mod) == 0;
-
-        // With bias, prefer certain jump operations when condition is met
-        match kangaroo.is_tame {
-            true => {
-                // Tame kangaroo: bias toward target operations when biased
-                if is_biased {
-                    // Biased tame: prefer AddKG/SubKG for stronger target attraction
-                    match pos_hash % 2 {
-                        0 => JumpOp::AddKG,
-                        _ => JumpOp::SubKG,
-                    }
-                } else {
-                    // Non-biased tame: use standard selection
-                    match pos_hash % 4 {
-                        0 => JumpOp::AddG,
-                        1 => JumpOp::SubG,
-                        2 => JumpOp::AddKG,
-                        _ => JumpOp::SubKG,
-                    }
-                }
-            }
-            false => {
-                // Wild kangaroo: bias toward generator operations when biased
-                if is_biased {
-                    // Biased wild: prefer AddG/SubG for stronger generator attraction
-                    match pos_hash % 2 {
-                        0 => JumpOp::AddG,
-                        _ => JumpOp::SubG,
-                    }
-                } else {
-                    // Non-biased wild: use standard selection
-                    match pos_hash % 4 {
-                        0 => JumpOp::AddG,
-                        1 => JumpOp::SubG,
-                        2 => JumpOp::AddKG,
-                        _ => JumpOp::SubKG,
-                    }
-                }
-            }
-        }
+        result
     }
 
-    /// Apply jump operation and return position/coefficient updates
-    fn _apply_jump(&self, kangaroo: &KangarooState, jump_op: JumpOp, target: Option<&Point>) -> (Point, [u64; 4], [u64; 4]) {
-        match jump_op {
-            JumpOp::AddG => {
-                let jump_point = &self._jump_table[0]; // G
-                let new_pos = self.curve.add(&kangaroo.position, jump_point);
-                let alpha_update = [1, 0, 0, 0]; // +1 * G coefficient
-                let beta_update = [0, 0, 0, 0];
-                (new_pos, alpha_update, beta_update)
-            }
-            JumpOp::SubG => {
-                let jump_point = &self._jump_table[0]; // G
-                let neg_g = jump_point.negate(&self.curve);
-                let new_pos = self.curve.add(&kangaroo.position, &neg_g);
-                let alpha_update = [0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]; // -1 mod n
-                let beta_update = [0, 0, 0, 0];
-                (new_pos, alpha_update, beta_update)
-            }
-            JumpOp::AddKG => {
-                if let Some(target) = target {
-                    let jump_point = target; // Target point
-                    let new_pos = self.curve.add(&kangaroo.position, jump_point);
-                    let alpha_update = [0, 0, 0, 0];
-                    let beta_update = [1, 0, 0, 0]; // +1 * target coefficient
-                    (new_pos, alpha_update, beta_update)
-                } else {
-                    // Fallback to AddG if no target
-                    self._apply_jump(kangaroo, JumpOp::AddG, target)
-                }
-            }
-            JumpOp::SubKG => {
-                if let Some(target) = target {
-                    let jump_point = target.negate(&self.curve); // -Target
-                    let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-                    let alpha_update = [0, 0, 0, 0];
-                    let beta_update = [0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]; // -1 mod n
-                    (new_pos, alpha_update, beta_update)
-                } else {
-                    // Fallback to SubG if no target
-                    self._apply_jump(kangaroo, JumpOp::SubG, target)
-                }
-            }
-        }
-    }
-
-    /// Update coefficient with modular addition
-    fn update_coefficient(&self, current: &[u64; 4], update: &[u64; 4], is_alpha: bool) -> [u64; 4] {
-        let current_big = BigInt256::from_u64_array(*current);
-        let update_big = BigInt256::from_u64_array(*update);
-
-        let modulus = if is_alpha {
-            self.curve.n.clone() // Alpha coefficients mod n
-        } else {
-            self.curve.n.clone() // Beta coefficients also mod n
-        };
-
-        let result = self.curve.barrett_n.add(&current_big, &update_big);
-        // Ensure result is in [0, n-1]
-        if result >= modulus {
-            self.curve.barrett_n.sub(&result, &modulus)
-        } else {
-            result
-        }.to_u64_array()
-    }
-
-    /// Hash position for deterministic jump selection
     fn hash_position(&self, position: &Point) -> u64 {
-        // Simple hash of x-coordinate for determinism
-        position.x[0] ^ position.x[1] ^ position.x[2] ^ position.x[3]
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        position.x.hash(&mut hasher);
+        hasher.finish()
     }
 
-    /// Check if point should be distinguished (simple implementation)
     pub fn is_distinguished_point(&self, point: &Point, dp_bits: usize) -> bool {
         let x_hash = self.hash_position(point);
-        // Check if trailing bits are zero
-        (x_hash & ((1 << dp_bits) - 1)) == 0
-    }
-
-    /// Step a batch of kangaroos
-    pub fn step_batch(&mut self, kangaroos: &[KangarooState], target: Option<&Point>) -> Result<Vec<KangarooState>, anyhow::Error> {
-        let result = Ok(kangaroos.iter()
-            .map(|k| self.step_kangaroo(k, target))
-            .collect());
-        self.step_count += 1; // Increment global step counter
-        result
+        (x_hash & ((1u64 << dp_bits) - 1)) == 0
     }
 }
 
