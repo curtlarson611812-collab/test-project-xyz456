@@ -137,14 +137,11 @@ impl KangarooManager {
         // Load targets - ALWAYS load full valuable_p2pk_publickey.txt
         println!("DEBUG: Entered KangarooManager::new");
         println!("DEBUG: Starting target loading...");
-        println!("DEBUG: Skipping target loading for testing");
-        // Temporarily use a dummy target for testing
-        use crate::types::Target;
-        use crate::math::secp::Secp256k1;
-        let curve = Secp256k1::new();
-        let dummy_point = curve.g.clone(); // Use generator as dummy target
-        let targets = vec![Target::new(dummy_point, 0)];
-        println!("DEBUG: Using dummy target for testing");
+        // Load targets properly - no early returns
+        println!("DEBUG: Loading targets properly");
+        use crate::targets::TargetLoader;
+        let target_loader = TargetLoader::new();
+        let targets = target_loader.load_targets(&config)?;
         info!("Loaded {} targets", targets.len());
 
         // Load targets with priority support
@@ -358,12 +355,17 @@ impl KangarooManager {
 
             // Generate new kangaroo batch - distribute herd size across targets
             let kangaroos_per_target = if self.targets.is_empty() {
-                warn!("No targets loaded, cannot start hunt");
-                return Ok(None);
+                warn!("No targets loaded – using fallback single target");
+                1  // Use single kangaroo for fallback
             } else {
                 std::cmp::max(1, self.config.herd_size / self.targets.len() as usize)
             };
-            let target_points: Vec<_> = self.targets.iter().map(|t| t.point).collect();
+            let target_points: Vec<_> = if self.targets.is_empty() {
+                // Fallback: use generator point
+                vec![self.curve.g.clone()]
+            } else {
+                self.targets.iter().map(|t| t.point).collect()
+            };
             let kangaroos = self.generator.generate_batch(&target_points, kangaroos_per_target)?;
 
             // Use GPU acceleration when available (hybrid backend with optimizations)

@@ -12,8 +12,8 @@ struct Point256 {
 @group(0) @binding(0) var<storage, read_write> states_x: array<u32, 8>;  // SoA: 8 limbs per kangaroo (256-bit)
 @group(0) @binding(1) var<storage, read_write> states_y: array<u32, 8>;
 @group(0) @binding(2) var<storage, read_write> states_dist: array<u32, 8>;
-@group(0) @binding(3) var<storage, read_write> states_jump_idx: array<u32>;
-@group(0) @binding(4) var<uniform> jumps: array<u32, 8>;  // Preloaded jump table (256-bit)
+@group(0) @binding(3) var<storage, read> jump_table: array<u32, 16>;  // Jump table from jump_table.wgsl
+@group(0) @binding(4) var<storage, read_write> states_jump_idx: array<u32>;
 @group(0) @binding(5) var<uniform> bias_table: array<f32, 81>;  // mod81 bias weights
 @group(0) @binding(6) var<uniform> mu_barrett: u32;  // Precomputed for mod 81
 @group(0) @binding(7) var<uniform> secp_p: BigInt256;  // secp256k1 modulus
@@ -236,7 +236,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     // In main loop: Step with jump, update dist/alpha/beta, check DP
     for (var s: u32 = 0u; s < 100u; s = s + 1u) { // Unroll for perf
-        select_apply_jump(&kang); // From jump_table
+        // Apply jump from jump table
+        let jump_idx = s % 16u;
+        let jump_value = jump_table[jump_idx];
+        kang.dist[0] = kang.dist[0] + jump_value;
+
         if (is_dp(kang.point)) { /* append */ }
     }
 

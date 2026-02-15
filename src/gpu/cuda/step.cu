@@ -1309,7 +1309,8 @@ __global__ void kangaroo_step_opt(
     uint32_t steps_per_thread,  // Steps per thread for occupancy
     int bias_mode,              // 0=uniform, 1=magic9, 2=primes
     int gold_bias_combo,        // 1=enable GOLD hierarchical nudging
-    uint64_t mod_level          // Starting mod level for GOLD (9/27/81)
+    uint64_t mod_level,         // Starting mod level for GOLD (9/27/81)
+    uint64_t step_counter       // Global step counter for deterministic behavior
 ) {
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_kangaroos) return;
@@ -1373,6 +1374,7 @@ extern "C" void launch_kangaroo_step_bias(
     int bias_mode,
     int gold_bias_combo,
     uint64_t mod_level,
+    uint64_t step_counter,
     cudaStream_t stream
 ) {
     dim3 block(256);
@@ -1380,7 +1382,7 @@ extern "C" void launch_kangaroo_step_bias(
     kangaroo_step_opt<<<grid, block, 0, stream>>>(
         d_positions, d_distances, d_types, d_jumps, d_traps,
         num_kangaroos, num_jumps, dp_bits, steps_per_thread,
-        bias_mode, gold_bias_combo, mod_level
+        bias_mode, gold_bias_combo, mod_level, step_counter
     );
 }
 
