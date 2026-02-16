@@ -51,7 +51,7 @@ GLV decomposition enables faster elliptic curve scalar multiplication by exploit
 #### 🧮 **Advanced Algorithms:**
 - **GLV2**: Standard 2D lattice decomposition (30-40% speedup)
 - **GLV4**: 4D lattice decomposition (50-60% speedup)
-- **GLV6 Framework**: Research-level 6D decomposition ready
+- **GLV6/GLV8**: Higher-dimensional decomposition (cancelled - insufficient performance gain vs. implementation cost)
 - **Babai's Refinement**: Multi-round convergence for optimal vectors
 - **Gram-Schmidt**: Orthogonal basis computation for lattice reduction
 
