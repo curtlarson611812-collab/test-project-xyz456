@@ -109,10 +109,28 @@ impl GpuBackend for WgpuBackend {
         Self::new().await
     }
 
-    fn precomp_table(&self, _base: [[u32;8];3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
-        // TODO: Implement Vulkan jump table precomputation
-        // For now, return empty table
-        Ok(vec![])
+    fn precomp_table(&self, base: [[u32;8];3], window: u32) -> Result<Vec<[[u32;8];3]>> {
+        // Phase 4: CPU-based jump table precomputation
+        // TODO: Replace with Vulkan compute shader implementation
+
+        use crate::math::secp::Secp256k1;
+
+        let curve = Secp256k1::new();
+        let base_point = self.u32_array_to_point(&base);
+
+        // For windowed method, precompute odd multiples: base, 3*base, 5*base, ..., (2^w-1)*base
+        let num_points = 1 << (window - 1); // 2^(w-1) points
+        let mut precomp_table = Vec::with_capacity(num_points);
+
+        for i in 0..num_points {
+            let multiplier = (2 * i + 1) as u32; // 1, 3, 5, 7, ...
+            let scalar = BigInt256::from_u64(multiplier as u64);
+            let point = curve.mul(&scalar, &base_point);
+            let point_array = self.point_to_u32_array(&point);
+            precomp_table.push(point_array);
+        }
+
+        Ok(precomp_table)
     }
 
     /// GLV windowed NAF precomputation table for Vulkan bulk operations
@@ -149,82 +167,132 @@ impl GpuBackend for WgpuBackend {
     }
 
     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
-        let num = positions.len();
-        if num == 0 {
-            return Ok(vec![]);
+        // Phase 4: CPU-based stepping implementation with GPU framework ready
+        // TODO: Replace with actual Vulkan compute shader execution
+
+        use crate::kangaroo::stepper::KangarooStepper;
+        use crate::types::KangarooState;
+        use crate::math::bigint::BigInt256;
+
+        let mut traps = Vec::new();
+        let stepper = KangarooStepper::new();
+
+        // Process each kangaroo
+        for i in 0..positions.len() {
+            // Convert from GPU format to CPU format
+            let position_point = self.u32_array_to_point(&positions[i]);
+            let distance_bigint = self.u32_array_to_bigint(&distances[i]);
+            let kangaroo_type = types[i];
+
+            // Create CPU KangarooState
+            let mut state = KangarooState {
+                position: position_point,
+                distance: distance_bigint,
+                alpha: BigInt256::zero(), // Not used in basic stepping
+                beta: BigInt256::zero(),  // Not used in basic stepping
+                kangaroo_type: if kangaroo_type == 0 { crate::types::KangarooType::Tame } else { crate::types::KangarooType::Wild },
+            };
+
+            // Perform stepping
+            let step_result = stepper.step_single(&mut state);
+
+            // Convert back to GPU format
+            positions[i] = self.point_to_u32_array(&state.position);
+            distances[i] = self.bigint_to_u32_array(&state.distance);
+
+            // Check for traps (collisions)
+            if let Ok(Some(trap)) = step_result {
+                // Convert trap to GPU format
+                traps.push(trap);
+            }
         }
 
-        // Flatten input data for GPU buffers
-        let positions_flat: Vec<u32> = positions.iter().flatten().flatten().copied().collect();
-        let distances_flat: Vec<u32> = distances.iter().flatten().copied().collect();
-
-        // Create GPU buffers
-        let positions_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("positions"),
-            size: (positions_flat.len() * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let distances_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("distances"),
-            size: (distances_flat.len() * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let types_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("types"),
-            size: (types.len() * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Create output buffers
-        let output_positions_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("output_positions"),
-            size: (positions_flat.len() * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let output_distances_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("output_distances"),
-            size: (distances_flat.len() * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        // Create traps buffer (estimate size)
-        let traps_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("traps"),
-            size: (num * 9 * std::mem::size_of::<u32>()) as u64, // 9 u32 per trap
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        // Upload input data
-        self.queue.write_buffer(&positions_buffer, 0, bytemuck::cast_slice(&positions_flat));
-        self.queue.write_buffer(&distances_buffer, 0, bytemuck::cast_slice(&distances_flat));
-        self.queue.write_buffer(&types_buffer, 0, bytemuck::cast_slice(types));
-
-        // TODO: Load and execute compute shader for kangaroo stepping
-        // For now, return empty traps to indicate framework is ready
-        // In full implementation: create compute pipeline from kangaroo.wgsl shader
-
-        Ok(vec![])
+        Ok(traps)
     }
 
-    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
-        Err(anyhow!("Vulkan batch_inverse not implemented - use CUDA"))
+    fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+        // Phase 4: CPU-based modular inverse implementation
+        // TODO: Replace with Vulkan compute shader for batch modular inverse
+
+        use crate::math::bigint::BigInt256;
+
+        let modulus_bigint = self.u32_array_to_bigint(&modulus);
+        let mut results = Vec::with_capacity(a.len());
+
+        for value in a {
+            let value_bigint = self.u32_array_to_bigint(value);
+
+            // Compute modular inverse using extended Euclidean algorithm
+            match value_bigint.mod_inverse(&modulus_bigint) {
+                Some(inv) => {
+                    let inv_array = self.bigint_to_u32_array(&inv);
+                    results.push(Some(inv_array));
+                },
+                None => {
+                    // No modular inverse exists (GCD != 1)
+                    results.push(None);
+                }
+            }
+        }
+
+        Ok(results)
     }
 
     fn batch_solve(&self, _dps: &Vec<crate::dp::DpEntry>, _targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
         Err(anyhow!("Vulkan batch_solve not implemented - use CUDA"))
     }
 
-    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
-        Err(anyhow!("Vulkan batch_solve_collision not implemented - use CUDA"))
+    fn batch_solve_collision(&self, alpha_t: Vec<[u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+        // Phase 4: CPU-based collision solving implementation
+        // Solve: k = (alpha_t - alpha_w) * inv(beta_w - beta_t) mod n
+
+        use crate::math::bigint::BigInt256;
+
+        let n_bigint = self.u32_array_to_bigint(&n);
+        let mut results = Vec::with_capacity(alpha_t.len());
+
+        for i in 0..alpha_t.len() {
+            let alpha_t_bigint = self.u32_array_to_bigint(&alpha_t[i]);
+            let alpha_w_bigint = self.u32_array_to_bigint(&alpha_w[i]);
+            let beta_t_bigint = self.u32_array_to_bigint(&beta_t[i]);
+            let beta_w_bigint = self.u32_array_to_bigint(&beta_w[i]);
+
+            // Compute numerator: alpha_t - alpha_w
+            let numerator = if alpha_t_bigint >= alpha_w_bigint {
+                alpha_t_bigint - alpha_w_bigint
+            } else {
+                n_bigint.clone() + alpha_t_bigint - alpha_w_bigint
+            };
+
+            // Compute denominator: beta_w - beta_t
+            let denominator = if beta_w_bigint >= beta_t_bigint {
+                beta_w_bigint - beta_t_bigint
+            } else {
+                n_bigint.clone() + beta_w_bigint - beta_t_bigint
+            };
+
+            // Check if denominator is zero
+            if denominator == BigInt256::zero() {
+                results.push(None);
+                continue;
+            }
+
+            // Compute modular inverse of denominator
+            match denominator.mod_inverse(&n_bigint) {
+                Some(denom_inv) => {
+                    // Compute k = numerator * denom_inv mod n
+                    let k = (numerator * denom_inv) % n_bigint.clone();
+                    let k_array = self.bigint_to_u32_array(&k);
+                    results.push(Some(k_array));
+                },
+                None => {
+                    // Denominator not invertible
+                    results.push(None);
+                }
+            }
+        }
+
+        Ok(results)
     }
 
     fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
@@ -363,6 +431,29 @@ impl GpuBackend for WgpuBackend {
 
     fn batch_bigint_mul(&self, _a: &Vec<[u32;8]>, _b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
         Err(anyhow!("Vulkan batch_bigint_mul not implemented - use CUDA"))
+    }
+
+    // Helper function to convert [u32;8] to BigInt256
+    fn u32_array_to_bigint(&self, arr: &[u32;8]) -> BigInt256 {
+        let mut bytes = [0u8; 32];
+        for i in 0..8 {
+            let start = i * 4;
+            bytes[start..start+4].copy_from_slice(&arr[i].to_be_bytes());
+        }
+        BigInt256::from_bytes_be(&bytes)
+    }
+
+    // Helper function to convert BigInt256 to [u32;8]
+    fn bigint_to_u32_array(&self, bigint: &BigInt256) -> [u32;8] {
+        let bytes = bigint.to_bytes_be();
+        let mut result = [0u32; 8];
+        for i in 0..8 {
+            let start = i * 4;
+            if start + 4 <= bytes.len() {
+                result[i] = u32::from_be_bytes(bytes[start..start+4].try_into().unwrap());
+            }
+        }
+        result
     }
 }
 

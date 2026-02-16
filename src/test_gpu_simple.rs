@@ -2,9 +2,9 @@
 // This tests the logic without requiring full wgpu compilation
 
 #[cfg(test)]
-mod gpu_init_tests {
-    use crate::gpu::backends::hybrid_backend::HybridBackend;
-    use crate::gpu::backends::cpu_backend::CpuBackend;
+mod tests {
+    use speedbitcrack::gpu::backends::hybrid_backend::HybridBackend;
+    use speedbitcrack::gpu::backends::cpu_backend::CpuBackend;
 
     #[tokio::test]
     async fn test_cpu_backend_always_works() {
