@@ -51,7 +51,7 @@ libfuzzer-sys = { version = "0.4", optional = true }  # Fuzz testing
 # cudarc = "0.19.2" # Not used, using rustacuda instead
 
 [features]
-default = []  # Disable CUDA by default to avoid compilation issues
+default = ["wgpu"]  # Enable Vulkan by default for GPU acceleration
 cuda = ["rustacuda", "glv"]  # Enable CUDA via rustacuda feature with GLV
 glv = [] # Enable GLV optimization
 rustacuda = ["dep:rustacuda", "dep:rustacuda_core", "dep:rustacuda_derive", "dep:cuda-sys"]

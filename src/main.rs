@@ -248,7 +248,7 @@ async fn main() -> Result<()> {
         println!("  📊 BSGS Threshold: {}", config.bsgs_threshold);
 
         // Test manager creation with config
-        match speedbitcrack::kangaroo::manager::KangarooManager::new(config.clone()) {
+        match speedbitcrack::kangaroo::manager::KangarooManager::new(config.clone()).await {
             Ok(_manager) => {
                 println!("✅ Manager created successfully");
                 println!("🎉 Basic integration test PASSED - core components working!");

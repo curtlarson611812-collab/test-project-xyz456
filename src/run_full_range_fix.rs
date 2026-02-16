@@ -17,7 +17,7 @@ pub async fn run_full_range(config: &Config) -> Result<(), Box<dyn std::error::E
     };
 
     // Proceed to herd launch
-    let mut manager = KangarooManager::new(config.clone())?;
+    let mut manager = KangarooManager::new(config.clone()).await?;
     manager.start_jumps();                    // ← Jumps now fire
     manager.run_hunt().await?;
 

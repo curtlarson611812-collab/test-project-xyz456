@@ -128,7 +128,7 @@ impl KangarooManager {
         info!("Hunt simulation - target loading test successful!");
         Ok(None)
     }
-    pub fn new(config: Config) -> anyhow::Result<Self> {
+    pub async fn new(config: Config) -> anyhow::Result<Self> {
         let dp_bits = config.dp_bits;
         // Load targets from the specified file
         let targets = pubkey_loader::load_pubkeys_from_file(config.targets.to_str().unwrap_or("pubkeys.txt"))
@@ -149,6 +149,19 @@ impl KangarooManager {
         let search_config = SearchConfig::default();
         let generator = KangarooGenerator::new(&config);
         let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, dp_bits));
+
+        // Initialize GPU backend for production use
+        let gpu_backend = match crate::gpu::backends::hybrid_backend::HybridBackend::new().await {
+            Ok(backend) => {
+                info!("GPU backend initialized successfully");
+                Some(Box::new(backend) as Box<dyn crate::gpu::backends::backend_trait::GpuBackend>)
+            },
+            Err(e) => {
+                warn!("Failed to initialize GPU backend: {}. Falling back to CPU-only mode.", e);
+                None
+            }
+        };
+
         let manager = KangarooManager {
             config,
             search_config,
@@ -158,7 +171,7 @@ impl KangarooManager {
             tame_states: Vec::new(),
             dp_table: Arc::new(Mutex::new(DpTable::new(dp_bits))),
             bloom: None,
-            gpu_backend: None, // CPU backend not used for production
+            gpu_backend,
             generator,
             stepper,
             collision_detector: CollisionDetector::new(),
@@ -178,6 +191,19 @@ impl KangarooManager {
         let dp_bits = config.dp_bits;
         let generator = KangarooGenerator::new(&config);
         let stepper = std::cell::RefCell::new(KangarooStepper::with_dp_bits(false, dp_bits));
+
+        // Initialize GPU backend for production use
+        let gpu_backend = match crate::gpu::backends::hybrid_backend::HybridBackend::new().await {
+            Ok(backend) => {
+                info!("GPU backend initialized successfully");
+                Some(Box::new(backend) as Box<dyn crate::gpu::backends::backend_trait::GpuBackend>)
+            },
+            Err(e) => {
+                warn!("Failed to initialize GPU backend: {}. Falling back to CPU-only mode.", e);
+                None
+            }
+        };
+
         let manager = KangarooManager {
             config,
             search_config,
@@ -187,7 +213,7 @@ impl KangarooManager {
             tame_states: Vec::new(),
             dp_table: Arc::new(Mutex::new(DpTable::new(dp_bits))),
             bloom: None,
-            gpu_backend: None, // CPU backend not used for production
+            gpu_backend,
             generator,
             stepper,
             collision_detector: CollisionDetector::new(),
@@ -203,7 +229,7 @@ impl KangarooManager {
         println!("[LAUNCH] Starting 34k P2PK + Magic9 hunt | Herd: {} | DP: {}",
                  config.herd_size, config.dp_bits);
 
-        let mut manager = KangarooManager::new(config.clone())?;
+        let mut manager = KangarooManager::new(config.clone()).await?;
         manager.start_jumps()?;
 
         // Simple real hunt loop - step kangaroos in reasonable batches

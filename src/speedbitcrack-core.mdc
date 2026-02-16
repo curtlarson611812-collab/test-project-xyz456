@@ -86,6 +86,72 @@ GLV decomposition enables faster elliptic curve scalar multiplication by exploit
 
 **MANDATORY: Professor-level GLV implementation cannot be removed, broken, or degraded.**
 
+## GPU Hybrid Backend Production Implementation (MANDATORY - February 2026)
+
+**STATUS: ACTIVE DEVELOPMENT** - GPU hybrid backend is critical for production performance targets (2.5-3B ops/sec on RTX 5090).
+
+### Implementation Lockdown:
+The following phased plan is LOCKED and cannot be modified without explicit user approval. All GPU backend development must follow this exact sequence.
+
+#### Phase 1: Feature Enablement ✅ (LOCKED)
+- Enable hybrid features: `cargo build --features hybrid`
+- Update default features to include `wgpu` for Vulkan support
+- Ensure CUDA compilation works when `cuda` feature enabled
+- Test compilation of both backends without conflicts
+
+#### Phase 2: Backend Architecture Fix (LOCKED)
+- Consolidate multiple `impl GpuBackend` blocks into single coherent implementations
+- Fix HybridBackend constructor to handle feature combinations gracefully
+- Add proper `#[cfg(feature = "...")]` guards throughout backends
+- Remove conflicting trait implementations
+
+#### Phase 3: Core Method Implementation (LOCKED)
+**CRITICAL PATH METHODS (Priority 1):**
+- `batch_init_kangaroos()` - Kangaroo generation (< 0.5 seconds)
+- `step_batch()` - Core stepping operations
+- `step_batch_bias()` - Bias-enhanced stepping with config
+- `batch_solve_collision()` - Private key recovery
+
+**SUPPORTING METHODS (Priority 2):**
+- `precomp_table()` - Jump table generation
+- `batch_inverse()` - Modular inverse operations
+- `batch_barrett_reduce()` - Modular reduction
+
+#### Phase 4: Vulkan Backend Completion (LOCKED)
+- Implement shader loading (SPIR-V/WGSL)
+- Create compute pipelines for all operations
+- Implement buffer management and GPU memory
+- Launch compute shaders for cryptographic operations
+
+#### Phase 5: CUDA Backend Completion (LOCKED)
+- Implement PTX/CUDA kernel loading and compilation
+- Device buffer allocation and mapping
+- Optimal thread/block configurations for RTX 5090
+- Proper CUDA error handling and propagation
+
+#### Phase 6: Integration & Validation (LOCKED)
+- Intelligent workload distribution between CUDA/Vulkan
+- KangarooManager GPU backend initialization
+- CPU vs GPU parity testing and verification
+- Performance benchmarking (>2.5B ops/sec target)
+
+### Success Criteria (MANDATORY):
+- ✅ `cargo build --features hybrid` compiles successfully
+- ✅ `HybridBackend::new().await` creates working instance
+- ✅ `KangarooManager` initializes GPU backend (not None)
+- ✅ `batch_init_kangaroos()` generates kangaroos in <0.5 seconds
+- ✅ `step_batch()` achieves >2.5B ops/sec on RTX 5090
+- ✅ Zero "GPU backend not available" errors in production
+
+### Implementation Rules:
+- **NO CODE CHANGES** outside this phased plan
+- **NO FEATURE ADDITIONS** without completing current phase
+- **MANDATORY TESTING** at each phase completion
+- **ZERO COMPILATION ERRORS** allowed in committed code
+- **PARITY VERIFICATION** required before phase advancement
+
+**LOCKED: GPU hybrid backend implementation follows this exact plan. No deviations allowed.**
+
 ## Dependencies & Standards
 
 **Required Crates** (add to Cargo.toml):

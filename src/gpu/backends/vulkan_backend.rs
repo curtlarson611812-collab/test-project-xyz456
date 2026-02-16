@@ -4,6 +4,9 @@
 
 use super::backend_trait::GpuBackend;
 use crate::kangaroo::collision::Trap;
+use crate::math::bigint::BigInt256;
+use crate::math::secp::Secp256k1;
+use crate::types::Point;
 use anyhow::{Result, anyhow};
 use rand::Rng;
 
@@ -525,9 +528,10 @@ impl GpuBackend for WgpuBackend {
     }
 
     fn batch_init_kangaroos(&self, tame_count: usize, wild_count: usize, targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<u32>)> {
-        // Vulkan-accelerated kangaroo initialization (< 0.5 seconds)
-        // Parallel computation of tame and wild starting positions on GPU
+        // Phase 3: Basic CPU-based implementation for functional GPU backend
+        // TODO: Replace with actual Vulkan GPU acceleration
 
+        let curve = Secp256k1::new();
         let total_count = tame_count + wild_count;
         let mut positions = Vec::with_capacity(total_count);
         let mut distances = Vec::with_capacity(total_count);
@@ -538,9 +542,12 @@ impl GpuBackend for WgpuBackend {
         // Tame kangaroos: start from (i+1)*G
         for i in 0..tame_count {
             let offset = (i + 1) as u32;
-            // TODO: Implement Vulkan shader for batch scalar multiplication: (i+1)*G
-            // For now, use identity element - actual implementation would use GPU compute
-            positions.push([[0u32; 8]; 3]); // Placeholder - should be (i+1)*G computed on GPU
+            let scalar = BigInt256::from_u64(offset as u64);
+            let point = curve.mul(&scalar, &curve.g);
+
+            // Convert Point to [[u32;8];3] format
+            let pos_array = point_to_u32_array(&point);
+            positions.push(pos_array);
             distances.push([offset, 0, 0, 0, 0, 0, 0, 0]);
             alphas.push([offset, 0, 0, 0, 0, 0, 0, 0]);
             betas.push([1, 0, 0, 0, 0, 0, 0, 0]);
@@ -549,7 +556,7 @@ impl GpuBackend for WgpuBackend {
 
         // Wild kangaroos: start from prime*target
         for i in 0..wild_count {
-            let _target_idx = i % targets.len();
+            let target_idx = i % targets.len();
             let prime_idx = i % 32;
             let prime = match prime_idx {
                 0 => 179, 1 => 257, 2 => 281, 3 => 349, 4 => 379, 5 => 419,
@@ -561,9 +568,13 @@ impl GpuBackend for WgpuBackend {
                 _ => 179,
             };
 
-            // TODO: Implement Vulkan shader for batch scalar multiplication: prime*target
-            // For now, use identity element - actual implementation would use GPU compute
-            positions.push([[0u32; 8]; 3]); // Placeholder - should be prime*targets[target_idx] computed on GPU
+            let prime_scalar = BigInt256::from_u64(prime as u64);
+            let target_point = u32_array_to_point(&targets[target_idx]);
+            let point = curve.mul(&prime_scalar, &target_point);
+
+            // Convert Point to [[u32;8];3] format
+            let pos_array = point_to_u32_array(&point);
+            positions.push(pos_array);
             distances.push([0, 0, 0, 0, 0, 0, 0, 0]);
             alphas.push([0, 0, 0, 0, 0, 0, 0, 0]);
             betas.push([prime, 0, 0, 0, 0, 0, 0, 0]);
@@ -575,6 +586,94 @@ impl GpuBackend for WgpuBackend {
         // Expected performance: < 0.5 seconds for 10,000+ kangaroos
 
         Ok((positions, distances, alphas, betas, types))
+    }
+
+    // Helper function to convert Point to [[u32;8];3] format
+    fn point_to_u32_array(point: &Point) -> [[u32;8];3] {
+        // Convert Point coordinates to u32 arrays
+        // Point has x, y, z coordinates as BigInt256
+        let x_bytes = point.x.to_bytes_be();
+        let y_bytes = point.y.to_bytes_be();
+        let z_bytes = point.z.to_bytes_be();
+
+        // Convert bytes to u32 arrays (8 u32s = 32 bytes)
+        let x_u32 = bytes_to_u32_array(&x_bytes);
+        let y_u32 = bytes_to_u32_array(&y_bytes);
+        let z_u32 = bytes_to_u32_array(&z_bytes);
+
+        [x_u32, y_u32, z_u32]
+    }
+
+    // Helper function to convert u32 array to Point
+    fn u32_array_to_point(arr: &[[u32;8];3]) -> Point {
+        let x = u32_array_to_bigint(&arr[0]);
+        let y = u32_array_to_bigint(&arr[1]);
+        let z = u32_array_to_bigint(&arr[2]);
+        Point { x, y, z }
+    }
+
+    // Helper to convert bytes to [u32;8]
+    fn bytes_to_u32_array(bytes: &[u8; 32]) -> [u32;8] {
+        let mut result = [0u32; 8];
+        for i in 0..8 {
+            let start = i * 4;
+            result[i] = u32::from_be_bytes(bytes[start..start+4].try_into().unwrap());
+        }
+        result
+    }
+
+    // Helper to convert [u32;8] to BigInt256
+    fn u32_array_to_bigint(arr: &[u32;8]) -> BigInt256 {
+        let mut bytes = [0u8; 32];
+        for i in 0..8 {
+            let start = i * 4;
+            bytes[start..start+4].copy_from_slice(&arr[i].to_be_bytes());
+        }
+        BigInt256::from_bytes_be(&bytes)
+    }
+
+    // Helper function to convert Point to [[u32;8];3] format
+    fn point_to_u32_array(point: &crate::types::Point) -> [[u32;8];3] {
+        // Convert Point coordinates to u32 arrays
+        // Point has x, y, z coordinates as BigInt256
+        let x_bytes = point.x.to_bytes_be();
+        let y_bytes = point.y.to_bytes_be();
+        let z_bytes = point.z.to_bytes_be();
+
+        // Convert bytes to u32 arrays (8 u32s = 32 bytes)
+        let x_u32 = bytes_to_u32_array(&x_bytes);
+        let y_u32 = bytes_to_u32_array(&y_bytes);
+        let z_u32 = bytes_to_u32_array(&z_bytes);
+
+        [x_u32, y_u32, z_u32]
+    }
+
+    // Helper function to convert u32 array to Point
+    fn u32_array_to_point(arr: &[[u32;8];3]) -> crate::types::Point {
+        let x = u32_array_to_bigint(&arr[0]);
+        let y = u32_array_to_bigint(&arr[1]);
+        let z = u32_array_to_bigint(&arr[2]);
+        crate::types::Point { x, y, z }
+    }
+
+    // Helper to convert bytes to [u32;8]
+    fn bytes_to_u32_array(bytes: &[u8; 32]) -> [u32;8] {
+        let mut result = [0u32; 8];
+        for i in 0..8 {
+            let start = i * 4;
+            result[i] = u32::from_be_bytes(bytes[start..start+4].try_into().unwrap());
+        }
+        result
+    }
+
+    // Helper to convert [u32;8] to BigInt256
+    fn u32_array_to_bigint(arr: &[u32;8]) -> crate::math::bigint::BigInt256 {
+        let mut bytes = [0u8; 32];
+        for i in 0..8 {
+            let start = i * 4;
+            bytes[start..start+4].copy_from_slice(&arr[i].to_be_bytes());
+        }
+        crate::math::bigint::BigInt256::from_bytes_be(&bytes)
     }
 
 }

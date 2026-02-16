@@ -62,11 +62,21 @@ impl HybridBackend {
     pub async fn new() -> Result<Self> {
         let cpu = CpuBackend::new()?;
 
+        // Initialize Vulkan backend if feature is enabled
         #[cfg(feature = "wgpu")]
-        let vulkan = WgpuBackend::new().await?;
+        let vulkan_result = WgpuBackend::new().await;
+        #[cfg(feature = "wgpu")]
+        let vulkan = vulkan_result?;
 
+        // Initialize CUDA backend if feature is enabled
         #[cfg(feature = "rustacuda")]
-        let cuda = CudaBackend::new()?;
+        let cuda_result = CudaBackend::new();
+        #[cfg(feature = "rustacuda")]
+        let cuda = cuda_result?;
+        #[cfg(feature = "rustacuda")]
+        let cuda_available = cuda_result.is_ok();
+        #[cfg(not(feature = "rustacuda"))]
+        let cuda_available = false;
 
         Ok(Self {
             #[cfg(feature = "wgpu")]
@@ -74,7 +84,7 @@ impl HybridBackend {
             #[cfg(feature = "rustacuda")]
             cuda,
             cpu,
-            cuda_available: true,
+            cuda_available,
         })
     }
 }

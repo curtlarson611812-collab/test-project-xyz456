@@ -135,6 +135,7 @@ fn load_mock_targets(_count: usize) -> Vec<crate::types::Point> {
     vec![crate::types::Point::generator(); _count]
 }
 
+#[allow(dead_code)]
 fn test_gpu_multi_target() -> Result<()> {
     use crate::kangaroo::manager::KangarooManager;
     use crate::config::SearchConfig;
@@ -169,6 +170,7 @@ fn test_hybrid_fallback() -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn test_gpu_hybrid_puzzle66() -> Result<()> {
     use crate::kangaroo::manager::KangarooManager;
     use crate::config::SearchConfig;
