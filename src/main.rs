@@ -1520,7 +1520,7 @@ fn detect_pos_bias_single(priv_key: &BigInt256, puzzle_n: u32) -> f64 {
     // Calculate 2^(N-1) using bit shifting
     let mut min_range = BigInt256::from_u64(1);
     for _ in 0..(puzzle_n - 1) {
-        min_range = min_range.clone().add(min_range.clone()); // Double the value
+        min_range = min_range.clone() + min_range.clone(); // Double the value
     }
     let range_width = min_range.clone(); // 2^(N-1)
 
