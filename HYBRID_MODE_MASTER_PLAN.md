@@ -42,10 +42,15 @@
 - Jump table operations
 - SmallOddPrime integration
 
+**Shaders Enhanced for Hybrid Mode**:
+- ✅ `montgomery_ladder.wgsl` - Constant-time scalar multiplication (side-channel resistant)
+- ✅ `bias_operations.wgsl` - Advanced bias-aware operations with SmallOddPrime integration
+- ✅ `memory_optimization.wgsl` - Memory access optimization and prefetching
+
 **Missing Shaders Needed**:
-- `collision_solver.wgsl` - BSGS collision solving
-- `batch_ops.wgsl` - Batch modular operations
-- `memory_ops.wgsl` - Affine conversion and coordinate transforms
+- `collision_solver.wgsl` - BSGS collision solving (Phase 2 priority)
+- `batch_ops.wgsl` - Batch modular operations (Phase 2)
+- `memory_ops.wgsl` - Affine conversion and coordinate transforms (Phase 2)
 
 #### **1.3 Vulkan Kernel Dispatch**
 **Current**: CPU fallbacks working
@@ -97,7 +102,29 @@ struct GpuPoint {
 - CUDA external memory interop (when rustacuda supports it)
 - CPU staging buffers as intermediate (current fallback)
 
-#### **2.3 Async Memory Operations**
+#### **2.3 CUDA Feature Parity in Vulkan**
+**Critical Features to Implement**:
+
+**✅ Already Implemented**:
+- GLV decomposition with endomorphism
+- Montgomery REDC modular reduction
+- Windowed NAF scalar multiplication
+- SmallOddPrime kangaroo generation
+- Barrett modular reduction
+
+**🔄 Enhanced for Hybrid Mode**:
+- Montgomery ladder (constant-time, side-channel resistant)
+- Advanced bias operations with shared memory optimization
+- Memory access optimization and prefetching
+- Bias-aware jump table selection
+
+**❌ CUDA-Only Features (Vulkan Alternatives)**:
+- CUDA texture memory → Vulkan storage buffers
+- CUDA shared memory → Vulkan workgroup memory
+- CUDA streams → Vulkan command buffers
+- NVML multi-GPU → Vulkan multi-device
+
+#### **2.4 Async Memory Operations**
 **Current**: Synchronous CPU fallbacks
 **Needed**: True GPU↔GPU async transfers
 
