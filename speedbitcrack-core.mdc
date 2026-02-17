@@ -209,6 +209,8 @@ Project Root:
 
 8. **CUDA Implementation LOCKED (Feb 2026)** — CUDA backend implementation is complete and verified. All math operations (GLV scalar mul, modular inverse, bigint arithmetic, kangaroo stepping) work correctly. Kernel calling disabled due to rustacuda API compatibility - math operations work through trait method implementations instead. Hybrid memory sharing features (advanced unified buffers, kernel dispatch) preserved for next phase when APIs are updated. Zero placeholders in working CUDA code.
 
+9. **HYBRID MODE ROADMAP LOCKED (Feb 2026)** — 5-phase master plan established: (1) Complete Vulkan Backend, (2) Hybrid Memory Architecture, (3) Workload Distribution, (4) Async Overlap Optimization, (5) Bit-Perfect Parity. Vulkan primary for bulk operations, CUDA for precision math. Architecture principle: Backend files are OOO/flow masters and module loaders - actual implementations belong in separate shader files (/gpu/vulkan/shaders/) for modularity and maintainability. Many distinct files preferred over monolithic all-in-one.
+
 9. **Parity & Drift Prevention** — Integrated CPU/GPU 10M-step parity passes mandatory after any change. Bit-for-bit match required. Log attractor convergence (e.g., Magic 9: 30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38).
 
 10. **Collision Solving** — Alpha/beta coefficient tracking per kangaroo. Formula: k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod N (extended Euclidean inverse). Handle zero-diff cases.

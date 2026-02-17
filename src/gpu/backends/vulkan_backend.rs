@@ -223,19 +223,45 @@ impl GpuBackend for WgpuBackend {
     }
 
     fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
-        // Phase 4: CPU-based modular inverse implementation
-        // TODO: Replace with Vulkan compute shader for batch modular inverse
+        // TODO: Implement Vulkan compute shader dispatch to batch_inverse.wgsl
+        // For now, use CPU fallback with proper modular inverse implementation
 
         use crate::math::bigint::BigInt256;
 
-        let _modulus_bigint = self.u32_array_to_bigint(&modulus);
+        let modulus_bigint = self.u32_array_to_bigint(&modulus);
+        let mut results = Vec::with_capacity(a.len());
+
+        for value in a {
+            let value_bigint = self.u32_array_to_bigint(value);
+
+            // Use CPU modular inverse implementation
+            let inv_result = crate::math::secp::Secp256k1::mod_inverse(&value_bigint, &modulus_bigint);
+
+            match inv_result {
+                Some(inv_bigint) => {
+                    let inv_array = self.bigint_to_u32_array(&inv_bigint);
+                    results.push(Some(inv_array));
+                }
+                None => {
+                    results.push(None); // Not invertible
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// CPU fallback for batch inverse (keeps existing logic)
+    fn batch_inverse_cpu_fallback(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+        use crate::math::bigint::BigInt256;
+
+        let modulus_bigint = self.u32_array_to_bigint(&modulus);
         let mut results = Vec::with_capacity(a.len());
 
         for value in a {
             let value_bigint = self.u32_array_to_bigint(value);
 
             // Simple modular inverse implementation (placeholder)
-            // TODO: Implement proper extended Euclidean algorithm
             if value_bigint != BigInt256::zero() {
                 // Placeholder: return input as "inverse" for now
                 let inv_array = self.bigint_to_u32_array(&value_bigint);
@@ -303,12 +329,47 @@ impl GpuBackend for WgpuBackend {
         Ok(results)
     }
 
-    fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
-        Err(anyhow!("Vulkan batch_barrett_reduce not implemented - use CUDA"))
+    fn batch_barrett_reduce(&self, x: Vec<[u32;16]>, mu: [u32;9], modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+        // TODO: Implement Vulkan compute shader dispatch to batch_barrett_reduce.wgsl
+        // For now, use CPU Barrett reduction implementation
+
+        use crate::math::bigint::{BigInt256, BigInt512};
+
+        let modulus_bigint = BigInt256::from_u32_limbs(modulus);
+        let mu_bigint = BigInt256::from_u32_limbs([mu[0], mu[1], mu[2], mu[3], mu[4], mu[5], mu[6], mu[7]]);
+
+        let mut results = Vec::with_capacity(x.len());
+
+        for value in x {
+            let x_bigint = BigInt512::from_u32_limbs(value);
+
+            // Perform Barrett reduction
+            let reduced = crate::math::bigint::BarrettReducer::new(&modulus_bigint)
+                .reduce(&x_bigint);
+
+            results.push(reduced.to_u32_limbs());
+        }
+
+        Ok(results)
     }
 
-    fn batch_bigint_mul(&self, _a: &Vec<[u32;8]>, _b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
-        Err(anyhow!("Vulkan batch_bigint_mul not implemented - use CUDA"))
+    fn batch_bigint_mul(&self, a: &Vec<[u32;8]>, b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+        // TODO: Implement Vulkan compute shader dispatch to batch_bigint_mul.wgsl
+        // For now, use CPU big integer multiplication
+
+        use crate::math::bigint::{BigInt256, BigInt512};
+
+        let mut results = Vec::with_capacity(a.len());
+
+        for i in 0..a.len() {
+            let a_bigint = BigInt256::from_u32_limbs(a[i]);
+            let b_bigint = BigInt256::from_u32_limbs(b[i]);
+
+            let product = BigInt512::mul(&a_bigint, &b_bigint);
+            results.push(product.to_u32_limbs());
+        }
+
+        Ok(results)
     }
 
     fn batch_to_affine(&self, _points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>> {
