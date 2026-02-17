@@ -6,6 +6,7 @@ pub mod backend;
 pub mod backends;
 pub mod shared;
 pub mod hybrid_manager;
+pub mod memory;
 #[cfg(feature = "vulkano")]
 pub mod vulkan;
 pub mod cuda;
