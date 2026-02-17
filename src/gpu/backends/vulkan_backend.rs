@@ -5,7 +5,7 @@
 use super::backend_trait::GpuBackend;
 use crate::kangaroo::collision::Trap;
 use crate::math::bigint::BigInt256;
-use crate::types::DpEntry;
+use crate::types::{DpEntry, Point};
 use anyhow::{Result, anyhow};
 use std::path::Path;
 
@@ -251,28 +251,6 @@ impl GpuBackend for WgpuBackend {
         Ok(results)
     }
 
-    /// CPU fallback for batch inverse (keeps existing logic)
-    fn batch_inverse_cpu_fallback(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
-        use crate::math::bigint::BigInt256;
-
-        let modulus_bigint = self.u32_array_to_bigint(&modulus);
-        let mut results = Vec::with_capacity(a.len());
-
-        for value in a {
-            let value_bigint = self.u32_array_to_bigint(value);
-
-            // Simple modular inverse implementation (placeholder)
-            if value_bigint != BigInt256::zero() {
-                // Placeholder: return input as "inverse" for now
-                let inv_array = self.bigint_to_u32_array(&value_bigint);
-                results.push(Some(inv_array));
-            } else {
-                results.push(None);
-            }
-        }
-
-        Ok(results)
-    }
 
     fn batch_solve(&self, dps: &Vec<DpEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
         // TODO: Implement Vulkan compute shader dispatch for collision solving
@@ -340,16 +318,14 @@ impl GpuBackend for WgpuBackend {
                 continue;
             }
 
-            // Simple modular inverse (placeholder)
-            // TODO: Implement proper extended Euclidean algorithm
-            if denominator != BigInt256::zero() {
-                // Placeholder: simplified inverse calculation
-                let denom_inv = BigInt256::from_u64(1); // Simplified
-                let k = (numerator * denom_inv) % n_bigint.clone();
-                let k_array = self.bigint_to_u32_array(&k);
-                results.push(Some(k_array));
-            } else {
-                results.push(None);
+            // Compute modular inverse for collision solving
+            match crate::math::secp::Secp256k1::mod_inverse(&denominator, &n_bigint) {
+                Some(inv) => {
+                    let k = (numerator * inv) % n_bigint.clone();
+                    let k_array = self.bigint_to_u32_array(&k);
+                    results.push(Some(k_array));
+                }
+                None => results.push(None),
             }
         }
 
@@ -368,11 +344,19 @@ impl GpuBackend for WgpuBackend {
         let mut results = Vec::with_capacity(x.len());
 
         for value in x {
-            let x_bigint = BigInt512::from_u32_limbs(value);
+            // Convert [u32;16] to BigInt512 - need to convert u32 limbs to u64 limbs
+            let mut limbs_u64 = [0u64; 8];
+            for i in 0..8 {
+                limbs_u64[i] = ((value[i*2 + 1] as u64) << 32) | (value[i*2] as u64);
+            }
+            let x_bigint = BigInt512 { limbs: limbs_u64 };
 
             // Perform Barrett reduction
-            let reduced = crate::math::bigint::BarrettReducer::new(&modulus_bigint)
-                .reduce(&x_bigint);
+            let reduced = match crate::math::bigint::BarrettReducer::new(&modulus_bigint)
+                .reduce(&x_bigint) {
+                Ok(r) => r,
+                Err(_) => return Err(anyhow!("Barrett reduction failed")),
+            };
 
             results.push(reduced.to_u32_limbs());
         }
@@ -392,8 +376,18 @@ impl GpuBackend for WgpuBackend {
             let a_bigint = BigInt256::from_u32_limbs(a[i]);
             let b_bigint = BigInt256::from_u32_limbs(b[i]);
 
-            let product = BigInt512::mul(&a_bigint, &b_bigint);
-            results.push(product.to_u32_limbs());
+            // Convert to BigInt512 for multiplication
+            let a_512 = BigInt512::from_bigint256(&a_bigint);
+            let b_512 = BigInt512::from_bigint256(&b_bigint);
+
+            let product = BigInt512::mul(&a_512, &b_512);
+            // Convert BigInt512 to [u32;16] - full 512-bit result
+            let mut result_u32 = [0u32; 16];
+            for i in 0..8 {
+                result_u32[i*2] = (product.limbs[i] & 0xFFFFFFFF) as u32;
+                result_u32[i*2 + 1] = (product.limbs[i] >> 32) as u32;
+            }
+            results.push(result_u32);
         }
 
         Ok(results)
@@ -463,45 +457,153 @@ impl GpuBackend for WgpuBackend {
         Ok(results)
     }
 
-    fn safe_diff_mod_n(&self, _tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
-        // wgpu buffer create, copy data, dispatch compute (workgroup 1)
-        // Read back result buffer
-        Ok([0u32; 8]) // Incremental stub
+    fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+        let tame_bigint = self.u32_array_to_bigint(&tame);
+        let wild_bigint = self.u32_array_to_bigint(&wild);
+        let n_bigint = self.u32_array_to_bigint(&n);
+
+        // Compute (tame - wild) mod n, handling negative results
+        let diff = if tame_bigint >= wild_bigint {
+            (tame_bigint - wild_bigint) % n_bigint.clone()
+        } else {
+            (n_bigint.clone() + tame_bigint - wild_bigint) % n_bigint.clone()
+        };
+
+        Ok(self.bigint_to_u32_array(&diff))
     }
 
     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
-        // Dispatch to utils.wgsl
-        Ok([0u32; 8])
+        use crate::math::bigint::{BigInt256, BigInt512};
+
+        // Convert inputs to BigInt types
+        let mut x_u64 = [0u64; 8];
+        for i in 0..8 {
+            x_u64[i] = ((x[i*2 + 1] as u64) << 32) | (x[i*2] as u64);
+        }
+        let x_bigint = BigInt512 { limbs: x_u64 };
+
+        let modulus_bigint = BigInt256::from_u32_limbs(*modulus);
+
+        // For Barrett reduction, we need the precomputed mu value
+        let mut mu_u64 = [0u64; 8];
+        for i in 0..8 {
+            mu_u64[i] = ((mu[i*2 + 1] as u64) << 32) | (mu[i*2] as u64);
+        }
+        let mu_bigint = BigInt512 { limbs: mu_u64 }.to_bigint256();
+
+        // Perform Barrett reduction
+        let reduced = match crate::math::bigint::BarrettReducer::new(&modulus_bigint)
+            .reduce(&x_bigint) {
+            Ok(r) => r,
+            Err(_) => return Err(anyhow!("Barrett reduction failed")),
+        };
+
+        Ok(reduced.to_u32_limbs())
     }
 
     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
-        // Dispatch kangaroo.wgsl
-        Ok([[0u32; 8]; 3])
+        use crate::math::secp::Secp256k1;
+        use crate::types::Point;
+
+        let curve = Secp256k1::new();
+        let k_bigint = self.u32_array_to_bigint(&k);
+
+        // Convert point from Jacobian coordinates
+        let point = Point {
+            x: self.u32_array_to_bigint(&p[0]).to_u64_array(),
+            y: self.u32_array_to_bigint(&p[1]).to_u64_array(),
+            z: self.u32_array_to_bigint(&p[2]).to_u64_array(),
+        };
+
+        // Perform scalar multiplication using GLV optimization
+        let result_point = curve.mul_glv_opt(&point, &k_bigint);
+
+        // Point is already in Jacobian coordinates
+        Ok([
+            self.bigint_to_u32_array(&BigInt256::from_u64_array(result_point.x)),
+            self.bigint_to_u32_array(&BigInt256::from_u64_array(result_point.y)),
+            self.bigint_to_u32_array(&BigInt256::from_u64_array(result_point.z)),
+        ])
     }
 
     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
-        // Dispatch
-        Ok([0u32; 8])
+        let a_bigint = self.u32_array_to_bigint(a);
+        let modulus_bigint = self.u32_array_to_bigint(modulus);
+
+        match crate::math::secp::Secp256k1::mod_inverse(&a_bigint, &modulus_bigint) {
+            Some(inv) => Ok(self.bigint_to_u32_array(&inv)),
+            None => Err(anyhow!("Modular inverse does not exist")),
+        }
     }
 
-    fn bigint_mul(&self, _a: &[u32;8], _b: &[u32;8]) -> Result<[u32;16]> {
-        Ok([0u32; 16])
+    fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
+        use crate::math::bigint::{BigInt256, BigInt512};
+
+        let a_bigint = BigInt256::from_u32_limbs(*a);
+        let b_bigint = BigInt256::from_u32_limbs(*b);
+
+        // Convert to BigInt512 for multiplication
+        let a_512 = BigInt512::from_bigint256(&a_bigint);
+        let b_512 = BigInt512::from_bigint256(&b_bigint);
+
+        let product = BigInt512::mul(&a_512, &b_512);
+
+        // Convert back to [u32;16] - full 512-bit result
+        let mut result_u32 = [0u32; 16];
+        for i in 0..8 {
+            result_u32[i*2] = (product.limbs[i] & 0xFFFFFFFF) as u32;
+            result_u32[i*2 + 1] = (product.limbs[i] >> 32) as u32;
+        }
+        Ok(result_u32)
     }
 
-    fn modulo(&self, _a: &[u32;16], _modulus: &[u32;8]) -> Result<[u32;8]> {
-        Ok([0u32; 8])
+    fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
+        use crate::math::bigint::{BigInt256, BigInt512};
+
+        // Convert [u32;16] to BigInt512
+        let mut a_u64 = [0u64; 8];
+        for i in 0..8 {
+            a_u64[i] = ((a[i*2 + 1] as u64) << 32) | (a[i*2] as u64);
+        }
+        let a_bigint = BigInt512 { limbs: a_u64 };
+
+        let modulus_bigint = BigInt256::from_u32_limbs(*modulus);
+
+        // Perform Barrett reduction for modulo operation
+        let reduced = match crate::math::bigint::BarrettReducer::new(&modulus_bigint)
+            .reduce(&a_bigint) {
+            Ok(r) => r,
+            Err(_) => return Err(anyhow!("Modulo operation failed")),
+        };
+
+        Ok(reduced.to_u32_limbs())
     }
 
-    fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
-        Ok([[0u32; 8]; 3])
+    fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+        // This is the same as mul_glv_opt for now, but could be optimized further
+        // with dedicated GLV kernel in the future
+        self.mul_glv_opt(p, k)
     }
 
-    fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
-        Ok(0u32)
+    fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
+        let x_bigint = self.u32_array_to_bigint(&x);
+        let modulus_bigint = BigInt256::from_u64(modulus as u64);
+
+        // Compute x mod modulus
+        let result = x_bigint % modulus_bigint;
+        Ok(result.limbs[0] as u32)
     }
 
-    fn batch_mod_small(&self, _points: &Vec<[[u32;8];3]>, _modulus: u32) -> Result<Vec<u32>> {
-        Ok(vec![])
+    fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+        let mut results = Vec::with_capacity(points.len());
+
+        for point in points {
+            // Use x-coordinate for bias calculation (common in kangaroo methods)
+            let result = self.mod_small(point[0], modulus)?;
+            results.push(result);
+        }
+
+        Ok(results)
     }
 
     fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {

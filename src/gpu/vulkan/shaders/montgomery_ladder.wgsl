@@ -135,7 +135,8 @@ fn mod_inverse(a: array<u32,8>, modulus: array<u32,8>) -> array<u32,8> {
     return x;
 }
 
-// Placeholder implementations (would be imported from utils.wgsl)
+// Helper functions for Montgomery ladder operations
+
 fn limb_is_neg(a: array<u32,8>) -> bool {
     return (a[7] & 0x80000000u) != 0u;
 }
@@ -152,18 +153,78 @@ fn limb_add(a: array<u32,8>, b: array<u32,8>) -> array<u32,8> {
 }
 
 fn egcd_iter(a: array<u32,8>, b: array<u32,8>, x: ptr<function, array<u32,8>>, y: ptr<function, array<u32,8>>) -> u32 {
-    // Simplified EGCD for this context
-    *x = array<u32,8>(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
-    *y = array<u32,8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
-    return 1u; // Assume invertible
+    var old_r = a; var r = b;
+    var old_s = array<u32,8>(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u); var s = array<u32,8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+    var old_t = array<u32,8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u); var t = array<u32,8>(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+
+    while (!limb_is_zero(r)) {
+        var quotient = limb_div(old_r, r);
+        var temp = limb_mul(quotient, r);
+        var new_r = limb_sub(old_r, temp);
+
+        temp = limb_mul(quotient, s);
+        var new_s = limb_sub(old_s, temp);
+
+        temp = limb_mul(quotient, t);
+        var new_t = limb_sub(old_t, temp);
+
+        old_r = r; r = new_r;
+        old_s = s; s = new_s;
+        old_t = t; t = new_t;
+    }
+
+    *x = old_s;
+    *y = old_t;
+    return limb_to_u32(old_r);
 }
 
+// Placeholder implementations for elliptic curve operations
+// These should be replaced with proper Jacobian coordinate implementations
 fn point_add_jacob(a: MontgomeryPoint, b: MontgomeryPoint, modulus: array<u32,8>) -> MontgomeryPoint {
-    // Simplified point addition (would be full implementation)
-    return a; // Placeholder
+    // Simplified point addition (would need full Jacobian implementation)
+    return MontgomeryPoint(
+        limb_add(a.x, b.x),
+        limb_add(a.y, b.y),
+        limb_add(a.z, b.z)
+    );
 }
 
 fn point_double_jacob(p: MontgomeryPoint, modulus: array<u32,8>) -> MontgomeryPoint {
-    // Simplified point doubling (would be full implementation)
-    return p; // Placeholder
+    // Simplified point doubling (would need full Jacobian implementation)
+    return MontgomeryPoint(
+        limb_add(p.x, p.x),
+        limb_add(p.y, p.y),
+        limb_add(p.z, p.z)
+    );
+}
+
+// Additional helper functions
+fn limb_div(a: array<u32,8>, b: array<u32,8>) -> array<u32,8> {
+    // Simplified division for EGCD (not full 256-bit division)
+    return array<u32,8>(a[0] / max(b[0], 1u), 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+}
+
+fn limb_mul(a: array<u32,8>, b: array<u32,8>) -> array<u32,8> {
+    // Simplified multiplication for EGCD
+    return bigint_mul_256x256_to_256(a, b);
+}
+
+fn limb_sub(a: array<u32,8>, b: array<u32,8>) -> array<u32,8> {
+    var result: array<u32,8>;
+    var borrow = 0i64;
+    for (var i = 0u; i < 8u; i++) {
+        let diff = i64(a[i]) - i64(b[i]) - borrow;
+        if (diff < 0) {
+            result[i] = u32(diff + 0x100000000i64);
+            borrow = 1i64;
+        } else {
+            result[i] = u32(diff);
+            borrow = 0i64;
+        }
+    }
+    return result;
+}
+
+fn limb_to_u32(a: array<u32,8>) -> u32 {
+    return a[0]; // Return least significant limb
 }
