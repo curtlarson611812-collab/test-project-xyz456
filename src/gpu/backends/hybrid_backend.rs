@@ -24,6 +24,24 @@ use std::collections::HashMap;
 use std::fs::read_to_string;
 use anyhow::anyhow;
 
+/// CPU staging buffer for Vulkan↔CUDA data transfer
+#[derive(Debug)]
+pub struct CpuStagingBuffer {
+    pub data: Vec<u8>,
+    pub size: usize,
+}
+
+/// Hybrid operation performance metrics
+#[derive(Debug, Clone)]
+pub struct HybridOperationMetrics {
+    pub operation: String,
+    pub vulkan_time_ms: u128,
+    pub cuda_time_ms: u128,
+    pub staging_time_ms: u128,
+    pub total_time_ms: u128,
+    pub backend_used: String,
+}
+
 /// Nsight rule scoring and color coding for dynamic optimization
 #[derive(Debug, Clone)]
 pub struct NsightRuleResult {
@@ -63,6 +81,7 @@ pub struct HybridBackend {
     cpu: CpuBackend,
     cuda_available: bool,
     dp_table: crate::dp::DpTable,
+    performance_metrics: Vec<HybridOperationMetrics>,
 }
 
 impl HybridBackend {
@@ -96,7 +115,202 @@ impl HybridBackend {
             cpu,
             cuda_available,
             dp_table,
+            performance_metrics: Vec::new(),
         })
+    }
+
+    /// Transfer data from Vulkan buffer to CPU staging buffer
+    #[cfg(feature = "wgpu")]
+    pub fn vulkan_to_cpu_staging(&self, vulkan_data: &[u8]) -> Result<CpuStagingBuffer> {
+        let size = vulkan_data.len();
+        let mut staging_data = vec![0u8; size];
+        staging_data.copy_from_slice(vulkan_data);
+
+        Ok(CpuStagingBuffer {
+            data: staging_data,
+            size,
+        })
+    }
+
+    /// Transfer data from CPU staging buffer to CUDA
+    #[cfg(all(feature = "wgpu", feature = "rustacuda"))]
+    pub fn cpu_staging_to_cuda(&self, staging: &CpuStagingBuffer) -> Result<()> {
+        // This would transfer the staging buffer data to CUDA memory
+        // For now, this is a placeholder - actual implementation would use CUDA memory copy
+        warn!("CPU staging to CUDA transfer not yet implemented - using direct dispatch");
+        Ok(())
+    }
+
+    /// Transfer data from CUDA to CPU staging buffer
+    #[cfg(all(feature = "wgpu", feature = "rustacuda"))]
+    pub fn cuda_to_cpu_staging(&self, cuda_data: &[u8]) -> Result<CpuStagingBuffer> {
+        let size = cuda_data.len();
+        let mut staging_data = vec![0u8; size];
+        staging_data.copy_from_slice(cuda_data);
+
+        Ok(CpuStagingBuffer {
+            data: staging_data,
+            size,
+        })
+    }
+
+    /// Transfer data from CPU staging buffer to Vulkan
+    #[cfg(feature = "wgpu")]
+    pub fn cpu_staging_to_vulkan(&self, staging: &CpuStagingBuffer) -> Result<Vec<u8>> {
+        Ok(staging.data.clone())
+    }
+
+    /// Execute hybrid operation with CPU staging
+    /// Vulkan bulk operation → CPU staging → CUDA precision operation → CPU staging → Vulkan result
+    #[cfg(all(feature = "wgpu", feature = "rustacuda"))]
+    pub async fn execute_hybrid_operation<F, G, T>(
+        &self,
+        vulkan_operation: F,
+        cuda_operation: G,
+    ) -> Result<T>
+    where
+        F: FnOnce() -> Result<Vec<u8>>,
+        G: FnOnce(&[u8]) -> Result<Vec<u8>>,
+    {
+        use std::time::Instant;
+
+        let start_time = Instant::now();
+
+        // Execute Vulkan bulk operation
+        let vulkan_start = Instant::now();
+        let vulkan_data = vulkan_operation()?;
+        let vulkan_time = vulkan_start.elapsed().as_millis();
+
+        // Transfer Vulkan → CPU staging
+        let staging_start = Instant::now();
+        let staging_buffer = self.vulkan_to_cpu_staging(&vulkan_data)?;
+        let staging_time = staging_start.elapsed().as_millis();
+
+        // Transfer CPU staging → CUDA
+        self.cpu_staging_to_cuda(&staging_buffer)?;
+
+        // Execute CUDA precision operation
+        let cuda_start = Instant::now();
+        let cuda_result = cuda_operation(&staging_buffer.data)?;
+        let cuda_time = cuda_start.elapsed().as_millis();
+
+        // Transfer CUDA result → CPU staging
+        let result_staging = self.cuda_to_cpu_staging(&cuda_result)?;
+
+        // Transfer CPU staging → Vulkan
+        let final_result = self.cpu_staging_to_vulkan(&result_staging)?;
+
+        let total_time = start_time.elapsed().as_millis();
+
+        // Log performance metrics
+        log::info!("Hybrid operation completed: Vulkan {}ms, Staging {}ms, CUDA {}ms, Total {}ms",
+                  vulkan_time, staging_time, cuda_time, total_time);
+
+        // For now, return a placeholder - this would need to be typed properly
+        Err(anyhow!("Hybrid operation result conversion not implemented"))
+    }
+
+    /// Record performance metrics for a hybrid operation
+    fn record_performance_metrics(&mut self, operation: &str, backend: &str, duration_ms: u128) {
+        let metrics = HybridOperationMetrics {
+            operation: operation.to_string(),
+            vulkan_time_ms: if backend == "vulkan" { duration_ms } else { 0 },
+            cuda_time_ms: if backend == "cuda" { duration_ms } else { 0 },
+            staging_time_ms: 0, // Not measured yet
+            total_time_ms: duration_ms,
+            backend_used: backend.to_string(),
+        };
+
+        self.performance_metrics.push(metrics);
+
+        // Keep only last 1000 metrics to avoid memory bloat
+        if self.performance_metrics.len() > 1000 {
+            self.performance_metrics.remove(0);
+        }
+    }
+
+    /// Get performance metrics summary
+    pub fn get_performance_summary(&self) -> HashMap<String, f64> {
+        let mut summary = HashMap::new();
+        let mut vulkan_ops = 0u64;
+        let mut cuda_ops = 0u64;
+        let mut vulkan_time = 0u128;
+        let mut cuda_time = 0u128;
+
+        for metric in &self.performance_metrics {
+            if metric.backend_used == "vulkan" {
+                vulkan_ops += 1;
+                vulkan_time += metric.total_time_ms;
+            } else if metric.backend_used == "cuda" {
+                cuda_ops += 1;
+                cuda_time += metric.total_time_ms;
+            }
+        }
+
+        summary.insert("vulkan_operations".to_string(), vulkan_ops as f64);
+        summary.insert("cuda_operations".to_string(), cuda_ops as f64);
+        summary.insert("vulkan_avg_time_ms".to_string(),
+                      if vulkan_ops > 0 { vulkan_time as f64 / vulkan_ops as f64 } else { 0.0 });
+        summary.insert("cuda_avg_time_ms".to_string(),
+                      if cuda_ops > 0 { cuda_time as f64 / cuda_ops as f64 } else { 0.0 });
+
+        summary
+    }
+
+    /// Clear performance metrics history
+    pub fn clear_performance_metrics(&mut self) {
+        self.performance_metrics.clear();
+    }
+
+    /// Get raw performance metrics for analysis
+    pub fn get_raw_metrics(&self) -> &[HybridOperationMetrics] {
+        &self.performance_metrics
+    }
+
+    /// Intelligent backend selection based on operation type and available backends
+    fn select_backend_for_operation(&self, operation: &str) -> &str {
+        match operation {
+            // Bulk operations → Vulkan
+            "step_batch" | "batch_init_kangaroos" | "run_gpu_steps" => {
+                #[cfg(feature = "wgpu")]
+                return "vulkan";
+                #[cfg(not(feature = "wgpu"))]
+                return "cpu";
+            }
+
+            // Precision operations → CUDA
+            "batch_inverse" | "batch_barrett_reduce" | "bigint_mul" | "mod_inverse" | "modulo" => {
+                if self.cuda_available {
+                    "cuda"
+                } else {
+                    #[cfg(feature = "wgpu")]
+                    return "vulkan";
+                    #[cfg(not(feature = "wgpu"))]
+                    return "cpu";
+                }
+            }
+
+            // Collision solving → CUDA (most efficient)
+            "batch_solve" | "batch_solve_collision" | "batch_bsgs_solve" => {
+                if self.cuda_available {
+                    "cuda"
+                } else {
+                    "cpu"
+                }
+            }
+
+            // Default fallback
+            _ => {
+                #[cfg(feature = "wgpu")]
+                return "vulkan";
+                #[cfg(not(feature = "wgpu"))]
+                if self.cuda_available {
+                    "cuda"
+                } else {
+                    "cpu"
+                }
+            }
+        }
     }
 }
 
@@ -698,16 +912,44 @@ impl GpuBackend for HybridBackend {
         }
     }
 
-    fn step_batch(&self, #[allow(unused_variables)] positions: &mut Vec<[[u32;8];3]>, #[allow(unused_variables)] distances: &mut Vec<[u32;8]>, #[allow(unused_variables)] types: &Vec<u32>) -> Result<Vec<Trap>> {
-        // Dispatch to Vulkan for bulk stepping operations
-        #[cfg(feature = "wgpu")]
-        {
-            self.vulkan.step_batch(positions, distances, types)
-        }
-        #[cfg(not(feature = "wgpu"))]
-        {
-            Err(anyhow!("CRITICAL: No GPU backend available! Vulkan not compiled in. Use CUDA or Vulkan for production."))
-        }
+    fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+        use std::time::Instant;
+
+        let start_time = Instant::now();
+        let backend = self.select_backend_for_operation("step_batch");
+
+        let result = match backend {
+            "vulkan" => {
+                #[cfg(feature = "wgpu")]
+                {
+                    self.vulkan.step_batch(positions, distances, types)
+                }
+                #[cfg(not(feature = "wgpu"))]
+                {
+                    return Err(anyhow!("Vulkan backend not available for bulk stepping operations"));
+                }
+            }
+            "cuda" => {
+                #[cfg(feature = "rustacuda")]
+                {
+                    // CUDA stepping (if implemented)
+                    self.cuda.step_batch(positions, distances, types)
+                }
+                #[cfg(not(feature = "rustacuda"))]
+                {
+                    return Err(anyhow!("CUDA backend not available for stepping operations"));
+                }
+            }
+            _ => {
+                return Err(anyhow!("No suitable GPU backend available for stepping operations"));
+            }
+        };
+
+        let duration = start_time.elapsed().as_millis();
+        log::info!("step_batch completed on {} backend in {}ms ({} kangaroos)",
+                  backend, duration, positions.len());
+
+        result
     }
 
     fn step_batch_bias(&self, #[allow(unused_variables)] positions: &mut Vec<[[u32;8];3]>, #[allow(unused_variables)] distances: &mut Vec<[u32;8]>, #[allow(unused_variables)] types: &Vec<u32>, #[allow(unused_variables)] config: &crate::config::Config) -> Result<Vec<Trap>> {
@@ -736,15 +978,47 @@ impl GpuBackend for HybridBackend {
     }
 
     fn batch_inverse(&self, inputs: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
-        // Dispatch to CUDA for precision inverse operations
-        #[cfg(feature = "rustacuda")]
-        {
-            self.cuda.batch_inverse(inputs, modulus)
-        }
-        #[cfg(not(feature = "rustacuda"))]
-        {
-            self.cpu.batch_inverse(inputs, modulus)
-        }
+        use std::time::Instant;
+
+        let start_time = Instant::now();
+        let backend = self.select_backend_for_operation("batch_inverse");
+
+        let result = match backend {
+            "cuda" => {
+                #[cfg(feature = "rustacuda")]
+                {
+                    self.cuda.batch_inverse(inputs, modulus)
+                }
+                #[cfg(not(feature = "rustacuda"))]
+                {
+                    // Fallback to CPU if CUDA selected but not available
+                    self.cpu.batch_inverse(inputs, modulus)
+                }
+            }
+            "vulkan" => {
+                #[cfg(feature = "wgpu")]
+                {
+                    self.vulkan.batch_inverse(inputs, modulus)
+                }
+                #[cfg(not(feature = "wgpu"))]
+                {
+                    self.cpu.batch_inverse(inputs, modulus)
+                }
+            }
+            _ => {
+                self.cpu.batch_inverse(inputs, modulus)
+            }
+        };
+
+        let duration = start_time.elapsed().as_millis();
+
+        // Record performance metrics (would need mutable self, so commented for now)
+        // self.record_performance_metrics("batch_inverse", backend, duration);
+
+        log::info!("batch_inverse completed on {} backend in {}ms ({} inputs)",
+                  backend, duration, inputs.len());
+
+        result
     }
 
     fn batch_solve(&self, _dps: &Vec<DpEntry>, _targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
