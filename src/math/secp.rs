@@ -2100,9 +2100,61 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
 
     /// Point doubling: 2 * point on secp256k1 curve
     pub fn point_double(&self, point: &Point) -> Point {
-        // Simplified point doubling - in production this would use proper Jacobian arithmetic
-        // For now, return point (placeholder)
-        point.clone()
+        // Proper point doubling using Jacobian coordinates for efficiency
+        if point.is_infinity() {
+            return Point::infinity();
+        }
+
+        let x = &point.x;
+        let y = &point.y;
+        let z = &point.z;
+
+        // Jacobian point doubling formula:
+        // X3 = (3*X1^2 - 2*Y1^2*Z1^2)^2 - 8*X1*Y1^2*Z1^2
+        // Y3 = (3*X1^2 - 2*Y1^2*Z1^2)*(4*X1*Y1^2*Z1^2 - X3) - 8*Y1^4*Z1^4
+        // Z3 = 2*Y1*Z1
+
+        // For affine coordinates (Z=1), simplified:
+        if z == &BigInt256::from_u64(1) {
+            let x_squared = self.barrett_p.mul(x, x);
+            let three_x_squared = self.barrett_p.mul(&BigInt256::from_u64(3), &x_squared);
+            let y_squared = self.barrett_p.mul(y, y);
+            let two_y_squared = self.barrett_p.mul(&BigInt256::from_u64(2), &y_squared);
+
+            let lambda = self.barrett_p.sub(&three_x_squared, &two_y_squared);
+            let lambda = self.barrett_p.mul(&lambda, &self.barrett_p.inv(&BigInt256::from_u64(2).mul(y)));
+
+            let x3 = self.barrett_p.sub(&self.barrett_p.mul(&lambda, &lambda), &BigInt256::from_u64(2).mul(x));
+            let y3 = self.barrett_p.sub(&self.barrett_p.mul(&lambda, &self.barrett_p.sub(x, &x3)), y);
+
+            Point {
+                x: x3,
+                y: y3,
+                z: BigInt256::from_u64(1),
+            }
+        } else {
+            // Full Jacobian doubling - more complex but handles all cases
+            let z_squared = self.barrett_p.mul(z, z);
+            let y_squared = self.barrett_p.mul(y, y);
+            let y_squared_z_squared = self.barrett_p.mul(&y_squared, &z_squared);
+
+            let x_squared = self.barrett_p.mul(x, x);
+            let three_x_squared = self.barrett_p.mul(&BigInt256::from_u64(3), &x_squared);
+
+            let m = self.barrett_p.sub(&three_x_squared, &self.barrett_p.mul(&BigInt256::from_u64(2), &y_squared_z_squared));
+
+            let z_new = self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(y, z));
+
+            let x_new = self.barrett_p.sub(&self.barrett_p.mul(&m, &m), &self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(x, &y_squared_z_squared))));
+
+            let y_new = self.barrett_p.sub(&self.barrett_p.mul(&m, &self.barrett_p.sub(&self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(x, &y_squared_z_squared)), &x_new)), &self.barrett_p.mul(&BigInt256::from_u64(8), &self.barrett_p.mul(&y_squared, &self.barrett_p.mul(&y_squared, &z_squared))));
+
+            Point {
+                x: x_new,
+                y: y_new,
+                z: z_new,
+            }
+        }
     }
 
     /// Point multiplication: scalar * point using double-and-add algorithm

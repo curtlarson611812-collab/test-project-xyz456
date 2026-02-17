@@ -3,16 +3,16 @@
 
 [features]
 # Enable Vulkan support by default for better IDE experience
-default = ["wgpu"]
+defaultFeatures = ["wgpu"]
 
 # Define all available features to match Cargo.toml exactly
-all = ["wgpu", "cuda", "glv", "rustacuda", "vulkano", "hybrid", "fuzz", "smoke", "laptop", "portable_simd", "legacy", "phase4", "cudarc"]
+allFeatures = ["wgpu", "cuda", "glv", "rustacuda", "vulkano", "hybrid", "fuzz", "smoke", "laptop", "portable_simd", "legacy", "phase4", "cudarc"]
 
 [build]
 # Use release profile for better performance
-profile = "release"
+buildProfile = "release"
 
-# Additional rustc flags for better conditional compilation understanding
+# Additional rkustc flags for better conditional compilation understanding
 extraArgs = [
     "--cfg", "feature=\"wgpu\"",
     "--cfg", "feature=\"cuda\"",
@@ -32,17 +32,17 @@ features = ["hybrid"]
 # Show all diagnostics including those from conditional compilation
 disabled = []
 # Enable experimental diagnostics for better error reporting
-experimental = true
+experimentalDiagnostics = true
 
 [checkOnSave]
 # Enable checking on save for better feedback
-enable = true
+enabled= true
 # Extra arguments for better conditional compilation handling
 extraArgs = ["--cfg", "feature=\"wgpu\""]
 
 [experimental]
 # Enable experimental features for better GPU code understanding
-procAttrMacros = true
+procAttrMacrosEnabled = true
 
 [lens]
 # Enable code lens for better navigation
@@ -53,7 +53,7 @@ debug = true
 
 [hoverActions]
 # Enable hover actions for better code exploration
-enable = true
+Enable = true
 implementations = true
 references = true
 run = true
@@ -100,15 +100,15 @@ semanticHighlighting = true
 [signatureInfo]
 # Configure signature help
 detail = "full"
-documentation = { enable = true }
+documentation = { enabled = true }
 
 [procMacro]
 # Enable proc macro expansion
-enable = true
+enabled = true
 
 [rustfmt]
 # Use rustfmt for formatting
-enable = true
+enabled = true
 extraArgs = ["--config", "max_width=120"]
 
 [workspace]

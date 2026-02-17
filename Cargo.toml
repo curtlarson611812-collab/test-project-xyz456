@@ -24,6 +24,8 @@ serde_json = "1.0"  # JSON parsing for metrics
 crossterm = "0.27"  # Terminal control for real-time output
 bytemuck = "1.0"                  # Safe casting between byte slices and POD types
 zerocopy = "0.8"                  # Safe casting between byte slices and POD types
+futures-intrusive = "0.5"         # For async channel communication
+num_cpus = "1.16"                 # For CPU core detection
 zeroize = { version = "1", features = ["zeroize_derive"] }  # Memory zeroing for sensitive data
 ndarray = { version = "0.15", features = ["blas"] }  # ML linear regression for predictive optimization
 num-traits = "0.2"                # Numeric traits for BigInt parsing
@@ -32,6 +34,7 @@ async-trait = "0.1"               # Async traits for GPU backend
 rand = "0.8"                      # Random number generation for entropy
 sha2 = "0.10"                     # SHA256 for attractor proxy
 sha3 = "0.10"                     # Keccak256 for jump selection
+ripemd = "0.1"                    # RIPEMD160 for Bitcoin address validation
 blake3 = "1.5.0"                  # Fast hash for DP table
 statrs = "0.16.0"                 # Stats for bias tests (KS, Chi2)
 crossbeam-deque = "0.8"           # Lock-free work-stealing deques

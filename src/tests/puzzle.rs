@@ -235,8 +235,9 @@ mod tests {
         )
     }
 
-    // Known priv for puzzle 66 (placeholder)
-    const KNOWN_66_PRIV: &str = "0x123456789abcdef"; // Replace with real
+    // Known private key for puzzle 66 (placeholder for testing)
+    // Real private key omitted for security - replace with actual solved key for validation tests
+    const KNOWN_66_PRIV: &str = "0x123456789abcdef"; // Placeholder value
 
     /// Test GLV optimization performance and correctness
     #[test]

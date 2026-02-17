@@ -10,6 +10,8 @@ use log::{warn, info};
 use std::fs;
 use std::path::Path;
 use anyhow::{Result, anyhow};
+use sha2::{Sha256, Digest};
+use ripemd::Ripemd160;
 
 /// Debug helper: Analyze hex string character codes for invisible characters
 #[allow(dead_code)]
@@ -236,12 +238,60 @@ pub fn calculate_remaining_prize_pool() -> Result<f64> {
 }
 
 /// Validate that a puzzle's public key matches its target address
-/// Note: This is a placeholder - full validation requires external Bitcoin libraries
-pub fn validate_puzzle_address(_puzzle: &PuzzleEntry) -> Result<bool> {
-    // For now, just return true as validation requires full Bitcoin address calculation
-    // In production, use bitcoin crate or external verification
-    warn!("Puzzle address validation not implemented - use external tools for verification");
-    Ok(true)
+/// Implements basic Bitcoin address validation using secp256k1 public key to address conversion
+pub fn validate_puzzle_address(puzzle: &PuzzleEntry) -> Result<bool> {
+    use sha2::{Sha256, Digest};
+    use ripemd::Ripemd160;
+
+    // Convert the puzzle's target public key to compressed format
+    let pubkey_bytes = if puzzle.target_pubkey.len() >= 64 {
+        // Assume uncompressed format (x,y coordinates)
+        let x_bytes = &puzzle.target_pubkey[0..32];
+        let y_bytes = &puzzle.target_pubkey[32..64];
+
+        // Create compressed public key (0x02/0x03 prefix based on y parity)
+        let y_parity = y_bytes[31] & 1;
+        let mut compressed = vec![if y_parity == 0 { 0x02 } else { 0x03 }];
+        compressed.extend_from_slice(x_bytes);
+        compressed
+    } else {
+        // Already compressed format
+        puzzle.target_pubkey.clone()
+    };
+
+    // SHA256 hash of public key
+    let sha256_hash = Sha256::digest(&pubkey_bytes);
+
+    // RIPEMD160 hash of SHA256 result
+    let ripemd_hash = Ripemd160::digest(&sha256_hash);
+
+    // Add version byte (0x00 for mainnet)
+    let mut version_ripemd = vec![0x00];
+    version_ripemd.extend_from_slice(&ripemd_hash);
+
+    // Double SHA256 for checksum
+    let checksum_sha256_1 = Sha256::digest(&version_ripemd);
+    let checksum_sha256_2 = Sha256::digest(&checksum_sha256_1);
+    let checksum = &checksum_sha256_2[0..4];
+
+    // Create full address payload
+    let mut address_payload = version_ripemd;
+    address_payload.extend_from_slice(checksum);
+
+    // Base58 encode
+    let calculated_address = bs58::encode(&address_payload).into_string();
+
+    // Compare with expected address
+    let matches = calculated_address == puzzle.expected_address;
+
+    if !matches {
+        warn!("Puzzle {} address validation failed: expected {}, calculated {}",
+              puzzle.number, puzzle.expected_address, calculated_address);
+    } else {
+        info!("Puzzle {} address validation successful", puzzle.number);
+    }
+
+    Ok(matches)
 }
 
 /// Get range boundaries for unsolved sequential puzzles

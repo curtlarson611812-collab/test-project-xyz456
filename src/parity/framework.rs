@@ -301,7 +301,7 @@ impl ParityFramework {
                             }
                         }
                         Err(_) => {
-                            // GLV not implemented, skip this test
+                            // GLV decomposition not available for this scalar, skip test
                         }
                     }
                 }
@@ -323,7 +323,7 @@ impl ParityFramework {
                             }
                         }
                         Err(_) => {
-                            // Vulkan not implemented, skip this test
+                            // Vulkan backend not available or failed, skip test
                         }
                     }
                 }

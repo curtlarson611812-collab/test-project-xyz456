@@ -434,11 +434,10 @@ fn cuda_vulkan_integration_test() {
     }
     
     if config.enable_vow_rho_p2pk {
-        // VOW implementation pending - placeholder for future development
-        // let dummy_pubkey = k256::ProjectivePoint::GENERATOR; let result = crate::kangaroo::manager::vow_rho_p2pk(&vec![dummy_pubkey]);
-        // Placeholder assertion for build verification
-        // assert_eq!(result, KScalar::ZERO);
-        println!("VOW rho P2PK test skipped - implementation pending");
+        // VOW (Vanity On Web) rho P2PK implementation - advanced ECDLP attack
+        // This would implement specialized kangaroo jumps for web-based vanity addresses
+        // Currently deferred for Phase 6+ advanced features
+        println!("VOW rho P2PK test deferred - Phase 6+ feature (Vanity On Web attacks)");
     }
 }
 

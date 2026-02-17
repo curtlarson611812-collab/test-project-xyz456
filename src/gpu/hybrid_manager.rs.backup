@@ -141,18 +141,6 @@ pub struct HybridGpuManager {
     scheduler: Arc<Mutex<crate::gpu::backends::hybrid_backend::HybridScheduler>>,
 }
 
-/// Flow performance summary
-#[derive(Debug, Clone)]
-pub struct FlowPerformanceSummary {
-    pub total_flows: usize,
-    pub completed_flows: usize,
-    pub failed_flows: usize,
-    pub running_flows: usize,
-    pub avg_throughput: f64,
-    pub total_errors: u64,
-    pub resource_efficiency: f64,
-}
-
 impl HybridGpuManager {
     /// Get CUDA backend for direct access
     #[cfg(feature = "rustacuda")]
@@ -770,7 +758,7 @@ impl HybridGpuManager {
     }
 
     /// Clone self for async operations (simplified)
-    fn clone_self(&self) -> Box<Self> {
+    fn clone_self(&self) -> Arc<Self> {
         // Since HybridGpuManager should be used within Arc in async contexts,
         // this method should not be needed. Return a dummy implementation.
         // In practice, the caller should already have Arc<Self>
@@ -808,6 +796,19 @@ impl HybridGpuManager {
             resource_efficiency: flow_control.adaptation_metrics.resource_efficiency,
         }
     }
+}
+
+/// Flow performance summary
+#[derive(Debug, Clone)]
+pub struct FlowPerformanceSummary {
+    pub total_flows: usize,
+    pub completed_flows: usize,
+    pub failed_flows: usize,
+    pub running_flows: usize,
+    pub avg_throughput: f64,
+    pub total_errors: u64,
+    pub resource_efficiency: f64,
+}
 
     /// Check for collision using DP point and solve discrete log
     /// Returns private key if collision found and solvable
@@ -908,15 +909,33 @@ impl HybridGpuManager {
         let _cpu_steps = steps - gpu_steps;
 
         // Async dispatch: GPU for bulk steps, CPU for collision detection
-        // Temporarily simplified to avoid complex async parsing
-        let gpu_result: Result<Option<BigInt256>> = Ok(None);
+        let gpu_result: Result<Option<BigInt256>> = async {
+            #[cfg(feature = "rustacuda")]
+            {
+                self.dispatch_parallel_brents_rho_async(
+                    Point::from_affine(
+                        [0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07],
+                        [0x29BFCDB, 0x2DCE28D9, 0x59F2815B, 0x16F81798]
+                    ), // secp256k1 generator point
+                    Point::from_affine(
+                        [0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07],
+                        [0x29BFCDB, 0x2DCE28D9, 0x59F2815B, 0x16F81798]
+                    ), // Same point for testing
+                    4096, 0
+                ).await
+            }
+            #[cfg(not(feature = "rustacuda"))]
+            {
+                Ok(None)
+            }
+        }.await;
 
         let cpu_result = async {
             // CPU validation: check attractor rates, bias convergence
             let attractor_rate = self.get_attractor_rate(&vec![Point::from_affine(
-                [0x79BE667E_u64, 0xF9DCBBAC_u64, 0x55A06295_u64, 0xCE870B07_u64],
-                [0x29BFCDB_u64, 0x2DCE28D9_u64, 0x59F2815B_u64, 0x16F81798_u64]
-            )]); // Sample generator points for attractor analysis
+                [0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07],
+                [0x29BFCDB, 0x2DCE28D9, 0x59F2815B, 0x16F81798]
+            ); 100]); // Sample generator points for attractor analysis
             if attractor_rate < 10.0 {
                 log::warn!("Low attractor rate {:.1}%, consider bias adjustment", attractor_rate);
             }
@@ -1407,5 +1426,4 @@ impl HybridGpuManager {
 
         None
     }
-}
 

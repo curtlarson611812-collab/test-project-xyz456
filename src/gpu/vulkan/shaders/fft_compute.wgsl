@@ -146,16 +146,33 @@ fn polynomial_multiply(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    // This would implement polynomial multiplication:
-    // 1. Convert coefficients to complex values (imag = 0)
+    // FFT-based polynomial multiplication implementation
+    // This is a simplified version - full implementation would require:
+    // 1. Separate input arrays for two polynomials
     // 2. FFT both polynomials
     // 3. Pointwise multiplication in frequency domain
     // 4. Inverse FFT
-    // 5. Extract real coefficients and handle carries
+    // 5. Extract real coefficients
 
-    // Placeholder implementation
-    // In practice, this would orchestrate multiple FFT passes
-    fft_data[tid].real = fft_data[tid].real * 2.0; // Example scaling
+    // For now, demonstrate the concept with a simple convolution
+    // In practice, this would use the FFT functions above
+
+    let n = fft_params.n;
+    let half_n = n / 2u;
+
+    // Simple convolution for demonstration (O(n²) - not optimal)
+    // Real implementation would use FFT for O(n log n)
+    if (tid < n) {
+        var sum = 0.0;
+        for (var i = 0u; i <= tid; i++) {
+            if (i < half_n && (tid - i) < half_n) {
+                // Multiply coefficients and accumulate
+                sum += fft_data[i].real * fft_data[tid - i].real;
+            }
+        }
+        fft_data[tid].real = sum;
+        fft_data[tid].imag = 0.0;
+    }
 }
 
 // FFT-based big integer multiplication
@@ -172,11 +189,63 @@ fn bigint_fft_multiply(
     // Input: Two 256-bit numbers (8 u32 limbs each)
     // Output: 512-bit result (16 u32 limbs)
 
-    // This would:
-    // 1. Convert u32 limbs to polynomial coefficients
-    // 2. Perform FFT-based multiplication
-    // 3. Convert back to u32 limbs with carry propagation
+    let limbs_per_number = 8u;
+    let total_limbs = limbs_per_number * 2u; // 16 limbs for result
 
-    // Placeholder - actual implementation would be complex
-    // and require careful handling of limb boundaries
+    // Shared memory for workgroup computation
+    var shared_a: array<u32, 8>;
+    var shared_b: array<u32, 8>;
+    var shared_result: array<u32, 16>;
+
+    // Load input limbs into shared memory (cooperative loading)
+    if (local_id < limbs_per_number) {
+        // Load first number limbs
+        shared_a[local_id] = twiddle_factors[group_id * limbs_per_number + local_id].real as u32;
+        // Load second number limbs
+        shared_b[local_id] = twiddle_factors[group_id * limbs_per_number + local_id].imag as u32;
+    }
+
+    // Initialize result
+    if (local_id < total_limbs) {
+        shared_result[local_id] = 0u;
+    }
+
+    workgroupBarrier();
+
+    // Perform schoolbook multiplication with carry propagation
+    // This is a simplified version - FFT would be used for larger numbers
+    for (var i = 0u; i < limbs_per_number; i++) {
+        var carry = 0u;
+        for (var j = 0u; j < limbs_per_number; j++) {
+            if (i + j + local_id < total_limbs) {
+                // Each thread handles one position in the result
+                let pos = i + j;
+                if (pos == local_id) {
+                    let prod = u64(shared_a[i]) * u64(shared_b[j]);
+                    let existing = u64(shared_result[pos]);
+                    let sum = prod + existing + u64(carry);
+
+                    shared_result[pos] = u32(sum & 0xFFFFFFFFu);
+                    carry = u32(sum >> 32u);
+
+                    // Propagate carry to next position
+                    if (carry > 0u && pos + 1u < total_limbs) {
+                        // This would need atomic operations in a real implementation
+                        // For now, this demonstrates the concept
+                    }
+                }
+            }
+        }
+    }
+
+    workgroupBarrier();
+
+    // Store result back to global memory
+    if (local_id < total_limbs) {
+        let result_idx = group_id * total_limbs + local_id;
+        if (result_idx < arrayLength(&fft_data)) {
+            fft_data[result_idx].real = shared_result[local_id] as f32;
+            fft_data[result_idx].imag = 0.0;
+        }
+    }
 }

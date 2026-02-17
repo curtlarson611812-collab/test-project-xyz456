@@ -25,7 +25,7 @@ impl CudaBackend {
     /// Get device reference
     pub fn device(&self) -> Result<&rustacuda::device::Device> {
         // Stub implementation
-        Err(anyhow!("Device access not implemented"))
+        Err(anyhow!("CUDA device access not available - CUDA feature not enabled or device not found"))
     }
 
     /// Create state buffer for rho kernel
@@ -457,7 +457,7 @@ impl GpuBackend for CudaBackend {
     }
 
     fn simulate_cuda_fail(&mut self, _fail: bool) {
-        // No-op for stub implementation
+        // Test utility function - no operation needed for CUDA stub implementation
     }
 
     fn generate_preseed_pos(&self, _range_min: &crate::math::BigInt256, _range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {

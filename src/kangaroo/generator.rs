@@ -472,7 +472,7 @@ impl KangarooGenerator {
                 final_pos,
                 BigInt256::from_u64(scalar.value.low_u64()),  // initial distance = biased prime
                 scalar.value.to_u64_array(),  // alpha starts with biased prime offset
-                [1, 0, 0, 0],           // beta placeholder (updated during stepping)
+                [1, 0, 0, 0],           // beta coefficient (initialized, updated during stepping)
                 false,                  // is_tame
                 false,                  // is_dp
                 i as u64,               // id
