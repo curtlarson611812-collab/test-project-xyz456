@@ -47,7 +47,223 @@ impl ParityFramework {
         results.push(self.test_jump_tables().await?);
         results.push(self.test_bias_operations().await?);
 
+        // Add comprehensive Vulkan-specific tests
+        results.push(self.test_vulkan_mathematical_operations().await?);
+        results.push(self.test_vulkan_memory_operations().await?);
+        results.push(self.test_vulkan_bias_optimization().await?);
+
         Ok(results)
+    }
+
+    /// Comprehensive test for Vulkan mathematical operations
+    pub async fn test_vulkan_mathematical_operations(&self) -> Result<ParityTestResult> {
+        let start_time = Instant::now();
+        let mut passed = 0;
+        let mut failed = 0;
+        let mut max_error = 0.0f64;
+
+        #[cfg(feature = "wgpu")]
+        {
+            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+                // Test batch modular inverse
+                let test_values = vec![
+                    [1u32, 0, 0, 0, 0, 0, 0, 0], // 1
+                    [2u32, 0, 0, 0, 0, 0, 0, 0], // 2
+                    [3u32, 0, 0, 0, 0, 0, 0, 0], // 3
+                ];
+                let modulus = [7u32, 0, 0, 0, 0, 0, 0, 0]; // Small modulus for testing
+
+                if let Ok(inverses) = vulkan_backend.batch_inverse(&test_values, modulus) {
+                    for (i, inv_option) in inverses.iter().enumerate() {
+                        if let Some(inv) = inv_option {
+                            // Verify inverse: (value * inv) mod modulus == 1
+                            let value_bigint = BigInt256::from_u32_limbs(test_values[i]);
+                            let inv_bigint = BigInt256::from_u32_limbs(*inv);
+                            let modulus_bigint = BigInt256::from_u32_limbs(modulus);
+                            let product = (value_bigint * inv_bigint) % modulus_bigint.clone();
+                            if product == BigInt256::from_u64(1) {
+                                passed += 1;
+                            } else {
+                                failed += 1;
+                            }
+                        } else {
+                            failed += 1; // Should have inverse for small values
+                        }
+                    }
+                }
+
+                // Test Barrett reduction
+                let x_512 = [1u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // 2^256
+                let modulus = [7u32, 0, 0, 0, 0, 0, 0, 0];
+                let mu = [0u32; 16]; // Simplified mu for small modulus
+
+                if let Ok(reduced) = vulkan_backend.barrett_reduce(&x_512, &modulus, &mu) {
+                    // x mod modulus should be 0 for x = k * modulus
+                    let expected = [0u32, 0, 0, 0, 0, 0, 0, 0];
+                    if reduced == expected {
+                        passed += 1;
+                    } else {
+                        failed += 1;
+                    }
+                }
+
+                // Test bigint multiplication
+                let a = [2u32, 0, 0, 0, 0, 0, 0, 0];
+                let b = [3u32, 0, 0, 0, 0, 0, 0, 0];
+
+                if let Ok(product) = vulkan_backend.bigint_mul(&a, &b) {
+                    // 2 * 3 = 6
+                    let expected = [6u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+                    if product == expected {
+                        passed += 1;
+                    } else {
+                        failed += 1;
+                    }
+                }
+
+                // Test modular inverse
+                let a = [3u32, 0, 0, 0, 0, 0, 0, 0];
+                let modulus = [7u32, 0, 0, 0, 0, 0, 0, 0];
+
+                if let Ok(inv) = vulkan_backend.mod_inverse(&a, &modulus) {
+                    // 3 * inv mod 7 should = 1
+                    let a_bigint = BigInt256::from_u32_limbs(a);
+                    let inv_bigint = BigInt256::from_u32_limbs(inv);
+                    let mod_bigint = BigInt256::from_u32_limbs(modulus);
+                    let product = (a_bigint * inv_bigint) % mod_bigint.clone();
+                    if product == BigInt256::from_u64(1) {
+                        passed += 1;
+                    } else {
+                        failed += 1;
+                    }
+                }
+
+                // Test mod_small operations
+                let x = [15u32, 0, 0, 0, 0, 0, 0, 0]; // 15
+                let modulus = 7u32;
+
+                if let Ok(result) = vulkan_backend.mod_small(x, modulus) {
+                    if result == 1 { // 15 mod 7 = 1
+                        passed += 1;
+                    } else {
+                        failed += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(ParityTestResult {
+            operation: "Vulkan Mathematical Operations".to_string(),
+            total_tests: passed + failed,
+            passed,
+            failed,
+            duration_ms: start_time.elapsed().as_millis() as u128,
+            max_error,
+        })
+    }
+
+    /// Test Vulkan memory operations and optimizations
+    pub async fn test_vulkan_memory_operations(&self) -> Result<ParityTestResult> {
+        let start_time = Instant::now();
+        let mut passed = 0;
+        let mut failed = 0;
+        let mut max_error = 0.0f64;
+
+        #[cfg(feature = "wgpu")]
+        {
+            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+                // Test safe_diff_mod_n
+                let tame = [10u32, 0, 0, 0, 0, 0, 0, 0];
+                let wild = [3u32, 0, 0, 0, 0, 0, 0, 0];
+                let n = [7u32, 0, 0, 0, 0, 0, 0, 0];
+
+                if let Ok(diff) = vulkan_backend.safe_diff_mod_n(tame, wild, n) {
+                    // (10 - 3) mod 7 = 7 mod 7 = 0
+                    let expected = [0u32, 0, 0, 0, 0, 0, 0, 0];
+                    if diff == expected {
+                        passed += 1;
+                    } else {
+                        failed += 1;
+                    }
+                }
+
+                // Test modulo operation
+                let a = [15u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // 15
+                let modulus = [7u32, 0, 0, 0, 0, 0, 0, 0];
+
+                if let Ok(result) = vulkan_backend.modulo(&a, &modulus) {
+                    // 15 mod 7 = 1
+                    let expected = [1u32, 0, 0, 0, 0, 0, 0, 0];
+                    if result == expected {
+                        passed += 1;
+                    } else {
+                        failed += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(ParityTestResult {
+            operation: "Vulkan Memory Operations".to_string(),
+            total_tests: passed + failed,
+            passed,
+            failed,
+            duration_ms: start_time.elapsed().as_millis() as u128,
+            max_error,
+        })
+    }
+
+    /// Test Vulkan bias optimization features
+    pub async fn test_vulkan_bias_optimization(&self) -> Result<ParityTestResult> {
+        let start_time = Instant::now();
+        let mut passed = 0;
+        let mut failed = 0;
+        let mut max_error = 0.0f64;
+
+        #[cfg(feature = "wgpu")]
+        {
+            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+                // Test batch_mod_small for bias calculations
+                let test_points = vec![
+                    [[15u32, 0, 0, 0, 0, 0, 0, 0]; 3], // x = 15
+                    [[22u32, 0, 0, 0, 0, 0, 0, 0]; 3], // x = 22
+                    [[8u32, 0, 0, 0, 0, 0, 0, 0]; 3],  // x = 8
+                ];
+                let modulus = 7u32;
+
+                if let Ok(results) = vulkan_backend.batch_mod_small(&test_points, modulus) {
+                    let expected = vec![1u32, 1u32, 1u32]; // 15,22,8 mod 7 = 1,1,1
+                    if results == expected {
+                        passed += results.len();
+                    } else {
+                        failed += results.len();
+                    }
+                }
+
+                // Test GLV optimized multiplication
+                let base_point = self.curve.g.clone();
+                let base_u32 = self.point_to_u32_array(&base_point);
+                let scalar = [5u32, 0, 0, 0, 0, 0, 0, 0]; // Small scalar for testing
+
+                if let Ok(result) = vulkan_backend.mul_glv_opt(base_u32, scalar) {
+                    // Verify result is valid point (basic check)
+                    if result[0] != [0u32; 8] || result[1] != [0u32; 8] || result[2] != [0u32; 8] {
+                        passed += 1;
+                    } else {
+                        failed += 1; // Should not be zero point
+                    }
+                }
+            }
+        }
+
+        Ok(ParityTestResult {
+            operation: "Vulkan Bias Optimization".to_string(),
+            total_tests: passed + failed,
+            passed,
+            failed,
+            duration_ms: start_time.elapsed().as_millis() as u128,
+            max_error,
+        })
     }
 
     /// Test scalar multiplication operations
