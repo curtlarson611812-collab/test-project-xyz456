@@ -1219,7 +1219,8 @@ pub fn validate_solution(k: &BigInt256, pubkey: &ProjectivePoint) -> bool {
     let k_value = BigInt256::from_bytes_be(&k_bytes);
 
     // Check that k is not zero and within secp256k1 order
-    !k_value.is_zero() && k_value < crate::math::secp::Secp256k1::order()
+    use crate::math::constants::CURVE_ORDER_BIGINT;
+    !k_value.is_zero() && k_value < *CURVE_ORDER_BIGINT
 }
 
 /// Production-ready adaptive timeout calculation

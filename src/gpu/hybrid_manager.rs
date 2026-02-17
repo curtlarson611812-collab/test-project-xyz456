@@ -462,14 +462,15 @@ impl HybridGpuManager {
     async fn execute_collision_solve_flow(&self, flow_id: &str) -> Result<(), anyhow::Error> {
         // High-priority collision solving with redundant execution
         let context = self.create_scheduling_context().await?;
-        let mut scheduler = self.scheduler.lock().unwrap();
-
-        let selection = self.hybrid_backend.schedule_operation_advanced(
-            &mut *scheduler,
-            "batch_solve_collision",
-            100, // Small data size
-            &context,
-        );
+        let selection = {
+            let mut scheduler = self.scheduler.lock().unwrap();
+            self.hybrid_backend.schedule_operation_advanced(
+                &mut *scheduler,
+                "batch_solve_collision",
+                100, // Small data size
+                &context,
+            )
+        }; // Drop the scheduler lock here
 
         // Execute based on scheduling decision
         match selection {
@@ -574,12 +575,12 @@ impl HybridGpuManager {
     }
 
     /// Execute collision solve with redundancy for verification
-    async fn execute_redundant_collision_solve(&self, backends: Vec<&str>) -> Result<(), anyhow::Error> {
+    async fn execute_redundant_collision_solve(&self, backends: Vec<String>) -> Result<(), anyhow::Error> {
         let mut handles = Vec::new();
 
-        for &backend in &backends {
+        for backend in &backends {
             let self_clone = self.clone_self();
-            let backend_name = backend.to_string();
+            let backend_name = backend.clone();
             let handle = tokio::spawn(async move {
                 self_clone.execute_collision_solve_on_backend(&backend_name).await
             });
@@ -674,17 +675,19 @@ impl HybridGpuManager {
                 if self.should_switch_to_parallel().await? {
                     FlowExecutionMode::Parallel
                 } else {
-                    current_mode
+                    FlowExecutionMode::Sequential
                 }
             }
             FlowExecutionMode::Parallel => {
                 if self.should_switch_to_pipeline().await? {
                     FlowExecutionMode::Pipeline
                 } else {
-                    current_mode
+                    FlowExecutionMode::Parallel
                 }
             }
-            _ => current_mode.clone(),
+            FlowExecutionMode::Pipeline => FlowExecutionMode::Pipeline,
+            FlowExecutionMode::Adaptive => FlowExecutionMode::Adaptive,
+            FlowExecutionMode::PriorityBased => FlowExecutionMode::PriorityBased,
         };
 
         if new_mode != current_mode {
@@ -1235,9 +1238,14 @@ impl HybridGpuManager {
             match self.dispatch_batch_bsgs_solve(deltas, alphas, distances) {
                 Ok(bsgs_results) => {
                     for (_i, result) in bsgs_results.into_iter().enumerate() {
-                        if let Some(solution_array) = result {
-                            // Convert to Solution
-                            let private_key: [u64; 4] = solution_array.map(|x| x as u64);
+                        if let Some(solution_u32) = result {
+                            // Convert [u32;8] to [u64;4]
+                            let private_key: [u64; 4] = [
+                                (solution_u32[0] as u64) | ((solution_u32[1] as u64) << 32),
+                                (solution_u32[2] as u64) | ((solution_u32[3] as u64) << 32),
+                                (solution_u32[4] as u64) | ((solution_u32[5] as u64) << 32),
+                                (solution_u32[6] as u64) | ((solution_u32[7] as u64) << 32),
+                            ];
                             let solution = Solution::new(private_key[..4].try_into().unwrap(), *target, BigInt256::zero(), 0.0);
                             solutions.push(solution);
                         }

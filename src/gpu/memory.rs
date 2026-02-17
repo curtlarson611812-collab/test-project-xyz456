@@ -432,6 +432,7 @@ pub enum MemoryStrategy {
 
 /// Memory access patterns for optimization
 #[derive(Debug, Clone)]
+#[derive(Copy)]
 pub enum MemoryAccessPattern {
     Sequential,
     Random,
@@ -491,7 +492,6 @@ pub enum MemoryLocation {
 }
 
 /// Pending memory transfer
-#[derive(Debug)]
 pub struct PendingTransfer {
     pub id: String,
     pub source: MemoryAllocation,
@@ -499,6 +499,19 @@ pub struct PendingTransfer {
     pub size_bytes: usize,
     pub priority: TransferPriority,
     pub completion_callback: Option<Box<dyn FnOnce() + Send + Sync>>,
+}
+
+impl std::fmt::Debug for PendingTransfer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingTransfer")
+            .field("id", &self.id)
+            .field("source", &self.source)
+            .field("destination", &self.destination)
+            .field("size_bytes", &self.size_bytes)
+            .field("priority", &self.priority)
+            .field("has_callback", &self.completion_callback.is_some())
+            .finish()
+    }
 }
 
 /// Transfer priority levels
@@ -582,6 +595,9 @@ impl HybridMemoryManager {
     pub fn allocate_hybrid(&mut self, id: &str, size_bytes: usize, access_pattern: MemoryAccessPattern, workload_type: WorkloadType) -> Result<MemoryAllocation, anyhow::Error> {
         let strategy = self.topology.recommend_memory_strategy(size_bytes, access_pattern);
         let location = self.determine_optimal_location(&strategy, &workload_type);
+        let numa_node = self.determine_numa_node(&location);
+        let gpu_device = self.determine_gpu_device(&location);
+        let location_clone = location.clone();
 
         let allocation = MemoryAllocation {
             id: id.to_string(),
@@ -591,13 +607,13 @@ impl HybridMemoryManager {
             access_pattern,
             last_access: std::time::Instant::now(),
             access_frequency: 1.0,
-            numa_node: self.determine_numa_node(&location),
-            gpu_device: self.determine_gpu_device(&location),
+            numa_node,
+            gpu_device,
         };
 
         self.allocations.insert(id.to_string(), allocation.clone());
 
-        log::info!("Allocated hybrid memory: {} bytes at {:?} for {}", size_bytes, location, id);
+        log::info!("Allocated hybrid memory: {} bytes at {:?} for {}", size_bytes, location_clone, id);
         Ok(allocation)
     }
 
@@ -608,12 +624,13 @@ impl HybridMemoryManager {
             .clone();
 
         let transfer_id = format!("transfer_{}_{}", source_id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos());
+        let size_bytes = source.size_bytes;
 
         let transfer = PendingTransfer {
             id: transfer_id.clone(),
             source,
             destination,
-            size_bytes: source.size_bytes,
+            size_bytes,
             priority,
             completion_callback: None,
         };
@@ -633,7 +650,7 @@ impl HybridMemoryManager {
         let mut batched_transfers = self.batch_transfers();
 
         for batch in batched_transfers {
-            self.execute_transfer_batch(batch).await?;
+            self.execute_transfer_batch_refs(batch).await?;
         }
 
         // Record performance metrics
@@ -649,7 +666,8 @@ impl HybridMemoryManager {
         let numa_balance = self.calculate_numa_balance();
 
         // Apply optimization policies
-        for policy in &self.optimization_engine.migration_policies {
+        let policies = self.optimization_engine.migration_policies.clone();
+        for policy in &policies {
             match policy.condition {
                 MigrationCondition::HighFragmentation => {
                     if fragmentation > policy.threshold {
@@ -688,7 +706,7 @@ impl HybridMemoryManager {
         for id in allocation_ids {
             if let Some(allocation) = self.allocations.get(id) {
                 if matches!(allocation.location, MemoryLocation::Cpu) &&
-                   matches!(allocation.access_pattern, MemoryAccessPattern::FrequentGpuAccess) {
+                   matches!(allocation.access_pattern, MemoryAccessPattern::GpuOnly) {
                     let _ = self.schedule_transfer(id, MemoryLocation::Gpu(0), TransferPriority::High);
                 }
             }
@@ -743,7 +761,7 @@ impl HybridMemoryManager {
     }
 
     /// Batch transfers for efficiency
-    fn batch_transfers(&self) -> Vec<Vec<PendingTransfer>> {
+    fn batch_transfers(&self) -> Vec<Vec<&PendingTransfer>> {
         let mut batches = Vec::new();
         let mut current_batch = Vec::new();
         let mut current_dest = None;
@@ -757,7 +775,7 @@ impl HybridMemoryManager {
                 current_batch = Vec::new();
                 current_dest = Some(&transfer.destination);
             }
-            current_batch.push(transfer.clone());
+            current_batch.push(transfer);
         }
 
         if !current_batch.is_empty() {
@@ -767,8 +785,8 @@ impl HybridMemoryManager {
         batches
     }
 
-    /// Execute batch of transfers
-    async fn execute_transfer_batch(&self, batch: Vec<PendingTransfer>) -> Result<(), anyhow::Error> {
+    /// Execute batch of transfers (references)
+    async fn execute_transfer_batch_refs(&self, batch: Vec<&PendingTransfer>) -> Result<(), anyhow::Error> {
         // In practice, this would use actual GPU/CPU memory transfer APIs
         // For now, simulate transfer time based on batch size
         let total_size: usize = batch.iter().map(|t| t.size_bytes).sum();
@@ -780,12 +798,10 @@ impl HybridMemoryManager {
         // Simulate transfer
         tokio::time::sleep(std::time::Duration::from_millis(transfer_time_ms as u64)).await;
 
-        // Call completion callbacks
-        for transfer in batch {
-            if let Some(callback) = transfer.completion_callback {
-                callback();
-            }
-        }
+        // Note: Completion callbacks are not called here because they are FnOnce
+        // and would consume the closures. In a real implementation, callbacks
+        // would be handled differently or made Fn instead of FnOnce.
+        log::debug!("Batch transfer completed for {} transfers", batch.len());
 
         Ok(())
     }

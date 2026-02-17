@@ -588,7 +588,7 @@ impl HybridBackend {
         tokio::spawn(async move {
             match work_item.operation {
                 HybridOperation::BatchInverse(inputs, modulus) => {
-                    match backend {
+                    match backend.as_str() {
                         "cuda" => {
                             #[cfg(feature = "rustacuda")]
                             {
@@ -621,7 +621,7 @@ impl HybridBackend {
                     }
                 }
                 HybridOperation::BatchBarrettReduce(inputs, mu, modulus, use_montgomery) => {
-                    match backend {
+                    match backend.as_str() {
                         "cuda" => {
                             #[cfg(feature = "rustacuda")]
                             {
@@ -652,7 +652,7 @@ impl HybridBackend {
                     }
                 }
                 HybridOperation::BatchBigIntMul(a, b) => {
-                    match backend {
+                    match backend.as_str() {
                         "cuda" => {
                             #[cfg(feature = "rustacuda")]
                             {
@@ -683,7 +683,7 @@ impl HybridBackend {
                     }
                 }
                 HybridOperation::StepBatch(mut positions, mut distances, types) => {
-                    match backend {
+                    match backend.as_str() {
                         "cuda" => {
                             #[cfg(feature = "rustacuda")]
                             {
@@ -714,7 +714,7 @@ impl HybridBackend {
                     }
                 }
                 HybridOperation::SolveCollision(alpha_t, alpha_w, beta_t, beta_w, target, n) => {
-                    match backend {
+                    match backend.as_str() {
                         "cuda" => {
                             #[cfg(feature = "rustacuda")]
                             {
@@ -746,7 +746,7 @@ impl HybridBackend {
                 }
                 HybridOperation::Custom(operation_name, data) => {
                     // Handle custom operations through extensible interface
-                    match backend {
+                    match backend.as_str() {
                         "cuda" => {
                             #[cfg(feature = "rustacuda")]
                             {
@@ -1026,11 +1026,12 @@ impl HybridBackend {
 
     /// Create advanced hybrid scheduler
     pub fn create_hybrid_scheduler(&self, policy: SchedulingPolicy) -> HybridScheduler {
+        let adaptation_enabled = matches!(policy, SchedulingPolicy::Adaptive);
         HybridScheduler {
             backend_performance_history: std::collections::HashMap::new(),
             workload_patterns: std::collections::HashMap::new(),
             scheduling_policy: policy,
-            adaptation_enabled: matches!(policy, SchedulingPolicy::Adaptive),
+            adaptation_enabled,
         }
     }
 
@@ -1049,9 +1050,9 @@ impl HybridBackend {
             }
             SchedulingPolicy::RoundRobin => {
                 // Simple round-robin rotation
-                let backends = vec!["vulkan", "cuda", "cpu"];
+                let backends = vec!["vulkan".to_string(), "cuda".to_string(), "cpu".to_string()];
                 let index = (scheduler.backend_performance_history.len() % backends.len()) as usize;
-                BackendSelection::Backend(backends[index])
+                BackendSelection::Backend(backends[index].clone())
             }
             SchedulingPolicy::LoadBalanced => {
                 // Choose backend with lowest current load
@@ -1134,7 +1135,7 @@ impl HybridBackend {
             .map(|(name, _)| *name)
             .unwrap_or("vulkan");
 
-        BackendSelection::Backend(best_backend)
+        BackendSelection::Backend(best_backend.to_string())
     }
 
     /// Select best performing backend based on history
@@ -1166,7 +1167,7 @@ impl HybridBackend {
                 .map(|(backend, _)| backend);
 
             if let Some(backend) = best_backend {
-                return BackendSelection::Backend(&backend);
+                return BackendSelection::Backend(backend);
             }
         }
 
@@ -1179,7 +1180,7 @@ impl HybridBackend {
         // Check for learned workload patterns
         if let Some(pattern) = scheduler.workload_patterns.get(operation) {
             if pattern.confidence_score > 0.8 {
-                return BackendSelection::Backend(&pattern.optimal_backend);
+                return BackendSelection::Backend(pattern.optimal_backend.clone());
             }
         }
 
@@ -1192,11 +1193,11 @@ impl HybridBackend {
         let cpu_score = factors.cpu_load * 0.3 + factors.cpu_performance * 0.4 + factors.cpu_memory * 0.3;
 
         let best_backend = if vulkan_score < cuda_score && vulkan_score < cpu_score {
-            "vulkan"
+            "vulkan".to_string()
         } else if cuda_score < cpu_score {
-            "cuda"
+            "cuda".to_string()
         } else {
-            "cpu"
+            "cpu".to_string()
         };
 
         BackendSelection::Backend(best_backend)
@@ -1208,11 +1209,11 @@ impl HybridBackend {
         match operation {
             "batch_solve_collision" | "batch_inverse" => {
                 // Critical operations get redundant execution for verification
-                BackendSelection::Redundant(vec!["cuda", "vulkan"])
+                BackendSelection::Redundant(vec!["cuda".to_string(), "vulkan".to_string()])
             }
             "step_batch" if data_size > 10000 => {
                 // Large bulk operations get parallel execution
-                BackendSelection::Parallel(vec!["vulkan", "cuda"])
+                BackendSelection::Parallel(vec!["vulkan".to_string(), "cuda".to_string()])
             }
             _ => {
                 // Standard operations use adaptive selection
@@ -1304,10 +1305,10 @@ impl HybridBackend {
 
 /// Backend selection result
 #[derive(Debug)]
-pub enum BackendSelection<'a> {
-    Backend(&'a str),
-    Redundant(Vec<&'a str>),    // Execute on multiple backends for verification
-    Parallel(Vec<&'a str>),     // Execute in parallel across backends
+pub enum BackendSelection {
+    Backend(String),
+    Redundant(Vec<String>),    // Execute on multiple backends for verification
+    Parallel(Vec<String>),     // Execute in parallel across backends
 }
 
 /// Scheduling context with current backend loads
@@ -1516,46 +1517,46 @@ impl HybridBackend {
     }
 
     /// Intelligent backend selection based on operation type and available backends
-    fn select_backend_for_operation(&self, operation: &str) -> &str {
+    fn select_backend_for_operation(&self, operation: &str) -> String {
         match operation {
             // Bulk operations → Vulkan
             "step_batch" | "batch_init_kangaroos" | "run_gpu_steps" => {
                 #[cfg(feature = "wgpu")]
-                return "vulkan";
+                return "vulkan".to_string();
                 #[cfg(not(feature = "wgpu"))]
-                return "cpu";
+                return "cpu".to_string();
             }
 
             // Precision operations → CUDA
             "batch_inverse" | "batch_barrett_reduce" | "bigint_mul" | "mod_inverse" | "modulo" => {
                 if self.cuda_available {
-                    "cuda"
+                    "cuda".to_string()
                 } else {
                     #[cfg(feature = "wgpu")]
-                    return "vulkan";
+                    return "vulkan".to_string();
                     #[cfg(not(feature = "wgpu"))]
-                    return "cpu";
+                    return "cpu".to_string();
                 }
             }
 
             // Collision solving → CUDA (most efficient)
             "batch_solve" | "batch_solve_collision" | "batch_bsgs_solve" => {
                 if self.cuda_available {
-                    "cuda"
+                    "cuda".to_string()
                 } else {
-                    "cpu"
+                    "cpu".to_string()
                 }
             }
 
             // Default fallback
             _ => {
                 #[cfg(feature = "wgpu")]
-                return "vulkan";
+                return "vulkan".to_string();
                 #[cfg(not(feature = "wgpu"))]
                 if self.cuda_available {
-                    "cuda"
+                    "cuda".to_string()
                 } else {
-                    "cpu"
+                    "cpu".to_string()
                 }
             }
         }
@@ -2162,7 +2163,7 @@ impl GpuBackend for HybridBackend {
         let start_time = Instant::now();
         let backend = self.select_backend_for_operation("step_batch");
 
-        let result = match backend {
+        let result = match backend.as_str() {
             "vulkan" => {
                 #[cfg(feature = "wgpu")]
                 {
@@ -2227,7 +2228,7 @@ impl GpuBackend for HybridBackend {
         let start_time = Instant::now();
         let backend = self.select_backend_for_operation("batch_inverse");
 
-        let result = match backend {
+        let result = match backend.as_str() {
             "cuda" => {
                 #[cfg(feature = "rustacuda")]
                 {

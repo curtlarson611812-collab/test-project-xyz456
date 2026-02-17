@@ -1035,6 +1035,47 @@ impl BarrettReducer {
         let reduced = BigInt256::from_bytes_be(&reduced_bytes_padded);
         result.copy_from_slice(&reduced.limbs);
     }
+
+    /// Compute modular inverse using Extended Euclidean Algorithm
+    /// Returns x such that (a * x) ≡ 1 mod modulus, or None if no inverse exists
+    pub fn inv(&self, a: &BigInt256) -> Option<BigInt256> {
+        if a.is_zero() {
+            return None;
+        }
+
+        // Extended Euclidean Algorithm
+        let mut old_r = self.modulus.clone();
+        let mut r = a.clone();
+        let mut old_s = BigInt256::zero();
+        let mut s = BigInt256::one();
+
+        while !r.is_zero() {
+            // quotient = old_r / r
+            let (quotient, _) = old_r.div_rem(&r);
+
+            // Update: (old_r, r) = (r, old_r - quotient * r)
+            let temp_r = old_r - quotient.clone() * r.clone();
+            old_r = r;
+            r = temp_r;
+
+            // Update: (old_s, s) = (s, old_s - quotient * s)
+            let temp_s = old_s - quotient * s.clone();
+            old_s = s;
+            s = temp_s;
+        }
+
+        // If old_r > 1, then no inverse exists
+        if old_r > BigInt256::one() {
+            return None;
+        }
+
+        // Ensure result is in [0, modulus)
+        if old_s.is_negative() {
+            old_s = old_s + self.modulus.clone();
+        }
+
+        Some(old_s)
+    }
 }
 
 /// Montgomery reduction for modular multiplication

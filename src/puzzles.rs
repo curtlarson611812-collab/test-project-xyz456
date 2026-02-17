@@ -244,10 +244,12 @@ pub fn validate_puzzle_address(puzzle: &PuzzleEntry) -> Result<bool> {
     use ripemd::Ripemd160;
 
     // Convert the puzzle's target public key to compressed format
-    let pubkey_bytes = if puzzle.target_pubkey.len() >= 64 {
+    let pubkey_hex = puzzle.pub_key_hex.trim_start_matches("0x");
+    let pubkey_bytes = hex::decode(pubkey_hex)?;
+    let pubkey_bytes = if pubkey_bytes.len() >= 64 {
         // Assume uncompressed format (x,y coordinates)
-        let x_bytes = &puzzle.target_pubkey[0..32];
-        let y_bytes = &puzzle.target_pubkey[32..64];
+        let x_bytes = &pubkey_bytes[0..32];
+        let y_bytes = &pubkey_bytes[32..64];
 
         // Create compressed public key (0x02/0x03 prefix based on y parity)
         let y_parity = y_bytes[31] & 1;
@@ -255,8 +257,8 @@ pub fn validate_puzzle_address(puzzle: &PuzzleEntry) -> Result<bool> {
         compressed.extend_from_slice(x_bytes);
         compressed
     } else {
-        // Already compressed format
-        puzzle.target_pubkey.clone()
+        // Already compressed format or short key
+        pubkey_bytes
     };
 
     // SHA256 hash of public key
@@ -282,13 +284,13 @@ pub fn validate_puzzle_address(puzzle: &PuzzleEntry) -> Result<bool> {
     let calculated_address = bs58::encode(&address_payload).into_string();
 
     // Compare with expected address
-    let matches = calculated_address == puzzle.expected_address;
+    let matches = calculated_address == puzzle.target_address;
 
     if !matches {
         warn!("Puzzle {} address validation failed: expected {}, calculated {}",
-              puzzle.number, puzzle.expected_address, calculated_address);
+              puzzle.n, puzzle.target_address, calculated_address);
     } else {
-        info!("Puzzle {} address validation successful", puzzle.number);
+        info!("Puzzle {} address validation successful", puzzle.n);
     }
 
     Ok(matches)

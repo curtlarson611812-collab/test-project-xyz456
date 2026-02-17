@@ -35,6 +35,7 @@ rand = "0.8"                      # Random number generation for entropy
 sha2 = "0.10"                     # SHA256 for attractor proxy
 sha3 = "0.10"                     # Keccak256 for jump selection
 ripemd = "0.1"                    # RIPEMD160 for Bitcoin address validation
+bs58 = "0.5"                       # Base58 encoding for Bitcoin addresses
 blake3 = "1.5.0"                  # Fast hash for DP table
 statrs = "0.16.0"                 # Stats for bias tests (KS, Chi2)
 crossbeam-deque = "0.8"           # Lock-free work-stealing deques
