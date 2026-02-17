@@ -3,7 +3,7 @@ use crate::types::{KangarooState, Target, Solution, Point};
 use crate::dp::DpTable;
 use crate::math::bigint::BigInt256;
 use crate::gpu::backend::GpuBackend;
-use log::debug;
+use log::{debug, info, warn};
 #[allow(unused_imports)]
 use crate::gpu::backends::{HybridBackend, CpuBackend};
 use crate::kangaroo::search_config::SearchConfig;
@@ -11,7 +11,6 @@ use crate::kangaroo::{KangarooGenerator, KangarooStepper, CollisionDetector};
 use crate::utils::pubkey_loader;
 use crate::parity::ParityChecker;
 use std::sync::{Arc, Mutex};
-use log::info;
 use anyhow::anyhow;
 
 /// Production-ready compressed secp256k1 point decompression

@@ -1,11 +1,15 @@
 use clap::Parser;
 use anyhow::Result;
-use std::fs::{File, Write};
+use std::fs::File;
+use std::io::Write;
 use std::io::{BufRead, BufReader};
 use k256::{AffinePoint, Scalar};
+use k256::elliptic_curve::sec1::ToEncodedPoint;
+use k256::elliptic_curve::group::GroupEncoding;
+use k256::elliptic_curve::point::AffineCoordinates;
 use rayon::prelude::*;
-use crate::utils::bias::{generate_preseed_pos, blend_proxy_preseed, analyze_preseed_cascade};
-use crate::math::bigint::BigInt256;
+use speedbitcrack::utils::bias::{generate_preseed_pos, blend_proxy_preseed, analyze_preseed_cascade};
+use speedbitcrack::math::bigint::BigInt256;
 
 /// Consolidated bias analysis CLI tool
 /// Analyzes pubkey files for positional + modular biases, extracts high-priority targets
@@ -51,7 +55,7 @@ fn main() -> Result<()> {
 
     println!("📊 Computing POS baseline...");
     let range_min = Scalar::ZERO;
-    let range_width = Scalar::from_u64(u64::MAX); // Full keyspace proxy
+    let range_width = Scalar::from(u64::MAX); // Full keyspace proxy
     let preseed_pos = generate_preseed_pos(&range_min, &range_width);
 
     println!("🔄 Blending proxy data...");
@@ -64,7 +68,7 @@ fn main() -> Result<()> {
     );
 
     println!("📈 Running cascade analysis...");
-    let cascades = analyze_preseed_cascade(&proxy, args.cascade_levels.min(5), 10); // Clamp max 5
+    let cascades = analyze_preseed_cascade(&proxy, args.cascade_levels.min(5)); // Clamp max 5
 
     println!("🎯 Computing bias scores for all {} pubkeys...", pubkeys.len());
 
@@ -150,7 +154,7 @@ fn load_pubkeys_parallel(path: &str) -> Result<Vec<AffinePoint>> {
                 Ok(bytes) => {
                     // Handle both compressed and uncompressed formats
                     if bytes.len() == 33 || bytes.len() == 65 {
-                        AffinePoint::from_bytes(bytes.into())
+                        AffinePoint::from_bytes(bytes.as_slice().try_into().unwrap()).into_option()
                     } else {
                         None
                     }
@@ -165,7 +169,7 @@ fn load_pubkeys_parallel(path: &str) -> Result<Vec<AffinePoint>> {
 
 /// Compute modular residue for bias analysis
 fn compute_mod_residue(point: &AffinePoint, mod_level: u64) -> u64 {
-    let x_bytes = point.x().to_bytes();
+    let x_bytes = point.x().as_bytes();
     let x_big = BigInt256::from_bytes_be(&x_bytes);
     (x_big % BigInt256::from_u64(mod_level)).low_u32() as u64
 }
@@ -180,11 +184,6 @@ fn is_gold_cluster(residue: u64, mod_level: u64) -> bool {
     }
 }
 
-/// Check if residue indicates gold cluster membership
-fn is_gold_cluster(residue: u64, mod_level: u64) -> bool {
-    let step = mod_level / 9;
-    (0..9).any(|i| residue == i * step)
-}
 
 /// Compute positional score from cascade analysis
 fn compute_pos_score(point: &AffinePoint, cascades: &[(f64, f64)]) -> f64 {
@@ -196,7 +195,7 @@ fn compute_pos_score(point: &AffinePoint, cascades: &[(f64, f64)]) -> f64 {
     let base_score = cascades.last().map(|(_, bias)| *bias).unwrap_or(1.0);
 
     // Add bonus if point falls in high-density regions
-    let x_bytes = point.x().to_bytes();
+    let x_bytes = point.x().as_bytes();
     let pos_hash = x_bytes.iter().fold(0u64, |acc, &b| (acc << 8) | b as u64);
     let pos_normalized = (pos_hash % 1000000) as f64 / 1000000.0; // Simple [0,1] proxy
 

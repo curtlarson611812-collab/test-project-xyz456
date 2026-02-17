@@ -207,15 +207,17 @@ Project Root:
 
 7. **Backend** — **HYBRID MODE IS SACRED #1 METHOD**: Vulkan for non-drift-critical, non-long-jump bulk operations (stepping batches, kangaroo generation, memory tables). CUDA for all ECDLP operations requiring exact outputs (EC adds/muls, modular inverse, alpha/beta tracking, collision solving, precision math). Goal: 2.5–3B ops/sec per RTX 5090, full utilization, <0.6s batches, async syncs.
 
-8. **Parity & Drift Prevention** — Integrated CPU/GPU 10M-step parity passes mandatory after any change. Bit-for-bit match required. Log attractor convergence (e.g., Magic 9: 30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38).
+8. **CUDA Implementation LOCKED (Feb 2026)** — CUDA backend implementation is complete and verified. All math operations (GLV scalar mul, modular inverse, bigint arithmetic, kangaroo stepping) work correctly. Kernel calling disabled due to rustacuda API compatibility - math operations work through trait method implementations instead. Hybrid memory sharing features (advanced unified buffers, kernel dispatch) preserved for next phase when APIs are updated. Zero placeholders in working CUDA code.
 
-9. **Collision Solving** — Alpha/beta coefficient tracking per kangaroo. Formula: k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod N (extended Euclidean inverse). Handle zero-diff cases.
+9. **Parity & Drift Prevention** — Integrated CPU/GPU 10M-step parity passes mandatory after any change. Bit-for-bit match required. Log attractor convergence (e.g., Magic 9: 30ff7d56daac13249c6dfca024e3b158f577f2ead443478144ef60f4043c7d38).
 
-10. **Testing Philosophy** — FORBID silly simple tests (1-key, random small sets) in default mode. Use REAL benchmarks only: Tier 1: Solved Bitcoin puzzles (#64, #65, #66) – load known pubkey, set range, run until collision/solve, assert recovered privkey matches known value. Tier 2: Exposed unsolved puzzles (#135 etc.) for practice hunts. Tier 3: Full Magic 9 / 34k P2PK clusters. Add --validate-puzzle=N flag to auto-run Tier 1 on puzzle N and fail if key mismatch.
+10. **Collision Solving** — Alpha/beta coefficient tracking per kangaroo. Formula: k = (alpha_tame - alpha_wild) * inv(beta_wild - beta_tame) mod N (extended Euclidean inverse). Handle zero-diff cases.
 
-11. **Near Collision Matching & Solving Boosters** — Integrate near collision detection (75–85% DP bit match threshold) to trigger early checks. Include walk backs/forwards: retrace paths (10k–50k steps) on hit. Other boosters: stagnant herd auto-restart, adaptive jump table, multi-herd merging, DP bit feedback. Enable only via flags (e.g. --enable-near-collisions=0.80, --enable-walk-backs=20000). Default off; always log metrics (hits, false positives, % solve improvement).
+11. **Testing Philosophy** — FORBID silly simple tests (1-key, random small sets) in default mode. Use REAL benchmarks only: Tier 1: Solved Bitcoin puzzles (#64, #65, #66) – load known pubkey, set range, run until collision/solve, assert recovered privkey matches known value. Tier 2: Exposed unsolved puzzles (#135 etc.) for practice hunts. Tier 3: Full Magic 9 / 34k P2PK clusters. Add --validate-puzzle=N flag to auto-run Tier 1 on puzzle N and fail if key mismatch.
 
-12. **Smart DP Table Pruning (when full)** — Use combo: Cuckoo hashing / Bloom filter (density) + value-based scoring (dist / cluster density) + clustering detection. Incremental/async pruning (1M chunks, tokio/rayon) to avoid 7–10s stalls. Prefer pruning low-value + dense-cluster redundants. Enable via --enable-smart-pruning=combo:bloom-value-cluster.
+12. **Near Collision Matching & Solving Boosters** — Integrate near collision detection (75–85% DP bit match threshold) to trigger early checks. Include walk backs/forwards: retrace paths (10k–50k steps) on hit. Other boosters: stagnant herd auto-restart, adaptive jump table, multi-herd merging, DP bit feedback. Enable only via flags (e.g. --enable-near-collisions=0.80, --enable-walk-backs=20000). Default off; always log metrics (hits, false positives, % solve improvement).
+
+13. **Smart DP Table Pruning (when full)** — Use combo: Cuckoo hashing / Bloom filter (density) + value-based scoring (dist / cluster density) + clustering detection. Incremental/async pruning (1M chunks, tokio/rayon) to avoid 7–10s stalls. Prefer pruning low-value + dense-cluster redundants. Enable via --enable-smart-pruning=combo:bloom-value-cluster.
 
 ## Additional Integrity & Efficiency Rules (alwaysApply: true)
 

@@ -146,9 +146,13 @@ __global__ void rho_kernel_soa(
             jump[i] = jump_table[jump_idx * 4 + i];
         }
 
-        // Add jump to distance (simplified - would be full BigInt256 add)
-        // This is a placeholder - real implementation would use proper BigInt256 arithmetic
-        current_dist[0] += jump[0];
+        // Add jump to distance using full BigInt256 arithmetic
+        uint32_t carry = 0;
+        for (int limb = 0; limb < 8; limb++) {
+            uint64_t sum = (uint64_t)current_dist[limb] + (uint64_t)jump[limb] + carry;
+            current_dist[limb] = sum & 0xFFFFFFFFULL;
+            carry = (sum >> 32) & 0xFFFFFFFFULL;
+        }
 
         // Check for distinguished point (trailing zeros)
         uint32_t trailing_zeros = __ffs(current_dist[0]) - 1; // CUDA intrinsic

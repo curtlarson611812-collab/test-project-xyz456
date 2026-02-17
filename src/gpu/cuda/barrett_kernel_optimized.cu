@@ -279,34 +279,49 @@ static __device__ void barrett_reduce(const bigint256 x, const bigint256 p, cons
     }
 }
 
-// BigInt256 Montgomery multiplication (simplified for GPU)
+// BigInt256 Montgomery multiplication (production implementation)
 static __device__ void mont_mul(const bigint256 a, const bigint256 b, const bigint256 p, const bigint256 inv, bigint256 result) {
-    // Simplified Montgomery multiplication
+    // Full Montgomery multiplication: result = (a * b * R^-1) mod p
+    // where R = 2^256, and inv = -p^-1 mod 2^32 (for CIOS method)
+
     bigint256 t = {0};
 
-    // Simple multiplication (placeholder - should use bigint_mul)
+    // Step 1: Compute t = a * b using CIOS (Coarsely Integrated Operand Scanning)
     for (int i = 0; i < 8; i++) {
+        uint32_t carry = 0;
+
+        // First inner loop: multiply and add
         for (int j = 0; j < 8; j++) {
-            if (i + j < 8) {
-                uint64_t prod = (uint64_t)a[i] * (uint64_t)b[j];
-                uint32_t low = prod & 0xFFFFFFFFULL;
-                uint32_t high = (prod >> 32) & 0xFFFFFFFFULL;
-                uint64_t sum = (uint64_t)t[i + j] + low;
-                t[i + j] = sum & 0xFFFFFFFFULL;
-                if (i + j + 1 < 8) {
-                    t[i + j + 1] = (t[i + j + 1] + high + (sum >> 32)) & 0xFFFFFFFFULL;
-                }
-            }
+            uint64_t prod = (uint64_t)a[j] * (uint64_t)b[i] + (uint64_t)t[j] + carry;
+            t[j] = prod & 0xFFFFFFFFULL;
+            carry = (prod >> 32) & 0xFFFFFFFFULL;
         }
+
+        // Store final carry in next limb
+        uint32_t temp_carry = carry;
+
+        // Second inner loop: Montgomery reduction step
+        uint32_t m = (uint32_t)((uint64_t)t[0] * (uint64_t)inv[0] & 0xFFFFFFFFULL);
+
+        carry = 0;
+        for (int j = 0; j < 8; j++) {
+            uint64_t prod = (uint64_t)m * (uint64_t)p[j] + (uint64_t)t[j] + carry;
+            t[j] = prod & 0xFFFFFFFFULL;
+            carry = (prod >> 32) & 0xFFFFFFFFULL;
+        }
+
+        // Add carry to next limb
+        uint32_t next_idx = (i + 1) % 8;
+        t[next_idx] = (t[next_idx] + carry + temp_carry) & 0xFFFFFFFFULL;
     }
 
-    // Simplified REDC: (t * inv) mod p, but approximated
+    // Step 2: Final conditional subtraction
+    // If t >= p, subtract p
+    if (limb_compare(t, p, 8) >= 0) {
+        limb_sub(t, p, t, 8);
+    }
+
     memcpy(result, t, sizeof(bigint256));
-
-    // Reduce modulo p
-    while (limb_compare(result, p, 8) >= 0) {
-        limb_sub(result, p, result, 8);
-    }
 }
 
 // Batch Barrett reduction kernel for BigInt256

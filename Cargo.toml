@@ -6,7 +6,7 @@ rust-version = "1.80"
 
 [dependencies]
 # Required Crates
-wgpu = { version = "0.20", optional = true }  # Vulkan backend via wgpu
+wgpu = { version = "0.20", features = ["spirv"], optional = true }  # Vulkan backend via wgpu
 vulkano = { version = "0.34", optional = true }  # Vulkan backend via vulkano
 vulkano-shaders = { version = "0.34", optional = true }  # Shader compilation
 k256 = { version = "0.13", features = ["arithmetic"] }  # secp256k1 with arithmetic ops
@@ -69,6 +69,7 @@ cudarc = [] # Not used
 [build-dependencies]
 naga = { version = "0.19", features = ["wgsl-in"] }                     # WGSL shader validation
 cc = "1.0"                        # C/CUDA compiler integration
+# CUDA compilation handled in build.rs using nvcc directly
 
 [lints.rust]
 # unsafe_code = "deny"  # Disabled for GPU operations (CUDA kernels, Vulkan buffers)
@@ -88,6 +89,10 @@ tempfile = "3.0"  # For temporary directories in tests
 criterion = { version = "0.5", features = ["html_reports"] }  # Performance benchmarking
 proptest = "1.0"   # Property-based testing
 tokio-test = "0.4" # Async testing utilities
+
+[[bin]]
+name = "bias_analyze"
+path = "bin/bias_analyze.rs"
 
 [[test]]
 name = "magic9"

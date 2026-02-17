@@ -6,6 +6,7 @@
 
 #[cfg(feature = "wgpu")]
 use wgpu;
+use anyhow::Result;
 
 /// Shared buffer for cross-API memory access
 /// Provides synchronized host memory accessible by both CUDA and Vulkan

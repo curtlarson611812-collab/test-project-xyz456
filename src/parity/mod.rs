@@ -1,8 +1,9 @@
-//! Parity verification module
+//! Parity verification modules
 //!
-//! 10M-step CPU vs GPU bit-for-bit verification harness
+//! Comprehensive CPU vs GPU bit-for-bit verification harness
 
 pub mod checker;
+pub mod framework;
 
 // Re-export main type
 pub use checker::ParityChecker;

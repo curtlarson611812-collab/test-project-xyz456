@@ -13,6 +13,7 @@ pub struct RhoState {
     pub current: Point,
     pub steps: BigInt256,
     pub is_dp: bool,
+    pub bias_mod: u64,
 }
 
 impl RhoState {
@@ -25,6 +26,7 @@ impl RhoState {
             current: Point::infinity(), // Placeholder - should use random point
             steps: rand_dist,
             is_dp: false,
+            bias_mod: 9, // Default to Magic9 modulus
         }
     }
 }
@@ -35,6 +37,7 @@ impl Default for RhoState {
             current: Point::infinity(),
             steps: BigInt256::zero(),
             is_dp: false,
+            bias_mod: 9, // Default to Magic9 modulus
         }
     }
 }

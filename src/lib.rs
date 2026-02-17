@@ -27,8 +27,10 @@ pub mod puzzles;
 pub mod security;
 pub mod test_basic;
 pub mod simple_test;
+pub mod cuda_parity_test;
 #[allow(non_snake_case)]
 pub mod SmallOddPrime_Precise_code;
+// pub mod test_orchestrator; // Temporarily disabled
 
 // Re-export key types for library usage
 pub use config::Config;

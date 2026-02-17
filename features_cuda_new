@@ -1,0 +1,1149 @@
+   Compiling speedbitcrack v0.1.0 (/data/Projects/SpeedBitCrackV3)
+warning: unused import: `crate::math::secp::Secp256k1`
+ --> src/gpu/backends/vulkan_backend.rs:8:5
+  |
+8 | use crate::math::secp::Secp256k1;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Point`
+ --> src/gpu/backends/vulkan_backend.rs:9:20
+  |
+9 | use crate::types::{Point, DpEntry};
+  |                    ^^^^^
+
+warning: unused import: `rand::Rng`
+  --> src/gpu/backends/vulkan_backend.rs:11:5
+   |
+11 | use rand::Rng;
+   |     ^^^^^^^^^
+
+warning: unused import: `crate::math::bigint::BigInt256`
+   --> src/gpu/backends/vulkan_backend.rs:187:13
+    |
+187 |         use crate::math::bigint::BigInt256;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0308]: arguments to this method are incorrect
+   --> src/gpu/backends/hybrid_backend.rs:204:27
+    |
+204 |                 self.cuda.step_batch(cuda_batch, jumps, config).await
+    |                           ^^^^^^^^^^
+    |
+note: types differ in mutability
+   --> src/gpu/backends/hybrid_backend.rs:204:38
+    |
+204 |                 self.cuda.step_batch(cuda_batch, jumps, config).await
+    |                                      ^^^^^^^^^^
+    = note: expected mutable reference `&mut Vec<[[u32; 8]; 3]>`
+                       found reference `&[KangarooState]`
+note: types differ in mutability
+   --> src/gpu/backends/hybrid_backend.rs:204:50
+    |
+204 |                 self.cuda.step_batch(cuda_batch, jumps, config).await
+    |                                                  ^^^^^
+    = note: expected mutable reference `&mut Vec<[u32; 8]>`
+                       found reference `&[BigInt256]`
+note: expected `&Vec<u32>`, found `&Config`
+   --> src/gpu/backends/hybrid_backend.rs:204:57
+    |
+204 |                 self.cuda.step_batch(cuda_batch, jumps, config).await
+    |                                                         ^^^^^^
+    = note: expected reference `&Vec<u32>`
+               found reference `&config::Config`
+note: method defined here
+   --> src/gpu/backends/backend_trait.rs:36:8
+    |
+ 36 |     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec...
+    |        ^^^^^^^^^^        ---------                         ---------                     -----
+
+error[E0277]: `std::result::Result<Vec<Trap>, anyhow::Error>` is not a future
+   --> src/gpu/backends/hybrid_backend.rs:204:65
+    |
+204 |                 self.cuda.step_batch(cuda_batch, jumps, config).await
+    |                                                                 ^^^^^ `std::result::Result<Vec<Trap>, anyhow::Error>` is not a future
+    |
+    = help: the trait `Future` is not implemented for `std::result::Result<Vec<Trap>, anyhow::Error>`
+    = note: std::result::Result<Vec<Trap>, anyhow::Error> must be a future or must implement `IntoFuture` to be awaited
+    = note: required for `std::result::Result<Vec<Trap>, anyhow::Error>` to implement `IntoFuture`
+help: remove the `.await`
+    |
+204 -                 self.cuda.step_batch(cuda_batch, jumps, config).await
+204 +                 self.cuda.step_batch(cuda_batch, jumps, config)
+    |
+
+error[E0599]: no function or associated item named `synchronize` found for struct `rustacuda::device::Device` in the current scope
+   --> src/gpu/backends/hybrid_backend.rs:285:68
+    |
+285 | ...                   rustacuda::device::Device::synchronize()?;
+    |                                                  ^^^^^^^^^^^ function or associated item not found in `rustacuda::device::Device`
+    |
+note: if you're trying to build a new `rustacuda::device::Device`, consider using `rustacuda::device::Device::get_device` which returns `std::result::Result<rustacuda::device::Device, CudaError>`
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/device.rs:246:5
+    |
+246 |     pub fn get_device(ordinal: u32) -> CudaResult<Device> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `step_batch_unified` found for struct `CudaBackend` in the current scope
+   --> src/gpu/backends/hybrid_backend.rs:287:57
+    |
+287 | ...                   match self.cuda.step_batch_unified(
+    |                             ----------^^^^^^^^^^^^^^^^^^
+    |
+   ::: src/gpu/backends/cuda_backend.rs:16:1
+    |
+ 16 | pub struct CudaBackend {
+    | ---------------------- method `step_batch_unified` not found for this struct
+    |
+help: there is a method `step_batch` with a similar name, but with different arguments
+   --> src/gpu/backends/backend_trait.rs:36:5
+    |
+ 36 |     fn step_batch(&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `as_device_ptr` found for struct `UnifiedBuffer<[[u32; 8]; 3]>` in the current scope
+   --> src/gpu/backends/hybrid_backend.rs:288:63
+    |
+288 | ...                   unified_positions.as_device_ptr(),
+    |                                         ^^^^^^^^^^^^^ method not found in `UnifiedBuffer<[[u32; 8]; 3]>`
+
+error[E0599]: no method named `as_device_ptr` found for struct `UnifiedBuffer<[u32; 8]>` in the current scope
+   --> src/gpu/backends/hybrid_backend.rs:289:63
+    |
+289 | ...                   unified_distances.as_device_ptr(),
+    |                                         ^^^^^^^^^^^^^ method not found in `UnifiedBuffer<[u32; 8]>`
+
+error[E0599]: no method named `as_device_ptr` found for struct `UnifiedBuffer<u32>` in the current scope
+   --> src/gpu/backends/hybrid_backend.rs:290:59
+    |
+290 | ...                   unified_types.as_device_ptr(),
+    |                                     ^^^^^^^^^^^^^ method not found in `UnifiedBuffer<u32>`
+
+error[E0599]: no method named `device` found for struct `CudaBackend` in the current scope
+    --> src/gpu/backends/hybrid_backend.rs:1122:31
+     |
+1122 |             let device = cuda.device()?;
+     |                               ^^^^^^ method not found in `CudaBackend`
+     |
+    ::: src/gpu/backends/cuda_backend.rs:16:1
+     |
+  16 | pub struct CudaBackend {
+     | ---------------------- method `device` not found for this struct
+
+error[E0599]: no method named `alloc_and_copy_pinned_async` found for struct `CudaBackend` in the current scope
+    --> src/gpu/backends/hybrid_backend.rs:1129:35
+     |
+1129 |             let mut states = cuda.alloc_and_copy_pinned_async(&vec![RhoState::default(); 1000],
+     |                              -----^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `CudaBackend`
+     |
+    ::: src/gpu/backends/cuda_backend.rs:16:1
+     |
+  16 | pub struct CudaBackend {
+     | ---------------------- method `alloc_and_copy_pinned_async` not found for this struct
+
+error[E0282]: type annotations needed
+    --> src/gpu/backends/hybrid_backend.rs:1129:17
+     |
+1129 |             let mut states = cuda.alloc_and_copy_pinned_async(&vec![RhoState::default(); 1000],
+     |                 ^^^^^^^^^^
+...
+1134 |                 states.as_ptr() as *const std::ffi::c_void,
+     |                 ------ type must be known at this point
+     |
+help: consider giving `states` an explicit type
+     |
+1129 |             let mut states: /* Type */ = cuda.alloc_and_copy_pinned_async(&vec![RhoState::default(); 1000],
+     |                           ++++++++++++
+
+error[E0599]: no method named `dispatch_async` found for struct `CudaBackend` in the current scope
+    --> src/gpu/backends/hybrid_backend.rs:1141:38
+     |
+1141 |             let compute_event = cuda.dispatch_async(
+     |                                 -----^^^^^^^^^^^^^^ method not found in `CudaBackend`
+     |
+    ::: src/gpu/backends/cuda_backend.rs:16:1
+     |
+  16 | pub struct CudaBackend {
+     | ---------------------- method `dispatch_async` not found for this struct
+
+error[E0282]: type annotations needed
+    --> src/gpu/backends/hybrid_backend.rs:1141:17
+     |
+1141 |             let compute_event = cuda.dispatch_async(
+     |                 ^^^^^^^^^^^^^
+...
+1153 |             compute_event.synchronize()?;
+     |             ------------- type must be known at this point
+     |
+help: consider giving `compute_event` an explicit type
+     |
+1141 |             let compute_event: /* Type */ = cuda.dispatch_async(
+     |                              ++++++++++++
+
+error[E0599]: no method named `prefetch_batch` found for struct `CudaBackend` in the current scope
+    --> src/gpu/backends/hybrid_backend.rs:1198:14
+     |
+1198 |         cuda.prefetch_batch(states, batch_start, batch_size).await?;
+     |              ^^^^^^^^^^^^^^ method not found in `CudaBackend`
+     |
+    ::: src/gpu/backends/cuda_backend.rs:16:1
+     |
+  16 | pub struct CudaBackend {
+     | ---------------------- method `prefetch_batch` not found for this struct
+
+error[E0599]: no method named `device` found for struct `CudaBackend` in the current scope
+    --> src/gpu/backends/hybrid_backend.rs:1209:27
+     |
+1209 |         let device = cuda.device()?;
+     |                           ^^^^^^ method not found in `CudaBackend`
+     |
+    ::: src/gpu/backends/cuda_backend.rs:16:1
+     |
+  16 | pub struct CudaBackend {
+     | ---------------------- method `device` not found for this struct
+
+error[E0560]: struct `RhoState` has no field named `bias_mod`
+   --> src/gpu/hybrid_manager.rs:451:21
+    |
+451 |                     bias_mod,
+    |                     ^^^^^^^^ `RhoState` does not have this field
+    |
+    = note: available fields are: `is_dp`
+
+error[E0599]: no method named `create_state_buffer` found for struct `CudaBackend` in the current scope
+   --> src/gpu/hybrid_manager.rs:456:41
+    |
+456 |             let d_states = cuda_backend.create_state_buffer(&rho_states)
+    |                                         ^^^^^^^^^^^^^^^^^^^ method not found in `CudaBackend`
+    |
+   ::: src/gpu/backends/cuda_backend.rs:16:1
+    |
+ 16 | pub struct CudaBackend {
+    | ---------------------- method `create_state_buffer` not found for this struct
+
+error[E0599]: no method named `launch_rho_kernel` found for struct `CudaBackend` in the current scope
+   --> src/gpu/hybrid_manager.rs:459:26
+    |
+459 |             cuda_backend.launch_rho_kernel(&d_states, num_walks as u32, BigInt256::from_u64(bias_mod))
+    |                          ^^^^^^^^^^^^^^^^^ method not found in `CudaBackend`
+    |
+   ::: src/gpu/backends/cuda_backend.rs:16:1
+    |
+ 16 | pub struct CudaBackend {
+    | ---------------------- method `launch_rho_kernel` not found for this struct
+
+error[E0599]: no method named `read_dp_buffer` found for struct `CudaBackend` in the current scope
+   --> src/gpu/hybrid_manager.rs:463:42
+    |
+463 |             let dp_points = cuda_backend.read_dp_buffer()
+    |                                          ^^^^^^^^^^^^^^ method not found in `CudaBackend`
+    |
+   ::: src/gpu/backends/cuda_backend.rs:16:1
+    |
+ 16 | pub struct CudaBackend {
+    | ---------------------- method `read_dp_buffer` not found for this struct
+
+error[E0308]: mismatched types
+  --> src/gpu/backends/cuda_backend.rs:34:57
+   |
+34 |         match rustacuda::module::Module::load_from_file("gpu/cuda/glv_decomp.ptx") {
+   |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+   |               |
+   |               arguments to this function are incorrect
+   |
+   = note: expected reference `&CStr`
+              found reference `&'static str`
+note: associated function defined here
+  --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+   |
+39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+   |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+  --> src/gpu/backends/cuda_backend.rs:45:57
+   |
+45 |         match rustacuda::module::Module::load_from_file("gpu/cuda/step.ptx") {
+   |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+   |               |
+   |               arguments to this function are incorrect
+   |
+   = note: expected reference `&CStr`
+              found reference `&'static str`
+note: associated function defined here
+  --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+   |
+39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+   |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+  --> src/gpu/backends/cuda_backend.rs:55:57
+   |
+55 |         match rustacuda::module::Module::load_from_file("gpu/cuda/solve.ptx") {
+   |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+   |               |
+   |               arguments to this function are incorrect
+   |
+   = note: expected reference `&CStr`
+              found reference `&'static str`
+note: associated function defined here
+  --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+   |
+39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+   |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+  --> src/gpu/backends/cuda_backend.rs:65:57
+   |
+65 |         match rustacuda::module::Module::load_from_file("gpu/cuda/wnaf_tables.ptx") {
+   |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+   |               |
+   |               arguments to this function are incorrect
+   |
+   = note: expected reference `&CStr`
+              found reference `&'static str`
+note: associated function defined here
+  --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+   |
+39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+   |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+  --> src/gpu/backends/cuda_backend.rs:75:57
+   |
+75 |         match rustacuda::module::Module::load_from_file("gpu/cuda/texture_jump_kernel.ptx") {
+   |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+   |               |
+   |               arguments to this function are incorrect
+   |
+   = note: expected reference `&CStr`
+              found reference `&'static str`
+note: associated function defined here
+  --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+   |
+39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+   |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+  --> src/gpu/backends/cuda_backend.rs:85:57
+   |
+85 |         match rustacuda::module::Module::load_from_file("gpu/cuda/system_optimizations.ptx") {
+   |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+   |               |
+   |               arguments to this function are incorrect
+   |
+   = note: expected reference `&CStr`
+              found reference `&'static str`
+note: associated function defined here
+  --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+   |
+39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+   |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+  --> src/gpu/backends/cuda_backend.rs:95:57
+   |
+95 |         match rustacuda::module::Module::load_from_file("gpu/cuda/brent_cycle_detection.ptx") {
+   |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+   |               |
+   |               arguments to this function are incorrect
+   |
+   = note: expected reference `&CStr`
+              found reference `&'static str`
+note: associated function defined here
+  --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+   |
+39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+   |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cuda_backend.rs:105:57
+    |
+105 |         match rustacuda::module::Module::load_from_file("gpu/cuda/adaptive_tuning.ptx") {
+    |               ----------------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&CStr`, found `&str`
+    |               |
+    |               arguments to this function are incorrect
+    |
+    = note: expected reference `&CStr`
+               found reference `&'static str`
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:39:12
+    |
+ 39 |     pub fn load_from_file(filename: &CStr) -> CudaResult<Module> {
+    |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cuda_backend.rs:153:42
+    |
+153 |         let kernel = module.get_function(kernel_name)
+    |                             ------------ ^^^^^^^^^^^ expected `&CStr`, found `&str`
+    |                             |
+    |                             arguments to this method are incorrect
+    |
+    = note: expected reference `&CStr`
+               found reference `&str`
+note: method defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/module.rs:153:12
+    |
+153 |     pub fn get_function<'a>(&'a self, name: &CStr) -> CudaResult<Function<'a>> {
+    |            ^^^^^^^^^^^^
+
+error[E0599]: no method named `copy_from_slice` found for struct `DeviceBuffer<_>` in the current scope
+   --> src/gpu/backends/cuda_backend.rs:167:19
+    |
+167 |         d_scalars.copy_from_slice(scalars_bytes)?;
+    |                   ^^^^^^^^^^^^^^^
+    |
+help: there is a method `copy_from` with a similar name
+    |
+167 -         d_scalars.copy_from_slice(scalars_bytes)?;
+167 +         d_scalars.copy_from(scalars_bytes)?;
+    |
+
+error[E0599]: no method named `launch` found for struct `rustacuda::function::Function<'a>` in the current scope
+   --> src/gpu/backends/cuda_backend.rs:174:20
+    |
+174 |             kernel.launch(
+    |             -------^^^^^^ method not found in `rustacuda::function::Function<'_>`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/cuda_backend.rs:175:43
+    |
+175 |                 &[&d_scalars, &d_results, &batch_size as *const i32],
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&DeviceBuffer<_>`, found `*const i32`
+    |
+    = note: expected reference `&DeviceBuffer<_>`
+             found raw pointer `*const i32`
+
+error[E0599]: no method named `copy_to_slice` found for struct `DeviceBuffer<_>` in the current scope
+   --> src/gpu/backends/cuda_backend.rs:182:19
+    |
+182 |         d_results.copy_to_slice(&mut results_bytes)?;
+    |                   ^^^^^^^^^^^^^
+    |
+help: there is a method `copy_to` with a similar name
+    |
+182 -         d_results.copy_to_slice(&mut results_bytes)?;
+182 +         d_results.copy_to(&mut results_bytes)?;
+    |
+
+error[E0606]: casting `&usize` as `*const i32` is invalid
+   --> src/gpu/backends/cuda_backend.rs:175:43
+    |
+175 |                 &[&d_scalars, &d_results, &batch_size as *const i32],
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+   --> src/gpu/backends/hybrid_backend.rs:449:26
+    |
+449 |         let mut buffer = UnifiedBuffer::new(data.len())?;
+    |                          ^^^^^^^^^^^^^^^^^^ ---------- argument #1 of type `&_` is missing
+    |
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/memory/unified.rs:350:12
+    |
+350 |     pub fn new(value: &T, size: usize) -> CudaResult<Self> {
+    |            ^^^
+help: provide the argument
+    |
+449 |         let mut buffer = UnifiedBuffer::new(/* value */, data.len())?;
+    |                                             ++++++++++++
+
+error[E0599]: no method named `copy_from` found for struct `UnifiedBuffer<_>` in the current scope
+   --> src/gpu/backends/hybrid_backend.rs:450:16
+    |
+450 |         buffer.copy_from(data)?;
+    |                ^^^^^^^^^
+    |
+help: there is a method `copy_from_slice` with a similar name
+    |
+450 |         buffer.copy_from_slice(data)?;
+    |                         ++++++
+
+error[E0277]: the trait bound `T: Clone` is not satisfied
+   --> src/gpu/backends/hybrid_backend.rs:449:45
+    |
+449 |         let mut buffer = UnifiedBuffer::new(data.len())?;
+    |                          ------------------ ^^^^^^^^^^ the trait `Clone` is not implemented for `T`
+    |                          |
+    |                          required by a bound introduced by this call
+    |
+note: required by a bound in `UnifiedBuffer::<T>::new`
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/memory/unified.rs:333:22
+    |
+333 | impl<T: DeviceCopy + Clone> UnifiedBuffer<T> {
+    |                      ^^^^^ required by this bound in `UnifiedBuffer::<T>::new`
+...
+350 |     pub fn new(value: &T, size: usize) -> CudaResult<Self> {
+    |            --- required by a bound in this associated function
+help: consider further restricting type parameter `T` with trait `Clone`
+    |
+445 |     pub fn allocate_unified_buffer<T: rustacuda::memory::DeviceCopy + zeroize::Zeroize + std::clone::Clone>(
+    |                                                                                        +++++++++++++++++++
+help: consider removing this method call, as the receiver has type `&[T]` and `&[T]: Clone` trivially holds
+    |
+449 -         let mut buffer = UnifiedBuffer::new(data.len())?;
+449 +         let mut buffer = UnifiedBuffer::new(data)?;
+    |
+
+error[E0277]: the trait bound `Vec<u8>: DeviceCopy` is not satisfied
+   --> src/gpu/backends/hybrid_backend.rs:571:45
+    |
+571 |             let buffer = UnifiedBuffer::new(&vec![0u8; size])?;
+    |                          ------------------ ^^^^^^^^^^^^^^^^ the trait `DeviceCopy` is not implemented for `Vec<u8>`
+    |                          |
+    |                          required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `DeviceCopy`:
+              ()
+              (A, B)
+              (A, B, C)
+              (A, B, C, D)
+              (A, B, C, D, E)
+              (A, B, C, D, E, F)
+              (A, B, C, D, E, F, G)
+              (A, B, C, D, E, F, G, H)
+            and 59 others
+note: required by a bound in `UnifiedBuffer::<T>::new`
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/memory/unified.rs:333:9
+    |
+333 | impl<T: DeviceCopy + Clone> UnifiedBuffer<T> {
+    |         ^^^^^^^^^^ required by this bound in `UnifiedBuffer::<T>::new`
+...
+350 |     pub fn new(value: &T, size: usize) -> CudaResult<Self> {
+    |            --- required by a bound in this associated function
+
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+   --> src/gpu/backends/hybrid_backend.rs:571:26
+    |
+571 |             let buffer = UnifiedBuffer::new(&vec![0u8; size])?;
+    |                          ^^^^^^^^^^^^^^^^^^------------------ argument #2 of type `usize` is missing
+    |
+note: associated function defined here
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/memory/unified.rs:350:12
+    |
+350 |     pub fn new(value: &T, size: usize) -> CudaResult<Self> {
+    |            ^^^
+help: provide the argument
+    |
+571 |             let buffer = UnifiedBuffer::new(&vec![0u8; size], /* usize */)?;
+    |                                                             +++++++++++++
+
+error[E0277]: the trait bound `Vec<u8>: DeviceCopy` is not satisfied
+   --> src/gpu/backends/hybrid_backend.rs:571:26
+    |
+571 |             let buffer = UnifiedBuffer::new(&vec![0u8; size])?;
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `DeviceCopy` is not implemented for `Vec<u8>`
+    |
+    = help: the following other types implement trait `DeviceCopy`:
+              ()
+              (A, B)
+              (A, B, C)
+              (A, B, C, D)
+              (A, B, C, D, E)
+              (A, B, C, D, E, F)
+              (A, B, C, D, E, F, G)
+              (A, B, C, D, E, F, G, H)
+            and 59 others
+note: required by a bound in `UnifiedBuffer`
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/memory/unified.rs:329:29
+    |
+329 | pub struct UnifiedBuffer<T: DeviceCopy> {
+    |                             ^^^^^^^^^^ required by this bound in `UnifiedBuffer`
+
+error[E0277]: the trait bound `Vec<u8>: DeviceCopy` is not satisfied
+   --> src/gpu/backends/hybrid_backend.rs:571:26
+    |
+571 |             let buffer = UnifiedBuffer::new(&vec![0u8; size])?;
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `DeviceCopy` is not implemented for `Vec<u8>`
+    |
+    = help: the following other types implement trait `DeviceCopy`:
+              ()
+              (A, B)
+              (A, B, C)
+              (A, B, C, D)
+              (A, B, C, D, E)
+              (A, B, C, D, E, F)
+              (A, B, C, D, E, F, G)
+              (A, B, C, D, E, F, G, H)
+            and 59 others
+note: required by a bound in `UnifiedBuffer`
+   --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustacuda-0.1.2/src/memory/unified.rs:329:29
+    |
+329 | pub struct UnifiedBuffer<T: DeviceCopy> {
+    |                             ^^^^^^^^^^ required by this bound in `UnifiedBuffer`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid_backend.rs:572:35
+    |
+572 |             Ok(SharedBuffer::Cuda(buffer))
+    |                ------------------ ^^^^^^ expected `UnifiedBuffer<u8>`, found `UnifiedBuffer<Vec<u8>>`
+    |                |
+    |                arguments to this enum variant are incorrect
+    |
+    = note: expected struct `UnifiedBuffer<u8>`
+               found struct `UnifiedBuffer<Vec<u8>>`
+note: tuple variant defined here
+   --> src/gpu/backends/hybrid_backend.rs:597:5
+    |
+597 |     Cuda(rustacuda::memory::UnifiedBuffer<u8>),
+    |     ^^^^
+
+error[E0560]: struct `RhoState` has no field named `bias_mod`
+   --> src/gpu/hybrid_manager.rs:337:21
+    |
+337 |                     bias_mod,
+    |                     ^^^^^^^^ `RhoState` does not have this field
+    |
+    = note: available fields are: `is_dp`
+
+error[E0599]: no method named `create_state_buffer` found for struct `CudaBackend` in the current scope
+   --> src/gpu/hybrid_manager.rs:342:32
+    |
+342 |             match cuda_backend.create_state_buffer(&rho_states) {
+    |                                ^^^^^^^^^^^^^^^^^^^ method not found in `CudaBackend`
+    |
+   ::: src/gpu/backends/cuda_backend.rs:16:1
+    |
+ 16 | pub struct CudaBackend {
+    | ---------------------- method `create_state_buffer` not found for this struct
+
+error[E0599]: no method named `launch_rho_kernel` found for struct `CudaBackend` in the current scope
+   --> src/gpu/hybrid_manager.rs:344:37
+    |
+344 | ...   if cuda_backend.launch_rho_kernel(&d_states, num_walks as u32, BigInt256::from_u64(bias_mod))....
+    |                       ^^^^^^^^^^^^^^^^^ method not found in `CudaBackend`
+    |
+   ::: src/gpu/backends/cuda_backend.rs:16:1
+    |
+ 16 | pub struct CudaBackend {
+    | ---------------------- method `launch_rho_kernel` not found for this struct
+
+error[E0599]: no method named `read_dp_buffer` found for struct `CudaBackend` in the current scope
+   --> src/gpu/hybrid_manager.rs:346:61
+    |
+346 |                         if let Ok(dp_points) = cuda_backend.read_dp_buffer() {
+    |                                                             ^^^^^^^^^^^^^^ method not found in `CudaBackend`
+    |
+   ::: src/gpu/backends/cuda_backend.rs:16:1
+    |
+ 16 | pub struct CudaBackend {
+    | ---------------------- method `read_dp_buffer` not found for this struct
+
+error[E0609]: no field `steps` on type `&DpEntry`
+   --> src/gpu/hybrid_manager.rs:379:58
+    |
+379 |         let tame_distance = BigInt256::from_u64_array(dp.steps); // Wild distance from DP
+    |                                                          ^^^^^ unknown field
+    |
+    = note: available fields are: `point`, `state`, `x_hash`, `timestamp`, `cluster_id`, `value_score`
+
+error[E0599]: no method named `hash_dp_point` found for reference `&HybridGpuManager` in the current scope
+   --> src/gpu/hybrid_manager.rs:382:28
+    |
+382 |         let dp_hash = self.hash_dp_point(dp);
+    |                            ^^^^^^^^^^^^^ method not found in `&HybridGpuManager`
+
+error[E0599]: no method named `mock_dp_table_contains` found for reference `&HybridGpuManager` in the current scope
+   --> src/gpu/hybrid_manager.rs:383:17
+    |
+383 |         if self.mock_dp_table_contains(dp_hash) {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^ method not found in `&HybridGpuManager`
+
+error[E0308]: mismatched types
+   --> src/gpu/hybrid_manager.rs:392:25
+    |
+392 |             Some(diff % order)
+    |                  ----   ^^^^^ expected `BigInt256`, found `Result<BigInt256, String>`
+    |                  |
+    |                  expected because this is `BigInt256`
+    |
+    = note: expected struct `BigInt256`
+                 found enum `std::result::Result<BigInt256, std::string::String>`
+help: consider using `Result::expect` to unwrap the `std::result::Result<BigInt256, std::string::String>` value, panicking if the value is a `Result::Err`
+    |
+392 |             Some(diff % order.expect("REASON"))
+    |                              +++++++++++++++++
+
+error[E0609]: no field `cuda` on type `&HybridGpuManager`
+   --> src/gpu/hybrid_manager.rs:858:18
+    |
+858 |             self.cuda.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+    |                  ^^^^ unknown field
+    |
+    = note: available fields are: `hybrid_backend`, `curve`, `drift_threshold`, `config`, `metrics`
+
+warning: unnecessary `unsafe` block
+  --> src/gpu/backend.rs:27:25
+   |
+27 |         if let Ok(()) = unsafe { rustacuda::init(CudaFlags::empty()) } {
+   |                         ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `tame_count`
+   --> src/gpu/backends/cuda_backend.rs:213:36
+    |
+213 | ...self, tame_count: usize, wild_count: usize, targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3...
+    |          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tame_count`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `wild_count`
+   --> src/gpu/backends/cuda_backend.rs:213:55
+    |
+213 | ...size, wild_count: usize, targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, V...
+    |          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wild_count`
+
+warning: unused variable: `targets`
+   --> src/gpu/backends/cuda_backend.rs:213:74
+    |
+213 | ...: usize, targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec...
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_targets`
+
+warning: unused variable: `base`
+   --> src/gpu/backends/cuda_backend.rs:224:33
+    |
+224 |     fn precomp_table_glv(&self, base: [u32;24], window: u32) -> Result<Vec<[[u32;8];3]>> {
+    |                                 ^^^^ help: if this is intentional, prefix it with an underscore: `_base`
+
+warning: unused variable: `window`
+   --> src/gpu/backends/cuda_backend.rs:224:49
+    |
+224 |     fn precomp_table_glv(&self, base: [u32;24], window: u32) -> Result<Vec<[[u32;8];3]>> {
+    |                                                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_window`
+
+warning: unused variable: `positions`
+   --> src/gpu/backends/cuda_backend.rs:229:26
+    |
+229 | ...&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Resul...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_positions`
+
+warning: unused variable: `distances`
+   --> src/gpu/backends/cuda_backend.rs:229:60
+    |
+229 | ...];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_distances`
+
+warning: unused variable: `types`
+   --> src/gpu/backends/cuda_backend.rs:229:90
+    |
+229 | ...<[u32;8]>, types: &Vec<u32>) -> Result<Vec<Trap>> {
+    |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_types`
+
+warning: unused variable: `positions`
+   --> src/gpu/backends/cuda_backend.rs:234:31
+    |
+234 | ...&self, positions: &mut Vec<[[u32;8];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: ...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_positions`
+
+warning: unused variable: `distances`
+   --> src/gpu/backends/cuda_backend.rs:234:65
+    |
+234 | ...];3]>, distances: &mut Vec<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_distances`
+
+warning: unused variable: `types`
+   --> src/gpu/backends/cuda_backend.rs:234:95
+    |
+234 | ...<[u32;8]>, types: &Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+    |               ^^^^^ help: if this is intentional, prefix it with an underscore: `_types`
+
+warning: unused variable: `config`
+   --> src/gpu/backends/cuda_backend.rs:234:113
+    |
+234 | ...Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/cuda_backend.rs:239:47
+    |
+239 |     fn batch_inverse(&self, a: &Vec<[u32;8]>, modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+    |                                               ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `targets`
+   --> src/gpu/backends/cuda_backend.rs:244:47
+    |
+244 | ...pEntry>, targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_targets`
+
+warning: unused variable: `alpha_w`
+   --> src/gpu/backends/cuda_backend.rs:249:60
+    |
+249 | ...u32;8]>, alpha_w: Vec<[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>,...
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_alpha_w`
+
+warning: unused variable: `beta_t`
+   --> src/gpu/backends/cuda_backend.rs:249:83
+    |
+249 | ...[u32;8]>, beta_t: Vec<[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result...
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_beta_t`
+
+warning: unused variable: `beta_w`
+   --> src/gpu/backends/cuda_backend.rs:249:105
+    |
+249 | ...[u32;8]>, beta_w: Vec<[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_beta_w`
+
+warning: unused variable: `target`
+   --> src/gpu/backends/cuda_backend.rs:249:127
+    |
+249 | ...[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `n`
+   --> src/gpu/backends/cuda_backend.rs:249:149
+    |
+249 | ... Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+    |                   ^ help: if this is intentional, prefix it with an underscore: `_n`
+
+warning: unused variable: `alphas`
+   --> src/gpu/backends/cuda_backend.rs:254:58
+    |
+254 | ...2;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Resul...
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_alphas`
+
+warning: unused variable: `distances`
+   --> src/gpu/backends/cuda_backend.rs:254:80
+    |
+254 | ...2;8]>, distances: Vec<[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_distances`
+
+warning: unused variable: `config`
+   --> src/gpu/backends/cuda_backend.rs:254:105
+    |
+254 | ...[u32;8]>, config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `mu`
+   --> src/gpu/backends/cuda_backend.rs:259:54
+    |
+259 | ...ec<[u32;16]>, mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+    |                  ^^ help: if this is intentional, prefix it with an underscore: `_mu`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/cuda_backend.rs:259:67
+    |
+259 | ...[u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `use_montgomery`
+   --> src/gpu/backends/cuda_backend.rs:259:85
+    |
+259 | ..., mu: [u32;9], modulus: [u32;8], use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+    |                                     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_montgomery`
+
+warning: unused variable: `b`
+   --> src/gpu/backends/cuda_backend.rs:264:50
+    |
+264 |     fn batch_bigint_mul(&self, a: &Vec<[u32;8]>, b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+    |                                                  ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `tame`
+   --> src/gpu/backends/cuda_backend.rs:274:31
+    |
+274 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+    |                               ^^^^ help: if this is intentional, prefix it with an underscore: `_tame`
+
+warning: unused variable: `wild`
+   --> src/gpu/backends/cuda_backend.rs:274:46
+    |
+274 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+    |                                              ^^^^ help: if this is intentional, prefix it with an underscore: `_wild`
+
+warning: unused variable: `n`
+   --> src/gpu/backends/cuda_backend.rs:274:61
+    |
+274 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+    |                                                             ^ help: if this is intentional, prefix it with an underscore: `_n`
+
+warning: unused variable: `x`
+   --> src/gpu/backends/cuda_backend.rs:279:30
+    |
+279 |     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+    |                              ^ help: if this is intentional, prefix it with an underscore: `_x`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/cuda_backend.rs:279:44
+    |
+279 |     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+    |                                            ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `mu`
+   --> src/gpu/backends/cuda_backend.rs:279:63
+    |
+279 |     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+    |                                                               ^^ help: if this is intentional, prefix it with an underscore: `_mu`
+
+warning: unused variable: `k`
+   --> src/gpu/backends/cuda_backend.rs:284:43
+    |
+284 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+    |                                           ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `a`
+   --> src/gpu/backends/cuda_backend.rs:289:27
+    |
+289 |     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+    |                           ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/cuda_backend.rs:289:40
+    |
+289 |     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+    |                                        ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `a`
+   --> src/gpu/backends/cuda_backend.rs:294:26
+    |
+294 |     fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
+    |                          ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: unused variable: `b`
+   --> src/gpu/backends/cuda_backend.rs:294:39
+    |
+294 |     fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
+    |                                       ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `a`
+   --> src/gpu/backends/cuda_backend.rs:299:22
+    |
+299 |     fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
+    |                      ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/cuda_backend.rs:299:36
+    |
+299 |     fn modulo(&self, a: &[u32;16], modulus: &[u32;8]) -> Result<[u32;8]> {
+    |                                    ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `k`
+   --> src/gpu/backends/cuda_backend.rs:304:46
+    |
+304 |     fn scalar_mul_glv(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+    |                                              ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `x`
+   --> src/gpu/backends/cuda_backend.rs:309:25
+    |
+309 |     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
+    |                         ^ help: if this is intentional, prefix it with an underscore: `_x`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/cuda_backend.rs:309:37
+    |
+309 |     fn mod_small(&self, x: [u32;8], modulus: u32) -> Result<u32> {
+    |                                     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/cuda_backend.rs:314:58
+    |
+314 |     fn batch_mod_small(&self, points: &Vec<[[u32;8];3]>, modulus: u32) -> Result<Vec<u32>> {
+    |                                                          ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `hare`
+   --> src/gpu/backends/cuda_backend.rs:319:47
+    |
+319 | ...[u32;8];3], hare: [[u32;8];3], max_steps: u32) -> Result<crate::gpu::backends::RhoWalkResult> {
+    |                ^^^^ help: if this is intentional, prefix it with an underscore: `_hare`
+
+warning: unused variable: `max_steps`
+   --> src/gpu/backends/cuda_backend.rs:319:66
+    |
+319 | ...8];3], max_steps: u32) -> Result<crate::gpu::backends::RhoWalkResult> {
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_max_steps`
+
+warning: unused variable: `walk`
+   --> src/gpu/backends/cuda_backend.rs:328:31
+    |
+328 | ...walk(&self, walk: crate::gpu::backends::RhoWalkResult, targets: Vec<[[u32;8];3]>) -> Result<Optio...
+    |                ^^^^ help: if this is intentional, prefix it with an underscore: `_walk`
+
+warning: unused variable: `targets`
+   --> src/gpu/backends/cuda_backend.rs:328:74
+    |
+328 | ...kResult, targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_targets`
+
+warning: unused variable: `num_steps`
+   --> src/gpu/backends/cuda_backend.rs:333:29
+    |
+333 | ...&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::P...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_steps`
+
+warning: unused variable: `start_state`
+   --> src/gpu/backends/cuda_backend.rs:333:47
+    |
+333 | ...ize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::ma...
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_start_state`
+
+warning: unused variable: `fail`
+   --> src/gpu/backends/cuda_backend.rs:338:38
+    |
+338 |     fn simulate_cuda_fail(&mut self, fail: bool) {
+    |                                      ^^^^ help: if this is intentional, prefix it with an underscore: `_fail`
+
+warning: unused variable: `range_min`
+   --> src/gpu/backends/cuda_backend.rs:342:36
+    |
+342 | ...&self, range_min: &crate::math::BigInt256, range_width: &crate::math::BigInt256) -> Result<Vec<f6...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_range_min`
+
+warning: unused variable: `range_width`
+   --> src/gpu/backends/cuda_backend.rs:342:72
+    |
+342 | ...256, range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_range_width`
+
+warning: unused variable: `num_random`
+   --> src/gpu/backends/cuda_backend.rs:347:58
+    |
+347 | ...f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec...
+    |          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_random`
+
+warning: unused variable: `empirical_pos`
+   --> src/gpu/backends/cuda_backend.rs:347:77
+    |
+347 | ...e, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |       ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_empirical_pos`
+
+warning: unused variable: `weights`
+   --> src/gpu/backends/cuda_backend.rs:347:110
+    |
+347 | ...c<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_weights`
+
+warning: unused variable: `proxy_pos`
+   --> src/gpu/backends/cuda_backend.rs:352:39
+    |
+352 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    |                                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_proxy_pos`
+
+warning: unused variable: `bins`
+   --> src/gpu/backends/cuda_backend.rs:352:58
+    |
+352 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    |                                                          ^^^^ help: if this is intentional, prefix it with an underscore: `_bins`
+
+warning: unused variable: `output_buffer`
+   --> src/gpu/backends/vulkan_backend.rs:164:13
+    |
+164 |         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+    |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_output_buffer`
+
+warning: variable does not need to be mutable
+   --> src/gpu/backends/vulkan_backend.rs:189:13
+    |
+189 |         let mut traps = Vec::new();
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `modulus_bigint`
+   --> src/gpu/backends/vulkan_backend.rs:234:13
+    |
+234 |         let modulus_bigint = self.u32_array_to_bigint(&modulus);
+    |             ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus_bigint`
+
+warning: unused variable: `target`
+   --> src/gpu/backends/vulkan_backend.rs:258:127
+    |
+258 | ...[u32;8]>, target: Vec<[u32;8]>, n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `config`
+   --> src/gpu/backends/vulkan_backend.rs:327:113
+    |
+327 | ...Vec<u32>, config: &crate::config::Config) -> Result<Vec<Trap>> {
+    |              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `tame`
+   --> src/gpu/backends/vulkan_backend.rs:338:31
+    |
+338 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+    |                               ^^^^ help: if this is intentional, prefix it with an underscore: `_tame`
+
+warning: unused variable: `wild`
+   --> src/gpu/backends/vulkan_backend.rs:338:46
+    |
+338 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+    |                                              ^^^^ help: if this is intentional, prefix it with an underscore: `_wild`
+
+warning: unused variable: `n`
+   --> src/gpu/backends/vulkan_backend.rs:338:61
+    |
+338 |     fn safe_diff_mod_n(&self, tame: [u32;8], wild: [u32;8], n: [u32;8]) -> Result<[u32;8]> {
+    |                                                             ^ help: if this is intentional, prefix it with an underscore: `_n`
+
+warning: unused variable: `x`
+   --> src/gpu/backends/vulkan_backend.rs:344:30
+    |
+344 |     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+    |                              ^ help: if this is intentional, prefix it with an underscore: `_x`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/vulkan_backend.rs:344:44
+    |
+344 |     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+    |                                            ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `mu`
+   --> src/gpu/backends/vulkan_backend.rs:344:63
+    |
+344 |     fn barrett_reduce(&self, x: &[u32;16], modulus: &[u32;8], mu: &[u32;16]) -> Result<[u32;8]> {
+    |                                                               ^^ help: if this is intentional, prefix it with an underscore: `_mu`
+
+warning: unused variable: `p`
+   --> src/gpu/backends/vulkan_backend.rs:349:27
+    |
+349 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+    |                           ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `k`
+   --> src/gpu/backends/vulkan_backend.rs:349:43
+    |
+349 |     fn mul_glv_opt(&self, p: [[u32;8];3], k: [u32;8]) -> Result<[[u32;8];3]> {
+    |                                           ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `a`
+   --> src/gpu/backends/vulkan_backend.rs:354:27
+    |
+354 |     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+    |                           ^ help: if this is intentional, prefix it with an underscore: `_a`
+
+warning: unused variable: `modulus`
+   --> src/gpu/backends/vulkan_backend.rs:354:40
+    |
+354 |     fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+    |                                        ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `num_random`
+   --> src/gpu/backends/vulkan_backend.rs:464:58
+    |
+464 | ...f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec...
+    |          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_num_random`
+
+warning: unused variable: `empirical_pos`
+   --> src/gpu/backends/vulkan_backend.rs:464:77
+    |
+464 | ...e, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |       ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_empirical_pos`
+
+warning: unused variable: `weights`
+   --> src/gpu/backends/vulkan_backend.rs:464:110
+    |
+464 | ...c<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_weights`
+
+warning: unused variable: `proxy_pos`
+   --> src/gpu/backends/vulkan_backend.rs:469:39
+    |
+469 |     fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    |                                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_proxy_pos`
+
+Some errors have detailed explanations: E0061, E0277, E0282, E0308, E0560, E0599, E0606, E0609.
+For more information about an error, try `rustc --explain E0061`.
+warning: `speedbitcrack` (lib) generated 81 warnings
+error: could not compile `speedbitcrack` (lib) due to 49 previous errors; 81 warnings emitted

@@ -67,6 +67,14 @@ fn cpu_bigint_mul(a: &BigInt256, b: &BigInt256) -> BigInt512 {
     BigInt512::from_bytes_le(&res.to_bytes_le())
 }
 
+// CPU mod small for parity
+fn cpu_mod_small(x: &BigInt256, modulus: u32) -> u32 {
+    let x_big = num_bigint::BigUint::from_bytes_le(&x.to_bytes_le());
+    let mod_big = num_bigint::BigUint::from(modulus);
+    let result = &x_big % &mod_big;
+    result.to_u32().unwrap_or(0)
+}
+
 fn test_parity_barrett(backend: &dyn Backend) -> Result<()> {
     let x_wide = mock_large_x(); // 2^512 + 42
     let modulus = mock_mod81(); // mod81 bias
@@ -92,6 +100,31 @@ fn test_parity_bigint_mul(backend: &dyn Backend) -> Result<()> {
     let mu = compute_mu(&mod81);
     let reduced = backend.barrett_reduce(&gpu_res, &mod81, &mu)?;
     assert_eq!(reduced, BigInt256::from_u64(42), "Mul + reduce fail"); // 42*179 %81 = 7518 %81 = 42
+    Ok(())
+}
+
+fn test_gpu_mod_bias(backend: &dyn Backend) -> Result<()> {
+    // Test modular bias operations (mod small values for bucket selection)
+    let test_values = vec![
+        BigInt256::from_u64(12345),
+        BigInt256::from_u64(999999),
+        BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F")?,
+    ];
+
+    for value in test_values {
+        // Test mod 81 (SmallOddPrime bias)
+        let mod81 = 81u32;
+        let gpu_result = backend.mod_small(&value, mod81)?;
+        let cpu_result = cpu_mod_small(&value, mod81);
+        assert_eq!(gpu_result, cpu_result, "Mod small parity fail for {}", value);
+
+        // Test mod 32 (bucket selection)
+        let mod32 = 32u32;
+        let gpu_bucket = backend.mod_small(&value, mod32)?;
+        let cpu_bucket = cpu_mod_small(&value, mod32);
+        assert_eq!(gpu_bucket, cpu_bucket, "Bucket selection parity fail for {}", value);
+    }
+
     Ok(())
 }
 

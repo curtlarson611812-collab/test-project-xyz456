@@ -113,6 +113,30 @@ pub struct Config {
     #[arg(short = 'T', long, default_value = "256")]
     pub threads: u32,
 
+    /// Tame kangaroo count
+    #[arg(long, default_value = "100000")]
+    pub tame_count: usize,
+
+    /// Wild kangaroo count
+    #[arg(long, default_value = "100000")]
+    pub wild_count: usize,
+
+    /// Maximum steps per batch
+    #[arg(long, default_value = "1000")]
+    pub steps_per_batch: u32,
+
+    /// Maximum total steps before stopping
+    #[arg(long, default_value = "1000000")]
+    pub max_steps: u64,
+
+    /// GOLD hierarchical modulation level
+    #[arg(long, default_value = "9")]
+    pub gold_mod_level: Option<u32>,
+
+    /// Stop hunt after finding first solution
+    #[arg(long)]
+    pub stop_on_first_solve: bool,
+
     /// Max cycles before forced stop
     #[arg(long, default_value = "0")]
     pub max_cycles: u64,
@@ -419,6 +443,12 @@ impl Default for Config {
             gpu_batch: 131072,
             threads: 256,
             max_cycles: 0,
+            tame_count: 1000000,
+            wild_count: 1000000,
+            steps_per_batch: 1000000,
+            max_steps: 1000000000000,
+            gold_mod_level: None,
+            stop_on_first_solve: false,
 
             // Testing & Validation
             basic_test: false,

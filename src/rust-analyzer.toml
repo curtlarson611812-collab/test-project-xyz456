@@ -1,0 +1,162 @@
+# Rust Analyzer Configuration for SpeedBitCrackV3
+# Helps rust-analyzer understand our complex feature flags and conditional compilation
+
+[features]
+# Enable Vulkan support by default for better IDE experience
+default = ["wgpu"]
+
+# Define all available features to match Cargo.toml exactly
+all = ["wgpu", "cuda", "glv", "rustacuda", "vulkano", "hybrid", "fuzz", "smoke", "laptop", "portable_simd", "legacy", "phase4", "cudarc"]
+
+[build]
+# Use release profile for better performance
+profile = "release"
+
+# Additional rustc flags for better conditional compilation understanding
+extraArgs = [
+    "--cfg", "feature=\"wgpu\"",
+    "--cfg", "feature=\"cuda\"",
+    "--cfg", "feature=\"hybrid\"",
+    "--cfg", "feature=\"glv\""
+]
+
+[check]
+# Enable hybrid features for comprehensive checking (includes both Vulkan and CUDA)
+features = ["hybrid"]
+
+[completion]
+# Enable hybrid features for completion (includes both Vulkan and CUDA)
+features = ["hybrid"]
+
+[diagnostics]
+# Show all diagnostics including those from conditional compilation
+disabled = []
+# Enable experimental diagnostics for better error reporting
+experimental = true
+
+[checkOnSave]
+# Enable checking on save for better feedback
+enable = true
+# Extra arguments for better conditional compilation handling
+extraArgs = ["--cfg", "feature=\"wgpu\""]
+
+[experimental]
+# Enable experimental features for better GPU code understanding
+procAttrMacros = true
+
+[lens]
+# Enable code lens for better navigation
+implementations = true
+references = true
+run = true
+debug = true
+
+[hoverActions]
+# Enable hover actions for better code exploration
+enable = true
+implementations = true
+references = true
+run = true
+debug = true
+
+[imports]
+# Configure import handling for large codebase
+granularity = { group = "module" }
+prefix = "self"
+# Allow imports from conditional compilation
+group = true
+# Don't mark imports as unused if they're used in conditional compilation
+merge = { glob = false }
+
+[run]
+# Configure test running
+bench = false
+checkOnSave = true
+cargo = { allFeatures = true }
+
+[cargo]
+# Enable cargo features for better understanding of dependencies
+features = ["hybrid"]
+
+[rust]
+# Configure rust analysis
+analyzerTarget = "x86_64-unknown-linux-gnu"
+analyzerDataPath = "target/rust-analyzer"
+
+[lru]
+# Increase capacity for large codebase
+capacity = 2048
+
+[typing]
+# Configure typing assistance
+autocompleteInsideComments = true
+closingBraceHints = true
+closingBracketHints = true
+
+[syntax]
+# Configure syntax highlighting and understanding
+semanticHighlighting = true
+
+[signatureInfo]
+# Configure signature help
+detail = "full"
+documentation = { enable = true }
+
+[procMacro]
+# Enable proc macro expansion
+enable = true
+
+[rustfmt]
+# Use rustfmt for formatting
+enable = true
+extraArgs = ["--config", "max_width=120"]
+
+[workspace]
+# Workspace symbol search
+symbolSearch = { kind = "only_types" }
+
+[hover]
+# Show documentation on hover
+documentation = true
+# Show memory layout information
+memoryLayout = { niches = true }
+
+[inlayHints]
+# Enable inlay hints for better code understanding
+bindingModeHints = true
+chainingHints = true
+closingBraceHints = { minLines = 25 }
+closureReturnTypeHints = { maxLength = 30 }
+implicitDrops = true
+lifetimeElisionHints = { enable = "always" }
+parameterHints = true
+rangeExclusiveHints = true
+typeHints = true
+
+[semanticHighlighting]
+# Enable semantic highlighting for better code visualization
+punctuation = { enable = true, specializations = true }
+strings = { enable = true }
+
+[linkedProjects]
+# Link to the main Cargo.toml for proper feature understanding
+CargoTomlFile = ["Cargo.toml"]
+
+[files]
+# Exclude shader files from rust analysis (they're WGSL, not Rust)
+excludeDirs = ["gpu/vulkan/shaders"]
+
+[notifications]
+# Reduce noise from experimental features
+cargoTomlNotFound = false
+
+# Additional rust-analyzer configuration for GPU code
+[cfg]
+# Enable conditional compilation understanding
+features = ["wgpu", "hybrid"]
+
+[assist]
+# Configure code assistance
+snippet = { enable = true }
+importGranularity = "module"
+importEnforceGranularity = false

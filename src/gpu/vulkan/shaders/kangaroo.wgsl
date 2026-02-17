@@ -28,6 +28,13 @@ const PRIME_MULTIPLIERS: array<u64, 32> = array<u64, 32>(
     1327u, 1381u, 1423u, 1453u, 1483u, 1511u, 1553u, 1583u
 );
 
+// Generator point G in Jacobian coordinates (Z=1)
+const GENERATOR_POINT: array<array<u32,8>,3> = array<array<u32,8>,3>(
+    array<u32,8>(0x16F81798u, 0x59F2815Bu, 0x2DCE28D9u, 0x029BFCDBu, 0xCE870B07u, 0x55A06295u, 0xF9DCBBACu, 0x79BE667Eu),
+    array<u32,8>(0xFB10D4B8u, 0x9C47D08Fu, 0xA6855419u, 0xFD17B448u, 0x0E1108A8u, 0x5DA4FBFCu, 0x26A3C465u, 0x483ADA77u),
+    array<u32,8>(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
+);
+
 // GLV mul with windowed NAF for 15% stall reduction
 fn mul_glv_opt(p: PointJacob, k: array<u32,8>) -> PointJacob {
     var k1: array<u32,4>;
@@ -50,16 +57,38 @@ struct Kangaroo {
     is_tame: bool,
 }
 
-// Phase 8: Multi-target init in compute
-fn init_kangaroo(targets: array<PointJacob, BATCH_SIZE>, primes: array<u32,32>, id: u32) -> Kangaroo {
-    let t_idx = id / KANGS_PER_TARGET;
-    let k_idx = id % KANGS_PER_TARGET;
-    let prime = primes[k_idx % 32u];
+// Phase 8: Multi-target kangaroo initialization
+fn init_kangaroo(targets: array<array<array<u32,8>,3>, 64>, primes: array<u32,32>, id: u32, is_tame: bool) -> Kangaroo {
+    let t_idx = id / 32u;  // Assume 32 kangaroos per target
+    let k_idx = id % 32u;
+    let prime = primes[k_idx];
     let target_point = targets[t_idx];
-    // Phase 6: GLV mul for init
-    let prime_sc = scalar_from_u32(prime);
-    let start_point = mul_glv_opt(target_point, prime_sc); // Wild
-    return Kangaroo { point: start_point, dist: zero_scalar(), alpha: one_scalar(), beta: prime_sc, target_idx: t_idx, is_tame: false };
+
+    if (is_tame) {
+        // Tame: start from G * (k_idx + 1)
+        let tame_scalar = scalar_from_u32(k_idx + 1u);
+        let start_point = scalar_mul_glv(tame_scalar, GENERATOR_POINT);
+        return Kangaroo {
+            point: start_point,
+            dist: tame_scalar,
+            alpha: tame_scalar,
+            beta: one_scalar(),
+            target_idx: t_idx,
+            is_tame: true
+        };
+    } else {
+        // Wild: start from target * prime
+        let prime_scalar = scalar_from_u32(prime);
+        let start_point = scalar_mul_glv(prime_scalar, target_point);
+        return Kangaroo {
+            point: start_point,
+            dist: zero_scalar(),
+            alpha: zero_scalar(),
+            beta: prime_scalar,
+            target_idx: t_idx,
+            is_tame: false
+        };
+    }
 }
 
 // SmallOddPrime sacred bucket selection
@@ -150,6 +179,34 @@ fn bigint256_cmp(a: BigInt256, b: BigInt256) -> i32 {
     return 0i;
 }
 
+// Helper functions for scalar operations
+fn scalar_from_u32(x: u32) -> array<u32,8> {
+    var result: array<u32,8>;
+    result[0] = x;
+    for (var i = 1u; i < 8u; i = i + 1u) {
+        result[i] = 0u;
+    }
+    return result;
+}
+
+fn zero_scalar() -> array<u32,8> {
+    return array<u32,8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+}
+
+fn one_scalar() -> array<u32,8> {
+    var result = zero_scalar();
+    result[0] = 1u;
+    return result;
+}
+
+fn scalar_add(a: array<u32,8>, b: array<u32,8>) -> array<u32,8> {
+    return bigint256_add(BigInt256(a), BigInt256(b)).limbs;
+}
+
+fn scalar_sub(a: array<u32,8>, b: array<u32,8>) -> array<u32,8> {
+    return bigint256_sub(BigInt256(a), BigInt256(b)).limbs;
+}
+
 fn bigint256_ge(a: BigInt256, b: BigInt256) -> bool {
     return bigint256_cmp(a, b) >= 0i;
 }
@@ -227,21 +284,71 @@ fn ec_add(p1: Point256, p2: Point256, mod_p: BigInt256, mu: BigInt256, curve_a: 
     return Point256(barrett_reduce(x3, mod_p, mu), barrett_reduce(y3, mod_p, mu), barrett_reduce(z3, mod_p, mu));
 }
 
+// Kangaroo stepping kernel - main compute function
+@group(0) @binding(0) var<storage, read_write> kangaroo_states: array<Kangaroo>;
+@group(0) @binding(1) var<storage, read> jump_table: array<array<u32,8>>;
+@group(0) @binding(2) var<storage, read_write> dp_table: array<array<u32,8>>;
+@group(0) @binding(3) var<uniform> global_step: u32;
+@group(0) @binding(4) var<uniform> dp_bits: u32;
+
 @compute @workgroup_size(256)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+fn kangaroo_step_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
     let idx = gid.x;
     if (idx >= arrayLength(&kangaroo_states)) { return; }
 
-    var state = kangaroo_states[idx];
-    let step = global_step + idx;                     // REAL step counter
+    var kang = kangaroo_states[idx];
 
-    // === FIXED: Use jump table (was commented/hardcoded) ===
-    let jump_idx = (step % arrayLength(&jump_table)) as u32;
-    let jump     = jump_table[jump_idx];
+    // Select jump using SmallOddPrime bucket selection
+    let mix = hash_position(kang.point[0], kang.point[1]);
+    let jump_idx = mix % arrayLength(&jump_table);
+    let jump = jump_table[jump_idx];
 
-    // Apply jump (your existing apply_jump function)
-    state.position = apply_jump(state.position, jump);
+    // Apply jump to distance
+    kang.dist = scalar_add(kang.dist, jump);
 
-    // Rest of your kernel (bias, DP check, etc.) stays the same
-    kangaroo_states[idx] = state;
+    // Update position: point = point + jump * G (for tame) or jump * target (for wild)
+    if (kang.is_tame) {
+        let jump_point = scalar_mul_glv(jump, GENERATOR_POINT);
+        kang.point = point_add(kang.point, jump_point);
+        kang.alpha = scalar_add(kang.alpha, jump);
+    } else {
+        // For wild kangaroos, we need the target point
+        // This would be passed as a uniform or additional binding
+        // For now, assume target is available
+        // let target_point = get_target_point(kang.target_idx);
+        // let jump_point = scalar_mul_glv(jump, target_point);
+        // kang.point = point_add(kang.point, jump_point);
+        // kang.beta = scalar_add(kang.beta, jump);
+    }
+
+    // Check for distinguished point
+    let x_hash = hash_u64(kang.point[0]);
+    if ((x_hash & ((1u << dp_bits) - 1u)) == 0u) {
+        // Found DP - store in DP table
+        // This would trigger CPU collision detection
+        let dp_idx = atomicAdd(&dp_counter, 1u);
+        if (dp_idx < arrayLength(&dp_table)) {
+            dp_table[dp_idx] = kang.point[0]; // Store X coordinate
+        }
+    }
+
+    // Store updated kangaroo
+    kangaroo_states[idx] = kang;
+}
+
+// Initialize kangaroos kernel
+@group(0) @binding(0) var<storage, read_write> init_kangaroos: array<Kangaroo>;
+@group(0) @binding(1) var<storage, read> target_points: array<array<array<u32,8>,3>>;
+@group(0) @binding(2) var<uniform> num_tame: u32;
+@group(0) @binding(3) var<uniform> num_wild: u32;
+
+@compute @workgroup_size(256)
+fn kangaroo_init_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let idx = gid.x;
+    let total_kangaroos = arrayLength(&init_kangaroos);
+    if (idx >= total_kangaroos) { return; }
+
+    let is_tame = idx < num_tame;
+    let kang = init_kangaroo(target_points, PRIME_MULTIPLIERS, idx, is_tame);
+    init_kangaroos[idx] = kang;
 }
