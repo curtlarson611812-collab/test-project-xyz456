@@ -2,13 +2,13 @@
 //!
 //! Tests to verify bias detection functions work correctly
 
+use num_bigint::BigInt;
+use rand::{thread_rng, Rng};
+use speedbitcrack::kangaroo::generator::{KangarooGenerator, PosSlice};
 use speedbitcrack::math::bigint::BigInt256;
 use speedbitcrack::utils::pubkey_loader::detect_bias_single;
-use speedbitcrack::kangaroo::generator::{KangarooGenerator, PosSlice};
-use num_bigint::BigInt;
-use std::collections::HashMap;
 use statrs::distribution::{KolmogorovSmirnov, Uniform};
-use rand::{Rng, thread_rng};
+use std::collections::HashMap;
 
 #[test]
 fn test_mod9_bias_detection() {
@@ -53,7 +53,8 @@ fn test_mod81_bias_detection() {
 fn test_large_number_bias_detection() {
     // Test with a large number that should be 0 mod 9
     // Use a number that ends with multiple 9s in decimal (digital root property)
-    let large_num = BigInt256::from_hex("123456789012345678901234567890123456789012345678901234567890");
+    let large_num =
+        BigInt256::from_hex("123456789012345678901234567890123456789012345678901234567890");
     let (mod9, mod27, mod81, _, _) = detect_bias_single(&large_num);
 
     // Verify the modular arithmetic works correctly for large numbers
@@ -94,10 +95,10 @@ fn test_bias_detection_consistency() {
 fn test_magic_nine_candidates() {
     // Test known Magic 9 candidates
     let candidates = vec![
-        BigInt256::from_u64(9),   // 9 mod 9 = 0
-        BigInt256::from_u64(18),  // 18 mod 9 = 0
-        BigInt256::from_u64(27),  // 27 mod 9 = 0
-        BigInt256::from_u64(36),  // 36 mod 9 = 0
+        BigInt256::from_u64(9),  // 9 mod 9 = 0
+        BigInt256::from_u64(18), // 18 mod 9 = 0
+        BigInt256::from_u64(27), // 27 mod 9 = 0
+        BigInt256::from_u64(36), // 36 mod 9 = 0
     ];
 
     for candidate in candidates {
@@ -169,10 +170,13 @@ fn test_mod81_bias_kernel_mock() {
     let high_residues = vec![0, 9, 27, 36];
 
     // Mock implementation (real would use CUDA)
-    let flags: Vec<bool> = keys.iter().map(|k| {
-        let residue = (k % BigInt::from(81)).to_u64().unwrap() as u32;
-        high_residues.contains(&residue)
-    }).collect();
+    let flags: Vec<bool> = keys
+        .iter()
+        .map(|k| {
+            let residue = (k % BigInt::from(81)).to_u64().unwrap() as u32;
+            high_residues.contains(&residue)
+        })
+        .collect();
 
     assert_eq!(flags, vec![true, false, true]);
 }
@@ -204,7 +208,7 @@ fn test_hierarchical_bias_jumping() {
 fn test_positional_proxy_integration() {
     // Test that positional proxy is correctly extracted from bias detection
     let test_keys = vec![
-        BigInt::from(1),    // Small key, should have low proxy
+        BigInt::from(1),        // Small key, should have low proxy
         BigInt::from(1) << 130, // Large key, should have higher proxy
     ];
 
@@ -218,21 +222,22 @@ fn test_positional_proxy_integration() {
 // Dependencies: statrs::distribution::{KolmogorovSmirnov, Uniform}, rand::{Rng, thread_rng}
 #[test]
 fn test_bias_ks() {
-    let observed = vec![0.2, 0.15, 0.25, 0.1, 0.3];  // Biased mod5 freq
+    let observed = vec![0.2, 0.15, 0.25, 0.1, 0.3]; // Biased mod5 freq
     let uniform = Uniform::new(0.0, 1.0).unwrap();
     let mut rng = thread_rng();
     let samples: Vec<f64> = (0..1000).map(|_| uniform.sample(&mut rng)).collect();
     let ks = KolmogorovSmirnov::two_sample(&observed, &samples);
-    assert!(ks.p_value < 0.05);  // Significant bias
+    assert!(ks.p_value < 0.05); // Significant bias
 }
 
 // Bootstrap resampling for confidence intervals on speedup
 #[test]
 fn test_bias_bootstrap() {
-    let solved_biases = vec![1.2, 1.35, 1.42];  // mod9/27/81 biases from solved data
+    let solved_biases = vec![1.2, 1.35, 1.42]; // mod9/27/81 biases from solved data
     let mut bootstrapped_means = Vec::new();
 
-    for _ in 0..1000 {  // Bootstrap resampling
+    for _ in 0..1000 {
+        // Bootstrap resampling
         let mut sample = Vec::new();
         for _ in 0..solved_biases.len() {
             sample.push(solved_biases[rand::random::<usize>() % solved_biases.len()]);
@@ -241,9 +246,20 @@ fn test_bias_bootstrap() {
         bootstrapped_means.push(mean);
     }
 
-    let ci_lower = bootstrapped_means.iter().cloned().fold(f64::INFINITY, f64::min);
-    let ci_upper = bootstrapped_means.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    assert!(ci_lower > 1.1 && ci_upper < 1.6, "Bootstrap CI [{:.3}, {:.3}] outside expected bias range", ci_lower, ci_upper);
+    let ci_lower = bootstrapped_means
+        .iter()
+        .cloned()
+        .fold(f64::INFINITY, f64::min);
+    let ci_upper = bootstrapped_means
+        .iter()
+        .cloned()
+        .fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        ci_lower > 1.1 && ci_upper < 1.6,
+        "Bootstrap CI [{:.3}, {:.3}] outside expected bias range",
+        ci_lower,
+        ci_upper
+    );
 }
 
 #[test]
@@ -262,17 +278,26 @@ fn test_bias_ks_validation() {
     let ks_test = KolmogorovSmirnov::two_sample(&observed, &reference);
 
     // For significantly biased data, p-value should be < 0.05 (reject uniform hypothesis)
-    assert!(ks_test.p_value < 0.05, "KS test should detect bias (p={:.6})", ks_test.p_value);
+    assert!(
+        ks_test.p_value < 0.05,
+        "KS test should detect bias (p={:.6})",
+        ks_test.p_value
+    );
 
     // Calculate bias score (mock implementation)
     let bias_score = if ks_test.p_value < 0.05 {
         // Simple score based on clustering around lower values
         let mean = observed.iter().sum::<f64>() / observed.len() as f64;
-        let variance = observed.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / observed.len() as f64;
+        let variance =
+            observed.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / observed.len() as f64;
         1.0 + (0.3 - mean).abs() * 2.0 - variance * 5.0 // Reward clustering near 0.1-0.3
     } else {
         1.0
     };
 
-    assert!(bias_score > 1.2, "Bias score {:.3} should be > 1.2 for significant bias", bias_score);
+    assert!(
+        bias_score > 1.2,
+        "Bias score {:.3} should be > 1.2 for significant bias",
+        bias_score
+    );
 }

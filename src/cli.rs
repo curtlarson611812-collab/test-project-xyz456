@@ -7,15 +7,16 @@
 //! - Visual collision detection alerts
 //! - Performance trend analysis
 
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-use std::thread;
-use std::io::{self, Write};
-use crossterm::{
-    execute, queue, cursor, terminal,
-    event::{self, Event, KeyCode},
-};
 use anyhow::Result;
+use crossterm::{
+    cursor,
+    event::{self, Event, KeyCode},
+    execute, queue, terminal,
+};
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// Performance metrics collected during hunt
 #[derive(Debug, Clone)]
@@ -165,7 +166,11 @@ impl AdvancedCli {
         progress: &Arc<Mutex<HuntProgress>>,
     ) -> Result<()> {
         let mut stdout = io::stdout();
-        queue!(stdout, terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0, 0))?;
+        queue!(
+            stdout,
+            terminal::Clear(terminal::ClearType::All),
+            cursor::MoveTo(0, 0)
+        )?;
 
         let metrics = metrics.lock().unwrap();
         let progress = progress.lock().unwrap();
@@ -184,7 +189,7 @@ impl AdvancedCli {
         Self::draw_status(&progress)?;
 
         // Controls
-          writeln!(stdout, "\n{}", "Controls:")?;
+        writeln!(stdout, "\n{}", "Controls:")?;
         writeln!(stdout, "  Q/Esc - Quit | P - Pause/Resume | S - Status")?;
 
         stdout.flush()?;
@@ -208,7 +213,11 @@ impl AdvancedCli {
         write!(stdout, "Progress: [")?;
         write!(stdout, "{}", "█".repeat(filled))?;
         write!(stdout, "{}", "░".repeat(empty))?;
-        writeln!(stdout, "] {}% ({}/{})", percentage, progress.current_cycle, progress.max_cycles)?;
+        writeln!(
+            stdout,
+            "] {}% ({}/{})",
+            percentage, progress.current_cycle, progress.max_cycles
+        )?;
 
         // Targets progress
         let target_percentage = if progress.total_targets > 0 {
@@ -216,8 +225,11 @@ impl AdvancedCli {
         } else {
             0
         };
-        writeln!(stdout, "Targets:  {}% ({}/{}) processed",
-                target_percentage, progress.targets_processed, progress.total_targets)?;
+        writeln!(
+            stdout,
+            "Targets:  {}% ({}/{}) processed",
+            target_percentage, progress.targets_processed, progress.total_targets
+        )?;
 
         Ok(())
     }
@@ -226,7 +238,7 @@ impl AdvancedCli {
     fn draw_metrics(metrics: &PerformanceMetrics) -> Result<()> {
         let mut stdout = io::stdout();
 
-          writeln!(stdout, "\n{}", "📊 Performance Metrics:")?;
+        writeln!(stdout, "\n{}", "📊 Performance Metrics:")?;
 
         // Format numbers with appropriate units
         let ops_str = Self::format_large_number(metrics.total_ops);
@@ -234,10 +246,19 @@ impl AdvancedCli {
         let memory_mb = metrics.memory_usage_mb;
         let gpu_util = metrics.gpu_utilization;
 
-        writeln!(stdout, "  Operations: {} ({:.1}M ops/sec)", ops_str, ops_per_sec / 1_000_000.0)?;
+        writeln!(
+            stdout,
+            "  Operations: {} ({:.1}M ops/sec)",
+            ops_str,
+            ops_per_sec / 1_000_000.0
+        )?;
         writeln!(stdout, "  Memory:     {:.1} MB", memory_mb)?;
         writeln!(stdout, "  GPU Util:   {:.1}%", gpu_util)?;
-        writeln!(stdout, "  DPs Found:  {}", Self::format_large_number(metrics.dp_found))?;
+        writeln!(
+            stdout,
+            "  DPs Found:  {}",
+            Self::format_large_number(metrics.dp_found)
+        )?;
         writeln!(stdout, "  Collisions: {}", metrics.collisions_found)?;
 
         // ETA calculation
@@ -253,16 +274,25 @@ impl AdvancedCli {
     fn draw_status(progress: &HuntProgress) -> Result<()> {
         let mut stdout = io::stdout();
 
-          writeln!(stdout, "\n{}", "🎯 Hunt Status:")?;
+        writeln!(stdout, "\n{}", "🎯 Hunt Status:")?;
 
         writeln!(stdout, "  Status:     {}", progress.status_message)?;
 
         if let Some((low, high)) = progress.current_range {
-            writeln!(stdout, "  Range:      [{}, {}]", Self::format_large_number(low), Self::format_large_number(high))?;
+            writeln!(
+                stdout,
+                "  Range:      [{}, {}]",
+                Self::format_large_number(low),
+                Self::format_large_number(high)
+            )?;
         }
 
         if progress.solutions_found > 0 {
-            writeln!(stdout, "  {}", format!("🎉 Solutions Found: {}", progress.solutions_found))?;
+            writeln!(
+                stdout,
+                "  {}",
+                format!("🎉 Solutions Found: {}", progress.solutions_found)
+            )?;
         }
 
         Ok(())
@@ -331,6 +361,9 @@ mod tests {
         assert_eq!(AdvancedCli::format_duration(30), "30s");
         assert_eq!(AdvancedCli::format_duration(90), "1m 30s");
         assert_eq!(AdvancedCli::format_duration(3660), "1h 1m 0s");
-        assert_eq!(AdvancedCli::format_duration(86400 + 3600 + 60 + 1), "1d 1h 1m 1s");
+        assert_eq!(
+            AdvancedCli::format_duration(86400 + 3600 + 60 + 1),
+            "1d 1h 1m 1s"
+        );
     }
 }

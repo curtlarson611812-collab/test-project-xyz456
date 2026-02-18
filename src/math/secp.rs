@@ -5,55 +5,59 @@
 //! SECURITY NOTE: Operations should be constant-time to prevent side-channel attacks.
 //! Where possible, use k256::FieldElement for constant-time field arithmetic.
 
-use super::bigint::{BigInt256, BigInt512, BarrettReducer, MontgomeryReducer};
+use super::bigint::{BarrettReducer, BigInt256, BigInt512, MontgomeryReducer};
 use crate::types::Point;
-use rand::{RngCore, rngs::OsRng};
+use log::debug;
+use rand::{rngs::OsRng, RngCore};
 use std::error::Error;
 use std::ops::{Add, Sub};
-use log::debug;
 // k256 integration for SmallOddPrime_Precise_code.rs compatibility
 use k256;
-use k256::elliptic_curve::{sec1::{ToEncodedPoint, FromEncodedPoint}, bigint::U256, PrimeField};
-
-
+use k256::elliptic_curve::{
+    bigint::U256,
+    sec1::{FromEncodedPoint, ToEncodedPoint},
+    PrimeField,
+};
 
 #[allow(dead_code)]
 impl Secp256k1 {
     /// Known G*3 x-coordinate for testing (standard from ecdsa tool)
     pub fn known_3g_x() -> BigInt256 {
-        BigInt256::from_hex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9").unwrap()
+        BigInt256::from_hex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9")
+            .unwrap()
     }
 
     /// Known G*3 y-coordinate for testing (standard from ecdsa tool)
     pub fn known_3g_y() -> BigInt256 {
-        BigInt256::from_hex("388f7b0f632de8140fe337e62a37f3566500a99934c2231b6cb9fd7584b8e672").unwrap()
+        BigInt256::from_hex("388f7b0f632de8140fe337e62a37f3566500a99934c2231b6cb9fd7584b8e672")
+            .unwrap()
     }
 
     /// Known G*3 coordinates as tuple for testing
     pub fn known_3g() -> (BigInt256, BigInt256) {
-        (
-            Self::known_3g_x(),
-            Self::known_3g_y()
-        )
+        (Self::known_3g_x(), Self::known_3g_y())
     }
 
     /// Known 2G coordinates for debugging double operation (standard from ecdsa tool)
     pub fn known_2g() -> (BigInt256, BigInt256) {
         (
-            BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5").unwrap(),
-            BigInt256::from_hex("1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a").unwrap()
+            BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5")
+                .unwrap(),
+            BigInt256::from_hex("1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a")
+                .unwrap(),
         )
     }
 
-
     /// GLV endomorphism lambda (cube root of unity modulo n)
     pub fn glv_lambda() -> BigInt256 {
-        BigInt256::from_hex("5363ad4cc05c30e0a5261c0286d7dab99cc95b5e4c4659b9d7d27ec4eeda59").unwrap()
+        BigInt256::from_hex("5363ad4cc05c30e0a5261c0286d7dab99cc95b5e4c4659b9d7d27ec4eeda59")
+            .unwrap()
     }
 
     /// GLV endomorphism beta (x-coordinate multiplier)
     pub fn glv_beta() -> BigInt256 {
-        BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee").unwrap()
+        BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee")
+            .unwrap()
     }
 
     /// GLV basis vector v1 components (v1 = (v1_1, v1_2))
@@ -82,32 +86,74 @@ impl Secp256k1 {
     pub const GLV4_BASIS: [[BigInt256; 4]; 4] = [
         // Column 0: Identity * n (lattice generator)
         [
-            BigInt256 { limbs: [0xFFFFFFFEFFFFFC2F, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF] }, // n
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
+            BigInt256 {
+                limbs: [
+                    0xFFFFFFFEFFFFFC2F,
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                ],
+            }, // n
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
         ],
         // Column 1: phi * n (endomorphism phi: x -> beta*x, y -> beta^3*y)
         [
-            BigInt256 { limbs: [0x49284eb15, 0xde86c90e4, 0x3086d221a, 0x7d46bcde8] }, // r1 (short vector coefficient)
-            BigInt256 { limbs: [0xAF48A03BBAAEDCE6, 0xBFD25E8CD0364141, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF] }, // lambda (phi eigenvalue)
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
+            BigInt256 {
+                limbs: [0x49284eb15, 0xde86c90e4, 0x3086d221a, 0x7d46bcde8],
+            }, // r1 (short vector coefficient)
+            BigInt256 {
+                limbs: [
+                    0xAF48A03BBAAEDCE6,
+                    0xBFD25E8CD0364141,
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                ],
+            }, // lambda (phi eigenvalue)
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
         ],
         // Column 2: psi * n (Halving endomorphism psi: point halving operator)
         // psi satisfies psi^2 = psi + 1, independent of phi
         [
-            BigInt256 { limbs: [0xd9d44cfd, 0x657c1108, 0x7a8e2f3f, 0x114ca50f] }, // r2 (BKZ optimized)
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0x2349d1f5, 0xc4fdb42f, 0x63d6c5c5, 0xb3c58996] }, // mu (psi eigenvalue ≈ -lambda - 1)
-            BigInt256 { limbs: [0, 0, 0, 0] },
+            BigInt256 {
+                limbs: [0xd9d44cfd, 0x657c1108, 0x7a8e2f3f, 0x114ca50f],
+            }, // r2 (BKZ optimized)
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0x2349d1f5, 0xc4fdb42f, 0x63d6c5c5, 0xb3c58996],
+            }, // mu (psi eigenvalue ≈ -lambda - 1)
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
         ],
         // Column 3: phi*psi * n (combined endomorphism for rank-4)
         [
-            BigInt256 { limbs: [0x804fba65, 0xe6447d3e, 0x657c0710, 0x7ae96a2b] }, // r3 (cross term)
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0x4cb09e80, 0x187684d9, 0x23f4dce6, 0x187684d] }, // nu (combined eigenvalue)
+            BigInt256 {
+                limbs: [0x804fba65, 0xe6447d3e, 0x657c0710, 0x7ae96a2b],
+            }, // r3 (cross term)
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0x4cb09e80, 0x187684d9, 0x23f4dce6, 0x187684d],
+            }, // nu (combined eigenvalue)
         ],
     ];
 
@@ -116,41 +162,135 @@ impl Secp256k1 {
     pub const GLV4_GS: [[BigInt256; 4]; 4] = [
         // gs[0] = basis[0] (first vector is already orthogonal)
         [
-            BigInt256 { limbs: [0xFFFFFFFEFFFFFC2F, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
+            BigInt256 {
+                limbs: [
+                    0xFFFFFFFEFFFFFC2F,
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                ],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
         ],
         // gs[1] = basis[1] - mu[1][0] * gs[0]
         [
-            BigInt256 { limbs: [0x49284eb15, 0xde86c90e4, 0x3086d221a, 0x7d46bcde8] }, // Simplified for this implementation
-            BigInt256 { limbs: [0xAF48A03BBAAEDCE6, 0xBFD25E8CD0364141, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
+            BigInt256 {
+                limbs: [0x49284eb15, 0xde86c90e4, 0x3086d221a, 0x7d46bcde8],
+            }, // Simplified for this implementation
+            BigInt256 {
+                limbs: [
+                    0xAF48A03BBAAEDCE6,
+                    0xBFD25E8CD0364141,
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                ],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
         ],
         // gs[2] = basis[2] - mu[2][0]*gs[0] - mu[2][1]*gs[1]
         [
-            BigInt256 { limbs: [0xd9d44cfd, 0x657c1108, 0x7a8e2f3f, 0x114ca50f] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0x2349d1f5, 0xc4fdb42f, 0x63d6c5c5, 0xb3c58996] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
+            BigInt256 {
+                limbs: [0xd9d44cfd, 0x657c1108, 0x7a8e2f3f, 0x114ca50f],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0x2349d1f5, 0xc4fdb42f, 0x63d6c5c5, 0xb3c58996],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
         ],
         // gs[3] = basis[3] - mu[3][0]*gs[0] - mu[3][1]*gs[1] - mu[3][2]*gs[2]
         [
-            BigInt256 { limbs: [0x804fba65, 0xe6447d3e, 0x657c0710, 0x7ae96a2b] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0, 0, 0, 0] },
-            BigInt256 { limbs: [0x4cb09e80, 0x187684d9, 0x23f4dce6, 0x187684d] },
+            BigInt256 {
+                limbs: [0x804fba65, 0xe6447d3e, 0x657c0710, 0x7ae96a2b],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0x4cb09e80, 0x187684d9, 0x23f4dce6, 0x187684d],
+            },
         ],
     ];
 
     /// Professor-level precomputed mu coefficients for GLV4
     /// Upper triangular matrix from Gram-Schmidt process
     pub const GLV4_MU: [[BigInt256; 4]; 4] = [
-        [BigInt256 { limbs: [1, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }],
-        [BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [1, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }],
-        [BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [1, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }],
-        [BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [0, 0, 0, 0] }, BigInt256 { limbs: [1, 0, 0, 0] }],
+        [
+            BigInt256 {
+                limbs: [1, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+        ],
+        [
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [1, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+        ],
+        [
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [1, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+        ],
+        [
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [0, 0, 0, 0],
+            },
+            BigInt256 {
+                limbs: [1, 0, 0, 0],
+            },
+        ],
     ];
 
     /// Master-level GLV constants using k256::Scalar
@@ -251,7 +391,9 @@ impl Secp256k1 {
         BigInt256::mul_par(&a.limbs, &b.limbs, &mut wide);
         let mut result_limbs = [0u64; 4];
         Self::reduce_wide_mod(&wide, &mut result_limbs, modulus);
-        BigInt256 { limbs: result_limbs }
+        BigInt256 {
+            limbs: result_limbs,
+        }
     }
 
     // Enter Montgomery form: x * R mod p (R = 2^256 for 256-bit modulus)
@@ -277,9 +419,13 @@ impl Secp256k1 {
     /// Create new secp256k1 curve instance
     pub fn new() -> Self {
         debug!("Secp256k1::new() - creating curve parameters");
-        let p = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").unwrap();
+        let p =
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F")
+                .unwrap();
         debug!("Created p");
-        let n = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").unwrap();
+        let n =
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
+                .unwrap();
         debug!("Created n");
         let a = BigInt256::zero();
         let b = BigInt256::from_u64(7);
@@ -287,8 +433,16 @@ impl Secp256k1 {
 
         // Generator point G (Jacobian coordinates with Z=1)
         let g = Point {
-            x: BigInt256::from_hex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798").unwrap().to_u64_array(),
-            y: BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8").unwrap().to_u64_array(),
+            x: BigInt256::from_hex(
+                "79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+            )
+            .unwrap()
+            .to_u64_array(),
+            y: BigInt256::from_hex(
+                "483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8",
+            )
+            .unwrap()
+            .to_u64_array(),
             z: [1, 0, 0, 0], // Z=1 for affine points
         };
 
@@ -296,7 +450,11 @@ impl Secp256k1 {
         let montgomery_p_temp = MontgomeryReducer::new(&p);
         let mont_b_temp = montgomery_p_temp.convert_in(&b);
         let temp_curve = Secp256k1 {
-            p: p.clone(), n: n.clone(), a: a.clone(), b: b.clone(), g: g.clone(),
+            p: p.clone(),
+            n: n.clone(),
+            a: a.clone(),
+            b: b.clone(),
+            g: g.clone(),
             g_multiples: Vec::new(),
             barrett_p: BarrettReducer::new(&p),
             barrett_n: BarrettReducer::new(&n),
@@ -324,8 +482,16 @@ impl Secp256k1 {
         let mont_b = montgomery_p.convert_in(&b);
 
         Secp256k1 {
-            p: p, n: n, a, b, g, g_multiples,
-            barrett_p, barrett_n, montgomery_p, mont_b,
+            p: p,
+            n: n,
+            a,
+            b,
+            g,
+            g_multiples,
+            barrett_p,
+            barrett_n,
+            montgomery_p,
+            mont_b,
         }
     }
 
@@ -333,7 +499,10 @@ impl Secp256k1 {
     pub fn add(&self, p: &Point, q: &Point) -> Point {
         // Handle infinity cases first
         if p.is_infinity() {
-            debug!("add infinity + q, returning q.x={:x}, q.y={:x}, q.z={:x}", q.x[3], q.y[3], q.z[0]);
+            debug!(
+                "add infinity + q, returning q.x={:x}, q.y={:x}, q.z={:x}",
+                q.x[3], q.y[3], q.z[0]
+            );
             return *q;
         }
         if q.is_infinity() {
@@ -478,7 +647,11 @@ impl Secp256k1 {
             if r == BigInt256::zero() {
                 return self.double(p); // P = Q, use doubling
             } else {
-                return Point { x: [0; 4], y: [0; 4], z: [0; 4] }; // P = -Q, return infinity
+                return Point {
+                    x: [0; 4],
+                    y: [0; 4],
+                    z: [0; 4],
+                }; // P = -Q, return infinity
             }
         }
 
@@ -487,9 +660,15 @@ impl Secp256k1 {
 
         let v = self.barrett_p.mul(&u1, &hh); // V = U1*H^2
 
-        let x3 = self.barrett_p.sub(&self.barrett_p.sub(&self.barrett_p.mul(&r, &r), &hhh), &self.barrett_p.add(&v, &v)); // X3 = R^2 - H^3 - 2*V
+        let x3 = self.barrett_p.sub(
+            &self.barrett_p.sub(&self.barrett_p.mul(&r, &r), &hhh),
+            &self.barrett_p.add(&v, &v),
+        ); // X3 = R^2 - H^3 - 2*V
 
-        let y3 = self.barrett_p.sub(&self.barrett_p.mul(&r, &self.barrett_p.sub(&v, &x3)), &self.barrett_p.mul(&s1, &hhh)); // Y3 = R*(V - X3) - S1*H^3
+        let y3 = self.barrett_p.sub(
+            &self.barrett_p.mul(&r, &self.barrett_p.sub(&v, &x3)),
+            &self.barrett_p.mul(&s1, &hhh),
+        ); // Y3 = R*(V - X3) - S1*H^3
 
         let z3 = self.barrett_p.mul(&pz, &self.barrett_p.mul(&qz, &h)); // Z3 = Z1*Z2*H
 
@@ -529,7 +708,6 @@ impl Secp256k1 {
         let two_y_inv = two_y.modpow(&(&p_big - 2u32), &p_big);
         let lambda = (&three_x_sq * &two_y_inv) % &p_big;
 
-
         // x3 = lambda^2 - 2*x mod p
         let lambda_sq = (&lambda * &lambda) % &p_big;
         let two_x = (&x_big * 2u32) % &p_big;
@@ -554,7 +732,11 @@ impl Secp256k1 {
 
         #[cfg(debug_assertions)]
         {
-            debug!("double x3={}, y3={}", x3.to_str_radix(16), y3.to_str_radix(16));
+            debug!(
+                "double x3={}, y3={}",
+                x3.to_str_radix(16),
+                y3.to_str_radix(16)
+            );
         }
 
         // Result is affine (z=1)
@@ -580,7 +762,11 @@ impl Secp256k1 {
         // Barrett/Montgomery hybrid only — plain modmul auto-fails rule #4
 
         if k.is_zero() || p.is_infinity() {
-            return Point { x: [0; 4], y: [0; 4], z: [0; 4] }; // Infinity
+            return Point {
+                x: [0; 4],
+                y: [0; 4],
+                z: [0; 4],
+            }; // Infinity
         }
 
         // GLV endomorphism decomposition for secp256k1
@@ -588,7 +774,12 @@ impl Secp256k1 {
         let (k1, k2) = self.glv_decompose(k);
         #[cfg(debug_assertions)]
         {
-            debug!("GLV decompose k={} -> k1={}, k2={}", k.to_hex(), k1.to_hex(), k2.to_hex());
+            debug!(
+                "GLV decompose k={} -> k1={}, k2={}",
+                k.to_hex(),
+                k1.to_hex(),
+                k2.to_hex()
+            );
         }
 
         // Compute P1 = k1 * P
@@ -607,7 +798,11 @@ impl Secp256k1 {
     /// Provides maximum speedup by decomposing into 4 components
     pub fn mul_glv4(&self, k: &BigInt256, p: &Point) -> Point {
         if k.is_zero() || p.is_infinity() {
-            return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
+            return Point {
+                x: [0; 4],
+                y: [0; 4],
+                z: [0; 4],
+            };
         }
 
         // GLV4 decomposition for maximum speedup
@@ -661,7 +856,7 @@ impl Secp256k1 {
         let mut table = vec![Point::infinity(); table_size];
         table[1] = p.clone();
         for i in 2..table_size {
-            table[i] = self.add(&table[i-1], p);
+            table[i] = self.add(&table[i - 1], p);
         }
         table
     }
@@ -752,7 +947,8 @@ impl Secp256k1 {
             let mut addend = p.clone();
             let mut scalar = k.clone();
             while !scalar.is_zero() {
-                if scalar.limbs[0] & 1 == 1 {  // is_odd check
+                if scalar.limbs[0] & 1 == 1 {
+                    // is_odd check
                     result = self.add(&result, &addend);
                 }
                 addend = self.double(&addend);
@@ -764,7 +960,10 @@ impl Secp256k1 {
         #[cfg(debug_assertions)]
         {
             debug!(" Scalar range check: k = {}", k.to_hex());
-            debug!(" Point input: X={:x}, Y={:x}, Z={:x}", p.x[3], p.y[3], p.z[3]);
+            debug!(
+                " Point input: X={:x}, Y={:x}, Z={:x}",
+                p.x[3], p.y[3], p.z[3]
+            );
         }
 
         if k.is_zero() {
@@ -774,7 +973,11 @@ impl Secp256k1 {
         }
         if k >= &self.n {
             #[cfg(debug_assertions)]
-            println!("WARNING: Scalar >= N - should be reduced: {} >= {}", k.to_hex(), self.n.to_hex());
+            println!(
+                "WARNING: Scalar >= N - should be reduced: {} >= {}",
+                k.to_hex(),
+                self.n.to_hex()
+            );
         }
         if p.is_infinity() {
             return Ok(Point::infinity());
@@ -797,18 +1000,36 @@ impl Secp256k1 {
     /// Index 0-5: [1,2,3,4,8,16]G, Index 6-11: -[1,2,3,4,8,16]G
     pub fn get_g_multiple_scalar(&self, index: usize) -> Option<BigInt256> {
         match index {
-            0 => Some(BigInt256::from_u64(1)),      // G
-            1 => Some(BigInt256::from_u64(2)),      // 2G
-            2 => Some(BigInt256::from_u64(3)),      // 3G
-            3 => Some(BigInt256::from_u64(4)),      // 4G
-            4 => Some(BigInt256::from_u64(8)),      // 8G
-            5 => Some(BigInt256::from_u64(16)),     // 16G
-            6 => Some(self.barrett_n.sub(&BigInt256::from_u64(1), &BigInt256::zero())),  // -G mod n
-            7 => Some(self.barrett_n.sub(&BigInt256::from_u64(2), &BigInt256::zero())),  // -2G mod n
-            8 => Some(self.barrett_n.sub(&BigInt256::from_u64(3), &BigInt256::zero())),  // -3G mod n
-            9 => Some(self.barrett_n.sub(&BigInt256::from_u64(4), &BigInt256::zero())),  // -4G mod n
-            10 => Some(self.barrett_n.sub(&BigInt256::from_u64(8), &BigInt256::zero())), // -8G mod n
-            11 => Some(self.barrett_n.sub(&BigInt256::from_u64(16), &BigInt256::zero())), // -16G mod n
+            0 => Some(BigInt256::from_u64(1)),  // G
+            1 => Some(BigInt256::from_u64(2)),  // 2G
+            2 => Some(BigInt256::from_u64(3)),  // 3G
+            3 => Some(BigInt256::from_u64(4)),  // 4G
+            4 => Some(BigInt256::from_u64(8)),  // 8G
+            5 => Some(BigInt256::from_u64(16)), // 16G
+            6 => Some(
+                self.barrett_n
+                    .sub(&BigInt256::from_u64(1), &BigInt256::zero()),
+            ), // -G mod n
+            7 => Some(
+                self.barrett_n
+                    .sub(&BigInt256::from_u64(2), &BigInt256::zero()),
+            ), // -2G mod n
+            8 => Some(
+                self.barrett_n
+                    .sub(&BigInt256::from_u64(3), &BigInt256::zero()),
+            ), // -3G mod n
+            9 => Some(
+                self.barrett_n
+                    .sub(&BigInt256::from_u64(4), &BigInt256::zero()),
+            ), // -4G mod n
+            10 => Some(
+                self.barrett_n
+                    .sub(&BigInt256::from_u64(8), &BigInt256::zero()),
+            ), // -8G mod n
+            11 => Some(
+                self.barrett_n
+                    .sub(&BigInt256::from_u64(16), &BigInt256::zero()),
+            ), // -16G mod n
             _ => None,
         }
     }
@@ -840,16 +1061,18 @@ impl Secp256k1 {
         let mut scalar = k.clone();
 
         while !scalar.is_zero() {
-            if scalar.limbs[0] & 1 == 1 {  // LSB set
+            if scalar.limbs[0] & 1 == 1 {
+                // LSB set
                 result = self.add(&result, &current);
             }
             current = self.double(&current);
             scalar = scalar.right_shift(1);
         }
-        debug!(" mul_naive final result: x={}, y={}",
+        debug!(
+            " mul_naive final result: x={}, y={}",
             BigInt256::from_u64_array(result.x).to_hex(),
-            BigInt256::from_u64_array(result.y).to_hex());
-
+            BigInt256::from_u64_array(result.y).to_hex()
+        );
 
         // Convert result to affine coordinates using exact arithmetic
         use num_bigint::BigUint;
@@ -887,7 +1110,13 @@ impl Secp256k1 {
     /// Professor-level Babai's refinement with multi-round convergence
     /// Applies iterative lattice reduction for optimal GLV decomposition
     /// Security: Constant-time execution prevents timing analysis
-    fn glv_babai_refinement(&self, k1: &BigInt256, k2: &BigInt256, lambda: &BigInt256, rounds: usize) -> (BigInt256, BigInt256) {
+    fn glv_babai_refinement(
+        &self,
+        k1: &BigInt256,
+        k2: &BigInt256,
+        lambda: &BigInt256,
+        rounds: usize,
+    ) -> (BigInt256, BigInt256) {
         let mut k1_refined = k1.clone();
         let mut k2_refined = k2.clone();
 
@@ -896,7 +1125,9 @@ impl Secp256k1 {
             // Apply Babai's nearest plane adjustment (constant-time)
             // This refines the lattice reduction to get closer to optimal vectors
             let adjust = self.round_to_closest(k1_refined.clone(), lambda);
-            k1_refined = self.barrett_n.sub(&k1_refined, &self.barrett_n.mul(&adjust, lambda));
+            k1_refined = self
+                .barrett_n
+                .sub(&k1_refined, &self.barrett_n.mul(&adjust, lambda));
             k2_refined = self.barrett_n.add(&k2_refined, &adjust);
 
             // Range reduction after each round (maintain [0, n-1])
@@ -978,7 +1209,8 @@ impl Secp256k1 {
         let quotient_u256 = U256::from_be_slice(&quotient_bytes);
 
         // Check if fractional part >= 0.5 (i.e., > p/2)
-        let p = U256::from_be_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+        let p =
+            U256::from_be_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
         let half_p = p >> 1; // p/2
 
         if quotient_u256 > half_p {
@@ -993,22 +1225,25 @@ impl Secp256k1 {
     /// Precompute GLV endomorphism table for common scalars
     /// Professor-level optimization: cache φ(P) for frequently used points
     pub fn precompute_glv_endomorphisms(&self, points: &[Point]) -> Vec<Point> {
-        points.iter()
-            .map(|p| self.apply_endomorphism(p))
-            .collect()
+        points.iter().map(|p| self.apply_endomorphism(p)).collect()
     }
 
     /// Precompute GLV decomposition table for common scalars
     /// Caches (k1, k2) pairs to avoid repeated decomposition
-    pub fn precompute_glv_decomposition(&self, scalars: &[BigInt256]) -> Vec<(BigInt256, BigInt256)> {
-        scalars.iter()
-            .map(|k| self.glv_decompose(k))
-            .collect()
+    pub fn precompute_glv_decomposition(
+        &self,
+        scalars: &[BigInt256],
+    ) -> Vec<(BigInt256, BigInt256)> {
+        scalars.iter().map(|k| self.glv_decompose(k)).collect()
     }
 
     /// Advanced Babai's algorithm with multi-round convergence
     /// Professor-level: iterative refinement for optimal lattice reduction
-    pub fn glv_decompose_babai_advanced(&self, k: &BigInt256, rounds: usize) -> (BigInt256, BigInt256) {
+    pub fn glv_decompose_babai_advanced(
+        &self,
+        k: &BigInt256,
+        rounds: usize,
+    ) -> (BigInt256, BigInt256) {
         let mut k1 = k.clone();
         let mut k2 = BigInt256::zero();
 
@@ -1036,8 +1271,12 @@ impl Secp256k1 {
 
         // For now, return simplified result
         let coeffs = [
-            BigInt256::zero(), BigInt256::zero(), BigInt256::zero(),
-            BigInt256::zero(), BigInt256::zero(), BigInt256::zero()
+            BigInt256::zero(),
+            BigInt256::zero(),
+            BigInt256::zero(),
+            BigInt256::zero(),
+            BigInt256::zero(),
+            BigInt256::zero(),
         ];
         let signs = [0i8; 6];
         (coeffs, signs)
@@ -1109,8 +1348,6 @@ impl Secp256k1 {
         (k1_final, k2_final)
     }
 
-
-
     /// Gram-Schmidt orthogonalization for 4D basis
     #[allow(dead_code)]
     fn gram_schmidt_4d(&self, _basis: &[k256::Scalar; 4]) -> [k256::Scalar; 4] {
@@ -1137,23 +1374,70 @@ impl Secp256k1 {
     }
 
     /// Professor-level Gram-Schmidt orthogonalization for 4D basis
-    pub fn gram_schmidt_4d_bigint(basis: &[[BigInt256; 4]; 4]) -> ([[BigInt256; 4]; 4], [[BigInt256; 4]; 4]) {
+    pub fn gram_schmidt_4d_bigint(
+        basis: &[[BigInt256; 4]; 4],
+    ) -> ([[BigInt256; 4]; 4], [[BigInt256; 4]; 4]) {
         let mut gs = [
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
         ]; // Orthogonal basis vectors
         let mut mu = [
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
         ]; // Upper triangular matrix
 
         for i in 0..4 {
             // Start with the original basis vector
-            gs[i] = [basis[i][0].clone(), basis[i][1].clone(), basis[i][2].clone(), basis[i][3].clone()];
+            gs[i] = [
+                basis[i][0].clone(),
+                basis[i][1].clone(),
+                basis[i][2].clone(),
+                basis[i][3].clone(),
+            ];
 
             // Subtract projections onto previous orthogonal vectors
             for j in 0..i {
@@ -1180,7 +1464,9 @@ impl Secp256k1 {
 
     /// 4D dot product
     fn dot_4d(a: &[BigInt256; 4], b: &[BigInt256; 4]) -> BigInt256 {
-        (0..4).fold(BigInt256::zero(), |sum, i| sum + a[i].clone() * b[i].clone())
+        (0..4).fold(BigInt256::zero(), |sum, i| {
+            sum + a[i].clone() * b[i].clone()
+        })
     }
 
     /// 4D norm squared
@@ -1193,7 +1479,7 @@ impl Secp256k1 {
         target: (BigInt256, BigInt256),
         _basis: &[[BigInt256; 2]; 2],
         _gs: &[[BigInt256; 2]; 2],
-        _mu: &[[BigInt256; 2]; 2]
+        _mu: &[[BigInt256; 2]; 2],
     ) -> (BigInt256, BigInt256) {
         let mut coeffs = (BigInt256::zero(), BigInt256::zero());
         let mut residual = target;
@@ -1251,9 +1537,14 @@ impl Secp256k1 {
         basis: &[[BigInt256; 4]; 4],
         gs: &[[BigInt256; 4]; 4],
         mu: &[[BigInt256; 4]; 4],
-        rounds: usize
+        rounds: usize,
     ) -> [BigInt256; 4] {
-        let mut coeffs = [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()];
+        let mut coeffs = [
+            BigInt256::zero(),
+            BigInt256::zero(),
+            BigInt256::zero(),
+            BigInt256::zero(),
+        ];
         let mut current_gs = gs.clone();
         let mut current_basis = basis.clone();
         let mut current_mu = mu.clone();
@@ -1264,7 +1555,7 @@ impl Secp256k1 {
             let range: Vec<usize> = if direction_forward {
                 (0..4).rev().collect() // 3, 2, 1, 0
             } else {
-                (0..4).collect()       // 0, 1, 2, 3
+                (0..4).collect() // 0, 1, 2, 3
             };
 
             // Project in specified order
@@ -1291,10 +1582,30 @@ impl Secp256k1 {
 
                 // Transpose and reverse mu matrix for consistency
                 let mut transposed_mu = [
-                    [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-                    [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-                    [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-                    [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+                    [
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                    ],
+                    [
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                    ],
+                    [
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                    ],
+                    [
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                        BigInt256::zero(),
+                    ],
                 ];
                 for i in 0..4 {
                     for j in 0..4 {
@@ -1312,10 +1623,30 @@ impl Secp256k1 {
     /// Transpose upper triangular mu matrix
     fn transpose_mu(mu: &[[BigInt256; 4]; 4]) -> [[BigInt256; 4]; 4] {
         let mut transposed = [
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
-            [BigInt256::zero(), BigInt256::zero(), BigInt256::zero(), BigInt256::zero()],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
+            [
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+                BigInt256::zero(),
+            ],
         ];
         for i in 0..4 {
             for j in 0..4 {
@@ -1325,7 +1656,6 @@ impl Secp256k1 {
         transposed
     }
 
-
     /// Master-level GLV endomorphism application with Jacobian coordinates
     pub fn endomorphism_apply(p: &k256::ProjectivePoint) -> k256::ProjectivePoint {
         // GLV endomorphism φ(P) = (β²x, β³y) where β is cube root of unity
@@ -1333,7 +1663,6 @@ impl Secp256k1 {
         let beta_sq = Self::glv_beta_scalar() * Self::glv_beta_scalar();
         p * &beta_sq
     }
-
 
     /// Second endomorphism application: phi^2(p) = phi(phi(p))
     pub fn endomorphism_apply2(p: &k256::ProjectivePoint) -> k256::ProjectivePoint {
@@ -1398,7 +1727,8 @@ impl Secp256k1 {
         let mut k_copy = *k;
 
         for i in 0..256 {
-            if false { // Placeholder: check if odd
+            if false {
+                // Placeholder: check if odd
                 // Extract window bits and compute NAF digit
                 let window_bits = (k_copy.to_bytes()[31] & ((1 << window) - 1)) as i8;
                 let digit = if window_bits >= (1 << (window - 1)) {
@@ -1421,16 +1751,19 @@ impl Secp256k1 {
     }
 
     /// Precompute odd multiples for NAF multiplication (constant-time)
-    fn precompute_odd_multiples_ct(p: &k256::ProjectivePoint, count: usize) -> Vec<k256::ProjectivePoint> {
+    fn precompute_odd_multiples_ct(
+        p: &k256::ProjectivePoint,
+        count: usize,
+    ) -> Vec<k256::ProjectivePoint> {
         let mut precomp = vec![k256::ProjectivePoint::IDENTITY; count];
 
         if count > 0 {
-            precomp[0] = *p;  // 1*P
+            precomp[0] = *p; // 1*P
         }
 
         for i in 1..count {
             let _odd_multiple = 2 * i + 1;
-            precomp[i] = precomp[i-1] + *p + *p;  // Add 2*P each time
+            precomp[i] = precomp[i - 1] + *p + *p; // Add 2*P each time
         }
 
         precomp
@@ -1485,7 +1818,10 @@ impl Secp256k1 {
     }
 
     /// Professor-level constant-time precomputation of odd multiples
-    pub fn ct_precompute_odd_multiples(p: &k256::ProjectivePoint, count: usize) -> Vec<k256::ProjectivePoint> {
+    pub fn ct_precompute_odd_multiples(
+        p: &k256::ProjectivePoint,
+        count: usize,
+    ) -> Vec<k256::ProjectivePoint> {
         let mut precomp = vec![k256::ProjectivePoint::IDENTITY; count];
 
         if count > 0 {
@@ -1496,7 +1832,7 @@ impl Secp256k1 {
             // Always compute: precomp[i] = precomp[i-1] + 2*P
             // This ensures 1*P, 3*P, 5*P, ... regardless of index
             let two_p = *p + *p;
-            precomp[i] = precomp[i-1] + two_p;
+            precomp[i] = precomp[i - 1] + two_p;
         }
 
         precomp
@@ -1508,7 +1844,11 @@ impl Secp256k1 {
 
         // Constant-time selection: result = sum over i of (index == i) * table[i]
         for (i, point) in table.iter().enumerate() {
-            let mask = if i == index { k256::Scalar::ONE } else { k256::Scalar::ZERO };
+            let mask = if i == index {
+                k256::Scalar::ONE
+            } else {
+                k256::Scalar::ZERO
+            };
             result = Self::point_ct_add(&result, point, &mask);
         }
 
@@ -1519,7 +1859,7 @@ impl Secp256k1 {
     pub fn ct_combo_select_glv4(
         combos: &[[k256::Scalar; 4]; 16],
         signs: &[[i8; 4]; 16],
-        norms: &[k256::Scalar; 16]
+        norms: &[k256::Scalar; 16],
     ) -> ([k256::Scalar; 4], [i8; 4]) {
         let mut best_coeffs = combos[0];
         let mut best_signs = signs[0];
@@ -1534,8 +1874,8 @@ impl Secp256k1 {
             let update_mask = k256::Scalar::from(is_better as u64);
 
             // Update min_norm: min_norm = is_better ? current_norm : min_norm
-            min_norm = (min_norm * (k256::Scalar::ONE - update_mask)) +
-                       (current_norm * update_mask);
+            min_norm =
+                (min_norm * (k256::Scalar::ONE - update_mask)) + (current_norm * update_mask);
 
             // Update coefficients and signs
             for i in 0..4 {
@@ -1543,13 +1883,13 @@ impl Secp256k1 {
                 let current_sign = k256::Scalar::from(signs[combo][i] as u64);
 
                 // best_coeffs[i] = is_better ? current_coeff : best_coeffs[i]
-                best_coeffs[i] = (best_coeffs[i] * (k256::Scalar::ONE - update_mask)) +
-                                (current_coeff * update_mask);
+                best_coeffs[i] = (best_coeffs[i] * (k256::Scalar::ONE - update_mask))
+                    + (current_coeff * update_mask);
 
                 // Handle signs (convert back to i8)
                 let best_sign_scalar = k256::Scalar::from(best_signs[i] as u64);
-                let new_sign_scalar = (best_sign_scalar * (k256::Scalar::ONE - update_mask)) +
-                                     (current_sign * update_mask);
+                let new_sign_scalar = (best_sign_scalar * (k256::Scalar::ONE - update_mask))
+                    + (current_sign * update_mask);
                 best_signs[i] = new_sign_scalar.to_bytes()[0] as i8; // Simplified conversion
             }
         }
@@ -1558,7 +1898,11 @@ impl Secp256k1 {
     }
 
     /// Constant-time point addition with mask
-    fn point_ct_add(a: &k256::ProjectivePoint, b: &k256::ProjectivePoint, mask: &k256::Scalar) -> k256::ProjectivePoint {
+    fn point_ct_add(
+        a: &k256::ProjectivePoint,
+        b: &k256::ProjectivePoint,
+        mask: &k256::Scalar,
+    ) -> k256::ProjectivePoint {
         let masked_b = Self::point_mask(b, mask);
         *a + masked_b
     }
@@ -1576,7 +1920,6 @@ impl Secp256k1 {
         quotient + round_up_mask
     }
 
-
     /// Helper function for rounding scalar division by 2^256
     fn round_scalar_div_2_256(x: &k256::Scalar) -> k256::Scalar {
         // For master implementation, we need proper rounding
@@ -1592,7 +1935,6 @@ impl Secp256k1 {
 
         k256::Scalar::ZERO // Placeholder rounded scalar
     }
-
 
     /// Master-level GLV optimized scalar multiplication
 
@@ -1612,7 +1954,9 @@ impl Secp256k1 {
     fn apply_endomorphism(&self, p: &Point) -> Point {
         // secp256k1 endomorphism λ where λ*P = (β*x, y)
         // β = 0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee
-        let beta = BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee").unwrap();
+        let beta =
+            BigInt256::from_hex("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee")
+                .unwrap();
 
         let px = BigInt256::from_u64_array(p.x);
         let new_x = self.barrett_p.mul(&beta, &px);
@@ -1635,12 +1979,19 @@ impl Secp256k1 {
         let _one = BigInt256::from_u64(1);
         if z_big.is_zero() {
             // Infinity point - return (0,0,0) representation
-            return Point { x: [0; 4], y: [0; 4], z: [0; 4] };
+            return Point {
+                x: [0; 4],
+                y: [0; 4],
+                z: [0; 4],
+            };
         }
 
         // Special case: if Z=1, point is already affine
         if z_big == BigInt256::from_u64(1) {
-            debug!(" to_affine Z=1, returning p.x={:x}, p.y={:x}", p.x[3], p.y[3]);
+            debug!(
+                " to_affine Z=1, returning p.x={:x}, p.y={:x}",
+                p.x[3], p.y[3]
+            );
             return Point {
                 x: p.x,
                 y: p.y,
@@ -1676,14 +2027,23 @@ impl Secp256k1 {
 
         #[cfg(debug_assertions)]
         {
-            debug!(" to_affine input x={}, y={}, z={}", 
-                     BigInt256::from_u64_array(p.x).to_hex(),
-                     BigInt256::from_u64_array(p.y).to_hex(),
-                     z_big.to_hex());
-            debug!(" to_affine z_inv={}, z_inv_sq={}, z_inv_cu={}",
-                     z_inv.to_str_radix(16), z_inv_sq.to_str_radix(16), z_inv_cu.to_str_radix(16));
-            debug!(" to_affine x_aff={}, y_aff={}",
-                     x_aff.to_hex(), y_aff.to_hex());
+            debug!(
+                " to_affine input x={}, y={}, z={}",
+                BigInt256::from_u64_array(p.x).to_hex(),
+                BigInt256::from_u64_array(p.y).to_hex(),
+                z_big.to_hex()
+            );
+            debug!(
+                " to_affine z_inv={}, z_inv_sq={}, z_inv_cu={}",
+                z_inv.to_str_radix(16),
+                z_inv_sq.to_str_radix(16),
+                z_inv_cu.to_str_radix(16)
+            );
+            debug!(
+                " to_affine x_aff={}, y_aff={}",
+                x_aff.to_hex(),
+                y_aff.to_hex()
+            );
         }
 
         Point {
@@ -1710,7 +2070,9 @@ impl Secp256k1 {
         let mut z_product = BigInt256::from_u64(1);
         for point in points {
             if !point.is_infinity() {
-                z_product = self.barrett_p.mul(&z_product, &BigInt256::from_u64_array(point.z));
+                z_product = self
+                    .barrett_p
+                    .mul(&z_product, &BigInt256::from_u64_array(point.z));
             }
         }
 
@@ -1731,7 +2093,9 @@ impl Secp256k1 {
 
                 // Update for next point (divide by this z)
                 if i > 0 {
-                    current_inv = self.barrett_p.mul(&current_inv, &BigInt256::from_u64_array(point.z));
+                    current_inv = self
+                        .barrett_p
+                        .mul(&current_inv, &BigInt256::from_u64_array(point.z));
                 }
             }
         }
@@ -1748,8 +2112,12 @@ impl Secp256k1 {
                 let z_inv_sq = self.montgomery_p.mul(&z_inv, &z_inv);
                 let z_inv_cu = self.montgomery_p.mul(&z_inv_sq, &z_inv);
 
-                let x_aff = self.barrett_p.mul(&BigInt256::from_u64_array(point.x), &z_inv_sq);
-                let y_aff = self.barrett_p.mul(&BigInt256::from_u64_array(point.y), &z_inv_cu);
+                let x_aff = self
+                    .barrett_p
+                    .mul(&BigInt256::from_u64_array(point.x), &z_inv_sq);
+                let y_aff = self
+                    .barrett_p
+                    .mul(&BigInt256::from_u64_array(point.y), &z_inv_cu);
 
                 result.push(Point {
                     x: x_aff.to_u64_array(),
@@ -1773,7 +2141,11 @@ impl Secp256k1 {
         let y = BigInt256::from_u64_array(affine.y);
 
         // Debug: print hex values
-        debug!(" is_on_curve affine.x={}, affine.y={}", x.to_hex(), y.to_hex());
+        debug!(
+            " is_on_curve affine.x={}, affine.y={}",
+            x.to_hex(),
+            y.to_hex()
+        );
 
         // Use num_bigint for exact curve check
         use num_bigint::BigUint;
@@ -1786,37 +2158,41 @@ impl Secp256k1 {
         let x3_big = (&x2_big * &x_big) % &p_big;
         let rhs_big = (x3_big + 7u32) % &p_big;
 
-        debug!(" is_on_curve exact x={}, y={}, y2={}, rhs={}",
-                x_big.to_str_radix(16), y_big.to_str_radix(16),
-                y2_big.to_str_radix(16), rhs_big.to_str_radix(16));
+        debug!(
+            " is_on_curve exact x={}, y={}, y2={}, rhs={}",
+            x_big.to_str_radix(16),
+            y_big.to_str_radix(16),
+            y2_big.to_str_radix(16),
+            rhs_big.to_str_radix(16)
+        );
 
         y2_big == rhs_big
     }
 
-/// Standalone modular inverse using extended Euclidean algorithm
-/// Computes a^(-1) mod modulus using the extended Euclidean algorithm
-pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
-    use num_bigint::BigUint;
+    /// Standalone modular inverse using extended Euclidean algorithm
+    /// Computes a^(-1) mod modulus using the extended Euclidean algorithm
+    pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+        use num_bigint::BigUint;
 
-    if a.is_zero() {
-        return None;
-    }
-
-    // Use BigUint for reliable modular inverse
-    let a_big = BigUint::from_bytes_be(&a.to_bytes_be());
-    let modulus_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
-
-    match a_big.modinv(&modulus_big) {
-        Some(inv) => {
-            let inv_bytes = inv.to_bytes_be();
-            let mut bytes = [0u8; 32];
-            let start = 32 - inv_bytes.len();
-            bytes[start..].copy_from_slice(&inv_bytes);
-            Some(BigInt256::from_bytes_be(&bytes))
+        if a.is_zero() {
+            return None;
         }
-        None => None,
+
+        // Use BigUint for reliable modular inverse
+        let a_big = BigUint::from_bytes_be(&a.to_bytes_be());
+        let modulus_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
+
+        match a_big.modinv(&modulus_big) {
+            Some(inv) => {
+                let inv_bytes = inv.to_bytes_be();
+                let mut bytes = [0u8; 32];
+                let start = 32 - inv_bytes.len();
+                bytes[start..].copy_from_slice(&inv_bytes);
+                Some(BigInt256::from_bytes_be(&bytes))
+            }
+            None => None,
+        }
     }
-}
 
     /// Modular inverse using extended Euclidean algorithm (method version)
     /// Computes a^(-1) mod modulus using the extended Euclidean algorithm
@@ -1833,7 +2209,10 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         }
 
         // Security: Ensure constant-time execution by normalizing inputs
-        let a_reduced = self.barrett_p.reduce(&BigInt512::from_bigint256(a)).expect("Barrett reduction should not fail");
+        let a_reduced = self
+            .barrett_p
+            .reduce(&BigInt512::from_bigint256(a))
+            .expect("Barrett reduction should not fail");
         let modulus_reduced = modulus; // Assume modulus is already valid
 
         let mut old_r = modulus_reduced.clone();
@@ -1873,8 +2252,13 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         let mut bytes = [0u8; 32];
         OsRng.fill_bytes(&mut bytes);
         let mut scalar = BigInt256::from_bytes_be(&bytes);
-        scalar = self.barrett_n.reduce(&BigInt512::from_bigint256(&scalar)).expect("Barrett reduction should not fail");
-        if scalar.is_zero() { scalar = BigInt256::from_u64(1); }
+        scalar = self
+            .barrett_n
+            .reduce(&BigInt512::from_bigint256(&scalar))
+            .expect("Barrett reduction should not fail");
+        if scalar.is_zero() {
+            scalar = BigInt256::from_u64(1);
+        }
         scalar
     }
 
@@ -1896,7 +2280,6 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             return None; // Invalid format
         }
 
-
         // Extract x coordinate from bytes 1-32 (big-endian)
         let mut x_bytes = [0u8; 32];
         x_bytes.copy_from_slice(&compressed[1..33]);
@@ -1909,8 +2292,12 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         }
 
         // Special cases for known puzzles - use known y coordinates
-        let generator_x = BigInt256::from_hex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798").unwrap();
-        let generator_y = BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8").unwrap();
+        let generator_x =
+            BigInt256::from_hex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798")
+                .unwrap();
+        let generator_y =
+            BigInt256::from_hex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8")
+                .unwrap();
 
         // For unknown points, compute y^2 = x^3 + ax + b mod p
         // Use BigUint for accurate calculation to avoid Barrett bugs
@@ -1927,7 +2314,6 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         let ax_plus_b_big = (&ax_big + &b_big) % &p_big;
         let rhs_big = (&x_cubed_big + &ax_plus_b_big) % &p_big;
 
-
         // Convert back to BigInt256
         let rhs_bytes = rhs_big.to_bytes_be();
         let mut rhs_bytes_array = [0u8; 32];
@@ -1938,10 +2324,15 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
         debug!(" Decompressing x: {}, rhs: {}", x.to_hex(), rhs.to_hex());
 
         // Special case: if this is puzzle #66's x coordinate, return the known y
-        let puzzle66_x = BigInt256::from_hex("00000000000000000000000000000002e00ddc93b1a8f8bf9afe880853090228").unwrap();
+        let puzzle66_x =
+            BigInt256::from_hex("00000000000000000000000000000002e00ddc93b1a8f8bf9afe880853090228")
+                .unwrap();
         if x == puzzle66_x {
             debug!(" Recognized puzzle #66 x coordinate, using known y");
-            let known_y = BigInt256::from_hex("000000000000000000000000000000006c9226f6233635cd3b3a7662ea4c5c24").unwrap();
+            let known_y = BigInt256::from_hex(
+                "000000000000000000000000000000006c9226f6233635cd3b3a7662ea4c5c24",
+            )
+            .unwrap();
             let point = Point {
                 x: x.to_u64_array(),
                 y: known_y.to_u64_array(),
@@ -1956,9 +2347,17 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             debug!(" Invalid x >= p: {}", x.to_hex());
             return None;
         }
-        let (legendre_exp, _) = self.barrett_p.sub(&self.p, &BigInt256::one()).div_rem(&BigInt256::from_u64(2));
+        let (legendre_exp, _) = self
+            .barrett_p
+            .sub(&self.p, &BigInt256::one())
+            .div_rem(&BigInt256::from_u64(2));
         let legendre = self.pow_mod(&rhs, &legendre_exp, &self.p);
-        debug!(" Legendre symbol check - rhs: {}, exp: {}, legendre: {}", rhs.to_hex(), legendre_exp.to_hex(), legendre.to_hex());
+        debug!(
+            " Legendre symbol check - rhs: {}, exp: {}, legendre: {}",
+            rhs.to_hex(),
+            legendre_exp.to_hex(),
+            legendre.to_hex()
+        );
         if legendre != BigInt256::one() {
             debug!(" Pre-check failed: x={} is not a quadratic residue (Legendre={}), cannot decompress", x.to_hex(), legendre.to_hex());
             return None;
@@ -1973,7 +2372,11 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             match self.compute_modular_sqrt(&rhs) {
                 Some(y) => y,
                 None => {
-                    log::warn!("Modular sqrt failed for rhs: {}, x: {}", rhs.to_hex(), x.to_hex());
+                    log::warn!(
+                        "Modular sqrt failed for rhs: {}, x: {}",
+                        rhs.to_hex(),
+                        x.to_hex()
+                    );
                     return None;
                 }
             }
@@ -2041,11 +2444,17 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             // Find smallest i where t^{2^i} ≡ 1 mod p
             let mut i: u32 = 1;
             let mut t2i = self.barrett_p.mul(&t, &t);
-            t2i = self.barrett_p.reduce(&BigInt512::from_bigint256(&t2i)).unwrap();
+            t2i = self
+                .barrett_p
+                .reduce(&BigInt512::from_bigint256(&t2i))
+                .unwrap();
 
             while t2i != BigInt256::one() && i < m {
                 t2i = self.barrett_p.mul(&t2i, &t2i);
-                t2i = self.barrett_p.reduce(&BigInt512::from_bigint256(&t2i)).unwrap();
+                t2i = self
+                    .barrett_p
+                    .reduce(&BigInt512::from_bigint256(&t2i))
+                    .unwrap();
                 i += 1;
             }
 
@@ -2055,13 +2464,22 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
 
             // Update r = r * b, c = b², t = t * c, m = i
             r = self.barrett_p.mul(&r, &b);
-            r = self.barrett_p.reduce(&BigInt512::from_bigint256(&r)).unwrap();
+            r = self
+                .barrett_p
+                .reduce(&BigInt512::from_bigint256(&r))
+                .unwrap();
 
             let b2 = self.barrett_p.mul(&b, &b);
-            c = self.barrett_p.reduce(&BigInt512::from_bigint256(&b2)).unwrap();
+            c = self
+                .barrett_p
+                .reduce(&BigInt512::from_bigint256(&b2))
+                .unwrap();
 
             t = self.barrett_p.mul(&t, &c);
-            t = self.barrett_p.reduce(&BigInt512::from_bigint256(&t)).unwrap();
+            t = self
+                .barrett_p
+                .reduce(&BigInt512::from_bigint256(&t))
+                .unwrap();
 
             m = i;
         }
@@ -2126,8 +2544,14 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             let inv_two_y = self.barrett_p.inv(&two_y).unwrap_or(BigInt256::zero());
             let lambda = self.barrett_p.mul(&lambda, &inv_two_y);
 
-            let x3 = self.barrett_p.sub(&self.barrett_p.mul(&lambda, &lambda), &(BigInt256::from_u64(2) * x.clone()));
-            let y3 = self.barrett_p.sub(&self.barrett_p.mul(&lambda, &self.barrett_p.sub(&x, &x3)), &y);
+            let x3 = self.barrett_p.sub(
+                &self.barrett_p.mul(&lambda, &lambda),
+                &(BigInt256::from_u64(2) * x.clone()),
+            );
+            let y3 = self.barrett_p.sub(
+                &self.barrett_p.mul(&lambda, &self.barrett_p.sub(&x, &x3)),
+                &y,
+            );
 
             Point {
                 x: x3.limbs,
@@ -2143,13 +2567,46 @@ pub fn mod_inverse(a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
             let x_squared = self.barrett_p.mul(&x, &x);
             let three_x_squared = self.barrett_p.mul(&BigInt256::from_u64(3), &x_squared);
 
-            let m = self.barrett_p.sub(&three_x_squared, &self.barrett_p.mul(&BigInt256::from_u64(2), &y_squared_z_squared));
+            let m = self.barrett_p.sub(
+                &three_x_squared,
+                &self
+                    .barrett_p
+                    .mul(&BigInt256::from_u64(2), &y_squared_z_squared),
+            );
 
-            let z_new = self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(&y, &z));
+            let z_new = self
+                .barrett_p
+                .mul(&BigInt256::from_u64(2), &self.barrett_p.mul(&y, &z));
 
-            let x_new = self.barrett_p.sub(&self.barrett_p.mul(&m, &m), &self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(&x, &y_squared_z_squared))));
+            let x_new = self.barrett_p.sub(
+                &self.barrett_p.mul(&m, &m),
+                &self.barrett_p.mul(
+                    &BigInt256::from_u64(2),
+                    &self.barrett_p.mul(
+                        &BigInt256::from_u64(2),
+                        &self.barrett_p.mul(&x, &y_squared_z_squared),
+                    ),
+                ),
+            );
 
-            let y_new = self.barrett_p.sub(&self.barrett_p.mul(&m, &self.barrett_p.sub(&self.barrett_p.mul(&BigInt256::from_u64(2), &self.barrett_p.mul(&x, &y_squared_z_squared)), &x_new)), &self.barrett_p.mul(&BigInt256::from_u64(8), &self.barrett_p.mul(&y_squared, &self.barrett_p.mul(&y_squared, &z_squared))));
+            let y_new = self.barrett_p.sub(
+                &self.barrett_p.mul(
+                    &m,
+                    &self.barrett_p.sub(
+                        &self.barrett_p.mul(
+                            &BigInt256::from_u64(2),
+                            &self.barrett_p.mul(&x, &y_squared_z_squared),
+                        ),
+                        &x_new,
+                    ),
+                ),
+                &self.barrett_p.mul(
+                    &BigInt256::from_u64(8),
+                    &self
+                        .barrett_p
+                        .mul(&y_squared, &self.barrett_p.mul(&y_squared, &z_squared)),
+                ),
+            );
 
             Point {
                 x: x_new.limbs,
@@ -2243,7 +2700,6 @@ impl Point {
         let affine_point = k256::AffinePoint::from_encoded_point(&encoded_point).unwrap();
         k256::ProjectivePoint::from(affine_point)
     }
-
 }
 
 #[cfg(test)]
@@ -2311,10 +2767,12 @@ mod tests {
         // Just test first double for now
         point = secp.double(&point);
         let affine = secp.to_affine(&point);
-        println!("First double result: x={}, y={}, on_curve={}",
-                BigInt256::from_u64_array(affine.x).to_hex(),
-                BigInt256::from_u64_array(affine.y).to_hex(),
-                secp.is_on_curve(&affine));
+        println!(
+            "First double result: x={}, y={}, on_curve={}",
+            BigInt256::from_u64_array(affine.x).to_hex(),
+            BigInt256::from_u64_array(affine.y).to_hex(),
+            secp.is_on_curve(&affine)
+        );
         // Skip assertion for now to see what we get
         // assert!(secp.is_on_curve(&affine));
     }
@@ -2381,7 +2839,11 @@ mod tests {
         assert!(curve.is_on_curve(&curve.g));
 
         // Infinity is valid
-        let infinity = Point { x: [0; 4], y: [0; 4], z: [0; 4] };
+        let infinity = Point {
+            x: [0; 4],
+            y: [0; 4],
+            z: [0; 4],
+        };
         assert!(infinity.is_infinity());
         assert!(curve.is_on_curve(&infinity));
 
@@ -2402,10 +2864,13 @@ mod tests {
         let three_g = curve.mul(&three, &curve.g);
         let three_g_affine = curve.to_affine(&three_g);
 
-        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")
-            .expect("Invalid expected x");
-        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
-            .expect("Invalid expected y");
+        let expected_x = BigInt256::from_hex(
+            "c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b",
+        )
+        .expect("Invalid expected x");
+        let expected_y =
+            BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+                .expect("Invalid expected y");
 
         assert_eq!(three_g_affine.x, expected_x.to_u64_array());
         assert_eq!(three_g_affine.y, expected_y.to_u64_array());
@@ -2417,8 +2882,8 @@ mod tests {
         let curve = Secp256k1::new();
 
         // Test that GLV decomposition gives correct scalar multiplication
-        let k = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0")
-            .expect("Invalid test scalar");
+        let k =
+            BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0").expect("Invalid test scalar");
         let (k1, k2) = curve.glv_decompose(&k);
 
         // Verify: k*P = k1*P + k2*λ(P)
@@ -2511,15 +2976,13 @@ mod tests {
 
         // Create test points in Jacobian coordinates
         let points = vec![
-            curve.g, // Z=1 (affine)
-            curve.double(&curve.g), // Z=2 (Jacobian)
+            curve.g,                                      // Z=1 (affine)
+            curve.double(&curve.g),                       // Z=2 (Jacobian)
             curve.add(&curve.g, &curve.double(&curve.g)), // Z=3 (Jacobian)
         ];
 
         // Convert to affine individually
-        let individual_affine: Vec<Point> = points.iter()
-            .map(|p| curve.to_affine(p))
-            .collect();
+        let individual_affine: Vec<Point> = points.iter().map(|p| curve.to_affine(p)).collect();
 
         // Convert to affine using batch method
         let batch_affine = curve.batch_to_affine(&points);
@@ -2559,10 +3022,13 @@ mod tests {
         assert_eq!(glv_affine.y, naive_affine.y);
 
         // Also verify against known 3G vector
-        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b")
-            .expect("Invalid expected x");
-        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
-            .expect("Invalid expected y");
+        let expected_x = BigInt256::from_hex(
+            "c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b",
+        )
+        .expect("Invalid expected x");
+        let expected_y =
+            BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+                .expect("Invalid expected y");
 
         assert_eq!(glv_affine.x, expected_x.to_u64_array());
         assert_eq!(glv_affine.y, expected_y.to_u64_array());
@@ -2574,16 +3040,23 @@ mod tests {
         use std::time::Instant;
 
         let curve = Secp256k1::new();
-        let k = BigInt256::from_hex("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
-            .expect("Invalid benchmark scalar");
+        let k =
+            BigInt256::from_hex("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+                .expect("Invalid benchmark scalar");
         let start_naive = Instant::now();
         let _naive = curve.mul_naive(&k, &curve.g);
         let duration_naive = start_naive.elapsed();
         let start_glv = Instant::now();
         let _glv = curve.mul(&k, &curve.g);
         let duration_glv = start_glv.elapsed();
-        let speedup = (duration_naive.as_nanos() as f64 - duration_glv.as_nanos() as f64) / duration_naive.as_nanos() as f64 * 100.0;
-        assert!(speedup > 25.0, "GLV speedup should be at least 25%: got {:.2}%", speedup);
+        let speedup = (duration_naive.as_nanos() as f64 - duration_glv.as_nanos() as f64)
+            / duration_naive.as_nanos() as f64
+            * 100.0;
+        assert!(
+            speedup > 25.0,
+            "GLV speedup should be at least 25%: got {:.2}%",
+            speedup
+        );
     }
 
     /// Test addition with non-affine Z coordinates (Z!=1)
@@ -2614,8 +3087,12 @@ mod tests {
         let four = BigInt256::from_u64(4);
         let four_g = curve.mul(&four, &curve.g);
         let four_g_affine = curve.to_affine(&four_g);
-        let expected_x = BigInt256::from_hex("490f943d44d80675a1a1d5e2250a8d0f9e787c5f8f08d8e8c97b4a8f6f4f4f4f").expect("valid expected x");
-        let expected_y = BigInt256::from_hex("2e0774c5e8f8a77d96d0c20a6c5a7e2302b7f1484bd3c84101384d90e6b4b1ac").expect("valid expected y");
+        let expected_x =
+            BigInt256::from_hex("490f943d44d80675a1a1d5e2250a8d0f9e787c5f8f08d8e8c97b4a8f6f4f4f4f")
+                .expect("valid expected x");
+        let expected_y =
+            BigInt256::from_hex("2e0774c5e8f8a77d96d0c20a6c5a7e2302b7f1484bd3c84101384d90e6b4b1ac")
+                .expect("valid expected y");
         assert_eq!(four_g_affine.x, expected_x.to_u64_array());
         assert_eq!(four_g_affine.y, expected_y.to_u64_array());
     }
@@ -2667,9 +3144,11 @@ mod tests {
         assert_eq!(curve.mul_constant_time(&two, &curve.g)?, double_g);
 
         // Random scalar (small for test)
-        let k = BigInt256::from_hex("0000000000000000000000000000000000000000000000000000000000001234").unwrap();
+        let k =
+            BigInt256::from_hex("0000000000000000000000000000000000000000000000000000000000001234")
+                .unwrap();
         let result = curve.mul_constant_time(&k, &curve.g)?;
-        let naive = curve.mul_naive(&k, &curve.g);  // For verification only
+        let naive = curve.mul_naive(&k, &curve.g); // For verification only
         assert_eq!(result, naive);
 
         Ok(())
@@ -2685,8 +3164,13 @@ mod tests {
         let three_g = curve.mul_constant_time(&three, &curve.g)?;
         let three_g_affine = curve.to_affine(&three_g);
 
-        let expected_x = BigInt256::from_hex("c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b").unwrap();
-        let expected_y = BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d").unwrap();
+        let expected_x = BigInt256::from_hex(
+            "c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b",
+        )
+        .unwrap();
+        let expected_y =
+            BigInt256::from_hex("b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d")
+                .unwrap();
 
         assert_eq!(three_g_affine.x, expected_x.to_u64_array());
         assert_eq!(three_g_affine.y, expected_y.to_u64_array());
@@ -2706,7 +3190,9 @@ mod tests {
 
         // [0] * P = inf for any P
         let p = curve.g;
-        assert!(curve.mul_constant_time(&BigInt256::zero(), &p)?.is_infinity());
+        assert!(curve
+            .mul_constant_time(&BigInt256::zero(), &p)?
+            .is_infinity());
 
         Ok(())
     }
@@ -2721,8 +3207,12 @@ mod tests {
             BigInt256::from_u64(1),
             BigInt256::from_u64(2),
             BigInt256::from_u64(7),
-            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140").unwrap(), // n-1
-            BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0FEDCBA9876543210FEDCBA9876543210F").unwrap(),
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140")
+                .unwrap(), // n-1
+            BigInt256::from_hex(
+                "123456789ABCDEF0123456789ABCDEF0FEDCBA9876543210FEDCBA9876543210F",
+            )
+            .unwrap(),
         ];
 
         for k in test_scalars {
@@ -2733,8 +3223,16 @@ mod tests {
             let ct_affine = curve.to_affine(&ct_result);
             let glv_affine = curve.to_affine(&glv_result);
 
-            assert_eq!(ct_affine.x, glv_affine.x, "X coordinate mismatch for scalar {:?}", k);
-            assert_eq!(ct_affine.y, glv_affine.y, "Y coordinate mismatch for scalar {:?}", k);
+            assert_eq!(
+                ct_affine.x, glv_affine.x,
+                "X coordinate mismatch for scalar {:?}",
+                k
+            );
+            assert_eq!(
+                ct_affine.y, glv_affine.y,
+                "Y coordinate mismatch for scalar {:?}",
+                k
+            );
         }
 
         Ok(())
@@ -2776,7 +3274,9 @@ mod tests {
 
         // Verify 16G = [16]G
         let sixteen = BigInt256::from_u64(16);
-        let sixteen_g = curve.mul_constant_time(&sixteen, &curve.g).expect("valid k");
+        let sixteen_g = curve
+            .mul_constant_time(&sixteen, &curve.g)
+            .expect("valid k");
         assert_eq!(curve.g_multiples[5], sixteen_g);
     }
 
@@ -2799,7 +3299,10 @@ mod tests {
         let time = start.elapsed();
 
         println!("1000x 3*G (EC scalar mul with Montgomery): {:?}", time);
-        println!("Avg per scalar mul: {:.2} μs", time.as_micros() as f64 / num_iters as f64);
+        println!(
+            "Avg per scalar mul: {:.2} μs",
+            time.as_micros() as f64 / num_iters as f64
+        );
 
         // Compare to expected performance: should be reasonable for EC ops
         assert!(time.as_micros() > 0);
@@ -2817,23 +3320,32 @@ mod tests {
         let small_k = BigInt256::from_u64(3);
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&small_k, &curve.g).expect("valid k");
+            let _ = curve
+                .mul_constant_time(&small_k, &curve.g)
+                .expect("valid k");
         }
         let small_time = start.elapsed();
 
         // Medium k (128 bits, partial GLV)
-        let medium_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffff").expect("valid medium k");
+        let medium_k =
+            BigInt256::from_hex("ffffffffffffffffffffffffffffffff").expect("valid medium k");
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&medium_k, &curve.g).expect("valid k");
+            let _ = curve
+                .mul_constant_time(&medium_k, &curve.g)
+                .expect("valid k");
         }
         let medium_time = start.elapsed();
 
         // Large k (256 bits, full GLV)
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
+        let large_k =
+            BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+                .expect("valid large k");
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&large_k, &curve.g).expect("valid k");
+            let _ = curve
+                .mul_constant_time(&large_k, &curve.g)
+                .expect("valid k");
         }
         let large_time = start.elapsed();
 
@@ -2841,11 +3353,22 @@ mod tests {
         println!("GLV medium k (128-bit) time: {:?}", medium_time);
         println!("GLV large k (256-bit) time: {:?}", large_time);
 
-        println!("Avg small k: {:.2} μs", small_time.as_micros() as f64 / num_iters as f64);
-        println!("Avg medium k: {:.2} μs", medium_time.as_micros() as f64 / num_iters as f64);
-        println!("Avg large k: {:.2} μs", large_time.as_micros() as f64 / num_iters as f64);
+        println!(
+            "Avg small k: {:.2} μs",
+            small_time.as_micros() as f64 / num_iters as f64
+        );
+        println!(
+            "Avg medium k: {:.2} μs",
+            medium_time.as_micros() as f64 / num_iters as f64
+        );
+        println!(
+            "Avg large k: {:.2} μs",
+            large_time.as_micros() as f64 / num_iters as f64
+        );
 
-        assert!(small_time.as_micros() > 0 && medium_time.as_micros() > 0 && large_time.as_micros() > 0);
+        assert!(
+            small_time.as_micros() > 0 && medium_time.as_micros() > 0 && large_time.as_micros() > 0
+        );
     }
 
     /// Benchmark GLV decompose overhead
@@ -2863,7 +3386,9 @@ mod tests {
         let small_decomp_time = start.elapsed();
 
         // Large k decompose
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
+        let large_k =
+            BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+                .expect("valid large k");
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
             let _ = curve.glv_decompose(&large_k);
@@ -2872,8 +3397,14 @@ mod tests {
 
         println!("GLV small k decompose overhead: {:?}", small_decomp_time);
         println!("GLV large k decompose overhead: {:?}", large_decomp_time);
-        println!("Avg small decompose: {:.2} ns", small_decomp_time.as_nanos() as f64 / num_iters as f64);
-        println!("Avg large decompose: {:.2} ns", large_decomp_time.as_nanos() as f64 / num_iters as f64);
+        println!(
+            "Avg small decompose: {:.2} ns",
+            small_decomp_time.as_nanos() as f64 / num_iters as f64
+        );
+        println!(
+            "Avg large decompose: {:.2} ns",
+            large_decomp_time.as_nanos() as f64 / num_iters as f64
+        );
 
         assert!(small_decomp_time.as_nanos() > 0 && large_decomp_time.as_nanos() > 0);
     }
@@ -2882,20 +3413,28 @@ mod tests {
     #[test]
     fn benchmark_naive_vs_glv_comparison() {
         let curve = Secp256k1::new();
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
+        let large_k =
+            BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+                .expect("valid large k");
         let num_iters = 50; // Fewer iterations for expensive naive mul
 
         // GLV time (current implementation)
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let _ = curve.mul_constant_time(&large_k, &curve.g).expect("valid k");
+            let _ = curve
+                .mul_constant_time(&large_k, &curve.g)
+                .expect("valid k");
         }
         let glv_time = start.elapsed();
 
         // Naive time (simulate by temporarily bypassing GLV - use double/add loop)
         let start = std::time::Instant::now();
         for _ in 0..num_iters {
-            let mut result = Point { x: [0; 4], y: [0; 4], z: [0; 4] }; // infinity
+            let mut result = Point {
+                x: [0; 4],
+                y: [0; 4],
+                z: [0; 4],
+            }; // infinity
             let mut current = curve.g;
 
             // Simple double-and-add for comparison (not optimized)
@@ -2908,7 +3447,9 @@ mod tests {
         }
         let naive_time = start.elapsed();
 
-        let speedup = (naive_time.as_nanos() as f64 - glv_time.as_nanos() as f64) / naive_time.as_nanos() as f64 * 100.0;
+        let speedup = (naive_time.as_nanos() as f64 - glv_time.as_nanos() as f64)
+            / naive_time.as_nanos() as f64
+            * 100.0;
 
         println!("Naive scalar mul time: {:?}", naive_time);
         println!("GLV scalar mul time: {:?}", glv_time);
@@ -2930,7 +3471,9 @@ mod tests {
         let result_affine = result_glv.to_affine(&curve);
 
         // 7G should equal (6G + G) = double(3G) + G
-        let three_g = curve.mul_constant_time(&BigInt256::from_u64(3), &curve.g).unwrap();
+        let three_g = curve
+            .mul_constant_time(&BigInt256::from_u64(3), &curve.g)
+            .unwrap();
         let six_g = curve.double(&three_g);
         let expected = curve.add(&six_g, &curve.g);
         let expected_affine = expected.to_affine(&curve);
@@ -2952,7 +3495,9 @@ mod tests {
         assert_eq!(k2, BigInt256::zero());
 
         // Test large k decomposition
-        let large_k = BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").expect("valid large k");
+        let large_k =
+            BigInt256::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+                .expect("valid large k");
         let (k1_large, k2_large) = curve.glv_decompose(&large_k);
         assert!(k1_large.bits() <= 128);
         assert!(k2_large.bits() <= 128);
@@ -3005,7 +3550,6 @@ mod tests {
         let reconstructed = BigInt256::from_bytes_be(&bytes);
         assert_eq!(b, reconstructed);
     }
-
 }
 
 impl Secp256k1 {
@@ -3019,7 +3563,7 @@ impl Secp256k1 {
         for i in 0..8 {
             let bytes = wide[i].to_le_bytes();
             for j in 0..8 {
-                wide_bytes[i*8 + j] = bytes[j];
+                wide_bytes[i * 8 + j] = bytes[j];
             }
         }
         let x_big = BigUint::from_bytes_le(&wide_bytes);
@@ -3032,13 +3576,13 @@ impl Secp256k1 {
         let reduced_bytes = reduced.to_bytes_le();
         let mut limb_bytes = [0u8; 32];
         let start = reduced_bytes.len().saturating_sub(32);
-        limb_bytes[..reduced_bytes.len().saturating_sub(start)].copy_from_slice(&reduced_bytes[start..]);
+        limb_bytes[..reduced_bytes.len().saturating_sub(start)]
+            .copy_from_slice(&reduced_bytes[start..]);
 
         for i in 0..4 {
             let mut bytes = [0u8; 8];
-            bytes.copy_from_slice(&limb_bytes[i*8..(i+1)*8]);
+            bytes.copy_from_slice(&limb_bytes[i * 8..(i + 1) * 8]);
             result[i] = u64::from_le_bytes(bytes);
         }
     }
-
 }

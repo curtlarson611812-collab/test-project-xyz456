@@ -2,19 +2,19 @@
 //!
 //! Cuckoo/Bloom filter + value-based scoring + clustering tags + rocksdb disk overflow
 
-use crate::types::DpEntry;
 use crate::math::bigint::BigInt256;
+use crate::types::DpEntry;
+use anyhow::Result;
+use bincode;
 use cuckoofilter::CuckooFilter;
+use rayon::prelude::*;
+use sled;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Instant;
 use std::sync::Arc;
-use anyhow::Result;
+use std::time::Instant;
 use tokio::task;
-use rayon::prelude::*;
-use sled;
-use bincode;
 
 /// Smart Distinguished Points table
 /// Cuckoo/Bloom + value-based + clustering — no simple hashmap for DP
@@ -76,8 +76,12 @@ impl DpTable {
         let cuckoo_filter = CuckooFilter::with_capacity(max_size * 2);
 
         let sled_db = if enable_disk {
-            let path = db_path.clone().unwrap_or_else(|| PathBuf::from("./dp_table_sled"));
-            Some(Arc::new(sled::open(path).expect("Failed to open Sled database")))
+            let path = db_path
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("./dp_table_sled"));
+            Some(Arc::new(
+                sled::open(path).expect("Failed to open Sled database"),
+            ))
         } else {
             None
         };
@@ -127,7 +131,10 @@ impl DpTable {
 
         // Assign to cluster: cluster_id = point.x[3] >> 16 (high bits)
         let cluster_id = self.assign_cluster(&entry);
-        self.clusters.entry(cluster_id).or_insert_with(Vec::new).push(hash);
+        self.clusters
+            .entry(cluster_id)
+            .or_insert_with(Vec::new)
+            .push(hash);
 
         Ok(())
     }
@@ -158,11 +165,13 @@ impl DpTable {
         self.value_scores.insert(hash, score);
 
         let cluster_id = self.assign_cluster(&entry);
-        self.clusters.entry(cluster_id).or_insert_with(Vec::new).push(hash);
+        self.clusters
+            .entry(cluster_id)
+            .or_insert_with(Vec::new)
+            .push(hash);
 
         Ok(())
     }
-
 
     /// Check if hash represents a known DP
     pub fn contains(&self, hash: u64) -> bool {
@@ -230,9 +239,18 @@ impl DpTable {
     /// Calculate value score for DP entry (higher = more valuable)
     /// Formula: score = dist / (cluster_density + 1)
     fn calculate_value_score(&self, entry: &DpEntry) -> f64 {
-        let dist_bigint = BigInt256 { limbs: [entry.state.distance.limbs[0], entry.state.distance.limbs[1], entry.state.distance.limbs[2], entry.state.distance.limbs[3]] };
+        let dist_bigint = BigInt256 {
+            limbs: [
+                entry.state.distance.limbs[0],
+                entry.state.distance.limbs[1],
+                entry.state.distance.limbs[2],
+                entry.state.distance.limbs[3],
+            ],
+        };
         let dist = dist_bigint.to_f64_approx();
-        let cluster_density = self.clusters.get(&entry.cluster_id)
+        let cluster_density = self
+            .clusters
+            .get(&entry.cluster_id)
             .map(|v| v.len())
             .unwrap_or(0) as f64;
 
@@ -265,7 +283,8 @@ impl DpTable {
 
         let (entries_to_remove, clusters_to_prune) = task::spawn_blocking(move || {
             Self::prune_incremental_chunks(entries_clone, value_scores_clone, clusters_clone)
-        }).await?;
+        })
+        .await?;
 
         // Apply pruning results
         let mut entries_removed = 0;
@@ -322,7 +341,8 @@ impl DpTable {
             }
 
             // Collect only the next CHUNK_SIZE keys without loading all at once
-            let chunk: Vec<u64> = value_scores.keys()
+            let chunk: Vec<u64> = value_scores
+                .keys()
                 .skip(key_count)
                 .take(CHUNK_SIZE)
                 .cloned()
@@ -421,7 +441,8 @@ impl DpTable {
             } else {
                 Err(anyhow::anyhow!("Sled database not enabled"))
             }
-        }).await??;
+        })
+        .await??;
         Ok(())
     }
 
@@ -537,8 +558,6 @@ impl Drop for DpTable {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -548,8 +567,22 @@ mod tests {
     #[test]
     fn test_add_dp() {
         let mut table = DpTable::new(4);
-        let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
+        let point = Point {
+            x: [1, 0, 0, 0],
+            y: [2, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+        let state = KangarooState::new(
+            point.clone(),
+            BigInt256::from_u64(100),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        );
         let entry = DpEntry::new(point, state, 12345, 1);
 
         assert!(table.add_dp(entry).is_ok());
@@ -564,8 +597,22 @@ mod tests {
 
         // Fill table beyond capacity
         for i in 0..100 {
-            let point = Point { x: [i as u64, 0, 0, 0], y: [i as u64 + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i, 0, 0);
+            let point = Point {
+                x: [i as u64, 0, 0, 0],
+                y: [i as u64 + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64 * 10),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, i as u64, (i % 5) as u32);
 
             // Override max_size for testing
@@ -594,8 +641,22 @@ mod tests {
 
         // Add some entries
         for i in 0..5 {
-            let point = Point { x: [i as u64, 0, 0, 0], y: [i as u64 + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i, 0, 0);
+            let point = Point {
+                x: [i as u64, 0, 0, 0],
+                y: [i as u64 + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64 * 10),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, i as u64, (i % 2) as u32);
             let _ = table.add_dp(entry);
         }
@@ -610,8 +671,22 @@ mod tests {
     #[test]
     fn test_clustering() {
         let table = DpTable::new(4);
-        let point = Point { x: [0x12345678, 0, 0, 0xABCD0000], y: [1, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
+        let point = Point {
+            x: [0x12345678, 0, 0, 0xABCD0000],
+            y: [1, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+        let state = KangarooState::new(
+            point.clone(),
+            BigInt256::from_u64(100),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        );
         let entry = DpEntry::new(point, state, 12345, 0);
 
         let cluster_id = table.assign_cluster(&entry);
@@ -623,8 +698,22 @@ mod tests {
     #[test]
     fn test_value_score() {
         let table = DpTable::new(4);
-        let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(1000), [0; 4], [0; 4], true, false, 0, 0, 0);
+        let point = Point {
+            x: [1, 0, 0, 0],
+            y: [2, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+        let state = KangarooState::new(
+            point.clone(),
+            BigInt256::from_u64(1000),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        );
         let entry = DpEntry::new(point, state, 12345, 1);
 
         let score = table.calculate_value_score(&entry);
@@ -643,9 +732,19 @@ mod tests {
             let point = Point {
                 x: [i as u64, 0, 0, (cluster_id << 16) as u64],
                 y: [(i + 1) as u64, 0, 0, 0],
-                z: [1, 0, 0, 0]
+                z: [1, 0, 0, 0],
             };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(distance), [0; 4], [0; 4], true, false, i, 0, 0);
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(distance),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, i as u64, cluster_id);
 
             assert!(table.add_dp(entry).is_ok());
@@ -663,7 +762,7 @@ mod tests {
 
         // Test value scoring - higher distance should give higher score
         let high_dist_entry = table.entries().get(&9).unwrap(); // distance = 1000
-        let low_dist_entry = table.entries().get(&0).unwrap();  // distance = 100
+        let low_dist_entry = table.entries().get(&0).unwrap(); // distance = 100
         let high_score = table.calculate_value_score(high_dist_entry);
         let low_score = table.calculate_value_score(low_dist_entry);
         assert!(high_score > low_score);
@@ -696,8 +795,22 @@ mod tests {
         let table = DpTable::with_disk_support(4, true, Some(db_path.clone()));
 
         // Create a test entry
-        let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
+        let point = Point {
+            x: [1, 0, 0, 0],
+            y: [2, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+        let state = KangarooState::new(
+            point.clone(),
+            BigInt256::from_u64(100),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        );
         let entry = DpEntry::new(point, state, 12345, 1);
 
         // Test spilling to disk
@@ -718,16 +831,12 @@ mod tests {
         fs::remove_dir_all(db_path).ok();
     }
 
-
     /// Test chunked pruning edge cases (Big Brother audit requirement)
     #[test]
     fn test_chunked_pruning_edge_cases() {
         // Test 1: Empty dataset
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(HashMap::new(), HashMap::new(), HashMap::new());
         assert!(entries_to_remove.is_empty());
         assert!(clusters_to_prune.is_empty());
 
@@ -737,19 +846,30 @@ mod tests {
         let mut clusters = HashMap::new();
 
         let hash = 12345u64;
-        let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
+        let point = Point {
+            x: [1, 0, 0, 0],
+            y: [2, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+        let state = KangarooState::new(
+            point.clone(),
+            BigInt256::from_u64(100),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        );
         let entry = DpEntry::new(point, state, hash, 0);
 
         entries.insert(hash, entry);
         value_scores.insert(hash, 1.0);
         clusters.entry(0u32).or_insert_with(Vec::new).push(hash);
 
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            entries,
-            value_scores,
-            clusters,
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(entries, value_scores, clusters);
 
         // Should remove at least 1 entry (10% of 1 = 0.1, rounded up to 1)
         assert_eq!(entries_to_remove.len(), 1);
@@ -762,8 +882,22 @@ mod tests {
 
         for i in 0..5 {
             let hash = i as u64;
-            let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
+            let point = Point {
+                x: [hash, 0, 0, 0],
+                y: [hash + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64 * 10),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i as u64,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, hash, 0);
 
             entries.insert(hash, entry);
@@ -771,11 +905,8 @@ mod tests {
             clusters.entry(0u32).or_insert_with(Vec::new).push(hash);
         }
 
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            entries,
-            value_scores,
-            clusters,
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(entries, value_scores, clusters);
 
         // Should remove 1 entry (max(1, 5/10) = 1)
         assert_eq!(entries_to_remove.len(), 1);
@@ -794,22 +925,36 @@ mod tests {
 
         for i in 0..CHUNK_SIZE {
             let hash = i as u64;
-            let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64), [0; 4], [0; 4], true, false, (i % 100) as u64, 0, 0);
+            let point = Point {
+                x: [hash, 0, 0, 0],
+                y: [hash + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                (i % 100) as u64,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, hash, (i % 100) as u32);
 
             entries.insert(hash, entry);
             value_scores.insert(hash, i as f64);
 
             // Create many clusters
-            clusters.entry((i % 100) as u32).or_insert_with(Vec::new).push(hash);
+            clusters
+                .entry((i % 100) as u32)
+                .or_insert_with(Vec::new)
+                .push(hash);
         }
 
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            entries,
-            value_scores,
-            clusters,
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(entries, value_scores, clusters);
 
         // Should remove exactly 10% of CHUNK_SIZE
         assert_eq!(entries_to_remove.len(), CHUNK_SIZE / 10);
@@ -831,8 +976,22 @@ mod tests {
         // Create 2500 entries (more than 2x CHUNK_SIZE to test chunking)
         for i in 0..2500 {
             let hash = i as u64;
-            let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
+            let point = Point {
+                x: [hash, 0, 0, 0],
+                y: [hash + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64 * 10),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i as u64,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, hash, (i % 10) as u32); // 10 clusters
 
             entries.insert(hash, entry);
@@ -840,7 +999,10 @@ mod tests {
             value_scores.insert(hash, (i as f64) * 0.1);
 
             // Add to clusters
-            clusters.entry((i % 10) as u32).or_insert_with(Vec::new).push(hash);
+            clusters
+                .entry((i % 10) as u32)
+                .or_insert_with(Vec::new)
+                .push(hash);
         }
 
         // Create some dense clusters (>100 entries each)
@@ -863,7 +1025,8 @@ mod tests {
         assert!(!clusters_to_prune.is_empty());
 
         // Verify that removed entries have the lowest scores
-        let mut removed_scores: Vec<f64> = entries_to_remove.iter()
+        let mut removed_scores: Vec<f64> = entries_to_remove
+            .iter()
             .filter_map(|&hash| value_scores.get(&hash))
             .cloned()
             .collect();
@@ -877,11 +1040,8 @@ mod tests {
     #[test]
     fn test_batch_step() {
         // Test 1: Empty dataset
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(HashMap::new(), HashMap::new(), HashMap::new());
         assert!(entries_to_remove.is_empty());
         assert!(clusters_to_prune.is_empty());
 
@@ -891,19 +1051,30 @@ mod tests {
         let mut clusters = HashMap::new();
 
         let hash = 12345u64;
-        let point = Point { x: [1, 0, 0, 0], y: [2, 0, 0, 0], z: [1, 0, 0, 0] };
-        let state = KangarooState::new(point.clone(), BigInt256::from_u64(100), [0; 4], [0; 4], true, false, 0, 0, 0);
+        let point = Point {
+            x: [1, 0, 0, 0],
+            y: [2, 0, 0, 0],
+            z: [1, 0, 0, 0],
+        };
+        let state = KangarooState::new(
+            point.clone(),
+            BigInt256::from_u64(100),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        );
         let entry = DpEntry::new(point, state, hash, 0);
 
         entries.insert(hash, entry);
         value_scores.insert(hash, 1.0);
         clusters.entry(0u32).or_insert_with(Vec::new).push(hash);
 
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            entries,
-            value_scores,
-            clusters,
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(entries, value_scores, clusters);
 
         // Should remove at least 1 entry (10% of 1 = 0.1, rounded up to 1)
         assert_eq!(entries_to_remove.len(), 1);
@@ -916,8 +1087,22 @@ mod tests {
 
         for i in 0..5 {
             let hash = i as u64;
-            let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
+            let point = Point {
+                x: [hash, 0, 0, 0],
+                y: [hash + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64 * 10),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i as u64,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, hash, 0);
 
             entries.insert(hash, entry);
@@ -925,11 +1110,8 @@ mod tests {
             clusters.entry(0u32).or_insert_with(Vec::new).push(hash);
         }
 
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            entries,
-            value_scores,
-            clusters,
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(entries, value_scores, clusters);
 
         // Should remove 1 entry (max(1, 5/10) = 1)
         assert_eq!(entries_to_remove.len(), 1);
@@ -947,21 +1129,52 @@ mod tests {
         let dense_cluster_id = 999u32;
         for i in 0..200 {
             let hash = 10000 + i as u64;
-            let point = Point { x: [hash, 0, 0, dense_cluster_id as u64], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64), [0; 4], [0; 4], true, false, i as u64, 0, 0);
+            let point = Point {
+                x: [hash, 0, 0, dense_cluster_id as u64],
+                y: [hash + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i as u64,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, hash, dense_cluster_id);
 
             entries.insert(hash, entry);
             // High scores for dense cluster (should be pruned first)
             value_scores.insert(hash, 100.0 + i as f64);
-            clusters.entry(dense_cluster_id).or_insert_with(Vec::new).push(hash);
+            clusters
+                .entry(dense_cluster_id)
+                .or_insert_with(Vec::new)
+                .push(hash);
         }
 
         // Create some regular entries with low scores
         for i in 0..50 {
             let hash = 20000 + i as u64;
-            let point = Point { x: [hash, 0, 0, 0], y: [hash + 1, 0, 0, 0], z: [1, 0, 0, 0] };
-            let state = KangarooState::new(point.clone(), BigInt256::from_u64(i as u64 * 10), [0; 4], [0; 4], true, false, i as u64, 0, 0);
+            let point = Point {
+                x: [hash, 0, 0, 0],
+                y: [hash + 1, 0, 0, 0],
+                z: [1, 0, 0, 0],
+            };
+            let state = KangarooState::new(
+                point.clone(),
+                BigInt256::from_u64(i as u64 * 10),
+                [0; 4],
+                [0; 4],
+                true,
+                false,
+                i as u64,
+                0,
+                0,
+            );
             let entry = DpEntry::new(point, state, hash, i as u32);
 
             entries.insert(hash, entry);
@@ -970,20 +1183,23 @@ mod tests {
             clusters.entry(i as u32).or_insert_with(Vec::new).push(hash);
         }
 
-        let (entries_to_remove, clusters_to_prune) = DpTable::prune_incremental_chunks(
-            entries,
-            value_scores,
-            clusters,
-        );
+        let (entries_to_remove, clusters_to_prune) =
+            DpTable::prune_incremental_chunks(entries, value_scores, clusters);
 
         // Should prune low-scoring entries first (from regular entries, not dense cluster)
-        let dense_cluster_removed: Vec<_> = entries_to_remove.iter()
+        let dense_cluster_removed: Vec<_> = entries_to_remove
+            .iter()
             .filter(|&&hash| hash >= 10000 && hash < 10200)
             .collect();
-        assert!(dense_cluster_removed.is_empty(), "Should NOT remove entries from dense cluster - low scores come first");
+        assert!(
+            dense_cluster_removed.is_empty(),
+            "Should NOT remove entries from dense cluster - low scores come first"
+        );
 
         // Should prune the entire extremely dense cluster (>100 entries)
-        assert!(clusters_to_prune.contains(&dense_cluster_id),
-                "Should prune extremely dense cluster entirely");
+        assert!(
+            clusters_to_prune.contains(&dense_cluster_id),
+            "Should prune extremely dense cluster entirely"
+        );
     }
 }

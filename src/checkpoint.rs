@@ -7,15 +7,15 @@
 //! - Crash recovery support
 //! - Configurable checkpoint frequency
 
+use crate::dp::DpTable;
+use crate::types::{KangarooState, Target};
+use anyhow::{anyhow, Result};
+use bincode;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
-use bincode;
-use crate::types::{KangarooState, Target};
-use crate::dp::DpTable;
 
 /// Checkpoint data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,7 +109,11 @@ pub struct CheckpointManager {
 
 impl CheckpointManager {
     /// Create new checkpoint manager
-    pub fn new(checkpoint_dir: PathBuf, max_checkpoints: usize, auto_save_interval_seconds: u64) -> Self {
+    pub fn new(
+        checkpoint_dir: PathBuf,
+        max_checkpoints: usize,
+        auto_save_interval_seconds: u64,
+    ) -> Self {
         // Create checkpoint directory if it doesn't exist
         if !checkpoint_dir.exists() {
             fs::create_dir_all(&checkpoint_dir).unwrap_or_else(|e| {
@@ -127,9 +131,7 @@ impl CheckpointManager {
 
     /// Save checkpoint with automatic naming
     pub fn save_checkpoint(&mut self, checkpoint: &HuntCheckpoint) -> Result<PathBuf> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
         let filename = format!("checkpoint_{}.json", timestamp);
         let filepath = self.checkpoint_dir.join(filename);
@@ -165,7 +167,8 @@ impl CheckpointManager {
         }
 
         // Find most recent checkpoint
-        let latest_path = checkpoints.into_iter()
+        let latest_path = checkpoints
+            .into_iter()
             .max_by_key(|path| {
                 path.file_stem()
                     .and_then(|s| s.to_str())
@@ -200,11 +203,13 @@ impl CheckpointManager {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("json") &&
-               path.file_stem()
-                   .and_then(|s| s.to_str())
-                   .map(|s| s.starts_with("checkpoint_"))
-                   .unwrap_or(false) {
+            if path.extension().and_then(|s| s.to_str()) == Some("json")
+                && path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.starts_with("checkpoint_"))
+                    .unwrap_or(false)
+            {
                 checkpoints.push(path);
             }
         }
@@ -242,7 +247,11 @@ impl CheckpointManager {
             // Remove oldest checkpoints
             for old_checkpoint in checkpoints.iter().skip(self.max_checkpoints) {
                 if let Err(e) = fs::remove_file(old_checkpoint) {
-                    eprintln!("Failed to remove old checkpoint {}: {}", old_checkpoint.display(), e);
+                    eprintln!(
+                        "Failed to remove old checkpoint {}: {}",
+                        old_checkpoint.display(),
+                        e
+                    );
                 }
             }
         }
@@ -253,7 +262,8 @@ impl CheckpointManager {
     /// Get checkpoint directory info
     pub fn get_checkpoint_info(&self) -> Result<CheckpointInfo> {
         let checkpoints = self.list_checkpoints()?;
-        let total_size_bytes: u64 = checkpoints.iter()
+        let total_size_bytes: u64 = checkpoints
+            .iter()
             .filter_map(|path| fs::metadata(path).ok().map(|m| m.len()))
             .sum();
 
@@ -359,7 +369,10 @@ impl CheckpointBuilder {
     /// Validate checkpoint compatibility
     pub fn validate_checkpoint(checkpoint: &HuntCheckpoint) -> Result<()> {
         if checkpoint.version != 1 {
-            return Err(anyhow!("Incompatible checkpoint version: {}. Expected: 1", checkpoint.version));
+            return Err(anyhow!(
+                "Incompatible checkpoint version: {}. Expected: 1",
+                checkpoint.version
+            ));
         }
 
         if checkpoint.wild_states.is_empty() && checkpoint.tame_states.is_empty() {
@@ -378,7 +391,7 @@ impl Default for CheckpointManager {
     fn default() -> Self {
         Self::new(
             PathBuf::from("checkpoints"),
-            10, // Keep 10 checkpoints
+            10,   // Keep 10 checkpoints
             3600, // Auto-save every hour
         )
     }

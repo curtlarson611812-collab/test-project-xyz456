@@ -2,19 +2,19 @@
 //!
 //! CPU vs GPU bit-for-bit verification
 
+use crate::config::Config;
 #[allow(unused_imports)]
-use crate::types::{KangarooState, Point};
-#[allow(unused_imports)]
-use crate::math::bigint::BigInt256;
+use crate::gpu::{CpuBackend, GpuBackend};
 use crate::kangaroo::stepper::KangarooStepper;
 #[allow(unused_imports)]
-use crate::gpu::{GpuBackend, CpuBackend};
-use crate::config::Config;
+use crate::math::bigint::BigInt256;
+#[allow(unused_imports)]
+use crate::types::{KangarooState, Point};
 use anyhow::Result;
 #[allow(unused_imports)]
-use std::time::Instant;
+use log::{debug, warn};
 #[allow(unused_imports)]
-use log::{warn, debug};
+use std::time::Instant;
 #[allow(dead_code)]
 pub struct ParityChecker {
     cpu_stepper: KangarooStepper,
@@ -44,7 +44,10 @@ impl ParityChecker {
 
     /// Run parity verification test
     pub async fn run_parity_test(&mut self) -> Result<ParityResult> {
-        println!("Starting parity verification test ({} steps)...", self.test_steps);
+        println!(
+            "Starting parity verification test ({} steps)...",
+            self.test_steps
+        );
 
         let start_time = Instant::now();
 
@@ -69,7 +72,11 @@ impl ParityChecker {
             passed: mismatches == 0,
         };
 
-        println!("Parity test completed in {:.2}s: {} mismatches", duration.as_secs_f64(), mismatches);
+        println!(
+            "Parity test completed in {:.2}s: {} mismatches",
+            duration.as_secs_f64(),
+            mismatches
+        );
 
         Ok(result)
     }
@@ -87,13 +94,13 @@ impl ParityChecker {
                     z: [1; 4],
                 },
                 BigInt256::from_u64((i * 1000) as u64), // Deterministic distance as BigInt256
-                [i as u64; 4],   // Deterministic alpha
-                [i as u64; 4],   // Deterministic beta
-                i % 2 == 0,      // Alternate tame/wild
-                false,           // is_dp
-                i as u64,        // id
-                0,                // step
-                if i % 2 == 0 { 1 } else { 0 }, // kangaroo_type
+                [i as u64; 4],                          // Deterministic alpha
+                [i as u64; 4],                          // Deterministic beta
+                i % 2 == 0,                             // Alternate tame/wild
+                false,                                  // is_dp
+                i as u64,                               // id
+                0,                                      // step
+                if i % 2 == 0 { 1 } else { 0 },         // kangaroo_type
             );
             kangaroos.push(state);
         }
@@ -113,12 +120,18 @@ impl ParityChecker {
     async fn step_on_gpu(&self, kangaroos: Vec<KangarooState>) -> Result<Vec<KangarooState>> {
         if let Some(gpu_backend) = &self.gpu_backend {
             // Convert kangaroos to GPU format
-            let (mut gpu_positions, mut gpu_distances, gpu_types) = self.convert_states_to_gpu_format(&kangaroos);
+            let (mut gpu_positions, mut gpu_distances, gpu_types) =
+                self.convert_states_to_gpu_format(&kangaroos);
 
             // Use real GPU stepping with bias integration
             let config = Config::default(); // Use default config for parity testing
             for _ in 0..self.test_steps {
-                let _traps = gpu_backend.step_batch_bias(&mut gpu_positions, &mut gpu_distances, &gpu_types, &config)?;
+                let _traps = gpu_backend.step_batch_bias(
+                    &mut gpu_positions,
+                    &mut gpu_distances,
+                    &gpu_types,
+                    &config,
+                )?;
             }
 
             // Convert back to CPU format
@@ -132,7 +145,9 @@ impl ParityChecker {
                 for kangaroo in &mut result {
                     // Simple deterministic stepping for testing
                     let bias_mod = 1u64;
-                    *kangaroo = self.cpu_stepper.step_kangaroo_with_bias(kangaroo, None, bias_mod);
+                    *kangaroo = self
+                        .cpu_stepper
+                        .step_kangaroo_with_bias(kangaroo, None, bias_mod);
                 }
             }
             Ok(result)
@@ -140,15 +155,22 @@ impl ParityChecker {
     }
 
     /// Convert KangarooState vectors to GPU format
-    fn convert_states_to_gpu_format(&self, states: &[KangarooState]) -> (Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<u32>) {
+    fn convert_states_to_gpu_format(
+        &self,
+        states: &[KangarooState],
+    ) -> (Vec<[[u32; 8]; 3]>, Vec<[u32; 8]>, Vec<u32>) {
         let mut positions = Vec::with_capacity(states.len());
         let mut distances = Vec::with_capacity(states.len());
         let mut types = Vec::with_capacity(states.len());
 
         for state in states {
             // Convert position to GPU format [[u32;8];3]
-            let x_bigint = BigInt256 { limbs: state.position.x };
-            let y_bigint = BigInt256 { limbs: state.position.y };
+            let x_bigint = BigInt256 {
+                limbs: state.position.x,
+            };
+            let y_bigint = BigInt256 {
+                limbs: state.position.y,
+            };
             let z_bigint = BigInt256::from_u64(1); // Z coordinate (affine)
             let pos_gpu = [
                 self.bigint_to_u32x8(&x_bigint),
@@ -168,7 +190,12 @@ impl ParityChecker {
     }
 
     /// Convert GPU format back to KangarooState vectors
-    fn convert_gpu_format_to_states(&self, positions: Vec<[[u32;8];3]>, distances: Vec<[u32;8]>, types: Vec<u32>) -> Vec<KangarooState> {
+    fn convert_gpu_format_to_states(
+        &self,
+        positions: Vec<[[u32; 8]; 3]>,
+        distances: Vec<[u32; 8]>,
+        types: Vec<u32>,
+    ) -> Vec<KangarooState> {
         let mut states = Vec::with_capacity(positions.len());
 
         for i in 0..positions.len() {
@@ -202,29 +229,39 @@ impl ParityChecker {
     }
 
     /// Convert BigInt256 to [u32;8] GPU format
-    fn bigint_to_u32x8(&self, value: &BigInt256) -> [u32;8] {
+    fn bigint_to_u32x8(&self, value: &BigInt256) -> [u32; 8] {
         let limbs = value.limbs;
         [
-            (limbs[0] & 0xFFFFFFFF) as u32, ((limbs[0] >> 32) & 0xFFFFFFFF) as u32,
-            (limbs[1] & 0xFFFFFFFF) as u32, ((limbs[1] >> 32) & 0xFFFFFFFF) as u32,
-            (limbs[2] & 0xFFFFFFFF) as u32, ((limbs[2] >> 32) & 0xFFFFFFFF) as u32,
-            (limbs[3] & 0xFFFFFFFF) as u32, ((limbs[3] >> 32) & 0xFFFFFFFF) as u32,
+            (limbs[0] & 0xFFFFFFFF) as u32,
+            ((limbs[0] >> 32) & 0xFFFFFFFF) as u32,
+            (limbs[1] & 0xFFFFFFFF) as u32,
+            ((limbs[1] >> 32) & 0xFFFFFFFF) as u32,
+            (limbs[2] & 0xFFFFFFFF) as u32,
+            ((limbs[2] >> 32) & 0xFFFFFFFF) as u32,
+            (limbs[3] & 0xFFFFFFFF) as u32,
+            ((limbs[3] >> 32) & 0xFFFFFFFF) as u32,
         ]
     }
 
     /// Convert [u32;8] GPU format to BigInt256
-    fn u32x8_to_bigint(&self, value: &[u32;8]) -> BigInt256 {
+    fn u32x8_to_bigint(&self, value: &[u32; 8]) -> BigInt256 {
         let limb0 = value[0] as u64 | ((value[1] as u64) << 32);
         let limb1 = value[2] as u64 | ((value[3] as u64) << 32);
         let limb2 = value[4] as u64 | ((value[5] as u64) << 32);
         let limb3 = value[6] as u64 | ((value[7] as u64) << 32);
-        BigInt256 { limbs: [limb0, limb1, limb2, limb3] }
+        BigInt256 {
+            limbs: [limb0, limb1, limb2, limb3],
+        }
     }
 
     /// Compare CPU and GPU results
     fn compare_results(&self, cpu: &[KangarooState], gpu: &[KangarooState]) -> Result<usize> {
         if cpu.len() != gpu.len() {
-            return Err(anyhow::anyhow!("Result length mismatch: CPU={}, GPU={}", cpu.len(), gpu.len()));
+            return Err(anyhow::anyhow!(
+                "Result length mismatch: CPU={}, GPU={}",
+                cpu.len(),
+                gpu.len()
+            ));
         }
 
         let mut mismatches = 0;
@@ -232,8 +269,12 @@ impl ParityChecker {
         for (i, (cpu_state, gpu_state)) in cpu.iter().zip(gpu.iter()).enumerate() {
             if !self.states_equal(cpu_state, gpu_state) {
                 mismatches += 1;
-                if mismatches <= 5 { // Log first few mismatches
-                    println!("Mismatch at kangaroo {}: CPU={:?}, GPU={:?}", i, cpu_state, gpu_state);
+                if mismatches <= 5 {
+                    // Log first few mismatches
+                    println!(
+                        "Mismatch at kangaroo {}: CPU={:?}, GPU={:?}",
+                        i, cpu_state, gpu_state
+                    );
                 }
             }
         }
@@ -243,11 +284,11 @@ impl ParityChecker {
 
     /// Check if two kangaroo states are equal
     fn states_equal(&self, a: &KangarooState, b: &KangarooState) -> bool {
-        a.position == b.position &&
-        a.distance == b.distance &&
-        a.alpha == b.alpha &&
-        a.beta == b.beta &&
-        a.is_tame == b.is_tame
+        a.position == b.position
+            && a.distance == b.distance
+            && a.alpha == b.alpha
+            && a.beta == b.beta
+            && a.is_tame == b.is_tame
     }
 
     /// Run batch parity verification (called from manager)
@@ -295,8 +336,13 @@ pub struct ParityResult {
 
 impl std::fmt::Display for ParityResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Parity test: {} steps, {} mismatches, {:.2}s, {}",
-               self.total_steps, self.mismatches, self.duration.as_secs_f64(),
-               if self.passed { "PASSED" } else { "FAILED" })
+        write!(
+            f,
+            "Parity test: {} steps, {} mismatches, {:.2}s, {}",
+            self.total_steps,
+            self.mismatches,
+            self.duration.as_secs_f64(),
+            if self.passed { "PASSED" } else { "FAILED" }
+        )
     }
 }

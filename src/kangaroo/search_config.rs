@@ -36,11 +36,11 @@ pub struct SearchConfig {
 impl Default for SearchConfig {
     fn default() -> Self {
         Self {
-            batch_per_target: 512,  // Moderate batch size for valuable P2PK
-            max_steps: u64::MAX,     // Run indefinitely until solution
+            batch_per_target: 512, // Moderate batch size for valuable P2PK
+            max_steps: u64::MAX,   // Run indefinitely until solution
             jump_primes: vec![3, 5, 7, 11, 13, 17, 19, 23], // Small odd primes
-            dp_bits: 20,             // ~1M average steps per DP
-            is_bounded: false,       // Unbounded for general P2PK
+            dp_bits: 20,           // ~1M average steps per DP
+            is_bounded: false,     // Unbounded for general P2PK
             range_start: BigInt256::zero(),
             range_end: BigInt256::from_u64(1u64 << 40), // Large but reasonable default
             per_puzzle_ranges: None,
@@ -57,7 +57,7 @@ impl SearchConfig {
             batch_per_target: 1024, // Large batches for throughput
             max_steps: u64::MAX,
             jump_primes: vec![3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
-            dp_bits: 24,            // Fewer DPs for efficiency
+            dp_bits: 24, // Fewer DPs for efficiency
             is_bounded: false,
             range_start: BigInt256::zero(),
             range_end: BigInt256::from_u64(1u64 << 40), // Large but reasonable default
@@ -70,11 +70,11 @@ impl SearchConfig {
     /// Configuration optimized for test/solved puzzles (quick validation)
     pub fn for_test_puzzles() -> Self {
         Self {
-            batch_per_target: 64,   // Small batches for quick testing
-            max_steps: 100_000,     // Limited steps for fast validation
+            batch_per_target: 64,               // Small batches for quick testing
+            max_steps: 100_000,                 // Limited steps for fast validation
             jump_primes: vec![3, 5, 7, 11, 13], // Minimal primes
-            dp_bits: 16,            // More frequent DPs for testing
-            is_bounded: true,       // Test keys have known small ranges
+            dp_bits: 16,                        // More frequent DPs for testing
+            is_bounded: true,                   // Test keys have known small ranges
             range_start: BigInt256::one(),
             range_end: BigInt256::from_u64(1u64 << 32), // Up to 32-bit for tests
             per_puzzle_ranges: None,
@@ -86,11 +86,13 @@ impl SearchConfig {
     /// Configuration optimized for unsolved puzzles (precision, long runs)
     pub fn for_unsolved_puzzles() -> Self {
         Self {
-            batch_per_target: 512,  // Moderate batches for balance
+            batch_per_target: 512, // Moderate batches for balance
             max_steps: u64::MAX,
-            jump_primes: vec![3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73],
-            dp_bits: 22,            // Balanced DP frequency
-            is_bounded: true,       // Puzzles have defined ranges
+            jump_primes: vec![
+                3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73,
+            ],
+            dp_bits: 22,                              // Balanced DP frequency
+            is_bounded: true,                         // Puzzles have defined ranges
             range_start: BigInt256::one() << 65usize, // 2^65 for typical high puzzles
             range_end: (BigInt256::one() << 66usize) - BigInt256::one(), // 2^66 - 1
             per_puzzle_ranges: None,
@@ -148,16 +150,24 @@ impl SearchConfig {
             return Err(anyhow::anyhow!("dp_bits must be between 1 and 32"));
         }
         if self.is_bounded && self.range_start >= self.range_end {
-            return Err(anyhow::anyhow!("range_start must be < range_end for bounded searches"));
+            return Err(anyhow::anyhow!(
+                "range_start must be < range_end for bounded searches"
+            ));
         }
         // Validate per-puzzle ranges if present
         if let Some(ranges) = &self.per_puzzle_ranges {
             for (puzzle_id, (start, end)) in ranges {
                 if start >= end {
-                    return Err(anyhow::anyhow!("puzzle {}: range_start must be < range_end", puzzle_id));
+                    return Err(anyhow::anyhow!(
+                        "puzzle {}: range_start must be < range_end",
+                        puzzle_id
+                    ));
                 }
                 if *puzzle_id < 64 || *puzzle_id > 160 {
-                    return Err(anyhow::anyhow!("puzzle {}: id must be between 64 and 160", puzzle_id));
+                    return Err(anyhow::anyhow!(
+                        "puzzle {}: id must be between 64 and 160",
+                        puzzle_id
+                    ));
                 }
             }
         }
@@ -206,7 +216,10 @@ mod tests {
     fn test_puzzle_range_config() {
         let config = SearchConfig::for_puzzle_range(64, 65);
         assert_eq!(config.range_start, BigInt256::one() << 64usize);
-        assert_eq!(config.range_end, (BigInt256::one() << 65usize) - BigInt256::one());
+        assert_eq!(
+            config.range_end,
+            (BigInt256::one() << 65usize) - BigInt256::one()
+        );
         assert_eq!(config.name, "puzzle_64_65");
     }
 

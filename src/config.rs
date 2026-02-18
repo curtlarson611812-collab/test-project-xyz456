@@ -29,7 +29,10 @@ impl FromStr for GpuBackend {
             "cuda" => Ok(GpuBackend::Cuda),
             "vulkan" => Ok(GpuBackend::Vulkan),
             "cpu" => Ok(GpuBackend::Cpu),
-            _ => Err(anyhow!("Invalid GPU backend: {}. Must be one of: hybrid, cuda, vulkan, cpu", s)),
+            _ => Err(anyhow!(
+                "Invalid GPU backend: {}. Must be one of: hybrid, cuda, vulkan, cpu",
+                s
+            )),
         }
     }
 }
@@ -48,17 +51,17 @@ impl std::fmt::Display for GpuBackend {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ValueEnum, Default)]
 pub enum BiasMode {
     #[default]
-    Auto,        // Auto-detect best bias mode
-    Uniform,     // No bias optimization
-    Magic9,      // Original Magic9 cluster targeting
-    Primes,      // Prime-based kangaroo generation
-    Mod3,        // Modular 3 bias optimization
-    Mod9,        // Modular 9 bias optimization
-    Mod27,       // Modular 27 bias optimization
-    Mod81,       // Modular 81 bias optimization
-    Gold,        // Golden ratio bias optimization
-    Pos,         // Position-based optimization
-    Combined,    // Multi-bias combination mode
+    Auto, // Auto-detect best bias mode
+    Uniform,  // No bias optimization
+    Magic9,   // Original Magic9 cluster targeting
+    Primes,   // Prime-based kangaroo generation
+    Mod3,     // Modular 3 bias optimization
+    Mod9,     // Modular 9 bias optimization
+    Mod27,    // Modular 27 bias optimization
+    Mod81,    // Modular 81 bias optimization
+    Gold,     // Golden ratio bias optimization
+    Pos,      // Position-based optimization
+    Combined, // Multi-bias combination mode
 }
 
 impl std::fmt::Display for BiasMode {
@@ -172,6 +175,8 @@ pub struct Config {
     /// Validate a specific puzzle number (e.g. 66)
     #[arg(short = 'p', long)]
     pub real_puzzle: Option<u32>,
+    #[arg(long, help = "Solve Puzzle #135 (first unsolved challenge)")]
+    pub solve_puzzle_135: bool,
 
     /// Validate all target pubkeys are on-curve
     #[arg(long)]
@@ -280,6 +285,9 @@ pub struct Config {
     #[arg(long, default_value = "0.01")]
     pub bias_threshold: f64,
 
+    /// Enable POP bias keyspace partitioning (histogram-based recursive reduction)
+    #[arg(long)]
+    pub enable_pop_partitioning: bool,
 
     /// Verbose output
     #[arg(short = 'v', long)]
@@ -481,6 +489,7 @@ impl Default for Config {
             basic_test: false,
             test_puzzles: false,
             real_puzzle: None,
+            solve_puzzle_135: false,
             check_pubkeys: false,
             integration_test: false,
             test_solved: None,
@@ -513,6 +522,7 @@ impl Default for Config {
             bias_components: None,
             sample_bias_analysis: 10000,
             bias_threshold: 0.01,
+            enable_pop_partitioning: false,
             verbose: false,
             laptop: false,
 
@@ -577,12 +587,12 @@ pub enum SearchMode {
 // Chunk: 3070 Max-Q Config (config.rs)
 #[derive(Debug, Clone)]
 pub struct GpuConfig {
-    pub arch: String,  // "sm_86" for Ampere
-    pub max_kangaroos: usize,  // 2048 for mem
-    pub dp_size: usize,  // 1<<19 =512K
-    pub dp_bits: u32,  // 24 for prob
-    pub max_regs: i32,  // 48 for occ
-    pub gpu_frac: f64,  // 0.7 for hybrid
+    pub arch: String,         // "sm_86" for Ampere
+    pub max_kangaroos: usize, // 2048 for mem
+    pub dp_size: usize,       // 1<<19 =512K
+    pub dp_bits: u32,         // 24 for prob
+    pub max_regs: i32,        // 48 for occ
+    pub gpu_frac: f64,        // 0.7 for hybrid
 }
 
 pub fn laptop_3070_config() -> GpuConfig {
@@ -607,7 +617,10 @@ impl Config {
     pub fn validate(&self) -> Result<()> {
         // Validate DP bits
         if !(20..=32).contains(&self.dp_bits) {
-            return Err(anyhow!("DP bits must be between 20 and 32, got {}", self.dp_bits));
+            return Err(anyhow!(
+                "DP bits must be between 20 and 32, got {}",
+                self.dp_bits
+            ));
         }
 
         // Validate herd size
@@ -625,12 +638,18 @@ impl Config {
 
         // Validate near collision threshold
         if self.enable_near_collisions < 0.0 || self.enable_near_collisions > 1.0 {
-            return Err(anyhow!("Near collision threshold must be between 0.0 and 1.0, got {}", self.enable_near_collisions));
+            return Err(anyhow!(
+                "Near collision threshold must be between 0.0 and 1.0, got {}",
+                self.enable_near_collisions
+            ));
         }
 
         // Validate walk backs steps
         if self.enable_walk_backs > 0 && self.enable_walk_backs < 1000 {
-            return Err(anyhow!("Walk backs steps must be 0 (disabled) or >= 1000, got {}", self.enable_walk_backs));
+            return Err(anyhow!(
+                "Walk backs steps must be 0 (disabled) or >= 1000, got {}",
+                self.enable_walk_backs
+            ));
         }
 
         // Validate puzzle number
@@ -649,12 +668,17 @@ impl Config {
 
         // Warn if bloom with low dp_bits (density risk)
         if self.use_bloom && self.dp_bits < 20 {
-            log::warn!("Bloom enabled with low dp_bits ({}); may cause high false positives", self.dp_bits);
+            log::warn!(
+                "Bloom enabled with low dp_bits ({}); may cause high false positives",
+                self.dp_bits
+            );
         }
 
         // Validate gold combo only with magic9/primes
         if self.gold_bias_combo && self.bias_mode == BiasMode::Uniform {
-            return Err(anyhow!("GOLD bias combo requires bias_mode magic9 or primes"));
+            return Err(anyhow!(
+                "GOLD bias combo requires bias_mode magic9 or primes"
+            ));
         }
 
         Ok(())
@@ -711,7 +735,11 @@ pub fn enable_nvidia_persistence() -> Result<bool> {
     }
 
     // Check if nvidia-smi exists before attempting
-    if std::process::Command::new("which").arg("nvidia-smi").output().is_err() {
+    if std::process::Command::new("which")
+        .arg("nvidia-smi")
+        .output()
+        .is_err()
+    {
         return Ok(false);
     }
 

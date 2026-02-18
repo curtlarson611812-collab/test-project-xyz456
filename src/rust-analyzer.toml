@@ -1,162 +1,142 @@
 # Rust Analyzer Configuration for SpeedBitCrackV3
-# Helps rust-analyzer understand our complex feature flags and conditional compilation
+# Optimized configuration using only supported options from rust-analyzer documentation
 
-[features]
-# Enable Vulkan support by default for better IDE experience
-defaultFeatures = ["wgpu"]
-
-# Define all available features to match Cargo.toml exactly
-allFeatures = ["wgpu", "cuda", "glv", "rustacuda", "vulkano", "hybrid", "fuzz", "smoke", "laptop", "portable_simd", "legacy", "phase4", "cudarc"]
-
-[build]
-# Use release profile for better performance
-buildProfile = "release"
-
-# Additional rkustc flags for better conditional compilation understanding
-extraArgs = [
-    "--cfg", "feature=\"wgpu\"",
-    "--cfg", "feature=\"cuda\"",
-    "--cfg", "feature=\"hybrid\"",
-    "--cfg", "feature=\"glv\""
-]
+[cargo]
+# Enable cargo features for better understanding of dependencies and conditional compilation
+features = ["wgpu", "hybrid"]
+extraEnv = { "RUST_BACKTRACE" = "1" }
 
 [check]
-# Enable hybrid features for comprehensive checking (includes both Vulkan and CUDA)
-features = ["hybrid"]
+# Enable comprehensive checking with hybrid features
+features = ["wgpu", "hybrid"]
+extraArgs = ["--cfg", "feature=\"wgpu\"", "--cfg", "feature=\"hybrid\""]
+ignore = ["dead_code", "unused_variables", "unused_imports"]
 
 [completion]
-# Enable hybrid features for completion (includes both Vulkan and CUDA)
-features = ["hybrid"]
+# Configure completion for large GPU codebase
+addSemicolonToUnit = true
+autoimport.enable = true
+callable.snippets = "fill_arguments"
+fullFunctionSignatures.enable = true
+postfix.enable = true
+privateEditable.enable = false
+termSearch.enable = false
 
 [diagnostics]
-# Show all diagnostics including those from conditional compilation
-disabled = []
-# Enable experimental diagnostics for better error reporting
-experimentalDiagnostics = true
+# Enable comprehensive diagnostics
+enable = true
+experimental.enable = true
+styleLints.enable = false
+warningsAsHint = []
+warningsAsInfo = []
 
-[checkOnSave]
-# Enable checking on save for better feedback
-enabled= true
-# Extra arguments for better conditional compilation handling
-extraArgs = ["--cfg", "feature=\"wgpu\""]
+[files]
+# Exclude non-Rust files from analysis
+exclude = ["gpu/backends/vulkan/shaders/**", "gpu/backends/cuda/kernels/**"]
 
-[experimental]
-# Enable experimental features for better GPU code understanding
-procAttrMacrosEnabled = true
-
-[lens]
-# Enable code lens for better navigation
-implementations = true
-references = true
-run = true
-debug = true
-
-[hoverActions]
-# Enable hover actions for better code exploration
-Enable = true
-implementations = true
-references = true
-run = true
-debug = true
+[hover]
+# Configure hover information
+actions.enable = true
+actions.debug.enable = true
+actions.implementations.enable = true
+actions.references.enable = false
+actions.run.enable = true
+documentation.enable = true
+memoryLayout.enable = true
+memoryLayout.niches = false
+memoryLayout.size = "both"
+show.fields = 5
+show.enumVariants = 5
 
 [imports]
 # Configure import handling for large codebase
-granularity = { group = "module" }
-prefix = "self"
-# Allow imports from conditional compilation
-group = true
-# Don't mark imports as unused if they're used in conditional compilation
-merge = { glob = false }
+granularity.group = "crate"
+group.enable = true
+merge.glob = true
+prefix = "crate"
+prefixExternPrelude = false
 
-[run]
-# Configure test running
-bench = false
-checkOnSave = true
-cargo = { allFeatures = true }
+[inlayHints]
+# Enable inlay hints for better code understanding
+bindingModeHints.enable = false
+chainingHints.enable = true
+closingBraceHints.enable = true
+closingBraceHints.minLines = 25
+closureReturnTypeHints.enable = "never"
+discriminantHints.enable = "never"
+expressionAdjustmentHints.enable = "never"
+genericParameterHints.const.enable = true
+genericParameterHints.lifetime.enable = false
+genericParameterHints.type.enable = false
+implicitDrops.enable = false
+implicitSizedBoundHints.enable = false
+impliedDynTraitHints.enable = true
+lifetimeElisionHints.enable = "never"
+parameterHints.enable = true
+rangeExclusiveHints.enable = false
+reborrowHints.enable = "never"
+renderColons = true
+typeHints.enable = true
+typeHints.hideClosureInitialization = false
 
-[cargo]
-# Enable cargo features for better understanding of dependencies
-features = ["hybrid"]
+[lens]
+# Enable code lens for navigation
+enable = true
+debug.enable = true
+implementations.enable = true
+location = "above_name"
+references.adt.enable = false
+references.enumVariant.enable = false
+references.method.enable = false
+references.trait.enable = false
+run.enable = true
 
-[rust]
-# Configure rust analysis
-analyzerTarget = "x86_64-unknown-linux-gnu"
-analyzerDataPath = "target/rust-analyzer"
+[linkedProjects]
+# Link to the main Cargo.toml for proper feature understanding
+linkedProjects = ["Cargo.toml"]
 
 [lru]
 # Increase capacity for large codebase
 capacity = 2048
 
-[typing]
-# Configure typing assistance
-autocompleteInsideComments = true
-closingBraceHints = true
-closingBracketHints = true
+[notifications]
+# Reduce noise from missing Cargo.toml notifications
+cargoTomlNotFound = false
 
-[syntax]
-# Configure syntax highlighting and understanding
-semanticHighlighting = true
+[procMacro]
+# Enable proc macro expansion for GPU code generation
+enable = true
+attributes.enable = true
+
+[references]
+# Configure reference finding
+excludeImports = false
+excludeTests = false
+
+[runnables]
+# Configure test and benchmark running
+extraArgs = ["--release"]
+
+[semanticHighlighting]
+# Configure semantic highlighting
+comments.enable = true
+doc.comment.inject.enable = true
+nonStandardTokens = true
+operator.enable = true
+operator.specialization.enable = false
+punctuation.enable = false
+punctuation.separate.macro.bang = false
+punctuation.specialization.enable = false
+strings.enable = true
 
 [signatureInfo]
 # Configure signature help
 detail = "full"
-documentation = { enabled = true }
-
-[procMacro]
-# Enable proc macro expansion
-enabled = true
-
-[rustfmt]
-# Use rustfmt for formatting
-enabled = true
-extraArgs = ["--config", "max_width=120"]
+documentation.enable = true
 
 [workspace]
-# Workspace symbol search
-symbolSearch = { kind = "only_types" }
-
-[hover]
-# Show documentation on hover
-documentation = true
-# Show memory layout information
-memoryLayout = { niches = true }
-
-[inlayHints]
-# Enable inlay hints for better code understanding
-bindingModeHints = true
-chainingHints = true
-closingBraceHints = { minLines = 25 }
-closureReturnTypeHints = { maxLength = 30 }
-implicitDrops = true
-lifetimeElisionHints = { enable = "always" }
-parameterHints = true
-rangeExclusiveHints = true
-typeHints = true
-
-[semanticHighlighting]
-# Enable semantic highlighting for better code visualization
-punctuation = { enable = true, specializations = true }
-strings = { enable = true }
-
-[linkedProjects]
-# Link to the main Cargo.toml for proper feature understanding
-CargoTomlFile = ["Cargo.toml"]
-
-[files]
-# Exclude shader files from rust analysis (they're WGSL, not Rust)
-excludeDirs = ["gpu/vulkan/shaders"]
-
-[notifications]
-# Reduce noise from experimental features
-cargoTomlNotFound = false
-
-# Additional rust-analyzer configuration for GPU code
-[cfg]
-# Enable conditional compilation understanding
-features = ["wgpu", "hybrid"]
-
-[assist]
-# Configure code assistance
-snippet = { enable = true }
-importGranularity = "module"
-importEnforceGranularity = false
+# Configure workspace-wide settings
+symbol.search.excludeImports = false
+symbol.search.kind = "only_types"
+symbol.search.limit = 128
+symbol.search.scope = "workspace"

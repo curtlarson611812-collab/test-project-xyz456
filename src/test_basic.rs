@@ -1,6 +1,6 @@
 //! Simple test to verify basic functionality
 
-use crate::math::{secp::Secp256k1, bigint::BigInt256};
+use crate::math::{bigint::BigInt256, secp::Secp256k1};
 use crate::types::Point;
 
 #[cfg(test)]
@@ -23,14 +23,28 @@ mod tests {
         let computed_x = BigInt256::from_u64_array(three_g_affine.x);
         let computed_y = BigInt256::from_u64_array(three_g_affine.y);
 
-        assert_eq!(computed_x, expected_x,
-            "G*3 x-coordinate mismatch: got {}, expected {}", computed_x.to_hex(), expected_x.to_hex());
-        assert_eq!(computed_y, expected_y,
-            "G*3 y-coordinate mismatch: got {}, expected {}", computed_y.to_hex(), expected_y.to_hex());
+        assert_eq!(
+            computed_x,
+            expected_x,
+            "G*3 x-coordinate mismatch: got {}, expected {}",
+            computed_x.to_hex(),
+            expected_x.to_hex()
+        );
+        assert_eq!(
+            computed_y,
+            expected_y,
+            "G*3 y-coordinate mismatch: got {}, expected {}",
+            computed_y.to_hex(),
+            expected_y.to_hex()
+        );
 
         // Verify point is on curve
-        assert!(curve.is_on_curve(&three_g_affine),
-            "G*3 point is not on curve: x={}, y={}", computed_x.to_hex(), computed_y.to_hex());
+        assert!(
+            curve.is_on_curve(&three_g_affine),
+            "G*3 point is not on curve: x={}, y={}",
+            computed_x.to_hex(),
+            computed_y.to_hex()
+        );
 
         Ok(())
     }
@@ -44,10 +58,8 @@ mod tests {
         let (k1, k2) = curve.glv_decompose(&k);
 
         // Verify |k1| <= 2^128 (half the bit length of n)
-        assert!(k1.bits() <= 128,
-            "k1 too large: {} bits", k1.bits());
-        assert!(k2.bits() <= 128,
-            "k2 too large: {} bits", k2.bits());
+        assert!(k1.bits() <= 128, "k1 too large: {} bits", k1.bits());
+        assert!(k2.bits() <= 128, "k2 too large: {} bits", k2.bits());
 
         // Verify reconstruction: k1 + k2 * lambda ≡ k mod n
         let lambda = Secp256k1::glv_lambda();
@@ -59,8 +71,13 @@ mod tests {
             reconstructed
         };
 
-        assert_eq!(reconstructed_mod, k,
-            "GLV reconstruction failed: got {}, expected {}", reconstructed_mod.to_hex(), k.to_hex());
+        assert_eq!(
+            reconstructed_mod,
+            k,
+            "GLV reconstruction failed: got {}, expected {}",
+            reconstructed_mod.to_hex(),
+            k.to_hex()
+        );
     }
 }
 
@@ -158,9 +175,7 @@ fn load_test_puzzles(file_path: &str, curve: &Secp256k1) -> Vec<crate::types::Po
             continue;
         }
         // Remove non-hex chars (e.g., if corrupted)
-        let cleaned = line.chars().filter(|c| {
-            c.is_digit(16)
-        }).collect::<String>();
+        let cleaned = line.chars().filter(|c| c.is_digit(16)).collect::<String>();
         let bytes = match hex::decode(&cleaned) {
             Ok(b) => b,
             Err(e) => {
@@ -175,10 +190,15 @@ fn load_test_puzzles(file_path: &str, curve: &Secp256k1) -> Vec<crate::types::Po
             if let Some(point) = curve.decompress_point(&comp) {
                 puzzles.push(point);
             } else {
-                log::warn!("Decompress fail on valid len line {}: {}", line_num + 1, cleaned);
+                log::warn!(
+                    "Decompress fail on valid len line {}: {}",
+                    line_num + 1,
+                    cleaned
+                );
                 skipped += 1;
             }
-        } else if bytes.len() == 65 {  // Uncompressed fallback
+        } else if bytes.len() == 65 {
+            // Uncompressed fallback
             if bytes[0] != 0x04 {
                 skipped += 1;
                 continue;
@@ -187,24 +207,46 @@ fn load_test_puzzles(file_path: &str, curve: &Secp256k1) -> Vec<crate::types::Po
             let y_bytes: [u8; 32] = bytes[33..65].try_into().unwrap();
             let x = BigInt256::from_bytes_be(&x_bytes);
             let y = BigInt256::from_bytes_be(&y_bytes);
-            let point = Point { x: x.to_u64_array(), y: y.to_u64_array(), z: [1, 0, 0, 0] };
+            let point = Point {
+                x: x.to_u64_array(),
+                y: y.to_u64_array(),
+                z: [1, 0, 0, 0],
+            };
             if curve.is_on_curve(&point) {
                 puzzles.push(point);
             } else {
-                log::warn!("Uncompressed point not on curve on line {}: {}", line_num + 1, cleaned);
+                log::warn!(
+                    "Uncompressed point not on curve on line {}: {}",
+                    line_num + 1,
+                    cleaned
+                );
                 skipped += 1;
             }
         } else {
-            log::warn!("Invalid len {} on line {}: {}", bytes.len(), line_num + 1, cleaned);
+            log::warn!(
+                "Invalid len {} on line {}: {}",
+                bytes.len(),
+                line_num + 1,
+                cleaned
+            );
             skipped += 1;
         }
     }
-    log::info!("Loaded {} puzzles, skipped {} from {}", puzzles.len(), skipped, file_path);
+    log::info!(
+        "Loaded {} puzzles, skipped {} from {}",
+        puzzles.len(),
+        skipped,
+        file_path
+    );
     if puzzles.is_empty() {
         log::warn!("All lines invalid—check file format (compressed 33-byte hex per line?)");
     }
 
-    log::info!("Successfully loaded {} puzzles from {}", puzzles.len(), file_path);
+    log::info!(
+        "Successfully loaded {} puzzles from {}",
+        puzzles.len(),
+        file_path
+    );
     puzzles
 }
 

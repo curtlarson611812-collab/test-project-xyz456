@@ -2,20 +2,23 @@
 //!
 //! Strict tame/wild start logic — fixed primes for wild, G-based tame, no entropy unless flagged
 
-use crate::config::{Config, BiasMode};
-use crate::types::{KangarooState, Point, TaggedKangarooState, RhoState, Scalar};
-use crate::math::{Secp256k1, bigint::{BigInt256, BigInt512}};
-use crate::kangaroo::{SearchConfig, collision::CollisionDetector};
+use crate::config::{BiasMode, Config};
 use crate::dp::DpTable;
+use crate::kangaroo::{collision::CollisionDetector, SearchConfig};
+use crate::math::{
+    bigint::{BigInt256, BigInt512},
+    Secp256k1,
+};
+use crate::types::{KangarooState, Point, RhoState, Scalar, TaggedKangarooState};
 use crate::SmallOddPrime_Precise_code as sop; // Import sacred code
 use num_bigint::BigInt;
 use std::ops::Sub;
 
 use anyhow::Result;
 use log::{info, warn};
-use rayon::prelude::*;
 use rand::rngs::OsRng;
 use rand::Rng;
+use rayon::prelude::*;
 use std::sync::Arc;
 // SIMD removed for stability - using regular loops instead
 
@@ -23,19 +26,17 @@ use std::sync::Arc;
 // Cycle via index % 32 — provides unique starts per kangaroo without bias.
 // EXACT from SmallOddPrime_Precise_code.rs - verified sacred and unmodified.
 pub const PRIME_MULTIPLIERS: [u64; 32] = [
-    179, 257, 281, 349, 379, 419, 457, 499,
-    541, 599, 641, 709, 761, 809, 853, 911,
-    967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
-    1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
+    179, 257, 281, 349, 379, 419, 457, 499, 541, 599, 641, 709, 761, 809, 853, 911, 967, 1013,
+    1061, 1091, 1151, 1201, 1249, 1297, 1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
 ];
 
 // Empirical GOLD attractors (from bias_analysis.log patterns)
 pub const GOLD_ATTRACTORS_9: [u64; 3] = [0, 3, 6];
-pub const GOLD_ATTRACTORS_27: [u64; 9] = [0, 3, 6, 9, 12, 15, 18, 21, 24];  // Extend 3^k
+pub const GOLD_ATTRACTORS_27: [u64; 9] = [0, 3, 6, 9, 12, 15, 18, 21, 24]; // Extend 3^k
 pub const GOLD_ATTRACTORS_81: [u64; 27] = [
-    0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45,
-    48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78
-];  // Full 3^4 clusters
+    0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72,
+    75, 78,
+]; // Full 3^4 clusters
 
 // Sacred kangaroo start initialization from SmallOddPrime_Precise_code.rs
 // wild_start = prime_i * target_pubkey - allows inversion in collision solving
@@ -60,13 +61,19 @@ pub fn initialize_tame_start() -> Point {
 }
 
 // Sacred bucket selection — tame deterministic, wild state-mixed
-pub fn select_bucket(_point: &Point, _dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+pub fn select_bucket(
+    _point: &Point,
+    _dist: &BigInt256,
+    seed: u32,
+    step: u32,
+    is_tame: bool,
+) -> u32 {
     // For now, use a simplified bucket selection since k256 Scalar conversion is complex
     // TODO: Implement proper k256 Scalar conversion for full compatibility
     const WALK_BUCKETS: u32 = 32;
 
     if is_tame {
-        (step % WALK_BUCKETS) as u32  // Deterministic for tame → exact distance
+        (step % WALK_BUCKETS) as u32 // Deterministic for tame → exact distance
     } else {
         // Simplified wild selection - in full implementation would use point coordinates
         let mix = seed ^ step;
@@ -113,13 +120,16 @@ pub fn additive_tame_jump(current_distance: &BigInt256, prime: u64) -> BigInt256
 pub fn multiplicative_wild_jump(current_scalar: &BigInt256, prime: u64) -> BigInt256 {
     let prime_big = BigInt256::from_u64(prime);
     let secp_n = crate::math::bigint::BigInt256::secp_n();
-    (current_scalar.clone() * prime_big.clone()).div_rem(&secp_n.clone()).1
+    (current_scalar.clone() * prime_big.clone())
+        .div_rem(&secp_n.clone())
+        .1
 }
 
 // Get bias-filtered subset of prime multipliers for Magic 9 optimization
 // Supports hierarchical filtering: tries mod81, falls back to mod27, then all
 pub fn get_biased_primes(target_mod: u8, modulus: u64, min_primes: usize) -> Vec<u64> {
-    let filtered: Vec<u64> = PRIME_MULTIPLIERS.iter()
+    let filtered: Vec<u64> = PRIME_MULTIPLIERS
+        .iter()
         .filter(|&&prime| (prime % modulus) as u8 == target_mod)
         .cloned()
         .collect();
@@ -130,7 +140,7 @@ pub fn get_biased_primes(target_mod: u8, modulus: u64, min_primes: usize) -> Vec
         // Relax to next level or fallback to all
         match modulus {
             81 => get_biased_primes(target_mod, 27, min_primes), // Try mod27
-            27 => PRIME_MULTIPLIERS.to_vec(), // Fallback to all
+            27 => PRIME_MULTIPLIERS.to_vec(),                    // Fallback to all
             _ => PRIME_MULTIPLIERS.to_vec(),
         }
     }
@@ -138,7 +148,7 @@ pub fn get_biased_primes(target_mod: u8, modulus: u64, min_primes: usize) -> Vec
 
 // Convenience function for GOLD cluster (uniform mod81=0 target)
 pub fn get_gold_cluster_primes() -> Vec<u64> {
-    get_biased_primes(0, 81, 4)  // Target mod81=0, min 4 primes
+    get_biased_primes(0, 81, 4) // Target mod81=0, min 4 primes
 }
 
 /// Apply bias filters to scalar values for Magic 9 sniper mode
@@ -188,19 +198,26 @@ pub fn biased_kangaroo_to_attractor(
     attractor_x: &BigInt256,
     biases: (u8, u8, u8, bool),
     curve: &Secp256k1,
-    max_steps: u64
+    max_steps: u64,
 ) -> Result<BigInt256, anyhow::Error> {
     let mut current_point = start_point.clone();
     let mut distance = BigInt256::zero();
     let mut step_count = 0u64;
 
-    info!("🚀 Starting biased kangaroo walk to attractor x={}", attractor_x.to_hex());
+    info!(
+        "🚀 Starting biased kangaroo walk to attractor x={}",
+        attractor_x.to_hex()
+    );
 
     loop {
         // Check if we've reached the attractor
         let current_affine = curve.to_affine(&current_point);
         if BigInt256::from_u64_array(current_affine.x) == *attractor_x {
-            info!("🎯 Attractor reached! Distance: {}, Steps: {}", distance.to_hex(), step_count);
+            info!(
+                "🎯 Attractor reached! Distance: {}, Steps: {}",
+                distance.to_hex(),
+                step_count
+            );
             return Ok(distance);
         }
 
@@ -210,18 +227,26 @@ pub fn biased_kangaroo_to_attractor(
 
         // Exponential adaptive threshold: smoother relaxation modeling stall probability
         // threshold = 0.9 * e^(-lambda * log10(step_count)) for decay
-        let lambda = 0.01;  // Decay rate from EC stall models
-        let log_step = if step_count > 0 { (step_count as f64).log10() } else { 0.0 };
+        let lambda = 0.01; // Decay rate from EC stall models
+        let log_step = if step_count > 0 {
+            (step_count as f64).log10()
+        } else {
+            0.0
+        };
         let threshold = 0.9 * std::f64::consts::E.powf(-lambda * log_step);
-        let threshold = threshold.max(0.5);  // Floor at 50% to prevent too loose matching
+        let threshold = threshold.max(0.5); // Floor at 50% to prevent too loose matching
 
         // Try to find a jump that passes bias scoring threshold
-        while attempts < 1000 {  // Prevent infinite loops
+        while attempts < 1000 {
+            // Prevent infinite loops
             // Generate random jump (in practice, this would use deterministic jump table)
             let random_jump = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
 
             // Use enhanced bias scoring from utils::bias with mod3
-            let score = crate::utils::bias::apply_biases(&random_jump, (biases.0, biases.1, biases.2, 0, biases.3)); // Add mod3=0 as default
+            let score = crate::utils::bias::apply_biases(
+                &random_jump,
+                (biases.0, biases.1, biases.2, 0, biases.3),
+            ); // Add mod3=0 as default
             if score >= threshold {
                 jump_scalar = random_jump;
                 break;
@@ -230,7 +255,11 @@ pub fn biased_kangaroo_to_attractor(
         }
 
         if jump_scalar.is_zero() {
-            return Err(anyhow::anyhow!("Failed to generate biased jump after {} attempts (threshold: {:.1})", attempts, threshold));
+            return Err(anyhow::anyhow!(
+                "Failed to generate biased jump after {} attempts (threshold: {:.1})",
+                attempts,
+                threshold
+            ));
         }
 
         // Apply jump: current_point += jump_scalar * G
@@ -244,20 +273,30 @@ pub fn biased_kangaroo_to_attractor(
 
         // Safety check to prevent infinite loops
         if step_count >= max_steps {
-            return Err(anyhow::anyhow!("Timeout: Failed to reach attractor within {} steps", max_steps));
+            return Err(anyhow::anyhow!(
+                "Timeout: Failed to reach attractor within {} steps",
+                max_steps
+            ));
         }
 
         // Progress logging
         if step_count % 10000 == 0 {
-            info!("📊 Kangaroo progress: {} steps, current distance: {}", step_count, distance.to_hex());
+            info!(
+                "📊 Kangaroo progress: {} steps, current distance: {}",
+                step_count,
+                distance.to_hex()
+            );
         }
     }
 }
 
 /// Standalone biased jump function for cycle detection
-pub fn biased_jump_standalone(current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
-    use crate::utils::pubkey_loader::detect_bias_single;
+pub fn biased_jump_standalone(
+    current: &BigInt256,
+    biases: &std::collections::HashMap<u32, f64>,
+) -> BigInt256 {
     use crate::math::constants::CURVE_ORDER_BIGINT;
+    use crate::utils::pubkey_loader::detect_bias_single;
     let mod_levels = [9u32, 27u32, 81u32];
     let mut chain_bias = 1.0;
     for &mod_level in &mod_levels {
@@ -265,21 +304,24 @@ pub fn biased_jump_standalone(current: &BigInt256, biases: &std::collections::Ha
         let res = (current.clone() % mod_val).low_u32();
         chain_bias *= *biases.get(&res).unwrap_or(&1.0);
     }
-    let (_, _, pos_factor) = detect_bias_single(current, 0);  // pos_proxy
+    let (_, _, pos_factor) = detect_bias_single(current, 0); // pos_proxy
     chain_bias *= pos_factor;
     let rand_scale = rand::random::<f64>() * chain_bias;
-    let base_jump = BigInt256::from_u64(rand::random::<u32>() as u64);  // Mock base, replace with bucket
+    let base_jump = BigInt256::from_u64(rand::random::<u32>() as u64); // Mock base, replace with bucket
     let jump = base_jump + BigInt256::from_u64(rand_scale as u64);
-    jump % CURVE_ORDER_BIGINT.clone()  // Clamp mod order
+    jump % CURVE_ORDER_BIGINT.clone() // Clamp mod order
 }
 
 /// Chunk: Improved Brent's Cycle Detection with Pos Bias and Logging
-pub fn biased_brent_cycle(current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
-    use crate::utils::pubkey_loader::detect_bias_single;
+pub fn biased_brent_cycle(
+    current: &BigInt256,
+    biases: &std::collections::HashMap<u32, f64>,
+) -> Option<BigInt256> {
     use crate::math::constants::CURVE_ORDER_BIGINT;
+    use crate::utils::pubkey_loader::detect_bias_single;
 
     let mut tortoise = current.clone();
-    let mut hare = biased_jump_standalone(&tortoise, biases);  // f(tortoise)
+    let mut hare = biased_jump_standalone(&tortoise, biases); // f(tortoise)
     let mut power = 1usize;
     let mut lam = 1usize;
     while tortoise != hare {
@@ -307,10 +349,14 @@ pub fn biased_brent_cycle(current: &BigInt256, biases: &std::collections::HashMa
         mu += 1;
     }
     info!("Brent's cycle detected: lam={}, mu={}", lam, mu);
-    Some(hare)  // Cycle point
+    Some(hare) // Cycle point
 }
 // Concise Block: Brent's Cycle Detection for Rho Walks
-fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where F: Fn(&BigInt256) -> BigInt256 { // (start point, μ, λ)
+fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64)
+where
+    F: Fn(&BigInt256) -> BigInt256,
+{
+    // (start point, μ, λ)
     let mut tortoise = x0.clone();
     let mut hare = f(&tortoise);
     let mut power = 1u64;
@@ -338,25 +384,22 @@ fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where
     (tortoise, mu, lam)
 }
 
-
 // Legacy Magic 9 primes for backward compatibility
 const MAGIC9_PRIMES: [u64; 32] = [
-    179, 257, 281, 349, 379, 419, 457, 499,
-    541, 599, 641, 709, 761, 809, 853, 911,
-    967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
-    1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
+    179, 257, 281, 349, 379, 419, 457, 499, 541, 599, 641, 709, 761, 809, 853, 911, 967, 1013,
+    1061, 1091, 1151, 1201, 1249, 1297, 1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
 ];
 
 // Chunk: Cache-Aligned PosSlice (generator.rs)
 // Dependencies: num_bigint::BigInt, std::mem::align_of
-#[repr(align(64))]  // Cache line align
-#[derive(Clone)]  // BigInt not Copy (heap allocated)
+#[repr(align(64))] // Cache line align
+#[derive(Clone)] // BigInt not Copy (heap allocated)
 pub struct PosSlice {
-    pub low: BigInt,    // 32B est
-    pub high: BigInt,   // 32B
-    pub proxy: u32,     // 4B
-    pub bias: f64,      // 8B
-    pub iter: u8,       // 1B + padding
+    pub low: BigInt,  // 32B est
+    pub high: BigInt, // 32B
+    pub proxy: u32,   // 4B
+    pub bias: f64,    // 8B
+    pub iter: u8,     // 1B + padding
 }
 // Static assert: assert_eq!(align_of::<PosSlice>(), 64);
 
@@ -402,7 +445,11 @@ impl KangarooGenerator {
     }
 
     /// Generate batch — one herd per target (multi-target support)
-    pub fn generate_batch(&self, targets: &[Point], kangaroos_per_target: usize) -> Result<Vec<KangarooState>> {
+    pub fn generate_batch(
+        &self,
+        targets: &[Point],
+        kangaroos_per_target: usize,
+    ) -> Result<Vec<KangarooState>> {
         let mut all_kangaroos = Vec::new();
 
         for target in targets {
@@ -434,10 +481,10 @@ impl KangarooGenerator {
                 BiasMode::Magic9 => scalar = scalar.skew_magic9(),
                 BiasMode::Primes => {
                     if let Some((reduced, _factors)) = scalar.mod_small_primes() {
-                        scalar = reduced;  // Factor out sacred primes
+                        scalar = reduced; // Factor out sacred primes
                     }
                 }
-                _ => {},  // Uniform no-op
+                _ => {} // Uniform no-op
             }
 
             // Multiplicative wild start: prime * target (sacred SmallOddPrime spacing)
@@ -448,12 +495,22 @@ impl KangarooGenerator {
             if self.config.gold_bias_combo {
                 let mut mod_level = 9u64;
                 while mod_level <= 81 {
-                    if !final_pos.has_magic9_bias() {  // Uses types.rs method
+                    if !final_pos.has_magic9_bias() {
+                        // Uses types.rs method
                         let res = final_pos.mod_residue(mod_level);
                         let closest_attractor = match mod_level {
-                            9 => GOLD_ATTRACTORS_9.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
-                            27 => GOLD_ATTRACTORS_27.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
-                            _ => GOLD_ATTRACTORS_81.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                            9 => GOLD_ATTRACTORS_9
+                                .iter()
+                                .min_by_key(|a| (res as i64 - **a as i64).abs())
+                                .unwrap(),
+                            27 => GOLD_ATTRACTORS_27
+                                .iter()
+                                .min_by_key(|a| (res as i64 - **a as i64).abs())
+                                .unwrap(),
+                            _ => GOLD_ATTRACTORS_81
+                                .iter()
+                                .min_by_key(|a| (res as i64 - **a as i64).abs())
+                                .unwrap(),
                         };
                         let diff = if *closest_attractor >= res {
                             *closest_attractor - res
@@ -461,24 +518,25 @@ impl KangarooGenerator {
                             *closest_attractor + mod_level - res
                         };
                         let nudge_scalar = Scalar::from_u64(diff);
-                        final_pos = self.curve.mul(&nudge_scalar.value, &final_pos);  // Nudge mul
+                        final_pos = self.curve.mul(&nudge_scalar.value, &final_pos);
+                    // Nudge mul
                     } else {
-                        break;  // In attractor, done
+                        break; // In attractor, done
                     }
-                    mod_level *= 3;  // Escalate 9->27->81
+                    mod_level *= 3; // Escalate 9->27->81
                 }
             }
 
             let state = KangarooState::new(
                 final_pos,
-                BigInt256::from_u64(scalar.value.low_u64()),  // initial distance = biased prime
-                scalar.value.to_u64_array(),  // alpha starts with biased prime offset
-                [1, 0, 0, 0],           // beta coefficient (initialized, updated during stepping)
-                false,                  // is_tame
-                false,                  // is_dp
-                i as u64,               // id
-                0,                      // step
-                0,                      // kangaroo_type (wild)
+                BigInt256::from_u64(scalar.value.low_u64()), // initial distance = biased prime
+                scalar.value.to_u64_array(), // alpha starts with biased prime offset
+                [1, 0, 0, 0], // beta coefficient (initialized, updated during stepping)
+                false,        // is_tame
+                false,        // is_dp
+                i as u64,     // id
+                0,            // step
+                0,            // kangaroo_type (wild)
             );
 
             wilds.push(state);
@@ -503,7 +561,7 @@ impl KangarooGenerator {
                         scalar = reduced;
                     }
                 }
-                _ => {},
+                _ => {}
             }
 
             // Additive tame start: G + biased_prime * G (uniform coverage, not multiplicative)
@@ -518,9 +576,18 @@ impl KangarooGenerator {
                     if !final_pos.has_magic9_bias() {
                         let res = final_pos.mod_residue(mod_level);
                         let closest_attractor = match mod_level {
-                            9 => GOLD_ATTRACTORS_9.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
-                            27 => GOLD_ATTRACTORS_27.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
-                            _ => GOLD_ATTRACTORS_81.iter().min_by_key(|a| (res as i64 - **a as i64).abs()).unwrap(),
+                            9 => GOLD_ATTRACTORS_9
+                                .iter()
+                                .min_by_key(|a| (res as i64 - **a as i64).abs())
+                                .unwrap(),
+                            27 => GOLD_ATTRACTORS_27
+                                .iter()
+                                .min_by_key(|a| (res as i64 - **a as i64).abs())
+                                .unwrap(),
+                            _ => GOLD_ATTRACTORS_81
+                                .iter()
+                                .min_by_key(|a| (res as i64 - **a as i64).abs())
+                                .unwrap(),
                         };
                         let diff = if *closest_attractor >= res {
                             *closest_attractor - res
@@ -529,24 +596,24 @@ impl KangarooGenerator {
                         };
                         let nudge_scalar = Scalar::from_u64(diff);
                         let nudge_point = self.curve.mul(&nudge_scalar.value, &self.curve.g);
-                        final_pos = self.curve.add(&final_pos, &nudge_point);  // Additive nudge
+                        final_pos = self.curve.add(&final_pos, &nudge_point); // Additive nudge
                     } else {
-                        break;  // In attractor, done
+                        break; // In attractor, done
                     }
-                    mod_level *= 3;  // Escalate 9->27->81
+                    mod_level *= 3; // Escalate 9->27->81
                 }
             }
 
             let state = KangarooState::new(
                 final_pos,
-                BigInt256::from_u64(scalar.value.low_u64()),  // distance = biased prime
-                [0, 0, 0, 0],           // alpha = 0 for tame (deterministic from G)
-                [1, 0, 0, 0],           // beta = 1 for tame
-                true,                   // is_tame
-                false,                  // is_dp
-                i as u64,               // id
-                0,                      // step
-                1,                      // kangaroo_type (tame)
+                BigInt256::from_u64(scalar.value.low_u64()), // distance = biased prime
+                [0, 0, 0, 0], // alpha = 0 for tame (deterministic from G)
+                [1, 0, 0, 0], // beta = 1 for tame
+                true,         // is_tame
+                false,        // is_dp
+                i as u64,     // id
+                0,            // step
+                1,            // kangaroo_type (tame)
             );
 
             tames.push(state);
@@ -555,7 +622,11 @@ impl KangarooGenerator {
     }
 
     /// Generate bias-aware jump scalar for kangaroo movement
-    pub fn generate_bias_aware_jump(&self, current_distance: u64, state: &KangarooState) -> BigInt256 {
+    pub fn generate_bias_aware_jump(
+        &self,
+        current_distance: u64,
+        state: &KangarooState,
+    ) -> BigInt256 {
         let base_jump = BigInt256::from_u64(current_distance ^ state.position.x[0]);
         let mut jump_scalar = base_jump.clone();
 
@@ -563,14 +634,14 @@ impl KangarooGenerator {
             BiasMode::Magic9 => {
                 let scalar = Scalar::new(base_jump);
                 jump_scalar = scalar.skew_magic9().value;
-            },
+            }
             BiasMode::Primes => {
                 let scalar = Scalar::new(base_jump);
                 if let Some((reduced, _)) = scalar.mod_small_primes() {
                     jump_scalar = reduced.value;
                 }
-            },
-            _ => {}, // Uniform - no bias
+            }
+            _ => {} // Uniform - no bias
         }
 
         // GOLD combo: Check projected point and nudge if needed
@@ -578,8 +649,18 @@ impl KangarooGenerator {
             // Simplified: nudge jump scalar toward attractors
             let res = jump_scalar.low_u64() % 9;
             if res != 0 && res != 3 && res != 6 {
-                let closest = if res <= 1 { 0 } else if res <= 4 { 3 } else { 6 };
-                let diff = if closest >= res { closest - res } else { closest + 9 - res };
+                let closest = if res <= 1 {
+                    0
+                } else if res <= 4 {
+                    3
+                } else {
+                    6
+                };
+                let diff = if closest >= res {
+                    closest - res
+                } else {
+                    closest + 9 - res
+                };
                 jump_scalar = jump_scalar + BigInt256::from_u64(diff);
             }
         }
@@ -590,8 +671,8 @@ impl KangarooGenerator {
     /// Entropy primes — only when flag enabled (real RNG, odd primes only)
     #[allow(dead_code)]
     fn generate_entropy_primes(&self, count: usize) -> Result<Vec<u64>> {
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
+        use rand::{Rng, SeedableRng};
 
         // Use deterministic seed for reproducibility in testing
         let mut rng = StdRng::from_entropy();
@@ -607,7 +688,10 @@ impl KangarooGenerator {
             }
         }
 
-        warn!("Entropy prime spacing enabled — generated {} random odd primes", primes.len());
+        warn!(
+            "Entropy prime spacing enabled — generated {} random odd primes",
+            primes.len()
+        );
         Ok(primes)
     }
 
@@ -656,11 +740,11 @@ impl KangarooGenerator {
                 BigInt256::from_u64(alpha[0] as u64), // Use lowest 64 bits as distance
                 alpha,
                 beta,
-                true, // is_tame = true
-                false, // is_dp
+                true,     // is_tame = true
+                false,    // is_dp
                 i as u64, // id
-                0, // step
-                1, // kangaroo_type (tame)
+                0,        // step
+                1,        // kangaroo_type (tame)
             ));
         }
 
@@ -693,10 +777,16 @@ impl KangarooGenerator {
     }
 
     /// Generate wild batch for multi-target with per-puzzle ranges
-    pub fn generate_wild_batch_multi_config(&self, targets: &Vec<(Point, u32)>, config: &SearchConfig) -> Result<Vec<TaggedKangarooState>> {
+    pub fn generate_wild_batch_multi_config(
+        &self,
+        targets: &Vec<(Point, u32)>,
+        config: &SearchConfig,
+    ) -> Result<Vec<TaggedKangarooState>> {
         let mut batch = Vec::with_capacity(targets.len() * config.batch_per_target);
         for (target, id) in targets {
-            let (start, end) = config.per_puzzle_ranges.as_ref()
+            let (start, end) = config
+                .per_puzzle_ranges
+                .as_ref()
                 .and_then(|r| r.get(id))
                 .cloned()
                 .unwrap_or((BigInt256::zero(), BigInt256::from_u64(1u64 << 40))); // Large but reasonable default
@@ -708,7 +798,7 @@ impl KangarooGenerator {
                     point: wild_point,
                     distance: BigInt256::zero(),
                     target_idx: *id,
-                    initial_offset: offset
+                    initial_offset: offset,
                 });
             }
         }
@@ -763,7 +853,14 @@ impl KangarooGenerator {
 
     /// Bucket Selection for Jump Choice (Deterministic Tame, Mixed Wild)
     /// Verbatim preset: Ensures tame reproducible, wild exploratory without traps.
-    pub fn select_bucket(&self, point: &Point, dist: &BigInt256, seed: u32, step: u32, is_tame: bool) -> u32 {
+    pub fn select_bucket(
+        &self,
+        point: &Point,
+        dist: &BigInt256,
+        seed: u32,
+        step: u32,
+        is_tame: bool,
+    ) -> u32 {
         const WALK_BUCKETS: u32 = 32;
         if is_tame {
             step % WALK_BUCKETS // Deterministic → exact distance
@@ -771,7 +868,7 @@ impl KangarooGenerator {
             // Convert point.x [u64; 4] to bytes for mixing
             let mut x_bytes = [0u8; 32];
             for i in 0..4 {
-                x_bytes[i*8..(i+1)*8].copy_from_slice(&point.x[i].to_le_bytes());
+                x_bytes[i * 8..(i + 1) * 8].copy_from_slice(&point.x[i].to_le_bytes());
             }
             let x0 = u32::from_le_bytes(x_bytes[0..4].try_into().unwrap());
             let x1 = u32::from_le_bytes(x_bytes[4..8].try_into().unwrap());
@@ -851,7 +948,13 @@ impl KangarooGenerator {
     // }
 
     /// Concise Block: Separate Rho Partition with Bias
-    pub fn rho_specific_partition(&self, point: &Point, dist: &BigInt256, seed: u32, bias_mod: u64) -> u32 {
+    pub fn rho_specific_partition(
+        &self,
+        point: &Point,
+        dist: &BigInt256,
+        seed: u32,
+        bias_mod: u64,
+    ) -> u32 {
         let mix = point.x_low_u32() as u32 ^ dist.low_u32() ^ seed; // Low bytes XOR as preset
         (mix as u64 % bias_mod) as u32 // Bias mod
     }
@@ -879,7 +982,10 @@ impl KangarooGenerator {
             } as usize;
 
             // Add jump (simplified - would use precomputed multiples)
-            tame = self.curve.add(&tame, &self.curve.g_multiples[jump_idx % self.curve.g_multiples.len()]);
+            tame = self.curve.add(
+                &tame,
+                &self.curve.g_multiples[jump_idx % self.curve.g_multiples.len()],
+            );
             tame_steps = tame_steps + BigInt256::from_u64(1);
 
             // Check for DP
@@ -895,7 +1001,10 @@ impl KangarooGenerator {
                 (wild_hash % bias_mod) % W as u64
             } as usize;
 
-            wild = self.curve.add(&wild, &self.curve.g_multiples[jump_idx % self.curve.g_multiples.len()]);
+            wild = self.curve.add(
+                &wild,
+                &self.curve.g_multiples[jump_idx % self.curve.g_multiples.len()],
+            );
             wild_steps = wild_steps + BigInt256::from_u64(1);
 
             // Check for collision
@@ -904,7 +1013,12 @@ impl KangarooGenerator {
                 // Solve: tame_steps - tame_at_collision = k mod n
                 let diff = tame_steps - tame_at_collision;
                 let diff_512 = BigInt512::from_bigint256(&diff);
-                return Some(self.curve.barrett_n.reduce(&diff_512).unwrap_or(BigInt256::zero()));
+                return Some(
+                    self.curve
+                        .barrett_n
+                        .reduce(&diff_512)
+                        .unwrap_or(BigInt256::zero()),
+                );
             }
         }
     }
@@ -916,23 +1030,42 @@ impl KangarooGenerator {
     }
 
     /// Concise Block: Use Brent's in Rho Cycle
-    pub fn rho_cycle_with_brents<F>(&self, f: F, x0: BigInt256) -> (u64, u64) where F: Fn(&BigInt256) -> BigInt256 {
+    pub fn rho_cycle_with_brents<F>(&self, f: F, x0: BigInt256) -> (u64, u64)
+    where
+        F: Fn(&BigInt256) -> BigInt256,
+    {
         let (_, mu, lam) = brents_cycle_detection(f, x0);
         (mu, lam)
     }
 
     /// Concise Block: Grover-Like Amplifier for Bias Narrowing
     pub fn grover_amplifier_bias(&self, points: &Vec<Point>, bias_mod: u64) -> Vec<Point> {
-        points.iter().filter(|p| p.x_bigint().mod_u64(bias_mod) == 0).cloned().collect() // "Amplify" biased
+        points
+            .iter()
+            .filter(|p| p.x_bigint().mod_u64(bias_mod) == 0)
+            .cloned()
+            .collect() // "Amplify" biased
     }
 
     /// Concise Block: Utilize Biases in Jump with Detected b
-    pub fn get_utilized_bias_jump(&self, bucket: u32, biases: &std::collections::HashMap<String, f64>) -> BigInt256 {
+    pub fn get_utilized_bias_jump(
+        &self,
+        bucket: u32,
+        biases: &std::collections::HashMap<String, f64>,
+    ) -> BigInt256 {
         let mut jump = crate::math::constants::PRIME_MULTIPLIERS[bucket as usize % 32];
-        if biases["mod81"] > 0.012 { jump = jump + (81 - jump % 81); } // Utilize if detected high
-        if biases["mod27"] > 0.037 { jump = jump + (27 - jump % 27); }
-        if biases["mod9"] > 0.111 { jump = jump + (9 - jump % 9); }
-        if biases["vanity"] > 0.0625 { jump = jump + (16 - jump % 16) + 9; } // Mod16=9
+        if biases["mod81"] > 0.012 {
+            jump = jump + (81 - jump % 81);
+        } // Utilize if detected high
+        if biases["mod27"] > 0.037 {
+            jump = jump + (27 - jump % 27);
+        }
+        if biases["mod9"] > 0.111 {
+            jump = jump + (9 - jump % 9);
+        }
+        if biases["vanity"] > 0.0625 {
+            jump = jump + (16 - jump % 16) + 9;
+        } // Mod16=9
         BigInt256::from_u64(jump % (1u64 << 32))
     }
 
@@ -941,10 +1074,14 @@ impl KangarooGenerator {
         (n.to_f64().sqrt() * bias_prob.sqrt()) as u64 // Adjust sqrt for bias
     }
 
-
     /// Setup Kangaroos for Multi-Target with Precise Starts
     /// Verbatim preset: Per-target wild primes, shared tame G.
-    pub fn setup_kangaroos_multi(&self, targets: &[Point], num_per_target: usize, _config: &SearchConfig) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
+    pub fn setup_kangaroos_multi(
+        &self,
+        targets: &[Point],
+        num_per_target: usize,
+        _config: &SearchConfig,
+    ) -> (Vec<TaggedKangarooState>, Vec<KangarooState>) {
         use crate::math::constants::PRIME_MULTIPLIERS;
         let mut wilds = Vec::with_capacity(targets.len() * num_per_target);
         for (idx, target) in targets.iter().enumerate() {
@@ -956,16 +1093,28 @@ impl KangarooGenerator {
                     point,
                     distance: BigInt256::zero(),
                     target_idx: idx as u32,
-                    initial_offset: initial_prime
+                    initial_offset: initial_prime,
                 });
             }
         }
-        let tames: Vec<_> = (0..wilds.len()).map(|_| {
-            let mut tame = KangarooState::new(Point::infinity(), BigInt256::zero(), [0; 4], [0; 4], true, false, 0, 0, 0);
-            tame.position = self.initialize_tame_start();
-            tame.distance = BigInt256::zero(); // Reset distance for tame kangaroos
-            tame
-        }).collect();
+        let tames: Vec<_> = (0..wilds.len())
+            .map(|_| {
+                let mut tame = KangarooState::new(
+                    Point::infinity(),
+                    BigInt256::zero(),
+                    [0; 4],
+                    [0; 4],
+                    true,
+                    false,
+                    0,
+                    0,
+                    0,
+                );
+                tame.position = self.initialize_tame_start();
+                tame.distance = BigInt256::zero(); // Reset distance for tame kangaroos
+                tame
+            })
+            .collect();
         (wilds, tames)
     }
 
@@ -975,10 +1124,22 @@ impl KangarooGenerator {
     /// Pollard's lambda algorithm for discrete logarithm in intervals
     /// Searches for k in [a, a+w] such that [k]G = Q
     /// Expected time O(√w) with tame/wild kangaroos
-    pub fn pollard_lambda(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, max_cycles: u64, bias_mod: u64, b_pos: f64, pos_proxy: f64, biases: Option<&std::collections::HashMap<u32, f64>>) -> Option<BigInt256> {
-        use std::collections::HashMap;
+    pub fn pollard_lambda(
+        &self,
+        curve: &Secp256k1,
+        g: &Point,
+        q: &Point,
+        a: BigInt256,
+        w: BigInt256,
+        max_cycles: u64,
+        bias_mod: u64,
+        b_pos: f64,
+        pos_proxy: f64,
+        biases: Option<&std::collections::HashMap<u32, f64>>,
+    ) -> Option<BigInt256> {
         use crate::math::bigint::{BigInt256, BigInt512};
         use crate::types::Point;
+        use std::collections::HashMap;
 
         let midpoint = curve.barrett_n.add(&a, &w.right_shift(1));
         let mut tame = curve.mul_constant_time(&midpoint, g).ok()?;
@@ -998,12 +1159,19 @@ impl KangarooGenerator {
             p.x[0] % 1024 // Simple hash for demo
         };
 
-        let max_steps = if max_cycles == 0 { 10000000 } else { max_cycles }; // 0 = unlimited for demo
+        let max_steps = if max_cycles == 0 {
+            10000000
+        } else {
+            max_cycles
+        }; // 0 = unlimited for demo
         for _step in 0..max_steps {
             // Move tame with bias-aware jumping
             let tame_jump_idx = if let Some(biases) = biases {
                 let tame_dist_bigint = BigInt256::from_u64_array([
-                    tame_steps.limbs[0], tame_steps.limbs[1], tame_steps.limbs[2], tame_steps.limbs[3]
+                    tame_steps.limbs[0],
+                    tame_steps.limbs[1],
+                    tame_steps.limbs[2],
+                    tame_steps.limbs[3],
                 ]);
                 let biased_jump = self.biased_jump(&tame_dist_bigint, biases);
                 // Convert back to jump index
@@ -1011,7 +1179,10 @@ impl KangarooGenerator {
             } else {
                 self.select_bias_aware_jump(&tame, bias_mod, b_pos, pos_proxy)
             };
-            tame = curve.add(&tame, &curve.g_multiples[tame_jump_idx % curve.g_multiples.len()]);
+            tame = curve.add(
+                &tame,
+                &curve.g_multiples[tame_jump_idx % curve.g_multiples.len()],
+            );
             tame_steps = curve.barrett_n.add(&tame_steps, &BigInt256::one());
             if is_dp(&tame) {
                 tame_dp.insert(tame.x, tame_steps.clone());
@@ -1019,7 +1190,10 @@ impl KangarooGenerator {
 
             // Move wild with bias-aware jumping
             let wild_jump_idx = self.select_bias_aware_jump(&wild, bias_mod, b_pos, pos_proxy);
-            wild = curve.add(&wild, &curve.g_multiples[wild_jump_idx % curve.g_multiples.len()]);
+            wild = curve.add(
+                &wild,
+                &curve.g_multiples[wild_jump_idx % curve.g_multiples.len()],
+            );
             wild_steps = curve.barrett_n.add(&wild_steps, &BigInt256::one());
 
             // Check collision
@@ -1027,7 +1201,12 @@ impl KangarooGenerator {
                 let neg_wild = wild_steps.negate(&curve.barrett_n);
                 let diff = curve.barrett_n.add(&t_steps, &neg_wild);
                 let k = curve.barrett_n.add(&midpoint, &diff);
-                return Some(curve.barrett_n.reduce(&BigInt512::from_bigint256(&k)).ok()?);
+                return Some(
+                    curve
+                        .barrett_n
+                        .reduce(&BigInt512::from_bigint256(&k))
+                        .ok()?,
+                );
             }
         }
         None
@@ -1041,38 +1220,75 @@ impl KangarooGenerator {
     /// where t is the number of kangaroo pairs
     /// Initialize kangaroo states for parallel execution
     #[allow(dead_code)]
-    fn pollard_init_parallel(&self, curve: &Arc<Secp256k1>, _g: &Arc<Point>, _q: &Arc<Point>,
-                           a: &Arc<BigInt256>, w: &Arc<BigInt256>, num_kangaroos: usize)
-                           -> Vec<(BigInt256, BigInt256)> {
-        (0..num_kangaroos).map(|_| {
-            // Generate random offset for this kangaroo pair
-            let w_clone = (**w).clone();
-            let w_array = w_clone.to_u64_array();
-            let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
-            let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
-            let offset = BigInt256::from_u64(offset_u64);
+    fn pollard_init_parallel(
+        &self,
+        curve: &Arc<Secp256k1>,
+        _g: &Arc<Point>,
+        _q: &Arc<Point>,
+        a: &Arc<BigInt256>,
+        w: &Arc<BigInt256>,
+        num_kangaroos: usize,
+    ) -> Vec<(BigInt256, BigInt256)> {
+        (0..num_kangaroos)
+            .map(|_| {
+                // Generate random offset for this kangaroo pair
+                let w_clone = (**w).clone();
+                let w_array = w_clone.to_u64_array();
+                let w_u64 = w_array[0]; // Take the lowest 64 bits for range splitting
+                let offset_u64 = OsRng.gen::<u64>() % (w_u64 / num_kangaroos as u64).max(1);
+                let offset = BigInt256::from_u64(offset_u64);
 
-            let adjusted_a = curve.barrett_n.add(a, &offset);
-            let adjusted_w = w.right_shift((num_kangaroos as f64).log2() as usize); // Split range
+                let adjusted_a = curve.barrett_n.add(a, &offset);
+                let adjusted_w = w.right_shift((num_kangaroos as f64).log2() as usize); // Split range
 
-            (adjusted_a, adjusted_w)
-        }).collect()
+                (adjusted_a, adjusted_w)
+            })
+            .collect()
     }
 
     /// Run parallel kangaroo search
     #[allow(dead_code)]
-    fn pollard_run_parallel(&self, curve: &Arc<Secp256k1>, g: &Arc<Point>, q: &Arc<Point>,
-                          states: Vec<(BigInt256, BigInt256)>, max_cycles: u64,
-                          bias_mod: u64, b_pos: f64, pos_proxy: f64, biases: Option<&std::collections::HashMap<u32, f64>>) -> Option<BigInt256> {
+    fn pollard_run_parallel(
+        &self,
+        curve: &Arc<Secp256k1>,
+        g: &Arc<Point>,
+        q: &Arc<Point>,
+        states: Vec<(BigInt256, BigInt256)>,
+        max_cycles: u64,
+        bias_mod: u64,
+        b_pos: f64,
+        pos_proxy: f64,
+        biases: Option<&std::collections::HashMap<u32, f64>>,
+    ) -> Option<BigInt256> {
         let states_len = states.len() as u64;
-        states.into_par_iter().find_map_first(|(adjusted_a, adjusted_w)| {
-        self.pollard_lambda(curve, g, q, adjusted_a, adjusted_w,
-                          max_cycles / states_len, bias_mod, b_pos, pos_proxy, biases)
-        })
+        states
+            .into_par_iter()
+            .find_map_first(|(adjusted_a, adjusted_w)| {
+                self.pollard_lambda(
+                    curve,
+                    g,
+                    q,
+                    adjusted_a,
+                    adjusted_w,
+                    max_cycles / states_len,
+                    bias_mod,
+                    b_pos,
+                    pos_proxy,
+                    biases,
+                )
+            })
     }
 
     #[allow(dead_code)]
-    fn pollard_init(&self, curve: &Secp256k1, g: &Point, q: &Point, a: BigInt256, w: BigInt256, num_kangaroos: usize) -> Vec<(BigInt256, BigInt256)> {
+    fn pollard_init(
+        &self,
+        curve: &Secp256k1,
+        g: &Point,
+        q: &Point,
+        a: BigInt256,
+        w: BigInt256,
+        num_kangaroos: usize,
+    ) -> Vec<(BigInt256, BigInt256)> {
         let curve_arc = Arc::new(curve.clone());
         let g_arc = Arc::new(g.clone());
         let q_arc = Arc::new(q.clone());
@@ -1082,11 +1298,24 @@ impl KangarooGenerator {
     }
 
     #[allow(dead_code)]
-    fn pollard_run(&self, curve: &Secp256k1, g: &Point, q: &Point, states: Vec<(BigInt256, BigInt256)>, max_cycles: u64, bias_mod: u64, b_pos: f64, pos_proxy: f64, biases: Option<&std::collections::HashMap<u32, f64>>) -> Option<BigInt256> {
+    fn pollard_run(
+        &self,
+        curve: &Secp256k1,
+        g: &Point,
+        q: &Point,
+        states: Vec<(BigInt256, BigInt256)>,
+        max_cycles: u64,
+        bias_mod: u64,
+        b_pos: f64,
+        pos_proxy: f64,
+        biases: Option<&std::collections::HashMap<u32, f64>>,
+    ) -> Option<BigInt256> {
         let curve_arc = Arc::new(curve.clone());
         let g_arc = Arc::new(g.clone());
         let q_arc = Arc::new(q.clone());
-        self.pollard_run_parallel(&curve_arc, &g_arc, &q_arc, states, max_cycles, bias_mod, b_pos, pos_proxy, biases)
+        self.pollard_run_parallel(
+            &curve_arc, &g_arc, &q_arc, states, max_cycles, bias_mod, b_pos, pos_proxy, biases,
+        )
     }
 
     #[allow(dead_code)]
@@ -1120,21 +1349,39 @@ impl KangarooGenerator {
     }
 
     /// Split Pollard Run: Execute biased kangaroo steps
-    fn pollard_run_split(&self, states: &mut [KangarooState], steps: usize, jumps: &[BigInt256], biases: &std::collections::HashMap<u32, f64>) {
+    fn pollard_run_split(
+        &self,
+        states: &mut [KangarooState],
+        steps: usize,
+        jumps: &[BigInt256],
+        biases: &std::collections::HashMap<u32, f64>,
+    ) {
         self.pollard_run_biased(states, steps, jumps, biases);
     }
 
     /// Split Pollard Resolve: Check collisions and return solution if found
-    fn pollard_resolve_split(&self, _states: &[KangarooState], _dp_table: &DpTable, _detector: &CollisionDetector, _biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
+    fn pollard_resolve_split(
+        &self,
+        _states: &[KangarooState],
+        _dp_table: &DpTable,
+        _detector: &CollisionDetector,
+        _biases: &std::collections::HashMap<u32, f64>,
+    ) -> Option<BigInt256> {
         // Placeholder: In full implementation, check DP table for collisions
         // and resolve using collision detector
         None
     }
 
-    pub fn pollard_lambda_parallel(&self, target_pubkey: &Point, _range: (BigInt256, BigInt256), count: usize, biases: &std::collections::HashMap<u32, f64>) -> Option<BigInt256> {
-        use crate::math::constants::{DP_BITS, jump_table};
+    pub fn pollard_lambda_parallel(
+        &self,
+        target_pubkey: &Point,
+        _range: (BigInt256, BigInt256),
+        count: usize,
+        biases: &std::collections::HashMap<u32, f64>,
+    ) -> Option<BigInt256> {
         use crate::dp::DpTable;
         use crate::kangaroo::collision::CollisionDetector;
+        use crate::math::constants::{jump_table, DP_BITS};
 
         let mut states = self.pollard_init_split(target_pubkey, count);
         let dp_table = DpTable::new(DP_BITS as usize);
@@ -1151,12 +1398,15 @@ impl KangarooGenerator {
         }
     }
 
-
     /// Select bias-aware jump operation with hierarchical modulus preferences (mod9 -> mod27 -> mod81 -> pos)
     /// Bias-aware jump with chain: mod9 -> mod27 -> mod81 + pos_proxy scaling
-    pub fn biased_jump(&self, current: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> BigInt256 {
-        use crate::utils::pubkey_loader::detect_bias_single;
+    pub fn biased_jump(
+        &self,
+        current: &BigInt256,
+        biases: &std::collections::HashMap<u32, f64>,
+    ) -> BigInt256 {
         use crate::math::constants::CURVE_ORDER_BIGINT;
+        use crate::utils::pubkey_loader::detect_bias_single;
         let mod_levels = [9u32, 27u32, 81u32];
         let mut chain_bias = 1.0;
         for &mod_level in &mod_levels {
@@ -1164,7 +1414,7 @@ impl KangarooGenerator {
             let res = (current.clone() % mod_val).low_u32();
             chain_bias *= *biases.get(&res).unwrap_or(&1.0);
         }
-        let (_, _, pos_factor) = detect_bias_single(current, 0);  // pos_proxy
+        let (_, _, pos_factor) = detect_bias_single(current, 0); // pos_proxy
         chain_bias *= pos_factor;
 
         // SpaceX-inspired flair logs for bias application
@@ -1177,19 +1427,33 @@ impl KangarooGenerator {
         }
 
         let rand_scale = rand::random::<f64>() * chain_bias;
-        let base_jump = BigInt256::from_u64(rand::random::<u32>() as u64);  // Mock base, replace with bucket
+        let base_jump = BigInt256::from_u64(rand::random::<u32>() as u64); // Mock base, replace with bucket
         let jump = base_jump + BigInt256::from_u64(rand_scale as u64);
-        jump % CURVE_ORDER_BIGINT.clone()  // Clamp mod order
+        jump % CURVE_ORDER_BIGINT.clone() // Clamp mod order
     }
 
-    fn pollard_run_biased(&self, states: &mut [KangarooState], steps: usize, jumps: &[BigInt256], biases: &std::collections::HashMap<u32, f64>) {
+    fn pollard_run_biased(
+        &self,
+        states: &mut [KangarooState],
+        steps: usize,
+        jumps: &[BigInt256],
+        biases: &std::collections::HashMap<u32, f64>,
+    ) {
         for state in states.iter_mut() {
             for s in 0..steps {
                 // Use lambda bucket select for deterministic tame vs mixed wild
                 let distance_bigint = state.distance.clone();
-                let bucket = self.select_bucket(&state.position, &distance_bigint, 0, s as u32, state.is_tame);
+                let bucket = self.select_bucket(
+                    &state.position,
+                    &distance_bigint,
+                    0,
+                    s as u32,
+                    state.is_tame,
+                );
                 let jump = self.biased_jump(&distance_bigint, biases);
-                let jump_point = self.curve.mul(&jumps[bucket as usize % jumps.len()], &self.curve.g);
+                let jump_point = self
+                    .curve
+                    .mul(&jumps[bucket as usize % jumps.len()], &self.curve.g);
                 state.position = self.curve.point_add(&state.position, &jump_point);
                 let new_distance = distance_bigint + jump;
                 state.distance = new_distance;
@@ -1209,7 +1473,13 @@ impl KangarooGenerator {
         }
     }
 
-    pub fn select_bias_aware_jump(&self, point: &Point, _bias_mod: u64, b_pos: f64, pos_proxy: f64) -> usize {
+    pub fn select_bias_aware_jump(
+        &self,
+        point: &Point,
+        _bias_mod: u64,
+        b_pos: f64,
+        pos_proxy: f64,
+    ) -> usize {
         use rand::Rng;
         let mut rng = rand::thread_rng();
 
@@ -1222,9 +1492,9 @@ impl KangarooGenerator {
         let mod81 = hash % 81;
 
         // High bias residues from solved puzzle analysis (aggressive for laptop)
-        const HIGH_BIAS_MOD9: [u64; 2] = [0, 3];  // Magic 9 and common residues
-        const HIGH_BIAS_MOD27: [u64; 3] = [0, 9, 18];  // Multiples of 9 within mod27
-        const HIGH_BIAS_MOD81: [u64; 5] = [0, 9, 27, 36, 45];  // Multiples of 9 within mod81 (extended)
+        const HIGH_BIAS_MOD9: [u64; 2] = [0, 3]; // Magic 9 and common residues
+        const HIGH_BIAS_MOD27: [u64; 3] = [0, 9, 18]; // Multiples of 9 within mod27
+        const HIGH_BIAS_MOD81: [u64; 5] = [0, 9, 27, 36, 45]; // Multiples of 9 within mod81 (extended)
 
         // Apply hierarchical bias with heavier mod81 for laptop speed
         if HIGH_BIAS_MOD9.contains(&mod9) {
@@ -1295,154 +1565,188 @@ impl KangarooGenerator {
         hash.wrapping_mul(31).wrapping_add(point.y[0] as usize)
     }
 
-// Chunk: Anti-Overfit in POS Refine with Proper Bounds (generator.rs)
-pub fn refine_pos_slice(slice: &mut PosSlice, biases: &std::collections::HashMap<u32, f64>, max_iterations: u8) {
-    if slice.iter >= max_iterations || (&slice.high - &slice.low) < BigInt::from(1u64 << 20) {
-        return;  // Size guard (min 1M range), iteration limit (3 optimal)
-    }
+    // Chunk: Anti-Overfit in POS Refine with Proper Bounds (generator.rs)
+    pub fn refine_pos_slice(
+        slice: &mut PosSlice,
+        biases: &std::collections::HashMap<u32, f64>,
+        max_iterations: u8,
+    ) {
+        if slice.iter >= max_iterations || (&slice.high - &slice.low) < BigInt::from(1u64 << 20) {
+            return; // Size guard (min 1M range), iteration limit (3 optimal)
+        }
 
-    let r = &slice.high - &slice.low;
-    let b = *biases.get(&slice.proxy).unwrap_or(&1.0);
-    slice.low += &r / BigInt::from(12u32); // ~8% offset for exploration
-    slice.high = &slice.low + &r * BigInt::from((b * 1.1) as u64);
-    slice.bias *= b;
-    slice.iter += 1;
+        let r = &slice.high - &slice.low;
+        let b = *biases.get(&slice.proxy).unwrap_or(&1.0);
+        slice.low += &r / BigInt::from(12u32); // ~8% offset for exploration
+        slice.high = &slice.low + &r * BigInt::from((b * 1.1) as u64);
+        slice.bias *= b;
+        slice.iter += 1;
 
-    // Overfit prevention: inject entropy if variance too high (σ > 0.5 = overfit risk)
-    let bias_values: Vec<f64> = biases.values().cloned().collect();
-    if bias_values.len() > 2 {
-        let mean = bias_values.iter().sum::<f64>() / bias_values.len() as f64;
-        let variance = bias_values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / bias_values.len() as f64;
-        let std_dev = variance.sqrt();
-        if std_dev > 0.5 {  // High variance = overfit risk (prevent infinite loops on small data)
-            slice.low += BigInt::from(rand::random::<u64>() % (1u64 << 10));  // Inject entropy
+        // Overfit prevention: inject entropy if variance too high (σ > 0.5 = overfit risk)
+        let bias_values: Vec<f64> = biases.values().cloned().collect();
+        if bias_values.len() > 2 {
+            let mean = bias_values.iter().sum::<f64>() / bias_values.len() as f64;
+            let variance = bias_values.iter().map(|v| (v - mean).powi(2)).sum::<f64>()
+                / bias_values.len() as f64;
+            let std_dev = variance.sqrt();
+            if std_dev > 0.5 {
+                // High variance = overfit risk (prevent infinite loops on small data)
+                slice.low += BigInt::from(rand::random::<u64>() % (1u64 << 10));
+                // Inject entropy
+            }
         }
     }
-}
 
-// Chunk: Batch Refine for Cache (generator.rs)
-pub fn batch_refine_slices(slices: &mut [PosSlice], biases: &std::collections::HashMap<u32, f64>) {
-    for s in slices.iter_mut() {  // Sequential but cache-hot
-        if s.iter >= 3 { continue; }
-        let r = &s.high - &s.low;
-        let b = *biases.get(&s.proxy).unwrap_or(&1.0);
-        s.low += &r / BigInt::from(12u32);
-        s.high = &s.low + &r * BigInt::from((b * 1.1) as u64);
-        s.bias *= b;
-        s.iter += 1;
-    }
-}
-// Usage: In init, let mut slices = vec![new_slice(); 4096]; batch_refine_slices(&mut slices, &biases);
-
-// Chunk: χ² Convergence Check (generator.rs)
-pub fn should_refine(slice: &PosSlice, obs_freq: &[f64], exp_uniform: f64) -> bool {
-    let df = obs_freq.len() as f64 - 1.0;
-    let chi2: f64 = obs_freq.iter().map(|&o| (o - exp_uniform).powi(2) / exp_uniform).sum();
-    let crit = df * 2.0;  // Approximate χ² critical value (rough approximation)
-    chi2 > crit && slice.iter < 5  // χ² high = non-uniform → refine
-}
-
-// Chunk: Bayesian Posterior Update (generator.rs)
-pub fn bayesian_posterior(hits: u32, misses: u32, prior_alpha: f64, prior_beta: f64) -> f64 {
-    let post_alpha = prior_alpha + hits as f64;
-    let post_beta = prior_beta + misses as f64;
-    post_alpha / (post_alpha + post_beta)  // Mean of beta dist
-}
-// Usage: If bayesian_posterior(bias_hits, bias_misses, 1.0, 1.0) < 0.6 { stop refine }
-
-// Chunk: Barrett Mu Precomp (generator.rs)
-// Dependencies: num_bigint::BigInt (for shift/div)
-pub fn barrett_mu(range: &BigInt256) -> BigInt256 {
-    // For Barrett reduction, mu = floor(2^{2*k} / modulus) where k=256
-    // Since we can't represent 2^{512} in BigInt256, use approximation
-    // mu ≈ 2^{256} / range for the Barrett constant
-    let two_to_256 = BigInt256 { limbs: [0, 0, 0, 1] }; // 2^256 as BigInt256 (approximation)
-    two_to_256.div_rem(range).0  // floor div
-}
-
-// Chunk: Safe Barrett Rem (generator.rs)
-// In SIMD function (after q calc):
-// let mut rem = rand - q * range;  // BigInt256 ops
-// while rem >= range {  // At most 2 iters
-//     rem -= range;
-// }
-// if rem < BigInt256::zero() { rem += range; }  // Rare underflow
-
-// Chunk: AVX512 Gate for BigInt Random (generator.rs)
-// Dependencies: std::arch::x86_64::*, num_bigint::BigInt (for range)
-#[cfg(target_feature = "avx512f")]
-pub fn simd_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt256> {
-    use std::arch::x86_64::*;
-    let range = &slice.high - &slice.low;
-    let mut rands = vec![BigInt256::zero(); count];
-    unsafe {
-        for i in (0..count).step_by(8) {  // x8 for AVX512
-            let rand_limbs = _mm512_set_epi64(rand::random(), rand::random(), /* repeat 8x */);
-            let mu = _mm512_set1_epi64((1u64 << 65) / range.limbs[0]);  // Barrett mu adj
-            let q = _mm512_mul_epu32(rand_limbs, mu);
-            let rem = _mm512_sub_epi64(rand_limbs, _mm512_mul_epu32(q, range.limbs_vec()));
-            // Unpack rem to rands[i..i+8] via _mm512_extract_epi64
+    // Chunk: Batch Refine for Cache (generator.rs)
+    pub fn batch_refine_slices(
+        slices: &mut [PosSlice],
+        biases: &std::collections::HashMap<u32, f64>,
+    ) {
+        for s in slices.iter_mut() {
+            // Sequential but cache-hot
+            if s.iter >= 3 {
+                continue;
+            }
+            let r = &s.high - &s.low;
+            let b = *biases.get(&s.proxy).unwrap_or(&1.0);
+            s.low += &r / BigInt::from(12u32);
+            s.high = &s.low + &r * BigInt::from((b * 1.1) as u64);
+            s.bias *= b;
+            s.iter += 1;
         }
     }
-    rands
-}
+    // Usage: In init, let mut slices = vec![new_slice(); 4096]; batch_refine_slices(&mut slices, &biases);
 
-#[cfg(not(target_feature = "avx512f"))]
-pub fn simd_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
-    (0..count).map(|_| {
+    // Chunk: χ² Convergence Check (generator.rs)
+    pub fn should_refine(slice: &PosSlice, obs_freq: &[f64], exp_uniform: f64) -> bool {
+        let df = obs_freq.len() as f64 - 1.0;
+        let chi2: f64 = obs_freq
+            .iter()
+            .map(|&o| (o - exp_uniform).powi(2) / exp_uniform)
+            .sum();
+        let crit = df * 2.0; // Approximate χ² critical value (rough approximation)
+        chi2 > crit && slice.iter < 5 // χ² high = non-uniform → refine
+    }
+
+    // Chunk: Bayesian Posterior Update (generator.rs)
+    pub fn bayesian_posterior(hits: u32, misses: u32, prior_alpha: f64, prior_beta: f64) -> f64 {
+        let post_alpha = prior_alpha + hits as f64;
+        let post_beta = prior_beta + misses as f64;
+        post_alpha / (post_alpha + post_beta) // Mean of beta dist
+    }
+    // Usage: If bayesian_posterior(bias_hits, bias_misses, 1.0, 1.0) < 0.6 { stop refine }
+
+    // Chunk: Barrett Mu Precomp (generator.rs)
+    // Dependencies: num_bigint::BigInt (for shift/div)
+    pub fn barrett_mu(range: &BigInt256) -> BigInt256 {
+        // For Barrett reduction, mu = floor(2^{2*k} / modulus) where k=256
+        // Since we can't represent 2^{512} in BigInt256, use approximation
+        // mu ≈ 2^{256} / range for the Barrett constant
+        let two_to_256 = BigInt256 {
+            limbs: [0, 0, 0, 1],
+        }; // 2^256 as BigInt256 (approximation)
+        two_to_256.div_rem(range).0 // floor div
+    }
+
+    // Chunk: Safe Barrett Rem (generator.rs)
+    // In SIMD function (after q calc):
+    // let mut rem = rand - q * range;  // BigInt256 ops
+    // while rem >= range {  // At most 2 iters
+    //     rem -= range;
+    // }
+    // if rem < BigInt256::zero() { rem += range; }  // Rare underflow
+
+    // Chunk: AVX512 Gate for BigInt Random (generator.rs)
+    // Dependencies: std::arch::x86_64::*, num_bigint::BigInt (for range)
+    #[cfg(target_feature = "avx512f")]
+    pub fn simd_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt256> {
+        use std::arch::x86_64::*;
         let range = &slice.high - &slice.low;
-        &slice.low + (BigInt::from(rand::random::<u64>()) % &range)
-    }).collect()
-}
-
-// Chunk: SIMD Random in Slice (generator.rs)
-pub fn vec_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
-    let _range = &slice.high - &slice.low;
-    let mut rands = vec![num_bigint::BigInt::from(0); count];
-    for i in 0..count {
-        let rand_val = rand::random::<u64>() % 1000000;  // Assume small range for now
-        rands[i] = BigInt::from(rand_val);
+        let mut rands = vec![BigInt256::zero(); count];
+        unsafe {
+            for i in (0..count).step_by(8) {
+                // x8 for AVX512
+                let rand_limbs =
+                    _mm512_set_epi64(rand::random(), rand::random() /* repeat 8x */);
+                let mu = _mm512_set1_epi64((1u64 << 65) / range.limbs[0]); // Barrett mu adj
+                let q = _mm512_mul_epu32(rand_limbs, mu);
+                let rem = _mm512_sub_epi64(rand_limbs, _mm512_mul_epu32(q, range.limbs_vec()));
+                // Unpack rem to rands[i..i+8] via _mm512_extract_epi64
+            }
+        }
+        rands
     }
-    rands
-}
 
-/// Generate random BigInt within POS slice bounds
-pub fn random_in_slice(slice: &PosSlice) -> BigInt {
-    use rand::Rng;
-    let range = &slice.high - &slice.low;
-    if range <= BigInt::from(0) { return slice.low.clone(); }
-    &slice.low + BigInt::from(rand::thread_rng().gen::<u64>()) % &range
-}
-
-/// Concise dynamic bias tuning - one-liner adjustment (lower thresh for laptop)
-pub fn tune_bias(biases: &mut std::collections::HashMap<u32, f64>, coll_rate: f64, target: f64) {
-    if coll_rate < target * 0.08 {  // Lower thresh for quick adj
-        for v in biases.values_mut() { *v = (*v * 1.15).min(2.5); }  // Aggressive boost
+    #[cfg(not(target_feature = "avx512f"))]
+    pub fn simd_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
+        (0..count)
+            .map(|_| {
+                let range = &slice.high - &slice.low;
+                &slice.low + (BigInt::from(rand::random::<u64>()) % &range)
+            })
+            .collect()
     }
-}
 
-/// POS slicing integrated pollard lambda parallel - 8 lines
-pub fn pollard_lambda_parallel_pos(_target: &BigInt256, range: (BigInt, BigInt)) -> Option<BigInt256> {
-    let _slice = new_slice(range, 0);
-    let _biases = std::collections::HashMap::from([(9, 1.25), (27, 1.35), (81, 1.42)]);
+    // Chunk: SIMD Random in Slice (generator.rs)
+    pub fn vec_random_in_slice(slice: &PosSlice, count: usize) -> Vec<BigInt> {
+        let _range = &slice.high - &slice.low;
+        let mut rands = vec![num_bigint::BigInt::from(0); count];
+        for i in 0..count {
+            let rand_val = rand::random::<u64>() % 1000000; // Assume small range for now
+            rands[i] = BigInt::from(rand_val);
+        }
+        rands
+    }
+
+    /// Generate random BigInt within POS slice bounds
+    pub fn random_in_slice(slice: &PosSlice) -> BigInt {
+        use rand::Rng;
+        let range = &slice.high - &slice.low;
+        if range <= BigInt::from(0) {
+            return slice.low.clone();
+        }
+        &slice.low + BigInt::from(rand::thread_rng().gen::<u64>()) % &range
+    }
+
+    /// Concise dynamic bias tuning - one-liner adjustment (lower thresh for laptop)
+    pub fn tune_bias(
+        biases: &mut std::collections::HashMap<u32, f64>,
+        coll_rate: f64,
+        target: f64,
+    ) {
+        if coll_rate < target * 0.08 {
+            // Lower thresh for quick adj
+            for v in biases.values_mut() {
+                *v = (*v * 1.15).min(2.5);
+            } // Aggressive boost
+        }
+    }
+
+    /// POS slicing integrated pollard lambda parallel - 8 lines
+    pub fn pollard_lambda_parallel_pos(
+        _target: &BigInt256,
+        range: (BigInt, BigInt),
+    ) -> Option<BigInt256> {
+        let _slice = new_slice(range, 0);
+        let _biases = std::collections::HashMap::from([(9, 1.25), (27, 1.35), (81, 1.42)]);
         for _ in 0..3 {
             // TODO: Implement batch processing
             // let starts: Vec<BigInt> = (0..4096).map(|_| random_in_slice(&slice)).collect();
             // if let Some(key) = run_batch_mock(&starts, target) { return Some(key); }
             // refine_pos_slice(&mut slice, &biases);
         }
-    None
-}
+        None
+    }
 
-// Mock batch runner for testing (replace with real implementation)
-// TODO: Uncomment when implementing mock testing
-// fn run_batch_mock(_starts: &[BigInt], _target: &BigInt256) -> Option<BigInt256> {
-//     // Mock collision detection - in real implementation this would run kangaroo algorithm
-//     use rand::Rng;
-//     if rand::thread_rng().gen_bool(0.001) { // 0.1% mock success rate
-//         Some(BigInt256::from_u64(42)) // Mock solution
-//     } else {
-//         None
-//     }
-// }
+    // Mock batch runner for testing (replace with real implementation)
+    // TODO: Uncomment when implementing mock testing
+    // fn run_batch_mock(_starts: &[BigInt], _target: &BigInt256) -> Option<BigInt256> {
+    //     // Mock collision detection - in real implementation this would run kangaroo algorithm
+    //     use rand::Rng;
+    //     if rand::thread_rng().gen_bool(0.001) { // 0.1% mock success rate
+    //         Some(BigInt256::from_u64(42)) // Mock solution
+    //     } else {
+    //         None
+    //     }
+    // }
 }

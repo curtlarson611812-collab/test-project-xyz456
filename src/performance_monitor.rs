@@ -8,10 +8,10 @@
 //! - Performance trend analysis and bottleneck detection
 //! - Integration with CLI for live updates
 
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
 use anyhow::Result;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// Comprehensive performance metrics collector
 pub struct PerformanceMonitor {
@@ -108,18 +108,13 @@ impl PerformanceMonitor {
         let thresholds = self.alert_thresholds.clone();
         let interval = self.collection_interval;
 
-        std::thread::spawn(move || {
-            loop {
-                if let Err(e) = Self::collect_metrics(
-                    &metrics_history,
-                    &gpu_metrics,
-                    &system_metrics,
-                    &thresholds,
-                ) {
-                    eprintln!("Performance monitoring error: {}", e);
-                }
-                std::thread::sleep(interval);
+        std::thread::spawn(move || loop {
+            if let Err(e) =
+                Self::collect_metrics(&metrics_history, &gpu_metrics, &system_metrics, &thresholds)
+            {
+                eprintln!("Performance monitoring error: {}", e);
             }
+            std::thread::sleep(interval);
         });
 
         Ok(())
@@ -144,34 +139,42 @@ impl PerformanceMonitor {
         let gpu_metrics_locked = gpu_metrics.lock().unwrap();
         let system_metrics_locked = system_metrics.lock().unwrap();
 
-        let avg_gpu_utilization = gpu_metrics_locked.values()
+        let avg_gpu_utilization = gpu_metrics_locked
+            .values()
             .map(|m| m.utilization)
-            .sum::<f64>() / gpu_metrics_locked.len() as f64;
+            .sum::<f64>()
+            / gpu_metrics_locked.len() as f64;
 
-        let total_memory_used = gpu_metrics_locked.values()
+        let total_memory_used = gpu_metrics_locked
+            .values()
             .map(|m| m.memory_used_mb)
             .sum::<f64>();
 
-        let total_power_consumption = gpu_metrics_locked.values()
+        let total_power_consumption = gpu_metrics_locked
+            .values()
             .map(|m| m.power_draw)
             .sum::<f64>();
 
-        let avg_temperature = gpu_metrics_locked.values()
+        let avg_temperature = gpu_metrics_locked
+            .values()
             .map(|m| m.temperature)
-            .sum::<f64>() / gpu_metrics_locked.len() as f64;
+            .sum::<f64>()
+            / gpu_metrics_locked.len() as f64;
 
         // Detect bottlenecks
-        let bottleneck = Self::detect_bottleneck(&gpu_metrics_locked, &system_metrics_locked, thresholds);
+        let bottleneck =
+            Self::detect_bottleneck(&gpu_metrics_locked, &system_metrics_locked, thresholds);
 
         // Create snapshot
         let mut snapshot = PerformanceSnapshot {
             timestamp,
-            total_ops: 0, // Would be updated by caller
+            total_ops: 0,        // Would be updated by caller
             ops_per_second: 0.0, // Would be calculated from history
             memory_usage_mb: total_memory_used,
             gpu_utilization_percent: avg_gpu_utilization,
             cpu_utilization_percent: system_metrics_locked.cpu_usage_percent,
-            network_bandwidth_mbps: system_metrics_locked.network_rx_mbps + system_metrics_locked.network_tx_mbps,
+            network_bandwidth_mbps: system_metrics_locked.network_rx_mbps
+                + system_metrics_locked.network_tx_mbps,
             temperature_celsius: avg_temperature,
             power_consumption_watts: total_power_consumption,
             active_devices: gpu_metrics_locked.len(),
@@ -183,7 +186,8 @@ impl PerformanceMonitor {
         if let Some(previous) = history_locked.last() {
             let time_diff = timestamp.duration_since(previous.timestamp).as_secs_f64();
             if time_diff > 0.0 {
-                snapshot.ops_per_second = (snapshot.total_ops.saturating_sub(previous.total_ops)) as f64 / time_diff;
+                snapshot.ops_per_second =
+                    (snapshot.total_ops.saturating_sub(previous.total_ops)) as f64 / time_diff;
             }
         }
 
@@ -246,7 +250,8 @@ impl PerformanceMonitor {
         thresholds: &PerformanceThresholds,
     ) -> Option<BottleneckType> {
         // Check thermal throttling
-        let avg_temp = gpu_metrics.values().map(|m| m.temperature).sum::<f64>() / gpu_metrics.len() as f64;
+        let avg_temp =
+            gpu_metrics.values().map(|m| m.temperature).sum::<f64>() / gpu_metrics.len() as f64;
         if avg_temp > thresholds.max_temperature_celsius {
             return Some(BottleneckType::ThermalThrottling);
         }
@@ -258,7 +263,8 @@ impl PerformanceMonitor {
         }
 
         // Check GPU utilization
-        let avg_gpu_util = gpu_metrics.values().map(|m| m.utilization).sum::<f64>() / gpu_metrics.len() as f64;
+        let avg_gpu_util =
+            gpu_metrics.values().map(|m| m.utilization).sum::<f64>() / gpu_metrics.len() as f64;
         if avg_gpu_util > thresholds.max_gpu_utilization {
             return Some(BottleneckType::GpuBound);
         }
@@ -277,7 +283,11 @@ impl PerformanceMonitor {
         }
 
         // Check PCIe bandwidth
-        let avg_pcie_util = gpu_metrics.values().map(|m| m.pcie_bandwidth_utilization).sum::<f64>() / gpu_metrics.len() as f64;
+        let avg_pcie_util = gpu_metrics
+            .values()
+            .map(|m| m.pcie_bandwidth_utilization)
+            .sum::<f64>()
+            / gpu_metrics.len() as f64;
         if avg_pcie_util > 80.0 {
             return Some(BottleneckType::PcieBandwidth);
         }
@@ -305,13 +315,17 @@ impl PerformanceMonitor {
 
         // Calculate averages over last 10 snapshots
         let recent_snapshots: Vec<_> = history.iter().rev().take(10).collect();
-        let avg_ops_per_second = recent_snapshots.iter()
+        let avg_ops_per_second = recent_snapshots
+            .iter()
             .map(|s| s.ops_per_second)
-            .sum::<f64>() / recent_snapshots.len() as f64;
+            .sum::<f64>()
+            / recent_snapshots.len() as f64;
 
-        let avg_gpu_utilization = recent_snapshots.iter()
+        let avg_gpu_utilization = recent_snapshots
+            .iter()
             .map(|s| s.gpu_utilization_percent)
-            .sum::<f64>() / recent_snapshots.len() as f64;
+            .sum::<f64>()
+            / recent_snapshots.len() as f64;
 
         Ok(PerformanceSummary {
             uptime_seconds: elapsed.as_secs(),
@@ -331,11 +345,16 @@ impl PerformanceMonitor {
     }
 
     /// Calculate overall efficiency score (0.0 to 1.0)
-    fn calculate_efficiency_score(snapshot: &PerformanceSnapshot, _gpu_metrics: &HashMap<usize, GpuMetrics>) -> f64 {
+    fn calculate_efficiency_score(
+        snapshot: &PerformanceSnapshot,
+        _gpu_metrics: &HashMap<usize, GpuMetrics>,
+    ) -> f64 {
         let gpu_efficiency = snapshot.gpu_utilization_percent / 100.0;
-        let memory_efficiency = 1.0 - (snapshot.memory_usage_mb / (snapshot.active_devices as f64 * 32768.0));
+        let memory_efficiency =
+            1.0 - (snapshot.memory_usage_mb / (snapshot.active_devices as f64 * 32768.0));
         let thermal_efficiency = 1.0 - (snapshot.temperature_celsius / 100.0);
-        let power_efficiency = 1.0 - (snapshot.power_consumption_watts / (snapshot.active_devices as f64 * 450.0));
+        let power_efficiency =
+            1.0 - (snapshot.power_consumption_watts / (snapshot.active_devices as f64 * 450.0));
 
         (gpu_efficiency + memory_efficiency + thermal_efficiency + power_efficiency) / 4.0
     }
@@ -352,10 +371,12 @@ impl PerformanceMonitor {
             match bottleneck {
                 BottleneckType::ThermalThrottling => {
                     recommendations.push("Reduce GPU clocks or improve cooling".to_string());
-                    recommendations.push("Consider enabling thermal throttling protection".to_string());
+                    recommendations
+                        .push("Consider enabling thermal throttling protection".to_string());
                 }
                 BottleneckType::PowerLimited => {
-                    recommendations.push("Reduce power limit or improve power delivery".to_string());
+                    recommendations
+                        .push("Reduce power limit or improve power delivery".to_string());
                     recommendations.push("Consider power budget optimization".to_string());
                 }
                 BottleneckType::GpuBound => {
@@ -367,55 +388,95 @@ impl PerformanceMonitor {
                     recommendations.push("Consider memory optimization techniques".to_string());
                 }
                 BottleneckType::CpuBound => {
-                    recommendations.push("Increase CPU thread count or optimize CPU code".to_string());
+                    recommendations
+                        .push("Increase CPU thread count or optimize CPU code".to_string());
                     recommendations.push("Consider CPU affinity optimization".to_string());
                 }
                 BottleneckType::PcieBandwidth => {
                     recommendations.push("Optimize data transfer patterns".to_string());
-                    recommendations.push("Consider NVLink-enabled GPUs for better bandwidth".to_string());
+                    recommendations
+                        .push("Consider NVLink-enabled GPUs for better bandwidth".to_string());
                 }
                 BottleneckType::NumAImbalance => {
-                    recommendations.push("Optimize memory allocation across NUMA nodes".to_string());
+                    recommendations
+                        .push("Optimize memory allocation across NUMA nodes".to_string());
                     recommendations.push("Consider NUMA-aware scheduling".to_string());
                 }
                 BottleneckType::NetworkBound => {
                     recommendations.push("Optimize network communication patterns".to_string());
-                    recommendations.push("Consider reducing network traffic or improving bandwidth".to_string());
+                    recommendations.push(
+                        "Consider reducing network traffic or improving bandwidth".to_string(),
+                    );
                 }
             }
         }
 
         // General recommendations based on utilization
         if snapshot.gpu_utilization_percent < 70.0 {
-            recommendations.push("GPU utilization is low - consider increasing batch sizes".to_string());
+            recommendations
+                .push("GPU utilization is low - consider increasing batch sizes".to_string());
         }
 
-        if snapshot.ops_per_second < 100_000_000.0 { // Less than 100M ops/sec
-            recommendations.push("Performance below target - review kernel optimizations".to_string());
+        if snapshot.ops_per_second < 100_000_000.0 {
+            // Less than 100M ops/sec
+            recommendations
+                .push("Performance below target - review kernel optimizations".to_string());
         }
 
         recommendations
     }
 
     // GPU query methods (placeholders - would interface with actual GPU APIs)
-    fn query_gpu_utilization(_device_id: usize) -> Result<f64> { Ok(85.0) }
-    fn query_gpu_memory_used(_device_id: usize) -> Result<f64> { Ok(24576.0) } // 24GB used
-    fn query_gpu_temperature(_device_id: usize) -> Result<f64> { Ok(72.0) }
-    fn query_gpu_power_draw(_device_id: usize) -> Result<f64> { Ok(380.0) }
-    fn query_gpu_fan_speed(_device_id: usize) -> Result<f64> { Ok(65.0) }
-    fn query_gpu_clock_speed(_device_id: usize) -> Result<u32> { Ok(1890) }
-    fn query_gpu_memory_clock(_device_id: usize) -> Result<u32> { Ok(1313) }
-    fn query_pcie_utilization(_device_id: usize) -> Result<f64> { Ok(45.0) }
+    fn query_gpu_utilization(_device_id: usize) -> Result<f64> {
+        Ok(85.0)
+    }
+    fn query_gpu_memory_used(_device_id: usize) -> Result<f64> {
+        Ok(24576.0)
+    } // 24GB used
+    fn query_gpu_temperature(_device_id: usize) -> Result<f64> {
+        Ok(72.0)
+    }
+    fn query_gpu_power_draw(_device_id: usize) -> Result<f64> {
+        Ok(380.0)
+    }
+    fn query_gpu_fan_speed(_device_id: usize) -> Result<f64> {
+        Ok(65.0)
+    }
+    fn query_gpu_clock_speed(_device_id: usize) -> Result<u32> {
+        Ok(1890)
+    }
+    fn query_gpu_memory_clock(_device_id: usize) -> Result<u32> {
+        Ok(1313)
+    }
+    fn query_pcie_utilization(_device_id: usize) -> Result<f64> {
+        Ok(45.0)
+    }
 
     // System query methods (placeholders)
-    fn query_cpu_usage() -> Result<f64> { Ok(45.0) }
-    fn query_memory_used() -> Result<f64> { Ok(16.0) }
-    fn query_memory_total() -> Result<f64> { Ok(64.0) }
-    fn query_network_rx() -> Result<f64> { Ok(125.0) }
-    fn query_network_tx() -> Result<f64> { Ok(89.0) }
-    fn query_disk_read() -> Result<f64> { Ok(234.0) }
-    fn query_disk_write() -> Result<f64> { Ok(156.0) }
-    fn calculate_numa_imbalance() -> Result<f64> { Ok(0.3) }
+    fn query_cpu_usage() -> Result<f64> {
+        Ok(45.0)
+    }
+    fn query_memory_used() -> Result<f64> {
+        Ok(16.0)
+    }
+    fn query_memory_total() -> Result<f64> {
+        Ok(64.0)
+    }
+    fn query_network_rx() -> Result<f64> {
+        Ok(125.0)
+    }
+    fn query_network_tx() -> Result<f64> {
+        Ok(89.0)
+    }
+    fn query_disk_read() -> Result<f64> {
+        Ok(234.0)
+    }
+    fn query_disk_write() -> Result<f64> {
+        Ok(156.0)
+    }
+    fn calculate_numa_imbalance() -> Result<f64> {
+        Ok(0.3)
+    }
 }
 
 impl Default for PerformanceSummary {
@@ -517,24 +578,28 @@ mod tests {
     #[test]
     fn test_bottleneck_detection() {
         let mut gpu_metrics = HashMap::new();
-        gpu_metrics.insert(0, GpuMetrics {
-            device_id: 0,
-            name: "Test GPU".to_string(),
-            utilization: 50.0,
-            memory_used_mb: 16000.0,
-            memory_total_mb: 32768.0,
-            temperature: 90.0, // High temperature
-            power_draw: 400.0,
-            fan_speed_percent: 80.0,
-            clock_speed_mhz: 1800,
-            memory_clock_mhz: 1300,
-            pcie_bandwidth_utilization: 50.0,
-        });
+        gpu_metrics.insert(
+            0,
+            GpuMetrics {
+                device_id: 0,
+                name: "Test GPU".to_string(),
+                utilization: 50.0,
+                memory_used_mb: 16000.0,
+                memory_total_mb: 32768.0,
+                temperature: 90.0, // High temperature
+                power_draw: 400.0,
+                fan_speed_percent: 80.0,
+                clock_speed_mhz: 1800,
+                memory_clock_mhz: 1300,
+                pcie_bandwidth_utilization: 50.0,
+            },
+        );
 
         let system_metrics = SystemMetrics::default();
         let thresholds = PerformanceThresholds::default();
 
-        let bottleneck = PerformanceMonitor::detect_bottleneck(&gpu_metrics, &system_metrics, &thresholds);
+        let bottleneck =
+            PerformanceMonitor::detect_bottleneck(&gpu_metrics, &system_metrics, &thresholds);
         assert_eq!(bottleneck, Some(BottleneckType::ThermalThrottling));
     }
 }

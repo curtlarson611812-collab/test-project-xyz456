@@ -3,15 +3,15 @@
 //! Loads large pubkey lists from files and provides Bitcoin puzzle pubkeys
 //! Supports both compressed and uncompressed formats with validation
 
+use crate::kangaroo::SearchConfig;
+use crate::math::bigint::{BigInt256, BigInt512};
+use crate::math::secp::Secp256k1;
+use crate::types::Point;
+use hex::decode;
+use log::warn;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::ops::{Add, Sub};
-use hex::decode;
-use crate::types::Point;
-use crate::math::bigint::{BigInt256, BigInt512};
-use crate::math::secp::Secp256k1;
-use crate::kangaroo::SearchConfig;
-use log::warn;
 
 /// Preset Magic 9 filter function (verbatim from RS code, no adjustments)
 /// Filters keys based on hex ending, mod 9, and prime residue patterns
@@ -19,13 +19,13 @@ fn is_magic9(key: &BigInt256, primes: &[u64]) -> bool {
     let hex = key.to_hex();
     if !hex.ends_with('9') {
         return false;
-    }  // Preset hex end check
+    } // Preset hex end check
 
     // Check key % 9 == 0
     let nine = BigInt256::from_u64(9);
     if !(key.clone() % nine).is_zero() {
         return false;
-    }  // Preset mod 9 == 0
+    } // Preset mod 9 == 0
 
     // Check prime residue bias: key % p == 9 % p for any prime p
     for &p in primes {
@@ -34,7 +34,7 @@ fn is_magic9(key: &BigInt256, primes: &[u64]) -> bool {
         let nine_mod_p = BigInt256::from_u64(9 % p);
         if key_mod_p == nine_mod_p {
             return true;
-        }  // Preset prime residue bias
+        } // Preset prime residue bias
     }
     false
 }
@@ -51,8 +51,9 @@ pub fn load_pubkeys_from_file(path: &str) -> io::Result<Vec<Point>> {
             continue;
         }
 
-        let bytes = decode(&hex_str)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Invalid hex: {}", e)))?;
+        let bytes = decode(&hex_str).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("Invalid hex: {}", e))
+        })?;
 
         // Parse based on format
         let point = if bytes.len() == 65 && bytes[0] == 0x04 {
@@ -64,7 +65,7 @@ pub fn load_pubkeys_from_file(path: &str) -> io::Result<Vec<Point>> {
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid pubkey length {} or format", bytes.len())
+                format!("Invalid pubkey length {} or format", bytes.len()),
             ));
         };
 
@@ -77,7 +78,10 @@ pub fn load_pubkeys_from_file(path: &str) -> io::Result<Vec<Point>> {
 /// Parse uncompressed pubkey (04 + x + y)
 fn parse_uncompressed(bytes: &[u8]) -> io::Result<Point> {
     if bytes.len() != 65 || bytes[0] != 0x04 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid uncompressed format"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid uncompressed format",
+        ));
     }
 
     let mut x_bytes = [0u8; 32];
@@ -91,7 +95,10 @@ fn parse_uncompressed(bytes: &[u8]) -> io::Result<Point> {
     let curve = Secp256k1::new();
     let point = Point::from_affine(x.to_u64_array(), y.to_u64_array());
     if !curve.is_on_curve(&point) {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Point not on secp256k1 curve"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Point not on secp256k1 curve",
+        ));
     }
 
     Ok(point)
@@ -100,15 +107,20 @@ fn parse_uncompressed(bytes: &[u8]) -> io::Result<Point> {
 /// Parse compressed pubkey and decompress (02/03 + x)
 /// Parse compressed pubkey from hex string with robust error handling
 pub fn parse_compressed(hex_str: &str) -> Result<BigInt256, Box<dyn std::error::Error>> {
-    let cleaned = hex_str.trim().trim_start_matches("0x");  // Handle prefixed/spaced input
+    let cleaned = hex_str.trim().trim_start_matches("0x"); // Handle prefixed/spaced input
     if cleaned.is_empty() {
-        return Err("Blank address string".into());  // Explicit error for blank addresses
+        return Err("Blank address string".into()); // Explicit error for blank addresses
     }
-    if cleaned.len() != 66 {  // 33 bytes *2 hex
-        log::warn!("Cleaned hex len {} !=66 (33 bytes): {}", cleaned.len(), cleaned);
+    if cleaned.len() != 66 {
+        // 33 bytes *2 hex
+        log::warn!(
+            "Cleaned hex len {} !=66 (33 bytes): {}",
+            cleaned.len(),
+            cleaned
+        );
     }
     let bytes = decode(cleaned).map_err(|e| format!("Hex decode fail: {}", e))?;
-    log::info!("Decoded bytes len: {}", bytes.len());  // Debug
+    log::info!("Decoded bytes len: {}", bytes.len()); // Debug
     if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
         return Err("Invalid compressed pubkey length/format".into());
     }
@@ -118,7 +130,10 @@ pub fn parse_compressed(hex_str: &str) -> Result<BigInt256, Box<dyn std::error::
 
 fn parse_compressed_bytes(bytes: &[u8]) -> io::Result<Point> {
     if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid compressed format"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid compressed format",
+        ));
     }
 
     // Extract x coordinate (32 bytes after the compression prefix)
@@ -142,12 +157,20 @@ fn parse_compressed_bytes(bytes: &[u8]) -> io::Result<Point> {
                 curve.barrett_p.sub(&curve.p, &y_val)
             }
         }
-        None => return Err(io::Error::new(io::ErrorKind::InvalidData, "No square root for compressed pubkey")),
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "No square root for compressed pubkey",
+            ))
+        }
     };
 
     let point = Point::from_affine(x.to_u64_array(), y.to_u64_array());
     if !curve.is_on_curve(&point) {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Decompressed point not on curve"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Decompressed point not on curve",
+        ));
     }
 
     Ok(point)
@@ -202,7 +225,10 @@ fn mod_mul(a: &BigInt256, b: &BigInt256, _modulus: &BigInt256) -> BigInt256 {
     // Use Barrett reduction from Phase 3
     let curve = crate::math::secp::Secp256k1::new();
     let prod = curve.barrett_p.mul(a, b);
-    curve.barrett_p.reduce(&BigInt512::from_bigint256(&prod)).expect("Barrett reduction should not fail")
+    curve
+        .barrett_p
+        .reduce(&BigInt512::from_bigint256(&prod))
+        .expect("Barrett reduction should not fail")
 }
 
 /// Full Tonelli-Shanks algorithm for modular square root
@@ -236,17 +262,15 @@ pub fn load_all_puzzles_pubkeys() -> Vec<Point> {
     let curve = Secp256k1::new();
     revealed_puzzle_pubkeys
         .into_iter()
-        .filter_map(|hex| {
-            match decode(hex) {
-                Ok(bytes) => {
-                    if bytes.len() == 33 && (bytes[0] == 0x02 || bytes[0] == 0x03) {
-                        curve.decompress_point(&bytes.try_into().unwrap())
-                    } else {
-                        None
-                    }
+        .filter_map(|hex| match decode(hex) {
+            Ok(bytes) => {
+                if bytes.len() == 33 && (bytes[0] == 0x02 || bytes[0] == 0x03) {
+                    curve.decompress_point(&bytes.try_into().unwrap())
+                } else {
+                    None
                 }
-                Err(_) => None,
             }
+            Err(_) => None,
         })
         .collect()
 }
@@ -268,8 +292,10 @@ pub fn load_test_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
     ];
 
     let curve = Secp256k1::new();
-    let points: Vec<(Point, u32)> = test_hex.into_iter().enumerate().filter_map(|(i, hex)| {
-        match hex::decode(hex) {
+    let points: Vec<(Point, u32)> = test_hex
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, hex)| match hex::decode(hex) {
             Ok(bytes) => {
                 if bytes.len() == 33 && (bytes[0] == 0x02 || bytes[0] == 0x03) {
                     let mut comp = [0u8; 33];
@@ -280,8 +306,8 @@ pub fn load_test_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
                 }
             }
             Err(_) => None,
-        }
-    }).collect();
+        })
+        .collect();
 
     let mut config = SearchConfig::for_test_puzzles();
     config.name = "test_puzzles".to_string();
@@ -296,7 +322,10 @@ pub fn load_unsolved_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
     // Note: These are compressed format pubkeys from puzzles where the pubkey was exposed
     let unsolved = vec![
         // (hex, puzzle_id)
-        ("02EE07BAA936B8FD3E5736B0474D2CF3DE231D0B17F3F76D4BA3CB4FE9FA52D600".to_string(), 66),
+        (
+            "02EE07BAA936B8FD3E5736B0474D2CF3DE231D0B17F3F76D4BA3CB4FE9FA52D600".to_string(),
+            66,
+        ),
         // Additional unsolved puzzles would be added here as they become available
         // ("02...", 67), etc.
     ];
@@ -311,8 +340,8 @@ pub fn load_unsolved_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
                 comp.copy_from_slice(&bytes);
                 if let Some(point) = Secp256k1::new().decompress_point(&comp) {
                     // Apply magic 9 filter: use approx key estimate for filtering
-                    let key_estimate = BigInt256::from_u64(1u64 << (id - 1));  // 2^(id-1) as proxy
-                    let jump_primes = &[3u64, 5, 7, 11, 13, 17, 19, 23];  // Default primes for filter
+                    let key_estimate = BigInt256::from_u64(1u64 << (id - 1)); // 2^(id-1) as proxy
+                    let jump_primes = &[3u64, 5, 7, 11, 13, 17, 19, 23]; // Default primes for filter
                     if is_magic9(&key_estimate, jump_primes) {
                         points_with_ids.push((point, id));
                     }
@@ -322,7 +351,7 @@ pub fn load_unsolved_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
     }
 
     let mut config = SearchConfig::for_unsolved_puzzles();
-    config.load_default_unsolved_ranges();  // Load per-puzzle ranges
+    config.load_default_unsolved_ranges(); // Load per-puzzle ranges
     config.name = "unsolved_puzzles".to_string();
 
     (points_with_ids, config)
@@ -330,30 +359,37 @@ pub fn load_unsolved_puzzle_keys() -> (Vec<(Point, u32)>, SearchConfig) {
 
 /// Concise Block: Scan Valuable for Magic 9 Count
 fn count_magic9_in_list(points: &Vec<Point>) -> usize {
-    points.iter().filter(|p| {
-        let x_hex = BigInt256::from_u64_array(p.x).to_hex();
-        x_hex.ends_with('9') && (BigInt256::from_u64_array(p.x).clone() % BigInt256::from_u64(9)).is_zero() // Preset: end '9', mod9=0
-    }).count()
+    points
+        .iter()
+        .filter(|p| {
+            let x_hex = BigInt256::from_u64_array(p.x).to_hex();
+            x_hex.ends_with('9')
+                && (BigInt256::from_u64_array(p.x).clone() % BigInt256::from_u64(9)).is_zero()
+            // Preset: end '9', mod9=0
+        })
+        .count()
 }
 
 /// Concise Block: Mod9=0 Filter for Attractor Reduction
 fn is_mod9_attractor_candidate(x: &BigInt256) -> bool {
-    x.clone() % BigInt256::from_u64(9) == BigInt256::zero()  // Digital root 0 mod9
+    x.clone() % BigInt256::from_u64(9) == BigInt256::zero() // Digital root 0 mod9
 }
 
 /// Concise Block: Mod27=0 Filter for Finer Reduction
 fn is_mod27_attractor_candidate(x: &BigInt256) -> bool {
-    x.mod_u64(27) == 0  // Higher 3-power multiple
+    x.mod_u64(27) == 0 // Higher 3-power multiple
 }
 
 /// Concise Block: Mod81=0 Filter for Ultra-Fine Reduction
 fn is_mod81_attractor_candidate(x: &BigInt256) -> bool {
-    x.mod_u64(81) == 0  // 3^4 power multiple
+    x.mod_u64(81) == 0 // 3^4 power multiple
 }
 
 /// Concise Block: Detect Vanity Bias in Pubkey Hex
 fn is_vanity_biased(x_hex: &str, prefix_pattern: &str, suffix_mod: u64) -> bool {
-    if x_hex.starts_with(prefix_pattern) { return true; } // e.g., "02" for compressed
+    if x_hex.starts_with(prefix_pattern) {
+        return true;
+    } // e.g., "02" for compressed
     BigInt256::from_hex(x_hex).unwrap().mod_u64(suffix_mod) == 9 // Suffix mod for '9' bias
 }
 
@@ -414,13 +450,13 @@ pub fn detect_bias_single(x: &BigInt256, n: u32) -> (u64, u64, f64) {
 
     // Determine bias modulus based on residue patterns
     let bias_mod = if mod9 == 0 {
-        9  // Strongest bias - multiple of 9
+        9 // Strongest bias - multiple of 9
     } else if mod27 == 0 || mod27 == 9 || mod27 == 18 {
         27 // Medium bias - multiple of 9 within mod27
     } else if mod81 == 0 || mod81 == 9 || mod81 == 18 || mod81 == 27 || mod81 == 36 || mod81 == 45 {
         81 // Finest bias - multiple of 9 within mod81
     } else {
-        0  // No significant bias detected
+        0 // No significant bias detected
     };
 
     // Use the finest modulus residue as dominant
@@ -489,7 +525,11 @@ pub fn analyze_pos_bias_histogram(solved_puzzles: &[(u32, BigInt256)]) -> [f64; 
 
     for i in 0..10 {
         // Normalize: prevalence per bin (uniform would be 1.0)
-        result[i] = if total > 0.0 { (hist[i] as f64) / (total / 10.0) } else { 1.0 };
+        result[i] = if total > 0.0 {
+            (hist[i] as f64) / (total / 10.0)
+        } else {
+            1.0
+        };
     }
 
     result
@@ -499,8 +539,8 @@ pub fn analyze_pos_bias_histogram(solved_puzzles: &[(u32, BigInt256)]) -> [f64; 
 /// Tests if observed frequency distribution differs significantly from uniform
 /// Returns true if bias is statistically significant (p < 0.05)
 pub fn is_bias_significant(obs_freq: &[f64], num_samples: usize) -> bool {
-    use statrs::distribution::Uniform;
     use rand::distributions::Distribution;
+    use statrs::distribution::Uniform;
 
     if obs_freq.is_empty() || num_samples == 0 {
         return false;
@@ -512,9 +552,7 @@ pub fn is_bias_significant(obs_freq: &[f64], num_samples: usize) -> bool {
     // Generate uniform samples for comparison
     let uniform = Uniform::new(0.0, 1.0).unwrap();
     let mut rng = rand::thread_rng();
-    let uniform_samples: Vec<f64> = (0..num_samples)
-        .map(|_| uniform.sample(&mut rng))
-        .collect();
+    let uniform_samples: Vec<f64> = (0..num_samples).map(|_| uniform.sample(&mut rng)).collect();
 
     // Create empirical CDFs
     let mut obs_sorted: Vec<f64> = obs_freq.iter().cloned().collect();
@@ -568,7 +606,7 @@ pub fn deeper_mod9_subgroup(points: &[Point]) -> (f64, u64, f64, u64) {
     let (_hist9, _expected9, max_r9, b_mod9, _sig9) = analyze_mod9_bias_deeper(points);
 
     // Analyze mod27 subgroups within the most biased mod9 residue
-    let mut sub_hist27 = [0u32; 3];  // For r=0,9,18 mod27 within mod9=max_r9
+    let mut sub_hist27 = [0u32; 3]; // For r=0,9,18 mod27 within mod9=max_r9
     let mut sub_total = 0u32;
 
     for point in points {
@@ -578,7 +616,7 @@ pub fn deeper_mod9_subgroup(points: &[Point]) -> (f64, u64, f64, u64) {
             let mod27 = x_bigint.mod_u64(27);
             // Only count if mod27 ≡ max_r9 mod 9 (conditional subgroup)
             if mod27 % 9 == max_r9 {
-                let sub_bin = (mod27 / 9) as usize;  // 0, 1, or 2
+                let sub_bin = (mod27 / 9) as usize; // 0, 1, or 2
                 if sub_bin < 3 {
                     sub_hist27[sub_bin] += 1;
                     sub_total += 1;
@@ -589,17 +627,22 @@ pub fn deeper_mod9_subgroup(points: &[Point]) -> (f64, u64, f64, u64) {
 
     let sub_expected = sub_total as f64 / 3.0;
     let b_mod27 = if sub_expected > 0.0 {
-        sub_hist27.iter().map(|&count| count as f64 / sub_expected).fold(0.0, f64::max)
+        sub_hist27
+            .iter()
+            .map(|&count| count as f64 / sub_expected)
+            .fold(0.0, f64::max)
     } else {
         1.0 / 3.0
     };
 
-    let max_sub_bin = sub_hist27.iter().enumerate()
+    let max_sub_bin = sub_hist27
+        .iter()
+        .enumerate()
         .max_by(|a, b| a.1.cmp(b.1))
         .map(|(i, _)| i)
         .unwrap_or(0);
 
-    let max_r27 = max_sub_bin as u64 * 9 + max_r9;  // Full mod27 residue
+    let max_r27 = max_sub_bin as u64 * 9 + max_r9; // Full mod27 residue
 
     (b_mod9, max_r9, b_mod27, max_r27)
 }
@@ -617,7 +660,8 @@ pub fn iterative_mod9_slice(points: &[Point], max_levels: u32) -> f64 {
             break; // Stop if too few points (overfitting protection)
         }
 
-        let (_hist, _expected, max_r, b, _sig) = analyze_mod_bias_deeper(&sub_points, current_modulus);
+        let (_hist, _expected, max_r, b, _sig) =
+            analyze_mod_bias_deeper(&sub_points, current_modulus);
 
         // Stop if bias is not significant or below uniform
         let uniform_bias = 1.0 / current_modulus as f64;
@@ -628,7 +672,8 @@ pub fn iterative_mod9_slice(points: &[Point], max_levels: u32) -> f64 {
         b_prod *= b;
 
         // Filter points to the most biased subgroup for next level
-        sub_points = sub_points.into_iter()
+        sub_points = sub_points
+            .into_iter()
             .filter(|p| {
                 let x_bigint = BigInt256::from_u64_array(p.x);
                 x_bigint.mod_u64(current_modulus) == max_r
@@ -658,7 +703,7 @@ fn simd_bias_check(res: u32, high_res: &[u32]) -> bool {
     // Process in chunks of 4 using SIMD
     for i in (0..copy_len).step_by(4) {
         let vec_res = u32x4::splat(res);
-        let vec_high = u32x4::from_slice(&padded[i..i+4]);
+        let vec_high = u32x4::from_slice(&padded[i..i + 4]);
         if vec_res.simd_eq(vec_high).any() {
             return true;
         }
@@ -690,7 +735,9 @@ fn analyze_mod_bias_deeper(points: &[Point], modulus: u64) -> ([u32; 81], f64, u
     let mut max_r = 0u64;
 
     for (r, &count) in hist.iter().enumerate() {
-        if r >= modulus as usize { break; }
+        if r >= modulus as usize {
+            break;
+        }
         let b = count as f64 / expected;
         if b > max_b {
             max_b = b;
@@ -699,7 +746,9 @@ fn analyze_mod_bias_deeper(points: &[Point], modulus: u64) -> ([u32; 81], f64, u
     }
 
     // Chi-square test for significance (simplified for degrees of freedom)
-    let chi_square = hist.iter().enumerate()
+    let chi_square = hist
+        .iter()
+        .enumerate()
         .take(modulus as usize)
         .map(|(_r, &count)| {
             let observed = count as f64;
@@ -708,7 +757,11 @@ fn analyze_mod_bias_deeper(points: &[Point], modulus: u64) -> ([u32; 81], f64, u
         .sum::<f64>();
 
     let df = (modulus - 1) as f64;
-    let chi_critical = if df <= 10.0 { 15.51 + (df - 8.0) * 2.0 } else { df + 2.0 * df.sqrt() };
+    let chi_critical = if df <= 10.0 {
+        15.51 + (df - 8.0) * 2.0
+    } else {
+        df + 2.0 * df.sqrt()
+    };
     let is_significant = chi_square > chi_critical && total >= 100.0;
 
     (hist, expected, max_r, max_b, is_significant)
@@ -779,7 +832,8 @@ pub fn iterative_pos_slice(points: &[Point], max_iters: u32) -> (f64, f64, f64) 
         current_max = new_max;
 
         // Filter points to new range (using proxy positions)
-        sub_points = sub_points.into_iter()
+        sub_points = sub_points
+            .into_iter()
             .filter(|p| {
                 let x_bigint = BigInt256::from_u64_array(p.x);
                 let proxy_pos = (x_bigint.mod_u64(1000000) as f64) / 1000000.0;
@@ -793,7 +847,8 @@ pub fn iterative_pos_slice(points: &[Point], max_iters: u32) -> (f64, f64, f64) 
 
 /// Helper: Test if positional bias is statistically significant
 fn is_pos_bias_significant(hist: &[u32; 10], expected: f64) -> bool {
-    let chi_square: f64 = hist.iter()
+    let chi_square: f64 = hist
+        .iter()
         .map(|&count| {
             let observed = count as f64;
             (observed - expected).powi(2) / expected
@@ -808,7 +863,10 @@ fn is_pos_bias_significant(hist: &[u32; 10], expected: f64) -> bool {
 /// Concise Block: Deeper Iterative Positional Bias Narrowing with Overfitting Protection
 /// Performs up to max_iters rounds of slicing with Bayesian stopping criteria
 /// Returns (cumulative_bias_factor, final_min_range, final_max_range, iterations_performed, overfitting_risk)
-pub fn iterative_pos_bias_narrowing_deeper(solved_puzzles: &[(u32, BigInt256)], max_iters: usize) -> (f64, BigInt256, BigInt256, usize, f64) {
+pub fn iterative_pos_bias_narrowing_deeper(
+    solved_puzzles: &[(u32, BigInt256)],
+    max_iters: usize,
+) -> (f64, BigInt256, BigInt256, usize, f64) {
     if solved_puzzles.is_empty() {
         return (1.0, BigInt256::one(), BigInt256::from_u64(2), 0, 0.0);
     }
@@ -819,7 +877,8 @@ pub fn iterative_pos_bias_narrowing_deeper(solved_puzzles: &[(u32, BigInt256)], 
     let current_max = BigInt256::from_u64(1) << 100; // End of largest puzzle range (use reasonable limit)
     let mut overfitting_risk = 0.0;
 
-    for _iter in 0..max_iters.min(3) { // Limit to 3 iterations maximum
+    for _iter in 0..max_iters.min(3) {
+        // Limit to 3 iterations maximum
         let n = current_puzzles.len();
 
         // Overfitting protection: stop if sample size too small
@@ -891,7 +950,13 @@ pub fn iterative_pos_bias_narrowing_deeper(solved_puzzles: &[(u32, BigInt256)], 
         };
     }
 
-    (cumulative_bias, current_min, current_max, current_puzzles.len().min(max_iters), overfitting_risk)
+    (
+        cumulative_bias,
+        current_min,
+        current_max,
+        current_puzzles.len().min(max_iters),
+        overfitting_risk,
+    )
 }
 
 /// Helper function: Calculate positional histogram for a given range
@@ -918,7 +983,11 @@ pub fn analyze_pos_hist_deeper(puzzles: &[(u32, BigInt256)]) -> ([u32; 10], f64,
             chi_square += (observed - expected).powi(2) / expected;
         }
 
-        let bias_factor = if expected > 0.0 { observed / expected } else { 1.0 };
+        let bias_factor = if expected > 0.0 {
+            observed / expected
+        } else {
+            1.0
+        };
         if bias_factor > max_bias {
             max_bias = bias_factor;
             max_bin = bin;
@@ -929,7 +998,12 @@ pub fn analyze_pos_hist_deeper(puzzles: &[(u32, BigInt256)]) -> ([u32; 10], f64,
     let chi_square_critical = 16.92;
     let is_significant = chi_square > chi_square_critical && total >= 100.0;
 
-    (hist, max_bias, max_bin, if is_significant { chi_square } else { 0.0 })
+    (
+        hist,
+        max_bias,
+        max_bin,
+        if is_significant { chi_square } else { 0.0 },
+    )
 }
 
 /// Concise Block: Deeper Mod9 Histogram Analysis with Statistical Significance
@@ -960,7 +1034,11 @@ pub fn analyze_mod9_bias_deeper(points: &[Point]) -> ([u32; 9], f64, u64, f64, b
             chi_square += (observed - expected_count).powi(2) / expected_count;
         }
 
-        let bias_factor = if expected_count > 0.0 { observed / expected_count } else { 1.0 };
+        let bias_factor = if expected_count > 0.0 {
+            observed / expected_count
+        } else {
+            1.0
+        };
         if bias_factor > max_bias {
             max_bias = bias_factor;
             most_biased_residue = residue as u64;
@@ -971,7 +1049,13 @@ pub fn analyze_mod9_bias_deeper(points: &[Point]) -> ([u32; 9], f64, u64, f64, b
     let chi_square_critical = 15.51;
     let is_significant = chi_square > chi_square_critical && total >= 100.0; // Need sufficient sample size
 
-    (hist, max_bias, most_biased_residue, chi_square, is_significant)
+    (
+        hist,
+        max_bias,
+        most_biased_residue,
+        chi_square,
+        is_significant,
+    )
 }
 
 /// Concise Block: Deeper Mod9 Subgroup Analysis (Mod27 within Mod9 clusters)
@@ -1003,7 +1087,11 @@ pub fn analyze_mod9_subgroup_deeper(points: &[Point], parent_residue: u64) -> ([
     let mut most_biased_sub = 0u64;
 
     for (i, &count) in sub_hist.iter().enumerate() {
-        let bias_factor = if expected > 0.0 { count as f64 / expected } else { 1.0 };
+        let bias_factor = if expected > 0.0 {
+            count as f64 / expected
+        } else {
+            1.0
+        };
         if bias_factor > max_sub_bias {
             max_sub_bias = bias_factor;
             most_biased_sub = i as u64;
@@ -1034,8 +1122,6 @@ pub fn analyze_mod9_subgroup_deeper(points: &[Point], parent_residue: u64) -> ([
 //     prevalences
 // }
 
-
-
 /// Helper function for DP bias detection
 // fn detect_dp_bias(x: &BigInt256, dp_bits: u32, mod_n: u64) -> bool {
 //     // Simple DP check: low bits == 0
@@ -1055,13 +1141,23 @@ pub fn analyze_mod9_subgroup_deeper(points: &[Point], parent_residue: u64) -> ([
 /// Concise Block: Layer Mod81 and Vanity in Attractor Proxy
 pub fn is_attractor_proxy(x: &BigInt256) -> bool {
     let x_hex = x.to_hex();
-    if !is_vanity_biased(&x_hex, "02", 16) { return false; } // Vanity '9' end bias
-    if !is_mod81_attractor_candidate(x) { return false; } // Ultra reduce first
-    if !is_mod27_attractor_candidate(x) { return false; } // Nested mod27
-    if !is_mod9_attractor_candidate(x) { return false; } // Mod9
-    if !x_hex.ends_with('9') { return false; }
+    if !is_vanity_biased(&x_hex, "02", 16) {
+        return false;
+    } // Vanity '9' end bias
+    if !is_mod81_attractor_candidate(x) {
+        return false;
+    } // Ultra reduce first
+    if !is_mod27_attractor_candidate(x) {
+        return false;
+    } // Nested mod27
+    if !is_mod9_attractor_candidate(x) {
+        return false;
+    } // Mod9
+    if !x_hex.ends_with('9') {
+        return false;
+    }
     // Extra: Low SHA %100 <10 for basin proxy
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(x_hex.as_bytes());
     let hash = hasher.finalize();
@@ -1070,11 +1166,13 @@ pub fn is_attractor_proxy(x: &BigInt256) -> bool {
 }
 
 /// Concise Block: Scan with CUDA Mod9 in Full Valuable (async version)
-pub async fn scan_full_valuable_for_attractors_async(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
+pub async fn scan_full_valuable_for_attractors_async(
+    points: &Vec<Point>,
+) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
     // Use CUDA mod9 check for acceleration
     let config = crate::config::Config::default();
     let hybrid = crate::gpu::HybridGpuManager::new(&config, 0.001, 5).await?;
-    let x_limbs: Vec<[u64;4]> = points.iter().map(|p| p.x).collect();
+    let x_limbs: Vec<[u64; 4]> = points.iter().map(|p| p.x).collect();
     let mod9_results = hybrid.dispatch_mod9_check(&x_limbs)?;
 
     let mut count = 0;
@@ -1083,23 +1181,35 @@ pub async fn scan_full_valuable_for_attractors_async(points: &Vec<Point>) -> Res
     for (i, &is_mod9) in mod9_results.iter().enumerate() {
         if is_mod9 && is_attractor_proxy(&points[i].x_bigint()) {
             count += 1;
-            if cluster_start.is_none() { cluster_start = Some(i); }
+            if cluster_start.is_none() {
+                cluster_start = Some(i);
+            }
         } else if let Some(start) = cluster_start {
             let len = i - start;
-            if len > 1 { clusters.push((start, len)); }
+            if len > 1 {
+                clusters.push((start, len));
+            }
             cluster_start = None;
         }
     }
     if let Some(start) = cluster_start {
         let len = points.len() - start;
-        if len > 1 { clusters.push((start, len)); }
+        if len > 1 {
+            clusters.push((start, len));
+        }
     }
-    let percent = if points.is_empty() { 0.0 } else { count as f64 / points.len() as f64 * 100.0 };
+    let percent = if points.is_empty() {
+        0.0
+    } else {
+        count as f64 / points.len() as f64 * 100.0
+    };
     Ok((count, percent, clusters))
 }
 
 /// Concise Block: Scan with CUDA Mod9 in Full Valuable (synchronous wrapper)
-pub fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
+pub fn scan_full_valuable_for_attractors(
+    points: &Vec<Point>,
+) -> Result<(usize, f64, Vec<(usize, usize)>), Box<dyn std::error::Error>> {
     // Since we're already in an async context, we need to create a runtime
     // But avoid nested runtime creation by using tokio::spawn if needed
     // For now, return a simple fallback that doesn't use GPU
@@ -1112,19 +1222,29 @@ pub fn scan_full_valuable_for_attractors(points: &Vec<Point>) -> Result<(usize, 
     for (i, point) in points.iter().enumerate() {
         if is_attractor_proxy(&point.x_bigint()) {
             count += 1;
-            if cluster_start.is_none() { cluster_start = Some(i); }
+            if cluster_start.is_none() {
+                cluster_start = Some(i);
+            }
         } else if let Some(start) = cluster_start {
             let len = i - start;
-            if len > 1 { clusters.push((start, len)); }
+            if len > 1 {
+                clusters.push((start, len));
+            }
             cluster_start = None;
         }
     }
     if let Some(start) = cluster_start {
         let len = points.len() - start;
-        if len > 1 { clusters.push((start, len)); }
+        if len > 1 {
+            clusters.push((start, len));
+        }
     }
 
-    let percent = if points.is_empty() { 0.0 } else { count as f64 / points.len() as f64 * 100.0 };
+    let percent = if points.is_empty() {
+        0.0
+    } else {
+        count as f64 / points.len() as f64 * 100.0
+    };
     Ok((count, percent, clusters))
 }
 
@@ -1135,17 +1255,31 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
 
     // Count magic 9 patterns
     let magic_count = count_magic9_in_list(&points);
-    println!("Magic 9 in valuable: {} (~{:.1}% potential attractors)", magic_count, (magic_count as f64 / points.len() as f64 * 100.0));
+    println!(
+        "Magic 9 in valuable: {} (~{:.1}% potential attractors)",
+        magic_count,
+        (magic_count as f64 / points.len() as f64 * 100.0)
+    );
 
     // Count attractors using CPU-based detection
-    let (count, percent, clusters) = scan_full_valuable_for_attractors(&points).unwrap_or((0, 0.0, vec![]));
-    println!("Attractors: {} ({:.1}%), Clusters: {:?}", count, percent, clusters);
+    let (count, percent, clusters) =
+        scan_full_valuable_for_attractors(&points).unwrap_or((0, 0.0, vec![]));
+    println!(
+        "Attractors: {} ({:.1}%), Clusters: {:?}",
+        count, percent, clusters
+    );
     if percent > 15.0 {
         println!("Confirmed MANY related keys—bias high!");
     }
 
     // Sort by attractor proxy priority: attractor keys first (lower sort key = higher priority)
-    points.sort_by_key(|p| if is_attractor_proxy(&p.x_bigint()) { 0 } else { 1 });
+    points.sort_by_key(|p| {
+        if is_attractor_proxy(&p.x_bigint()) {
+            0
+        } else {
+            1
+        }
+    });
 
     let mut config = SearchConfig::for_valuable_p2pk();
     config.name = format!("valuable_p2pk_{}", path);
@@ -1163,155 +1297,182 @@ mod tests {
         assert!(result.is_err());
     }
 
-/// Load the 9 specific Magic 9 sniper pubkeys by 0-based indices
-/// Indices: [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567]
-#[allow(dead_code)]
-pub fn load_magic9_pubkeys(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
-    let content = std::fs::read_to_string("valuable_p2pk_pubkeys.txt")
-        .map_err(|e| format!("Failed to read valuable_p2pk_pubkeys.txt: {}", e))?;
+    /// Load the 9 specific Magic 9 sniper pubkeys by 0-based indices
+    /// Indices: [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567]
+    #[allow(dead_code)]
+    pub fn load_magic9_pubkeys(
+        curve: &Secp256k1,
+    ) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string("valuable_p2pk_pubkeys.txt")
+            .map_err(|e| format!("Failed to read valuable_p2pk_pubkeys.txt: {}", e))?;
 
-    let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
-    let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
+        let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
+        let indices = [9379, 28687, 33098, 12457, 18902, 21543, 27891, 31234, 4567];
 
-    let mut pubkeys = Vec::with_capacity(9);
-    for &idx in &indices {
-        let line = lines.get(idx)
-            .ok_or_else(|| format!("Index {} out of bounds (file has {} lines)", idx, lines.len()))?;
+        let mut pubkeys = Vec::with_capacity(9);
+        for &idx in &indices {
+            let line = lines.get(idx).ok_or_else(|| {
+                format!(
+                    "Index {} out of bounds (file has {} lines)",
+                    idx,
+                    lines.len()
+                )
+            })?;
 
-        let bytes = hex::decode(line.trim())
-            .map_err(|e| format!("Invalid hex at index {}: {}", idx, e))?;
+            let bytes = hex::decode(line.trim())
+                .map_err(|e| format!("Invalid hex at index {}: {}", idx, e))?;
 
+            if bytes.len() != 33 {
+                return Err(
+                    format!("Invalid pubkey length {} at index {}", bytes.len(), idx).into(),
+                );
+            }
+
+            let mut comp = [0u8; 33];
+            comp.copy_from_slice(&bytes);
+
+            let point = curve
+                .decompress_point(&comp)
+                .ok_or_else(|| format!("Failed to decompress pubkey at index {}", idx))?;
+
+            pubkeys.push(point);
+        }
+
+        Ok(pubkeys)
+    }
+
+    /// Load valuable P2PK pubkeys from file
+    #[allow(dead_code)]
+    pub fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
+        load_from_file("valuable_p2pk_pubkeys.txt", curve)
+    }
+
+    /// Load test puzzles (known solved puzzles for validation)
+    #[allow(dead_code)]
+    pub fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
+        // Hardcoded test puzzles with known solutions
+        let test_hex = vec![
+            "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db", // #64, privkey = 1
+                                                                                 // Add more test puzzles as needed
+        ];
+
+        let mut points = Vec::new();
+        for hex in test_hex {
+            let bytes = hex::decode(hex)?;
+            if bytes.len() == 33 {
+                let mut comp = [0u8; 33];
+                comp.copy_from_slice(&bytes);
+                if let Some(point) = curve.decompress_point(&comp) {
+                    points.push(point);
+                }
+            }
+        }
+        Ok(points)
+    }
+
+    /// Load a specific real unsolved puzzle
+    #[allow(dead_code)]
+    pub fn load_real_puzzle(
+        n: u32,
+        curve: &Secp256k1,
+    ) -> Result<Point, Box<dyn std::error::Error>> {
+        let hex = match n {
+            135 => "02145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16",
+            140 => "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+            145 => "03afdda497369e219a2c1c369954a930e4d3740968e5e4352475bcffce3140dae5",
+            150 => "03137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49",
+            155 => "035cd1854cae45391ca4ec428cc7e6c7d9984424b954209a8eea197b9e364c05f6",
+            160 => "02e0a8b039282faf6fe0fd769cfbc4b6b4cf8758ba68220eac420e32b91ddfa673",
+            _ => return Err(format!("Unknown puzzle #{}", n).into()),
+        };
+
+        let bytes = hex::decode(hex)?;
         if bytes.len() != 33 {
-            return Err(format!("Invalid pubkey length {} at index {}", bytes.len(), idx).into());
+            return Err(format!("Invalid hex length for puzzle #{}", n).into());
         }
 
         let mut comp = [0u8; 33];
         comp.copy_from_slice(&bytes);
 
-        let point = curve.decompress_point(&comp)
-            .ok_or_else(|| format!("Failed to decompress pubkey at index {}", idx))?;
-
-        pubkeys.push(point);
+        curve
+            .decompress_point(&comp)
+            .ok_or_else(|| format!("Failed to decompress puzzle #{}", n).into())
     }
 
-    Ok(pubkeys)
-}
+    /// Generic file loader for compressed pubkey files
+    #[allow(dead_code)]
+    pub fn load_from_file(
+        path: &str,
+        curve: &Secp256k1,
+    ) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
+        use std::io::BufReader;
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let mut points = Vec::new();
 
-/// Load valuable P2PK pubkeys from file
-#[allow(dead_code)]
-pub fn load_valuable_p2pk(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
-    load_from_file("valuable_p2pk_pubkeys.txt", curve)
-}
-
-/// Load test puzzles (known solved puzzles for validation)
-#[allow(dead_code)]
-pub fn load_test_puzzles(curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
-    // Hardcoded test puzzles with known solutions
-    let test_hex = vec![
-        "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db",  // #64, privkey = 1
-        // Add more test puzzles as needed
-    ];
-
-    let mut points = Vec::new();
-    for hex in test_hex {
-        let bytes = hex::decode(hex)?;
-        if bytes.len() == 33 {
-            let mut comp = [0u8; 33];
-            comp.copy_from_slice(&bytes);
-            if let Some(point) = curve.decompress_point(&comp) {
-                points.push(point);
+        for line in reader.lines() {
+            let line = line?;
+            let cleaned = line.trim().trim_start_matches("0x");
+            if cleaned.is_empty() {
+                continue;
             }
-        }
-    }
-    Ok(points)
-}
 
-/// Load a specific real unsolved puzzle
-#[allow(dead_code)]
-pub fn load_real_puzzle(n: u32, curve: &Secp256k1) -> Result<Point, Box<dyn std::error::Error>> {
-    let hex = match n {
-        135 => "02145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16",
-        140 => "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
-        145 => "03afdda497369e219a2c1c369954a930e4d3740968e5e4352475bcffce3140dae5",
-        150 => "03137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49",
-        155 => "035cd1854cae45391ca4ec428cc7e6c7d9984424b954209a8eea197b9e364c05f6",
-        160 => "02e0a8b039282faf6fe0fd769cfbc4b6b4cf8758ba68220eac420e32b91ddfa673",
-        _ => return Err(format!("Unknown puzzle #{}", n).into()),
-    };
-
-    let bytes = hex::decode(hex)?;
-    if bytes.len() != 33 {
-        return Err(format!("Invalid hex length for puzzle #{}", n).into());
-    }
-
-    let mut comp = [0u8; 33];
-    comp.copy_from_slice(&bytes);
-
-    curve.decompress_point(&comp)
-        .ok_or_else(|| format!("Failed to decompress puzzle #{}", n).into())
-}
-
-/// Generic file loader for compressed pubkey files
-#[allow(dead_code)]
-pub fn load_from_file(path: &str, curve: &Secp256k1) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
-    use std::io::BufReader;
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    let mut points = Vec::new();
-
-    for line in reader.lines() {
-        let line = line?;
-        let cleaned = line.trim().trim_start_matches("0x");
-        if cleaned.is_empty() { continue; }
-
-        let bytes = hex::decode(cleaned)?;
-        if bytes.len() == 33 {
-            // Compressed format
-            let mut comp = [0u8; 33];
-            comp.copy_from_slice(&bytes);
-            if let Some(point) = curve.decompress_point(&comp) {
-                points.push(point);
-            }
-        } else if bytes.len() == 65 && bytes[0] == 0x04 {
-            // Uncompressed format: 04 + x + y
-            let x_bytes: [u8; 32] = bytes[1..33].try_into().unwrap();
-            let y_bytes: [u8; 32] = bytes[33..65].try_into().unwrap();
-            let x = BigInt256::from_bytes_be(&x_bytes);
-            let y = BigInt256::from_bytes_be(&y_bytes);
-            let point = Point { x: x.to_u64_array(), y: y.to_u64_array(), z: [1, 0, 0, 0] };
-            if curve.is_on_curve(&point) {
-                points.push(point);
+            let bytes = hex::decode(cleaned)?;
+            if bytes.len() == 33 {
+                // Compressed format
+                let mut comp = [0u8; 33];
+                comp.copy_from_slice(&bytes);
+                if let Some(point) = curve.decompress_point(&comp) {
+                    points.push(point);
+                }
+            } else if bytes.len() == 65 && bytes[0] == 0x04 {
+                // Uncompressed format: 04 + x + y
+                let x_bytes: [u8; 32] = bytes[1..33].try_into().unwrap();
+                let y_bytes: [u8; 32] = bytes[33..65].try_into().unwrap();
+                let x = BigInt256::from_bytes_be(&x_bytes);
+                let y = BigInt256::from_bytes_be(&y_bytes);
+                let point = Point {
+                    x: x.to_u64_array(),
+                    y: y.to_u64_array(),
+                    z: [1, 0, 0, 0],
+                };
+                if curve.is_on_curve(&point) {
+                    points.push(point);
+                } else {
+                    log::warn!("Uncompressed point not on curve: {}", cleaned);
+                }
             } else {
-                log::warn!("Uncompressed point not on curve: {}", cleaned);
+                log::warn!(
+                    "Invalid pubkey length {} for line: {}",
+                    bytes.len(),
+                    cleaned
+                );
             }
-        } else {
-            log::warn!("Invalid pubkey length {} for line: {}", bytes.len(), cleaned);
         }
+
+        Ok(points)
     }
 
-    Ok(points)
-}
-
-// Chunk: AVX Bias Check (pubkey_loader.rs)
-// Temporarily disabled SIMD code due to feature gate issues
-// use std::simd::prelude::*;
-#[allow(dead_code)]
-pub fn simd_bias_check(res: u32, high_residues: &[u32]) -> bool {
-    // Scalar fallback - SIMD temporarily disabled
-    high_residues.contains(&res)
-    /*
-    let mut padded = [0u32; 128];
-    for (i, &val) in high_residues.iter().enumerate().take(128) {
-        padded[i] = val;
+    // Chunk: AVX Bias Check (pubkey_loader.rs)
+    // Temporarily disabled SIMD code due to feature gate issues
+    // use std::simd::prelude::*;
+    #[allow(dead_code)]
+    pub fn simd_bias_check(res: u32, high_residues: &[u32]) -> bool {
+        // Scalar fallback - SIMD temporarily disabled
+        high_residues.contains(&res)
+        /*
+        let mut padded = [0u32; 128];
+        for (i, &val) in high_residues.iter().enumerate().take(128) {
+            padded[i] = val;
+        }
+        for i in (0..padded.len()).step_by(8) {
+            let vec_res = u32x8::splat(res);
+            let vec_high = u32x8::from_slice(&padded[i..]);
+            if vec_res.simd_eq(vec_high).any() { return true; }
+        }
+        false
+        */
     }
-    for i in (0..padded.len()).step_by(8) {
-        let vec_res = u32x8::splat(res);
-        let vec_high = u32x8::from_slice(&padded[i..]);
-        if vec_res.simd_eq(vec_high).any() { return true; }
-    }
-    false
-    */
-}
 
     #[test]
     fn test_puzzle_pubkeys_loading() {

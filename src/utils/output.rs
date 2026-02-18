@@ -8,19 +8,19 @@
 //! - Metrics: Hashrate, progress %, ETA, GPU temp, memory usage
 
 use crossterm::{
-    terminal::{Clear, ClearType},
     cursor::MoveTo,
-    style::{Color, ResetColor, SetForegroundColor},
     execute,
+    style::{Color, ResetColor, SetForegroundColor},
+    terminal::{Clear, ClearType},
 };
+use log::{Level, LevelFilter};
+use std::collections::HashMap;
 use std::io::{stdout, Write};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
-use log::{Level, LevelFilter};
-use std::sync::Mutex;
 
 /// Global log buffer for capturing recent messages
 static LOG_BUFFER: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -169,16 +169,44 @@ fn print_boxed_options(args: &DisplayArgs, default_config: &DisplayConfig) {
         println!("│ Mode: Custom/Default               │");
     }
 
-    println!("│ GPU: {}                             │", if args.gpu { "Enabled" } else { "Disabled" });
-    println!("│ Laptop Opt: {}                     │", if args.laptop { "Yes" } else { "No" });
-    println!("│ Verbose: {}                        │", if args.verbose { "Yes" } else { "No" });
-    println!("│ Max Cycles: {}                    │", if args.max_cycles > 0 { args.max_cycles.to_string() } else { "Unlimited".to_string() });
+    println!(
+        "│ GPU: {}                             │",
+        if args.gpu { "Enabled" } else { "Disabled" }
+    );
+    println!(
+        "│ Laptop Opt: {}                     │",
+        if args.laptop { "Yes" } else { "No" }
+    );
+    println!(
+        "│ Verbose: {}                        │",
+        if args.verbose { "Yes" } else { "No" }
+    );
+    println!(
+        "│ Max Cycles: {}                    │",
+        if args.max_cycles > 0 {
+            args.max_cycles.to_string()
+        } else {
+            "Unlimited".to_string()
+        }
+    );
 
     // Config defaults
-    println!("│ DP Bits: {}                        │", default_config.dp_bits);
-    println!("│ Herd Size: {}                     │", default_config.herd_size);
-    println!("│ Jump Mean: {}                     │", default_config.jump_mean);
-    println!("│ Near Threshold: {}                │", default_config.near_threshold);
+    println!(
+        "│ DP Bits: {}                        │",
+        default_config.dp_bits
+    );
+    println!(
+        "│ Herd Size: {}                     │",
+        default_config.herd_size
+    );
+    println!(
+        "│ Jump Mean: {}                     │",
+        default_config.jump_mean
+    );
+    println!(
+        "│ Near Threshold: {}                │",
+        default_config.near_threshold
+    );
 
     println!("└─────────────────────────────────────┘");
     println!();
@@ -268,7 +296,10 @@ fn print_boxed_metrics(total_ops: u64, run_time: Duration, gpu_temp: f32, mem_us
     println!("│ Hashrate: {:.0} M ops/sec            │", hashrate);
     execute!(stdout(), ResetColor).ok();
 
-    println!("│ Progress: {:.1}%                      │", progress_percent);
+    println!(
+        "│ Progress: {:.1}%                      │",
+        progress_percent
+    );
     println!("│ ETA: {}                            │", eta);
 
     // Color code temperature
@@ -307,7 +338,11 @@ fn print_boxed_verbose() {
         println!("│                                     │");
     } else {
         // Show last few log messages
-        let start_idx = if log_messages.len() > 6 { log_messages.len() - 6 } else { 0 };
+        let start_idx = if log_messages.len() > 6 {
+            log_messages.len() - 6
+        } else {
+            0
+        };
         for (_i, msg) in log_messages.iter().skip(start_idx).enumerate() {
             let truncated_msg = if msg.len() > 35 {
                 format!("{}...", &msg[..32])
@@ -339,7 +374,8 @@ fn print_boxed_verbose() {
 
 /// Print Cracker Curt mission patch ASCII art
 pub fn print_mission_patch() {
-    println!("
+    println!(
+        "
    ╔══════════════════════════════════════╗
    ║                                      ║
    ║             MISSION PATCH            ║
@@ -359,7 +395,8 @@ pub fn print_mission_patch() {
    ║       GÖDEL'S GHOST                 ║
    ║                                      ║
    ╚══════════════════════════════════════╝
-    ");
+    "
+    );
 }
 
 /// Format duration as HH:MM:SS

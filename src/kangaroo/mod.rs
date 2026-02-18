@@ -2,19 +2,19 @@
 //!
 //! Contains central orchestrator, tame/wild generation, stepping logic, and collision detection.
 
-pub mod manager;
-pub mod generator;
-pub mod stepper; // temporarily disabled
 pub mod collision;
+pub mod generator;
+pub mod manager;
 pub mod search_config;
+pub mod stepper; // temporarily disabled
 // pub mod controller;
 #[cfg(test)]
 pub mod tests;
 
 // Re-export main types
-pub use manager::KangarooManager;
+pub use collision::{fermat_ecdlp_diff, vow_parallel_rho, CollisionDetector, CollisionResult};
 pub use generator::KangarooGenerator;
-pub use stepper::KangarooStepper;
-pub use collision::{CollisionDetector, CollisionResult, vow_parallel_rho, fermat_ecdlp_diff};
+pub use manager::KangarooManager;
 pub use search_config::SearchConfig;
+pub use stepper::KangarooStepper;
 // pub use controller::{KangarooController, ManagerStats};

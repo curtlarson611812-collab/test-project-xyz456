@@ -1,5 +1,5 @@
 // Simple test program to verify G*3 computation and GLV constants
-use crate::math::{secp::Secp256k1, bigint::BigInt256};
+use crate::math::{bigint::BigInt256, secp::Secp256k1};
 
 pub fn run_simple_test() {
     println!("Running simple arithmetic verification tests...");
@@ -12,39 +12,46 @@ pub fn run_simple_test() {
         Ok(result) => {
             let affine = curve.to_affine(&result);
             // Expected G*3 coordinates (hardcoded to avoid hex parsing issues)
-        let expected_x_hex = "c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b";
-        let expected_y_hex = "b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d";
+            let expected_x_hex =
+                "c6047f9441ed7d6d3045406e95c07cd85c778e0b8dbe964be379693126c5d7f23b";
+            let expected_y_hex = "b1b3fb3eb6db0e6944b94289e37bab31bee7d45377e0f5fc7b1d8d5559d1d84d";
 
-        let computed_x = BigInt256::from_u64_array(affine.x);
-        let computed_y = BigInt256::from_u64_array(affine.y);
+            let computed_x = BigInt256::from_u64_array(affine.x);
+            let computed_y = BigInt256::from_u64_array(affine.y);
 
-        println!("Expected X: {}", expected_x_hex);
-        println!("Computed X: {}", computed_x.to_hex());
-        println!("Expected Y: {}", expected_y_hex);
-        println!("Computed Y: {}", computed_y.to_hex());
+            println!("Expected X: {}", expected_x_hex);
+            println!("Computed X: {}", computed_x.to_hex());
+            println!("Expected Y: {}", expected_y_hex);
+            println!("Computed Y: {}", computed_y.to_hex());
 
-        // Check if computed values match expected hex
-        let x_match = computed_x.to_hex() == expected_x_hex;
-        let y_match = computed_y.to_hex() == expected_y_hex;
+            // Check if computed values match expected hex
+            let x_match = computed_x.to_hex() == expected_x_hex;
+            let y_match = computed_y.to_hex() == expected_y_hex;
 
-        // Compare computed values with expected hex strings
+            // Compare computed values with expected hex strings
 
-        println!("X matches: {}", x_match);
-        println!("Y matches: {}", y_match);
+            println!("X matches: {}", x_match);
+            println!("Y matches: {}", y_match);
 
-        if x_match && y_match {
-            println!("✅ G*3 test PASSED!");
-        } else {
-            println!("❌ G*3 test FAILED!");
-            if !x_match {
-                println!("X mismatch - computed all zeros, expected: {}", expected_x_hex);
-                println!("  Computed limbs: {:?}", computed_x.limbs);
+            if x_match && y_match {
+                println!("✅ G*3 test PASSED!");
+            } else {
+                println!("❌ G*3 test FAILED!");
+                if !x_match {
+                    println!(
+                        "X mismatch - computed all zeros, expected: {}",
+                        expected_x_hex
+                    );
+                    println!("  Computed limbs: {:?}", computed_x.limbs);
+                }
+                if !y_match {
+                    println!(
+                        "Y mismatch - computed all zeros, expected: {}",
+                        expected_y_hex
+                    );
+                    println!("  Computed limbs: {:?}", computed_y.limbs);
+                }
             }
-            if !y_match {
-                println!("Y mismatch - computed all zeros, expected: {}", expected_y_hex);
-                println!("  Computed limbs: {:?}", computed_y.limbs);
-            }
-        }
 
             if curve.is_on_curve(&affine) {
                 println!("✅ Point is on curve");
@@ -108,10 +115,16 @@ pub fn run_simple_test() {
     } else {
         println!("❌ Double operation FAILED!");
         if !x_match {
-            println!("X mismatch - computed all zeros, expected: {}", expected_x.to_hex());
+            println!(
+                "X mismatch - computed all zeros, expected: {}",
+                expected_x.to_hex()
+            );
         }
         if !y_match {
-            println!("Y mismatch - computed all zeros, expected: {}", expected_y.to_hex());
+            println!(
+                "Y mismatch - computed all zeros, expected: {}",
+                expected_y.to_hex()
+            );
         }
     }
 
@@ -123,13 +136,17 @@ pub fn run_simple_test() {
 
     // Test 5: MODULAR FIX BLOCK 1: Test Montgomery conversion round-trip
     println!("\nTest 5: Montgomery conversion round-trip");
-    let test_val = BigInt256::from_hex("79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
-        .expect("Invalid G.x"); // G.x
+    let test_val =
+        BigInt256::from_hex("79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
+            .expect("Invalid G.x"); // G.x
 
     // Debug the conversion process
     println!("DEBUG: test_val = {}", test_val.to_hex());
     println!("DEBUG: R mod p = 1000003d1");
-    println!("DEBUG: R^(-1) mod p = {}", curve.montgomery_p.get_r_inv().to_hex());
+    println!(
+        "DEBUG: R^(-1) mod p = {}",
+        curve.montgomery_p.get_r_inv().to_hex()
+    );
 
     let mont_val = curve.montgomery_convert_in(&test_val);
     println!("DEBUG: mont_val from convert_in = {}", mont_val.to_hex());
@@ -156,7 +173,11 @@ pub fn run_simple_test() {
     if back == x {
         println!("✅ Round-trip PASSED!");
     } else {
-        println!("❌ Round-trip FAILED: input={}, output={}", x.to_hex(), back.to_hex());
+        println!(
+            "❌ Round-trip FAILED: input={}, output={}",
+            x.to_hex(),
+            back.to_hex()
+        );
     }
 
     // Test 7: MODULAR FIX BLOCK: n_prime verification
@@ -166,7 +187,10 @@ pub fn run_simple_test() {
     if actual_n_prime == expected_n_prime {
         println!("✅ n_prime PASSED: {}", format!("{:x}", actual_n_prime));
     } else {
-        println!("❌ n_prime FAILED: expected {:x}, got {:x}", expected_n_prime, actual_n_prime);
+        println!(
+            "❌ n_prime FAILED: expected {:x}, got {:x}",
+            expected_n_prime, actual_n_prime
+        );
     }
 
     // Test 6: Simple Barrett mul test

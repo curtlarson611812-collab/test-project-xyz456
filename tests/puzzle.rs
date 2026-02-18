@@ -7,7 +7,7 @@ use speedbitcrack::kangaroo::KangarooManager;
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::puzzles::PUZZLE_MAP;
 use speedbitcrack::types::Solution;
-use speedbitcrack::utils::pubkey_loader::{load_test_puzzle_keys, load_magic9_pubkeys};
+use speedbitcrack::utils::pubkey_loader::{load_magic9_pubkeys, load_test_puzzle_keys};
 use std::collections::HashMap;
 
 /// Score bias effectiveness (product of square roots for combined speedup)
@@ -16,12 +16,21 @@ fn score_bias(biases: &HashMap<u32, f64>) -> f64 {
 }
 
 /// Known solved puzzle data for validation
-/// Format: (puzzle_number, pubkey_hex, private_key_hex)
-const SOLVED_PUZZLES: &[(&str, &str, &str)] = &[
-    // Add actual solved puzzles here when available
-    // ("64", "pubkey_hex", "privkey_hex"),
-    // ("65", "pubkey_hex", "privkey_hex"),
-    // ("66", "pubkey_hex", "privkey_hex"),
+/// Format: (puzzle_number, pubkey_hex)
+/// Private keys are not stored - we solve and verify against known addresses
+const SOLVED_PUZZLES: &[(&str, &str)] = &[
+    (
+        "64",
+        "03100611c54dfef604163b8358f7b7fac13ce478e02cb224ae16d45526b25d9d4d",
+    ),
+    (
+        "65",
+        "0230210c23b1a047bc9bdbb13448e67deddc108946de6de639bcc75d47c0216b1b",
+    ),
+    (
+        "66",
+        "024ee2be2d4e9f92d2f5a4a03058617dc45befe22938feed5b7a6b7282dd74cbdd",
+    ),
 ];
 
 /// Magic 9 test data for validation
@@ -35,48 +44,51 @@ const MAGIC9_TEST_DATA: &[(&str, &str, bool)] = &[
 /// Test solving puzzle #64
 #[tokio::test]
 async fn test_puzzle_64() {
-    let (puzzle_num, pubkey_hex, expected_privkey) = SOLVED_PUZZLES[0];
+    let (puzzle_num, pubkey_hex) = SOLVED_PUZZLES[0];
 
     let mut config = create_test_config(puzzle_num, pubkey_hex);
     config.validate_puzzle = Some(64);
 
-    let manager = KangarooManager::new(config).await.expect("Failed to create manager");
+    let manager = KangarooManager::new(config)
+        .await
+        .expect("Failed to create manager");
 
     // This would run the actual solver in a real test
     // For now, just verify the test setup
     assert_eq!(puzzle_num, "64");
     assert!(!pubkey_hex.is_empty());
-    assert!(!expected_privkey.is_empty());
 }
 
 /// Test solving puzzle #65
 #[tokio::test]
 async fn test_puzzle_65() {
-    let (puzzle_num, pubkey_hex, expected_privkey) = SOLVED_PUZZLES[1];
+    let (puzzle_num, pubkey_hex) = SOLVED_PUZZLES[1];
 
     let mut config = create_test_config(puzzle_num, pubkey_hex);
     config.validate_puzzle = Some(65);
 
-    let manager = KangarooManager::new(config).await.expect("Failed to create manager");
+    let manager = KangarooManager::new(config)
+        .await
+        .expect("Failed to create manager");
 
     assert_eq!(puzzle_num, "65");
     assert!(!pubkey_hex.is_empty());
-    assert!(!expected_privkey.is_empty());
 }
 
 /// Test solving puzzle #66
 #[tokio::test]
 async fn test_puzzle_66() {
-    let (puzzle_num, pubkey_hex, expected_privkey) = SOLVED_PUZZLES[2];
+    let (puzzle_num, pubkey_hex) = SOLVED_PUZZLES[2];
 
     let mut config = create_test_config(puzzle_num, pubkey_hex);
     config.validate_puzzle = Some(66);
 
-    let manager = KangarooManager::new(config).await.expect("Failed to create manager");
+    let manager = KangarooManager::new(config)
+        .await
+        .expect("Failed to create manager");
 
     assert_eq!(puzzle_num, "66");
     assert!(!pubkey_hex.is_empty());
-    assert!(!expected_privkey.is_empty());
 }
 
 /// Create test configuration for puzzle validation
@@ -117,19 +129,27 @@ async fn integration_test_puzzle_solve() {
     // This test would actually run the solver
     // For now, it's a placeholder
 
-    for (puzzle_num, pubkey_hex, expected_privkey) in SOLVED_PUZZLES {
+    for (puzzle_num, pubkey_hex) in SOLVED_PUZZLES {
         println!("Testing puzzle {}...", puzzle_num);
 
         let config = create_test_config(puzzle_num, pubkey_hex);
-        let mut manager = KangarooManager::new(config).await.expect("Failed to create manager");
+        let mut manager = KangarooManager::new(config)
+            .await
+            .expect("Failed to create manager");
 
         // Run solver with timeout
         let result = manager.run();
 
         match result {
             Ok(Some(solution)) => {
-                assert!(validate_solution(&solution, expected_privkey),
-                       "Solution validation failed for puzzle {}", puzzle_num);
+                // Validate solution by checking if private key generates correct public key
+                let computed_pubkey = solution.generate_public_key();
+                assert_eq!(
+                    hex::encode(computed_pubkey.to_encoded_point(true).as_bytes()),
+                    pubkey_hex,
+                    "Solution validation failed for puzzle {} - pubkey mismatch",
+                    puzzle_num
+                );
                 println!("✓ Puzzle {} solved correctly", puzzle_num);
             }
             Ok(None) => {
@@ -149,7 +169,9 @@ async fn performance_regression_test() {
     // This would benchmark solve time and compare against baseline
 
     let config = create_test_config("64", SOLVED_PUZZLES[0].1);
-    let manager = KangarooManager::new(config).await.expect("Failed to create manager");
+    let manager = KangarooManager::new(config)
+        .await
+        .expect("Failed to create manager");
 
     // Measure initialization time
     let start = std::time::Instant::now();
@@ -157,7 +179,11 @@ async fn performance_regression_test() {
     let init_time = start.elapsed();
 
     // Should initialize in reasonable time
-    assert!(init_time.as_millis() < 1000, "Initialization took too long: {:?}", init_time);
+    assert!(
+        init_time.as_millis() < 1000,
+        "Initialization took too long: {:?}",
+        init_time
+    );
 }
 
 /// Memory usage test
@@ -167,7 +193,9 @@ async fn memory_usage_test() {
     // This would monitor memory usage during solver operation
 
     let config = create_test_config("64", SOLVED_PUZZLES[0].1);
-    let manager = KangarooManager::new(config).await.expect("Failed to create manager");
+    let manager = KangarooManager::new(config)
+        .await
+        .expect("Failed to create manager");
 
     // Check initial memory usage
     // (In real implementation, would use memory profiling)
@@ -187,8 +215,8 @@ fn correctness_test_small_solution() {
 /// Comprehensive test of the complete puzzle database
 #[test]
 fn test_complete_puzzle_database() {
-    use speedbitcrack::math::secp::Secp256k1;
     use speedbitcrack::math::bigint::BigInt256;
+    use speedbitcrack::math::secp::Secp256k1;
 
     let curve = Secp256k1::new();
 
@@ -206,18 +234,36 @@ fn test_complete_puzzle_database() {
         match n {
             1 => {
                 assert_eq!("1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH", get_puzzle_address(n));
-                assert_eq!("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798", get_puzzle_pubkey(n));
-                assert_eq!(Some("0000000000000000000000000000000000000000000000000000000000000001"), get_puzzle_privkey(n));
+                assert_eq!(
+                    "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                    get_puzzle_pubkey(n)
+                );
+                assert_eq!(
+                    Some("0000000000000000000000000000000000000000000000000000000000000001"),
+                    get_puzzle_privkey(n)
+                );
             }
             64 => {
                 assert_eq!("1NBC8uXJy1GiJ6drkiZa1WuKn51ps7EPTv", get_puzzle_address(n));
-                assert_eq!("02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db", get_puzzle_pubkey(n));
-                assert_eq!(Some("8000000000000000000000000000000000000000000000000000000000000000"), get_puzzle_privkey(n));
+                assert_eq!(
+                    "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db",
+                    get_puzzle_pubkey(n)
+                );
+                assert_eq!(
+                    Some("8000000000000000000000000000000000000000000000000000000000000000"),
+                    get_puzzle_privkey(n)
+                );
             }
             66 => {
                 assert_eq!("13zb1hQbWVsc2S7ZTZnP2G4undNNpdh5so", get_puzzle_address(n));
-                assert_eq!("02a9acc1e48c25ee6c04b8ba765e61b6d9d8e8a4ab6851aeeb3b79d9f10d8ca96", get_puzzle_pubkey(n));
-                assert_eq!(Some("00000000000000000000000000000000000000000000000000000000000000040"), get_puzzle_privkey(n));
+                assert_eq!(
+                    "02a9acc1e48c25ee6c04b8ba765e61b6d9d8e8a4ab6851aeeb3b79d9f10d8ca96",
+                    get_puzzle_pubkey(n)
+                );
+                assert_eq!(
+                    Some("00000000000000000000000000000000000000000000000000000000000000040"),
+                    get_puzzle_privkey(n)
+                );
             }
             _ => {} // Other puzzles would be verified similarly
         }
@@ -226,7 +272,12 @@ fn test_complete_puzzle_database() {
     // Test that unsolved puzzles have no private key
     let unsolved_puzzles = vec![67, 150, 160];
     for &n in &unsolved_puzzles {
-        assert_eq!(None, get_puzzle_privkey(n), "Puzzle #{} should be unsolved", n);
+        assert_eq!(
+            None,
+            get_puzzle_privkey(n),
+            "Puzzle #{} should be unsolved",
+            n
+        );
     }
 
     println!("✓ Puzzle database structure verified");
@@ -296,15 +347,23 @@ fn test_puzzle_database_completeness() {
 /// Test puzzle private key verification
 #[test]
 fn test_puzzle_private_key_verification() {
-    use speedbitcrack::math::secp::Secp256k1;
     use speedbitcrack::math::bigint::BigInt256;
+    use speedbitcrack::math::secp::Secp256k1;
 
     let curve = Secp256k1::new();
 
     // Test a few solved puzzles to verify privkey -> pubkey computation
     let test_cases = vec![
-        (1, "0000000000000000000000000000000000000000000000000000000000000001", "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"),
-        (64, "8000000000000000000000000000000000000000000000000000000000000000", "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db"),
+        (
+            1,
+            "0000000000000000000000000000000000000000000000000000000000000001",
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        ),
+        (
+            64,
+            "8000000000000000000000000000000000000000000000000000000000000000",
+            "02ce7c036c6fa52c0803746c7bece1221524e8b1f6ca8eb847b9bcffbc1da76db",
+        ),
     ];
 
     for (n, priv_hex, expected_pub_hex) in test_cases {
@@ -317,10 +376,20 @@ fn test_puzzle_private_key_verification() {
         let mut expected_comp = [0u8; 33];
         expected_comp.copy_from_slice(&expected_bytes);
 
-        let expected_point = curve.decompress_point(&expected_comp).expect("Decompression failed");
+        let expected_point = curve
+            .decompress_point(&expected_comp)
+            .expect("Decompression failed");
 
-        assert_eq!(computed_point.x, expected_point.x, "Puzzle #{} X coordinate mismatch", n);
-        assert_eq!(computed_point.y, expected_point.y, "Puzzle #{} Y coordinate mismatch", n);
+        assert_eq!(
+            computed_point.x, expected_point.x,
+            "Puzzle #{} X coordinate mismatch",
+            n
+        );
+        assert_eq!(
+            computed_point.y, expected_point.y,
+            "Puzzle #{} Y coordinate mismatch",
+            n
+        );
 
         println!("✓ Puzzle #{} private key verification passed", n);
     }
@@ -331,15 +400,18 @@ fn test_puzzle_private_key_verification() {
 #[test]
 #[cfg(feature = "smoke")]
 fn test_puzzle64_solve() {
-    use speedbitcrack::math::secp::Secp256k1;
     use speedbitcrack::math::constants::GENERATOR;
+    use speedbitcrack::math::secp::Secp256k1;
 
     let curve = Secp256k1::new();
     let (low, high, known) = speedbitcrack::puzzles::load_solved(64);
     let target_pub = speedbitcrack::puzzles::get_puzzle_pubkey(64).unwrap();
     // For now, just verify that the known key produces the correct pubkey
     let computed_pub = curve.point_mul(&known, &GENERATOR);
-    assert_eq!(computed_pub.x.to_hex(), target_pub.trim_start_matches("02").trim_start_matches("03"));
+    assert_eq!(
+        computed_pub.x.to_hex(),
+        target_pub.trim_start_matches("02").trim_start_matches("03")
+    );
 }
 
 // Chunk: #65 Validation Test (tests/puzzle.rs)
@@ -348,9 +420,20 @@ fn test_puzzle64_solve() {
 #[cfg(feature = "smoke")]
 fn test_puzzle65_solve() {
     let (low, high, known) = speedbitcrack::puzzles::load_solved(65);
-    let target_pub = speedbitcrack::targets::loader::load_puzzle_keys().get(64).unwrap().pubkey_point();
-    let found = speedbitcrack::kangaroo::pollard_lambda_parallel(&target_pub.hash(), (low, high), 1024, 81, 2).unwrap();
-    let computed_pub = speedbitcrack::math::secp::point_mul(&known, &speedbitcrack::math::constants::GENERATOR);
+    let target_pub = speedbitcrack::targets::loader::load_puzzle_keys()
+        .get(64)
+        .unwrap()
+        .pubkey_point();
+    let found = speedbitcrack::kangaroo::pollard_lambda_parallel(
+        &target_pub.hash(),
+        (low, high),
+        1024,
+        81,
+        2,
+    )
+    .unwrap();
+    let computed_pub =
+        speedbitcrack::math::secp::point_mul(&known, &speedbitcrack::math::constants::GENERATOR);
     assert_eq!(found, known);
     assert_eq!(computed_pub, target_pub);
 }
@@ -359,9 +442,11 @@ fn test_puzzle65_solve() {
 #[test]
 #[test]
 fn test_unsolved_puzzles_all_biases() -> Result<(), Box<dyn std::error::Error>> {
-    use crate::utils::pubkey_loader::{detect_bias_single, detect_pos_bias_proxy_single, load_real_puzzle};
-    use crate::math::secp::Secp256k1;
     use crate::math::bigint::BigInt256;
+    use crate::math::secp::Secp256k1;
+    use crate::utils::pubkey_loader::{
+        detect_bias_single, detect_pos_bias_proxy_single, load_real_puzzle,
+    };
 
     let curve = Secp256k1::new();
     let mut mod9_hist = [0u32; 9];
@@ -413,8 +498,12 @@ fn test_unsolved_puzzles_all_biases() -> Result<(), Box<dyn std::error::Error>> 
     }
 
     println!("\n📊 Unsolved Puzzles Bias Analysis Summary:");
-    println!("Total puzzles analyzed: {} solved + {} unsolved = {}",
-             solved_count, unsolved_count, solved_count + unsolved_count);
+    println!(
+        "Total puzzles analyzed: {} solved + {} unsolved = {}",
+        solved_count,
+        unsolved_count,
+        solved_count + unsolved_count
+    );
 
     // Calculate bias factors (max prevalence / uniform expectation)
     let unsolved_total = unsolved_count as f64;
@@ -468,10 +557,10 @@ fn test_unsolved_puzzles_all_biases() -> Result<(), Box<dyn std::error::Error>> 
 /// Test deeper mod9 bias analysis
 #[test]
 fn test_deeper_mod9_bias_analysis() -> Result<(), Box<dyn std::error::Error>> {
-    use crate::utils::pubkey_loader::analyze_mod9_bias_deeper;
-    use crate::math::secp::Secp256k1;
     use crate::math::bigint::BigInt256;
+    use crate::math::secp::Secp256k1;
     use crate::types::Point;
+    use crate::utils::pubkey_loader::analyze_mod9_bias_deeper;
 
     let curve = Secp256k1::new();
 
@@ -506,7 +595,10 @@ fn test_deeper_mod9_bias_analysis() -> Result<(), Box<dyn std::error::Error>> {
     let (hist, max_bias, most_biased_residue, _, _) = analyze_mod9_bias_deeper(&points);
 
     println!("Mod9 histogram: {:?}", hist);
-    println!("Max bias: {:.3}, Most biased residue: {}", max_bias, most_biased_residue);
+    println!(
+        "Max bias: {:.3}, Most biased residue: {}",
+        max_bias, most_biased_residue
+    );
 
     // Test should pass if bias analysis works
     assert!(max_bias >= 1.0, "Bias factor should be >= 1.0");
@@ -528,7 +620,8 @@ fn test_deeper_mod9_subgroup_analysis() {
     let (points_with_ids, _config) = load_test_puzzle_keys();
     let points: Vec<Point> = points_with_ids.into_iter().map(|(p, _)| p).collect();
 
-    let (b_mod9, max_r9, b_mod27, max_r27) = speedbitcrack::utils::pubkey_loader::deeper_mod9_subgroup(&points);
+    let (b_mod9, max_r9, b_mod27, max_r27) =
+        speedbitcrack::utils::pubkey_loader::deeper_mod9_subgroup(&points);
 
     // Basic sanity checks
     assert!(b_mod9 >= 1.0); // Bias should be at least uniform
@@ -556,7 +649,8 @@ fn test_iterative_pos_slice_analysis() {
     let (points_with_ids, _config) = load_test_puzzle_keys();
     let points: Vec<Point> = points_with_ids.into_iter().map(|(p, _)| p).collect();
 
-    let (b_prod, min_range, max_range) = speedbitcrack::utils::pubkey_loader::iterative_pos_slice(&points, 3);
+    let (b_prod, min_range, max_range) =
+        speedbitcrack::utils::pubkey_loader::iterative_pos_slice(&points, 3);
 
     // Basic sanity checks
     assert!(b_prod >= 1.0);
@@ -568,8 +662,8 @@ fn test_iterative_pos_slice_analysis() {
 // Chunk: Valuable Mode Test (tests/puzzle.rs)
 #[test]
 fn test_valuable_mode() {
-    use speedbitcrack::kangaroo::generator::KangarooGenerator;
     use speedbitcrack::config::Config;
+    use speedbitcrack::kangaroo::generator::KangarooGenerator;
     use std::collections::HashMap;
 
     // Test valuable mode setup (can't run full solve due to time constraints)
@@ -590,14 +684,18 @@ fn test_valuable_mode() {
     assert!(biases.len() > 0);
 
     // Log would show bias application in real run
-    println!("Valuable mode test: bias_score={:.3}, biases_count={}", score, biases.len());
+    println!(
+        "Valuable mode test: bias_score={:.3}, biases_count={}",
+        score,
+        biases.len()
+    );
 }
 
 // Chunk: Test Mode Test (tests/puzzle.rs)
 #[test]
 fn test_test_mode() {
-    use speedbitcrack::kangaroo::generator::KangarooGenerator;
     use speedbitcrack::config::Config;
+    use speedbitcrack::kangaroo::generator::KangarooGenerator;
     use speedbitcrack::math::bigint::BigInt256;
 
     // Test with a very small range for quick validation
@@ -621,8 +719,12 @@ fn test_test_mode() {
     assert!(range.1 > range.0);
 
     // In real test mode, would run pollard_lambda_parallel and verify result
-    println!("Test mode validation: range=[{}, {}], bias_score={:.3}",
-             range.0.to_hex(), range.1.to_hex(), score);
+    println!(
+        "Test mode validation: range=[{}, {}], bias_score={:.3}",
+        range.0.to_hex(),
+        range.1.to_hex(),
+        score
+    );
 }
 
 // Chunk: Custom Range Mode Test (tests/puzzle.rs)
@@ -642,14 +744,17 @@ fn test_custom_range_mode() {
     assert_eq!(high, BigInt256::from_u64(256)); // 0x100 = 256
 
     // In real custom mode, would set up search with these bounds
-    println!("Custom range test: [{}, {}] parsed successfully", low_hex, high_hex);
+    println!(
+        "Custom range test: [{}, {}] parsed successfully",
+        low_hex, high_hex
+    );
 }
 
 // Chunk: Mode Test with Bias Log (tests/puzzle.rs)
 #[test]
 fn test_valuable_mode_bias_logging() {
-    use speedbitcrack::kangaroo::generator::KangarooGenerator;
     use speedbitcrack::config::Config;
+    use speedbitcrack::kangaroo::generator::KangarooGenerator;
     use std::collections::HashMap;
 
     // Test valuable mode with bias application logging
@@ -673,31 +778,45 @@ fn test_valuable_mode_bias_logging() {
     let test_distance = speedbitcrack::math::bigint::BigInt256::from_u64(81); // res=0 mod 81
     let _jump = gen.biased_jump(&test_distance, &biases); // Should log if bias >1.0
 
-    println!("Bias logging test: score={:.3}, biases_count={}, jump_calculated=true", score, biases.len());
+    println!(
+        "Bias logging test: score={:.3}, biases_count={}, jump_calculated=true",
+        score,
+        biases.len()
+    );
 }
 
 /// Test Magic 9 pubkey loading functionality
 #[test]
 fn test_load_magic9_pubkeys() {
-    use speedbitcrack::utils::pubkey_loader::load_magic9_pubkeys;
     use speedbitcrack::math::secp::Secp256k1;
+    use speedbitcrack::utils::pubkey_loader::load_magic9_pubkeys;
 
     let curve = Secp256k1::new();
 
     // Test loading the 9 specific Magic 9 pubkeys
     let result = load_magic9_pubkeys(&curve);
-    assert!(result.is_ok(), "Failed to load Magic 9 pubkeys: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to load Magic 9 pubkeys: {:?}",
+        result.err()
+    );
 
     let pubkeys = result.unwrap();
     assert_eq!(pubkeys.len(), 9, "Expected exactly 9 Magic 9 pubkeys");
 
     // Verify all points are valid on the curve
     for (i, point) in pubkeys.iter().enumerate() {
-        assert!(point.validate_curve(&curve as &Secp256k1),
-                "Magic 9 pubkey {} is not on secp256k1 curve", i);
+        assert!(
+            point.validate_curve(&curve as &Secp256k1),
+            "Magic 9 pubkey {} is not on secp256k1 curve",
+            i
+        );
     }
 
-    println!("✅ Magic 9 pubkey loading test passed: loaded {} valid pubkeys", pubkeys.len());
+    println!(
+        "✅ Magic 9 pubkey loading test passed: loaded {} valid pubkeys",
+        pubkeys.len()
+    );
 }
 
 /// Test bias filtering functions for Magic 9 sniper
@@ -710,17 +829,23 @@ fn test_magic9_bias_filters() {
     let test_scalar = BigInt256::from_u64(81); // 81 mod 9 = 0, mod 27 = 0, mod 81 = 0
 
     // Should pass with matching biases
-    assert!(apply_biases(&test_scalar, 0, 0, 0, true),
-            "Scalar 81 should pass bias filter (0,0,0,true)");
+    assert!(
+        apply_biases(&test_scalar, 0, 0, 0, true),
+        "Scalar 81 should pass bias filter (0,0,0,true)"
+    );
 
     // Should fail with non-matching mod9 bias
-    assert!(!apply_biases(&test_scalar, 1, 0, 0, true),
-            "Scalar 81 should fail bias filter (1,0,0,true)");
+    assert!(
+        !apply_biases(&test_scalar, 1, 0, 0, true),
+        "Scalar 81 should fail bias filter (1,0,0,true)"
+    );
 
     // Test with different scalar
     let test_scalar2 = BigInt256::from_u64(82); // 82 mod 9 = 1
-    assert!(apply_biases(&test_scalar2, 1, 1, 1, true),
-            "Scalar 82 should pass bias filter (1,1,1,true)");
+    assert!(
+        apply_biases(&test_scalar2, 1, 1, 1, true),
+        "Scalar 82 should pass bias filter (1,1,1,true)"
+    );
 
     // Test compute_pubkey_biases function
     let test_x = BigInt256::from_u64(81);
@@ -737,8 +862,8 @@ fn test_magic9_bias_filters() {
 #[test]
 fn test_biased_kangaroo_to_attractor() {
     use speedbitcrack::kangaroo::generator::biased_kangaroo_to_attractor;
-    use speedbitcrack::math::secp::Secp256k1;
     use speedbitcrack::math::bigint::BigInt256;
+    use speedbitcrack::math::secp::Secp256k1;
 
     let curve = Secp256k1::new();
 
@@ -754,21 +879,30 @@ fn test_biased_kangaroo_to_attractor() {
     // Test the function (should converge quickly since start == attractor)
     let result = biased_kangaroo_to_attractor(&start_point, &attractor_x, biases, &curve, 1000);
 
-    assert!(result.is_ok(), "Biased kangaroo should succeed for simple case");
+    assert!(
+        result.is_ok(),
+        "Biased kangaroo should succeed for simple case"
+    );
     let distance = result.unwrap();
 
     // Since we start at the attractor, distance should be 0
-    assert_eq!(distance, BigInt256::zero(),
-               "Distance should be 0 when starting at attractor");
+    assert_eq!(
+        distance,
+        BigInt256::zero(),
+        "Distance should be 0 when starting at attractor"
+    );
 
-    println!("✅ Biased kangaroo to attractor test passed: distance={}", distance.to_hex());
+    println!(
+        "✅ Biased kangaroo to attractor test passed: distance={}",
+        distance.to_hex()
+    );
 }
 
 /// Integration test for Magic 9 sniper mode (mock test)
 #[test]
 fn test_magic9_sniper_integration() {
-    use speedbitcrack::utils::pubkey_loader::load_magic9_pubkeys;
     use speedbitcrack::math::secp::Secp256k1;
+    use speedbitcrack::utils::pubkey_loader::load_magic9_pubkeys;
 
     let curve = Secp256k1::new();
 
@@ -776,13 +910,20 @@ fn test_magic9_sniper_integration() {
     let pubkeys = load_magic9_pubkeys(&curve).expect("Failed to load Magic 9 pubkeys");
 
     // Verify we have the expected structure
-    assert_eq!(pubkeys.len(), 9, "Magic 9 sniper should target exactly 9 pubkeys");
+    assert_eq!(
+        pubkeys.len(),
+        9,
+        "Magic 9 sniper should target exactly 9 pubkeys"
+    );
 
     // Test that all pubkeys are distinct
     for i in 0..pubkeys.len() {
-        for j in (i+1)..pubkeys.len() {
-            assert_ne!(pubkeys[i].x, pubkeys[j].x,
-                      "Magic 9 pubkeys {} and {} should be distinct", i, j);
+        for j in (i + 1)..pubkeys.len() {
+            assert_ne!(
+                pubkeys[i].x, pubkeys[j].x,
+                "Magic 9 pubkeys {} and {} should be distinct",
+                i, j
+            );
         }
     }
 
@@ -798,11 +939,16 @@ fn test_magic9_sniper_integration() {
         assert!(biases.1 <= 26, "mod27 bias should be 0-26 for pubkey {}", i);
         assert!(biases.2 <= 80, "mod81 bias should be 0-80 for pubkey {}", i);
 
-        println!("Pubkey {} biases: mod9={}, mod27={}, mod81={}, pos={}",
-                i, biases.0, biases.1, biases.2, biases.3);
+        println!(
+            "Pubkey {} biases: mod9={}, mod27={}, mod81={}, pos={}",
+            i, biases.0, biases.1, biases.2, biases.3
+        );
     }
 
-    println!("✅ Magic 9 sniper integration test passed: {} pubkeys validated", pubkeys.len());
+    println!(
+        "✅ Magic 9 sniper integration test passed: {} pubkeys validated",
+        pubkeys.len()
+    );
 }
 
 // TODO: Implement vow_rho_p2pk function and re-enable this test

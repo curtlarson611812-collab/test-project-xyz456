@@ -6,8 +6,8 @@
 #[test]
 fn test_cuda_backend_direct() {
     use crate::gpu::backends::cuda_backend::CudaBackend;
-    use crate::math::secp::Secp256k1;
     use crate::math::bigint::BigInt256;
+    use crate::math::secp::Secp256k1;
 
     // Test CUDA backend initialization
     let cuda = CudaBackend::new().unwrap();
@@ -36,7 +36,10 @@ fn test_cuda_backend_direct() {
             };
 
             // Basic check - should not be identity
-            assert!(!gpu_point.is_infinity(), "CUDA GLV result should not be infinity");
+            assert!(
+                !gpu_point.is_infinity(),
+                "CUDA GLV result should not be infinity"
+            );
             println!("✅ CUDA GLV multiplication works");
         }
         Err(e) => {
@@ -57,7 +60,10 @@ fn test_cuda_backend_direct() {
     // Test bigint multiplication
     match cuda.bigint_mul(&scalar_u32, &scalar_u32) {
         Ok(product) => {
-            println!("✅ CUDA bigint multiplication works: {} bytes", product.len() * 4);
+            println!(
+                "✅ CUDA bigint multiplication works: {} bytes",
+                product.len() * 4
+            );
         }
         Err(e) => {
             println!("⚠️  CUDA bigint multiplication failed (expected): {}", e);

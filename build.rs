@@ -24,7 +24,7 @@ fn generate_prime_sets() {
     // Generate GOLD and Secondary prime sets for SmallOddPrime optimization
     // These are precomputed to avoid runtime overhead
     println!("cargo:rerun-if-changed=src/kangaroo/generator.rs");
-    
+
     // For now, generate minimal sets - can be expanded later
     println!("Generated prime sets - GOLD: 0 primes, Secondary: 0 primes");
 }

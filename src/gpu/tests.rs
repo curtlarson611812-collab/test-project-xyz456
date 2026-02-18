@@ -5,10 +5,10 @@
 
 #[cfg(test)]
 mod tests {
-    use tokio;
-    use crate::math::{secp::Secp256k1, bigint::BigInt256};
-    use crate::types::Point;
     use crate::gpu::backends::hybrid_backend::HybridBackend;
+    use crate::math::{bigint::BigInt256, secp::Secp256k1};
+    use crate::types::Point;
+    use tokio;
 
     #[cfg(feature = "rustacuda")]
     use crate::gpu::backends::cuda_backend::CudaBackend;
@@ -44,7 +44,7 @@ mod tests {
     async fn run_ec_consistency_test<F, Fut>(test_fn: F) -> Result<(), Box<dyn std::error::Error>>
     where
         F: Fn(&EcTestCase, &Point) -> Fut,
-        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error>>>
+        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error>>>,
     {
         let secp = Secp256k1::new();
 
@@ -59,8 +59,16 @@ mod tests {
             let computed_x = BigInt256::from_u64_array(cpu_affine.x);
             let computed_y = BigInt256::from_u64_array(cpu_affine.y);
 
-            assert_eq!(computed_x, expected_x, "CPU X mismatch for scalar {}", test_case.scalar);
-            assert_eq!(computed_y, expected_y, "CPU Y mismatch for scalar {}", test_case.scalar);
+            assert_eq!(
+                computed_x, expected_x,
+                "CPU X mismatch for scalar {}",
+                test_case.scalar
+            );
+            assert_eq!(
+                computed_y, expected_y,
+                "CPU Y mismatch for scalar {}",
+                test_case.scalar
+            );
 
             // Test GPU implementation
             test_fn(test_case, &cpu_result).await?;
@@ -77,7 +85,10 @@ mod tests {
 
             // TODO: Implement CUDA kernel calls for EC operations
             // For now, just test that backend initializes correctly
-            println!("CUDA test for scalar {}: backend initialized", test_case.scalar);
+            println!(
+                "CUDA test for scalar {}: backend initialized",
+                test_case.scalar
+            );
 
             Ok(())
         })
@@ -94,11 +105,15 @@ mod tests {
                 // The Vulkan shaders (utils.wgsl) have complete EC math implementation
                 // TODO: Dispatch test_entry compute shader to validate point operations
                 // For now, verify backend initializes and shaders compile
-                println!("Vulkan test for scalar {}: backend ready with complete EC shaders", scalar);
+                println!(
+                    "Vulkan test for scalar {}: backend ready with complete EC shaders",
+                    scalar
+                );
 
                 Ok(())
             }
-        }).await
+        })
+        .await
     }
 
     #[tokio::test]
@@ -107,17 +122,22 @@ mod tests {
         run_ec_consistency_test(|_test_case, _cpu_result| async {
             // CPU test already validated in the run_ec_consistency_test function
             Ok(())
-        }).await
+        })
+        .await
     }
 
     #[test]
     fn test_bigint_unified_reductions() {
         // Test that Barrett and Montgomery reducers produce same results
-        let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F").unwrap();
+        let modulus =
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F")
+                .unwrap();
         let barrett = crate::math::bigint::BarrettReducer::new(&modulus);
         let _montgomery = crate::math::bigint::MontgomeryReducer::new(&modulus);
 
-        let test_val = BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").unwrap();
+        let test_val =
+            BigInt256::from_hex("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF")
+                .unwrap();
         let wide_val = crate::math::bigint::BigInt512::from_bigint256(&test_val);
 
         let barrett_result = barrett.reduce(&wide_val).unwrap();
@@ -140,17 +160,20 @@ mod tests {
         let mut stepper = KangarooStepper::new(false);
 
         // Create mock kangaroo states
-        let tame_states = vec![
-            KangarooState::new(
-                secp.g.clone(),
-                BigInt256::zero(),
-                [0; 4], [0; 4],
-                true, false, 0,
-                0, 0
-            )
-        ];
+        let tame_states = vec![KangarooState::new(
+            secp.g.clone(),
+            BigInt256::zero(),
+            [0; 4],
+            [0; 4],
+            true,
+            false,
+            0,
+            0,
+            0,
+        )];
 
-        let pre_step_positions: Vec<Point> = tame_states.iter().map(|k| k.position.clone()).collect();
+        let pre_step_positions: Vec<Point> =
+            tame_states.iter().map(|k| k.position.clone()).collect();
 
         // Dispatch to CUDA for stepping
         let result = hybrid.step_kangaroos_cuda(&tame_states, &None);
@@ -161,7 +184,10 @@ mod tests {
 
         // Verify positions changed
         for (pre, post) in pre_step_positions.iter().zip(post_step_states.iter()) {
-            assert_ne!(pre, &post.position, "Tame kangaroo position should have changed");
+            assert_ne!(
+                pre, &post.position,
+                "Tame kangaroo position should have changed"
+            );
         }
     }
 
@@ -174,17 +200,20 @@ mod tests {
         // Create mock wild kangaroo states
         let secp = Secp256k1::new();
         let _target = secp.g.clone();
-        let wild_states = vec![
-            KangarooState::new(
-                secp.g.clone(),
-                BigInt256::zero(),
-                [0; 4], [0; 4],
-                false, false, 0,
-                0, 0
-            )
-        ];
+        let wild_states = vec![KangarooState::new(
+            secp.g.clone(),
+            BigInt256::zero(),
+            [0; 4],
+            [0; 4],
+            false,
+            false,
+            0,
+            0,
+            0,
+        )];
 
-        let pre_step_positions: Vec<Point> = wild_states.iter().map(|k| k.position.clone()).collect();
+        let pre_step_positions: Vec<Point> =
+            wild_states.iter().map(|k| k.position.clone()).collect();
 
         // TODO: Implement step_kangaroos_vulkan method
         // Dispatch to Vulkan for wild herd stepping
@@ -198,7 +227,10 @@ mod tests {
 
         // Verify positions changed
         for (pre, post) in pre_step_positions.iter().zip(post_step_states.iter()) {
-            assert_ne!(pre, &post.position, "Wild kangaroo position should have changed");
+            assert_ne!(
+                pre, &post.position,
+                "Wild kangaroo position should have changed"
+            );
         }
     }
 
@@ -214,8 +246,10 @@ mod tests {
         let step = 101112u32;
 
         // CPU reference
-        let cpu_tame_bucket = crate::kangaroo::generator::select_bucket(&point, &dist, seed, step, true);
-        let cpu_wild_bucket = crate::kangaroo::generator::select_bucket(&point, &dist, seed, step, false);
+        let cpu_tame_bucket =
+            crate::kangaroo::generator::select_bucket(&point, &dist, seed, step, true);
+        let cpu_wild_bucket =
+            crate::kangaroo::generator::select_bucket(&point, &dist, seed, step, false);
 
         // For now, just verify CPU implementation works
         // GPU validation would require actual GPU dispatch
@@ -306,16 +340,36 @@ mod tests {
         {
             if let Ok(mut cuda_backend) = CudaBackend::new() {
                 let gpu_tame = cuda_backend.step_kangaroo(&tame_state, None, 81).unwrap();
-                let gpu_wild = cuda_backend.step_kangaroo(&wild_state, Some(&curve.g), 81).unwrap();
+                let gpu_wild = cuda_backend
+                    .step_kangaroo(&wild_state, Some(&curve.g), 81)
+                    .unwrap();
 
                 // Compare CPU vs GPU results
-                assert_eq!(cpu_tame.position.x, gpu_tame.position.x, "CUDA tame position X mismatch");
-                assert_eq!(cpu_tame.position.y, gpu_tame.position.y, "CUDA tame position Y mismatch");
-                assert_eq!(cpu_tame.distance, gpu_tame.distance, "CUDA tame distance mismatch");
+                assert_eq!(
+                    cpu_tame.position.x, gpu_tame.position.x,
+                    "CUDA tame position X mismatch"
+                );
+                assert_eq!(
+                    cpu_tame.position.y, gpu_tame.position.y,
+                    "CUDA tame position Y mismatch"
+                );
+                assert_eq!(
+                    cpu_tame.distance, gpu_tame.distance,
+                    "CUDA tame distance mismatch"
+                );
 
-                assert_eq!(cpu_wild.position.x, gpu_wild.position.x, "CUDA wild position X mismatch");
-                assert_eq!(cpu_wild.position.y, gpu_wild.position.y, "CUDA wild position Y mismatch");
-                assert_eq!(cpu_wild.distance, gpu_wild.distance, "CUDA wild distance mismatch");
+                assert_eq!(
+                    cpu_wild.position.x, gpu_wild.position.x,
+                    "CUDA wild position X mismatch"
+                );
+                assert_eq!(
+                    cpu_wild.position.y, gpu_wild.position.y,
+                    "CUDA wild position Y mismatch"
+                );
+                assert_eq!(
+                    cpu_wild.distance, gpu_wild.distance,
+                    "CUDA wild distance mismatch"
+                );
 
                 println!("CUDA SmallOddPrime parity test passed ✓");
             }
@@ -333,21 +387,45 @@ mod tests {
                 let gpu_wild = wild_state.clone();
 
                 // Compare CPU vs GPU results
-                assert_eq!(cpu_tame.position.x, gpu_tame.position.x, "Vulkan tame position X mismatch");
-                assert_eq!(cpu_tame.position.y, gpu_tame.position.y, "Vulkan tame position Y mismatch");
-                assert_eq!(cpu_tame.distance, gpu_tame.distance, "Vulkan tame distance mismatch");
+                assert_eq!(
+                    cpu_tame.position.x, gpu_tame.position.x,
+                    "Vulkan tame position X mismatch"
+                );
+                assert_eq!(
+                    cpu_tame.position.y, gpu_tame.position.y,
+                    "Vulkan tame position Y mismatch"
+                );
+                assert_eq!(
+                    cpu_tame.distance, gpu_tame.distance,
+                    "Vulkan tame distance mismatch"
+                );
 
-                assert_eq!(cpu_wild.position.x, gpu_wild.position.x, "Vulkan wild position X mismatch");
-                assert_eq!(cpu_wild.position.y, gpu_wild.position.y, "Vulkan wild position Y mismatch");
-                assert_eq!(cpu_wild.distance, gpu_wild.distance, "Vulkan wild distance mismatch");
+                assert_eq!(
+                    cpu_wild.position.x, gpu_wild.position.x,
+                    "Vulkan wild position X mismatch"
+                );
+                assert_eq!(
+                    cpu_wild.position.y, gpu_wild.position.y,
+                    "Vulkan wild position Y mismatch"
+                );
+                assert_eq!(
+                    cpu_wild.distance, gpu_wild.distance,
+                    "Vulkan wild distance mismatch"
+                );
 
                 println!("Vulkan SmallOddPrime parity test passed ✓");
             }
         }
 
         // If no GPU backends available, at least verify CPU logic works
-        assert!(cpu_tame.distance > BigInt256::zero(), "CPU tame distance should increase");
-        assert_ne!(cpu_wild.position.x, wild_state.position.x, "CPU wild position should change");
+        assert!(
+            cpu_tame.distance > BigInt256::zero(),
+            "CPU tame distance should increase"
+        );
+        assert_ne!(
+            cpu_wild.position.x, wild_state.position.x,
+            "CPU wild position should change"
+        );
 
         println!("SmallOddPrime CPU reference test passed ✓");
     }
@@ -369,23 +447,27 @@ mod tests {
             total_failed += result.failed;
             total_duration += result.duration_ms;
 
-            println!("{}: {}/{} passed ({:.1}ms)",
-                    result.operation,
-                    result.passed,
-                    result.total_tests,
-                    result.duration_ms);
+            println!(
+                "{}: {}/{} passed ({:.1}ms)",
+                result.operation, result.passed, result.total_tests, result.duration_ms
+            );
 
             if result.failed > 0 {
-                println!("  ❌ {} failures, max error: {:.2}", result.failed, result.max_error);
+                println!(
+                    "  ❌ {} failures, max error: {:.2}",
+                    result.failed, result.max_error
+                );
             } else {
                 println!("  ✅ All tests passed");
             }
         }
 
-        println!("\nOverall: {}/{} tests passed in {}ms",
-                total_passed,
-                total_passed + total_failed,
-                total_duration);
+        println!(
+            "\nOverall: {}/{} tests passed in {}ms",
+            total_passed,
+            total_passed + total_failed,
+            total_duration
+        );
 
         if total_failed == 0 {
             println!("🎯 All parity tests passed!");
@@ -451,20 +533,23 @@ mod tests {
                         ..Default::default()
                     };
 
-                    let _traps = cuda_backend.step_batch_bias(
-                        &mut gpu_positions,
-                        &mut gpu_distances,
-                        &types,
-                        &config
-                    ).unwrap();
+                    let _traps = cuda_backend
+                        .step_batch_bias(&mut gpu_positions, &mut gpu_distances, &types, &config)
+                        .unwrap();
                 }
 
                 // Verify 100% bit-perfect parity
                 for i in 0..num_kangaroos {
-                    assert_eq!(cpu_positions[i], gpu_positions[i],
-                              "CUDA position mismatch for kangaroo {}", i);
-                    assert_eq!(cpu_distances[i], gpu_distances[i],
-                              "CUDA distance mismatch for kangaroo {}", i);
+                    assert_eq!(
+                        cpu_positions[i], gpu_positions[i],
+                        "CUDA position mismatch for kangaroo {}",
+                        i
+                    );
+                    assert_eq!(
+                        cpu_distances[i], gpu_distances[i],
+                        "CUDA distance mismatch for kangaroo {}",
+                        i
+                    );
                 }
 
                 println!("CUDA 100% bit-perfect parity test passed ✓");
@@ -488,10 +573,16 @@ mod tests {
 
                 // Verify 100% bit-perfect parity
                 for i in 0..num_kangaroos {
-                    assert_eq!(cpu_positions[i], gpu_positions[i],
-                              "Vulkan position mismatch for kangaroo {}", i);
-                    assert_eq!(cpu_distances[i], gpu_distances[i],
-                              "Vulkan distance mismatch for kangaroo {}", i);
+                    assert_eq!(
+                        cpu_positions[i], gpu_positions[i],
+                        "Vulkan position mismatch for kangaroo {}",
+                        i
+                    );
+                    assert_eq!(
+                        cpu_distances[i], gpu_distances[i],
+                        "Vulkan distance mismatch for kangaroo {}",
+                        i
+                    );
                 }
 
                 println!("Vulkan 100% bit-perfect parity test passed ✓");

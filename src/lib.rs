@@ -14,29 +14,29 @@
 
 #![deny(unsafe_code)]
 
-pub mod config;
-pub mod types;
-pub mod math;
-pub mod kangaroo;
-pub mod gpu;
-pub mod dp;
-pub mod parity;
-pub mod targets;
-pub mod utils;
-pub mod puzzles;
-pub mod security;
-pub mod cli;
-pub mod checkpoint;
-pub mod performance_monitor;
-pub mod test_basic;
-pub mod simple_test;
-pub mod cuda_parity_test;
 #[allow(non_snake_case)]
 pub mod SmallOddPrime_Precise_code;
+pub mod checkpoint;
+pub mod cli;
+pub mod config;
+pub mod cuda_parity_test;
+pub mod dp;
+pub mod gpu;
+pub mod kangaroo;
+pub mod math;
+pub mod parity;
+pub mod performance_monitor;
+pub mod puzzles;
+pub mod security;
+pub mod simple_test;
+pub mod targets;
+pub mod test_basic;
+pub mod types;
+pub mod utils;
 // pub mod test_orchestrator; // Temporarily disabled
 
 // Re-export key types for library usage
 pub use config::Config;
-pub use types::{KangarooState, Point, AlphaBeta};
-pub use kangaroo::KangarooManager;
 pub use gpu::GpuBackend;
+pub use kangaroo::KangarooManager;
+pub use types::{AlphaBeta, KangarooState, Point};

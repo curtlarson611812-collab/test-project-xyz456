@@ -2,9 +2,9 @@
 //!
 //! Contains structs/enums: DpEntry, KangarooState, AlphaBeta, Point coords, SearchMode enum
 
+use crate::math::bigint::BigInt256;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use crate::math::bigint::BigInt256;
 
 /// Rho algorithm state for GPU kernel execution (common definition)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,7 +57,9 @@ impl Scalar {
 
     /// Create scalar from u64
     pub fn from_u64(value: u64) -> Self {
-        Scalar { value: BigInt256::from_u64(value) }
+        Scalar {
+            value: BigInt256::from_u64(value),
+        }
     }
 
     /// Get residue modulo given modulus (for bias calculations)
@@ -230,7 +232,9 @@ impl Point {
         }
 
         if !self.validate_subgroup(curve) {
-            return Err("Point is not in the prime order subgroup (potential small subgroup attack)");
+            return Err(
+                "Point is not in the prime order subgroup (potential small subgroup attack)",
+            );
         }
 
         Ok(())
@@ -242,11 +246,19 @@ impl Point {
             return *self;
         }
 
-        let z_inv = super::math::secp::Secp256k1::mod_inverse(&super::math::bigint::BigInt256::from_u64_array(self.z), &curve.p).unwrap();
+        let z_inv = super::math::secp::Secp256k1::mod_inverse(
+            &super::math::bigint::BigInt256::from_u64_array(self.z),
+            &curve.p,
+        )
+        .unwrap();
         let z2 = curve.montgomery_p.mul(&z_inv, &z_inv);
         let z3 = curve.montgomery_p.mul(&z2, &z_inv);
-        let x_aff = curve.barrett_p.mul(&super::math::bigint::BigInt256::from_u64_array(self.x), &z2);
-        let y_aff = curve.barrett_p.mul(&super::math::bigint::BigInt256::from_u64_array(self.y), &z3);
+        let x_aff = curve
+            .barrett_p
+            .mul(&super::math::bigint::BigInt256::from_u64_array(self.x), &z2);
+        let y_aff = curve
+            .barrett_p
+            .mul(&super::math::bigint::BigInt256::from_u64_array(self.y), &z3);
 
         Point {
             x: x_aff.to_u64_array(),
@@ -278,8 +290,12 @@ impl Point {
         curve.mul(&scalar_bigint, self)
     }
 
-    pub fn validate_compressed_point(bytes: &[u8]) -> Result<k256::ProjectivePoint, Box<dyn std::error::Error>> {
-        k256::PublicKey::from_sec1_bytes(bytes).map(|pk| pk.to_projective()).map_err(|_| "Invalid compressed point".into())
+    pub fn validate_compressed_point(
+        bytes: &[u8],
+    ) -> Result<k256::ProjectivePoint, Box<dyn std::error::Error>> {
+        k256::PublicKey::from_sec1_bytes(bytes)
+            .map(|pk| pk.to_projective())
+            .map_err(|_| "Invalid compressed point".into())
     }
 }
 
@@ -288,13 +304,22 @@ impl fmt::Display for Point {
         if self.is_infinity() {
             write!(f, "Infinity")
         } else {
-            write!(f, "({:032x}, {:032x}, {:032x})",
-                   u128::from(self.x[3]) << 96 | u128::from(self.x[2]) << 64 |
-                   u128::from(self.x[1]) << 32 | u128::from(self.x[0]),
-                   u128::from(self.y[3]) << 96 | u128::from(self.y[2]) << 64 |
-                   u128::from(self.y[1]) << 32 | u128::from(self.y[0]),
-                   u128::from(self.z[3]) << 96 | u128::from(self.z[2]) << 64 |
-                   u128::from(self.z[1]) << 32 | u128::from(self.z[0]))
+            write!(
+                f,
+                "({:032x}, {:032x}, {:032x})",
+                u128::from(self.x[3]) << 96
+                    | u128::from(self.x[2]) << 64
+                    | u128::from(self.x[1]) << 32
+                    | u128::from(self.x[0]),
+                u128::from(self.y[3]) << 96
+                    | u128::from(self.y[2]) << 64
+                    | u128::from(self.y[1]) << 32
+                    | u128::from(self.y[0]),
+                u128::from(self.z[3]) << 96
+                    | u128::from(self.z[2]) << 64
+                    | u128::from(self.z[1]) << 32
+                    | u128::from(self.z[0])
+            )
         }
     }
 }
@@ -335,10 +360,19 @@ pub struct TaggedKangarooState {
     pub initial_offset: BigInt256,
 }
 
-
 impl KangarooState {
     /// Create new kangaroo state
-    pub fn new(position: Point, distance: BigInt256, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, id: u64, step: u64, kangaroo_type: u32) -> Self {
+    pub fn new(
+        position: Point,
+        distance: BigInt256,
+        alpha: [u64; 4],
+        beta: [u64; 4],
+        is_tame: bool,
+        is_dp: bool,
+        id: u64,
+        step: u64,
+        kangaroo_type: u32,
+    ) -> Self {
         KangarooState {
             position,
             distance,
@@ -444,7 +478,12 @@ pub struct Solution {
 
 impl Solution {
     /// Create new solution
-    pub fn new(private_key: [u64; 4], target_point: Point, total_ops: BigInt256, time_seconds: f64) -> Self {
+    pub fn new(
+        private_key: [u64; 4],
+        target_point: Point,
+        total_ops: BigInt256,
+        time_seconds: f64,
+    ) -> Self {
         Solution {
             private_key,
             target_point,
@@ -456,9 +495,10 @@ impl Solution {
 
     /// Format private key as hex string
     pub fn private_key_hex(&self) -> String {
-        format!("{:032x}{:032x}{:032x}{:032x}",
-                self.private_key[3], self.private_key[2],
-                self.private_key[1], self.private_key[0])
+        format!(
+            "{:032x}{:032x}{:032x}{:032x}",
+            self.private_key[3], self.private_key[2], self.private_key[1], self.private_key[0]
+        )
     }
 }
 
@@ -493,11 +533,15 @@ pub enum JumpOp {
 impl JumpOp {
     /// All 8 basic jump operations
     pub const ALL: [JumpOp; 8] = [
-        JumpOp::AddG, JumpOp::SubG,
-        JumpOp::AddKG, JumpOp::SubKG,
+        JumpOp::AddG,
+        JumpOp::SubG,
+        JumpOp::AddKG,
+        JumpOp::SubKG,
         // Negation variants for symmetry
-        JumpOp::AddG, JumpOp::SubG,
-        JumpOp::AddKG, JumpOp::SubKG,
+        JumpOp::AddG,
+        JumpOp::SubG,
+        JumpOp::AddKG,
+        JumpOp::SubKG,
     ];
 }
 
@@ -619,45 +663,78 @@ mod tests {
         assert!(!point1.has_magic9_bias());
     }
 
-/// GPU-optimized kangaroo state representation
-/// Mathematical derivation: 256-bit coordinates split into u32 limbs for GPU compatibility
-/// Performance: SOA layout enables coalesced memory access, 32-bit ops faster than 64-bit
-/// Security: Zeroize trait ensures sensitive key data is cleared from GPU memory
-/// Memory: 8×4 = 32 bytes per coordinate (x,y,z stored as [u32;8] each)
-#[cfg_attr(feature = "rustacuda", derive(rustacuda::memory::DeviceCopy))]
-#[derive(Clone, Debug, zeroize::Zeroize)]
-#[allow(dead_code)]
-pub struct GpuKangaroo {
-    /// X coordinate as 8×32-bit limbs (little-endian)
-    pub position_x: [u32; 8],
-    /// Y coordinate as 8×32-bit limbs (little-endian)
-    pub position_y: [u32; 8],
-    /// Z coordinate as 8×32-bit limbs (little-endian, for projective)
-    pub position_z: [u32; 8],
-    /// Distance walked as 8×32-bit limbs
-    pub distance: [u32; 8],
-    /// Alpha coefficient for collision solving
-    pub alpha: [u32; 8],
-    /// Beta coefficient for collision solving
-    pub beta: [u32; 8],
-}
-
-impl GpuKangaroo {
-    /// Convert from CPU KangarooState to GPU format
-    /// Mathematical correctness: Preserves all coordinate and distance information
-    /// Performance: O(1) conversion, enables efficient GPU data transfer
+    /// GPU-optimized kangaroo state representation
+    /// Mathematical derivation: 256-bit coordinates split into u32 limbs for GPU compatibility
+    /// Performance: SOA layout enables coalesced memory access, 32-bit ops faster than 64-bit
+    /// Security: Zeroize trait ensures sensitive key data is cleared from GPU memory
+    /// Memory: 8×4 = 32 bytes per coordinate (x,y,z stored as [u32;8] each)
+    #[cfg_attr(feature = "rustacuda", derive(rustacuda::memory::DeviceCopy))]
+    #[derive(Clone, Debug, zeroize::Zeroize)]
     #[allow(dead_code)]
-    pub fn from_cpu_state(state: &KangarooState) -> Self {
-        Self {
-            position_x: state.position.x.iter().flat_map(|&x| [(x & 0xFFFFFFFF) as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
-            position_y: state.position.y.iter().flat_map(|&y| [(y & 0xFFFFFFFF) as u32, (y >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
-            position_z: state.position.z.iter().flat_map(|&z| [(z & 0xFFFFFFFF) as u32, (z >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
-            distance: state.distance.to_u32_limbs(),
-            alpha: state.alpha.iter().flat_map(|&a| [(a & 0xFFFFFFFF) as u32, (a >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
-            beta: state.beta.iter().flat_map(|&b| [(b & 0xFFFFFFFF) as u32, (b >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap(),
+    pub struct GpuKangaroo {
+        /// X coordinate as 8×32-bit limbs (little-endian)
+        pub position_x: [u32; 8],
+        /// Y coordinate as 8×32-bit limbs (little-endian)
+        pub position_y: [u32; 8],
+        /// Z coordinate as 8×32-bit limbs (little-endian, for projective)
+        pub position_z: [u32; 8],
+        /// Distance walked as 8×32-bit limbs
+        pub distance: [u32; 8],
+        /// Alpha coefficient for collision solving
+        pub alpha: [u32; 8],
+        /// Beta coefficient for collision solving
+        pub beta: [u32; 8],
+    }
+
+    impl GpuKangaroo {
+        /// Convert from CPU KangarooState to GPU format
+        /// Mathematical correctness: Preserves all coordinate and distance information
+        /// Performance: O(1) conversion, enables efficient GPU data transfer
+        #[allow(dead_code)]
+        pub fn from_cpu_state(state: &KangarooState) -> Self {
+            Self {
+                position_x: state
+                    .position
+                    .x
+                    .iter()
+                    .flat_map(|&x| [(x & 0xFFFFFFFF) as u32, (x >> 32) as u32])
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+                position_y: state
+                    .position
+                    .y
+                    .iter()
+                    .flat_map(|&y| [(y & 0xFFFFFFFF) as u32, (y >> 32) as u32])
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+                position_z: state
+                    .position
+                    .z
+                    .iter()
+                    .flat_map(|&z| [(z & 0xFFFFFFFF) as u32, (z >> 32) as u32])
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+                distance: state.distance.to_u32_limbs(),
+                alpha: state
+                    .alpha
+                    .iter()
+                    .flat_map(|&a| [(a & 0xFFFFFFFF) as u32, (a >> 32) as u32])
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+                beta: state
+                    .beta
+                    .iter()
+                    .flat_map(|&b| [(b & 0xFFFFFFFF) as u32, (b >> 32) as u32])
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+            }
         }
     }
-}
 
     #[test]
     fn test_point_validate_with_subgroup() {

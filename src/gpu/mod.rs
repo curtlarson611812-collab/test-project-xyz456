@@ -4,16 +4,16 @@
 
 pub mod backend;
 pub mod backends;
-pub mod shared;
+pub mod cuda;
 pub mod hybrid_manager;
 pub mod memory;
-#[cfg(feature = "vulkano")]
-pub mod vulkan;
-pub mod cuda;
+pub mod shared;
 #[cfg(test)]
 pub mod tests;
+#[cfg(feature = "vulkano")]
+pub mod vulkan;
 
 // Re-export main backend interfaces
-pub use backend::{detect_gpu_backend};
+pub use backend::detect_gpu_backend;
 pub use backends::*;
 pub use hybrid_manager::HybridGpuManager;

@@ -4,17 +4,17 @@
 //! NEVER used for production operations - always returns errors for production use.
 
 #[allow(unused_imports)]
-use crate::types::{RhoState, DpEntry, Point};
+use crate::dp::DpTable;
 #[allow(unused_imports)]
 use crate::kangaroo::collision::Trap;
 use crate::math::{bigint::BigInt256, secp::Secp256k1};
 #[allow(unused_imports)]
+use crate::types::{DpEntry, Point, RhoState};
+use anyhow::{anyhow, Result};
+#[allow(unused_imports)]
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 #[allow(unused_imports)]
-use crate::dp::DpTable;
-#[allow(unused_imports)]
 use num_bigint::BigUint;
-use anyhow::{Result, anyhow};
 
 /// CPU backend for parity testing only
 pub struct CpuBackend;
@@ -65,13 +65,15 @@ impl CpuBackend {
             for _ in 0..steps {
                 // Apply jump (simplified)
                 if let Some(jump) = jumps.get(0) {
-                    state.current = Secp256k1::new().add(&state.current, &Secp256k1::new().mul(jump, &Secp256k1::new().g));
+                    state.current = Secp256k1::new().add(
+                        &state.current,
+                        &Secp256k1::new().mul(jump, &Secp256k1::new().g),
+                    );
                     state.steps = state.steps.clone() + BigInt256::one();
                 }
             }
         }
     }
-
 }
 // Implement GpuBackend trait for CpuBackend (for fallback/testing purposes)
 #[async_trait::async_trait]
@@ -80,68 +82,123 @@ impl crate::gpu::backends::backend_trait::GpuBackend for CpuBackend {
         Ok(CpuBackend::new()?)
     }
 
-    fn batch_init_kangaroos(&self, #[allow(unused_variables)] tame_count: usize, #[allow(unused_variables)] wild_count: usize, #[allow(unused_variables)] targets: &Vec<[[u32;8];3]>) -> Result<(Vec<[[u32;8];3]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<[u32;8]>, Vec<u32>)> {
+    fn batch_init_kangaroos(
+        &self,
+        #[allow(unused_variables)] tame_count: usize,
+        #[allow(unused_variables)] wild_count: usize,
+        #[allow(unused_variables)] targets: &Vec<[[u32; 8]; 3]>,
+    ) -> Result<(
+        Vec<[[u32; 8]; 3]>,
+        Vec<[u32; 8]>,
+        Vec<[u32; 8]>,
+        Vec<[u32; 8]>,
+        Vec<u32>,
+    )> {
         // CPU fallback - return error since CPU should not be used for production
         Err(anyhow!("CRITICAL: CPU backend cannot be used for kangaroo initialization! Use CUDA or Vulkan backends. CPU is reserved for parity testing only."))
     }
 
-    fn precomp_table(&self, _base: [[u32;8];3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
+    fn precomp_table(&self, _base: [[u32; 8]; 3], _window: u32) -> Result<Vec<[[u32; 8]; 3]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn precomp_table_glv(&self, _base: [u32;8*3], _window: u32) -> Result<Vec<[[u32;8];3]>> {
+    fn precomp_table_glv(&self, _base: [u32; 8 * 3], _window: u32) -> Result<Vec<[[u32; 8]; 3]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn step_batch(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>) -> Result<Vec<super::backend_trait::Trap>> {
+    fn step_batch(
+        &self,
+        _positions: &mut Vec<[[u32; 8]; 3]>,
+        _distances: &mut Vec<[u32; 8]>,
+        _types: &Vec<u32>,
+    ) -> Result<Vec<super::backend_trait::Trap>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn step_batch_bias(&self, _positions: &mut Vec<[[u32;8];3]>, _distances: &mut Vec<[u32;8]>, _types: &Vec<u32>, _config: &crate::config::Config) -> Result<Vec<super::backend_trait::Trap>> {
+    fn step_batch_bias(
+        &self,
+        _positions: &mut Vec<[[u32; 8]; 3]>,
+        _distances: &mut Vec<[u32; 8]>,
+        _types: &Vec<u32>,
+        _config: &crate::config::Config,
+    ) -> Result<Vec<super::backend_trait::Trap>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_inverse(&self, _a: &Vec<[u32;8]>, _modulus: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_inverse(
+        &self,
+        _a: &Vec<[u32; 8]>,
+        _modulus: [u32; 8],
+    ) -> Result<Vec<Option<[u32; 8]>>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_solve(&self, _dps: &Vec<super::backend_trait::DpEntry>, _targets: &Vec<[[u32;8];3]>) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_solve(
+        &self,
+        _dps: &Vec<super::backend_trait::DpEntry>,
+        _targets: &Vec<[[u32; 8]; 3]>,
+    ) -> Result<Vec<Option<[u32; 8]>>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_solve_collision(&self, _alpha_t: Vec<[u32;8]>, _alpha_w: Vec<[u32;8]>, _beta_t: Vec<[u32;8]>, _beta_w: Vec<[u32;8]>, _target: Vec<[u32;8]>, _n: [u32;8]) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_solve_collision(
+        &self,
+        _alpha_t: Vec<[u32; 8]>,
+        _alpha_w: Vec<[u32; 8]>,
+        _beta_t: Vec<[u32; 8]>,
+        _beta_w: Vec<[u32; 8]>,
+        _target: Vec<[u32; 8]>,
+        _n: [u32; 8],
+    ) -> Result<Vec<Option<[u32; 8]>>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_bsgs_solve(&self, _deltas: Vec<[[u32;8];3]>, _alphas: Vec<[u32;8]>, _distances: Vec<[u32;8]>, _config: &crate::config::Config) -> Result<Vec<Option<[u32;8]>>> {
+    fn batch_bsgs_solve(
+        &self,
+        _deltas: Vec<[[u32; 8]; 3]>,
+        _alphas: Vec<[u32; 8]>,
+        _distances: Vec<[u32; 8]>,
+        _config: &crate::config::Config,
+    ) -> Result<Vec<Option<[u32; 8]>>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_barrett_reduce(&self, _x: Vec<[u32;16]>, _mu: [u32;9], _modulus: [u32;8], _use_montgomery: bool) -> Result<Vec<[u32;8]>> {
+    fn batch_barrett_reduce(
+        &self,
+        _x: Vec<[u32; 16]>,
+        _mu: [u32; 9],
+        _modulus: [u32; 8],
+        _use_montgomery: bool,
+    ) -> Result<Vec<[u32; 8]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_bigint_mul(&self, _a: &Vec<[u32;8]>, _b: &Vec<[u32;8]>) -> Result<Vec<[u32;16]>> {
+    fn batch_bigint_mul(&self, _a: &Vec<[u32; 8]>, _b: &Vec<[u32; 8]>) -> Result<Vec<[u32; 16]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_to_affine(&self, _points: &Vec<[[u32;8];3]>) -> Result<Vec<[[u32;8];2]>> {
+    fn batch_to_affine(&self, _points: &Vec<[[u32; 8]; 3]>) -> Result<Vec<[[u32; 8]; 2]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn safe_diff_mod_n(&self, _tame: [u32;8], _wild: [u32;8], _n: [u32;8]) -> Result<[u32;8]> {
+    fn safe_diff_mod_n(&self, _tame: [u32; 8], _wild: [u32; 8], _n: [u32; 8]) -> Result<[u32; 8]> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn barrett_reduce(&self, _x: &[u32;16], _modulus: &[u32;8], _mu: &[u32;16]) -> Result<[u32;8]> {
+    fn barrett_reduce(
+        &self,
+        _x: &[u32; 16],
+        _modulus: &[u32; 8],
+        _mu: &[u32; 16],
+    ) -> Result<[u32; 8]> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn mul_glv_opt(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
+    fn mul_glv_opt(&self, _p: [[u32; 8]; 3], _k: [u32; 8]) -> Result<[[u32; 8]; 3]> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn mod_inverse(&self, a: &[u32;8], modulus: &[u32;8]) -> Result<[u32;8]> {
+    fn mod_inverse(&self, a: &[u32; 8], modulus: &[u32; 8]) -> Result<[u32; 8]> {
         // Convert GPU format to BigInt256 for CPU calculation
         let a_bigint = BigInt256::from_u64_array([
             (a[0] as u64) | ((a[1] as u64) << 32),
@@ -160,14 +217,18 @@ impl crate::gpu::backends::backend_trait::GpuBackend for CpuBackend {
 
         // Convert back to GPU format
         Ok([
-            result.limbs[0] as u32, (result.limbs[0] >> 32) as u32,
-            result.limbs[1] as u32, (result.limbs[1] >> 32) as u32,
-            result.limbs[2] as u32, (result.limbs[2] >> 32) as u32,
-            result.limbs[3] as u32, (result.limbs[3] >> 32) as u32,
+            result.limbs[0] as u32,
+            (result.limbs[0] >> 32) as u32,
+            result.limbs[1] as u32,
+            (result.limbs[1] >> 32) as u32,
+            result.limbs[2] as u32,
+            (result.limbs[2] >> 32) as u32,
+            result.limbs[3] as u32,
+            (result.limbs[3] >> 32) as u32,
         ])
     }
 
-    fn bigint_mul(&self, a: &[u32;8], b: &[u32;8]) -> Result<[u32;16]> {
+    fn bigint_mul(&self, a: &[u32; 8], b: &[u32; 8]) -> Result<[u32; 16]> {
         // Convert to BigInt256 and multiply
         let a_bigint = BigInt256::from_u64_array([
             (a[0] as u64) | ((a[1] as u64) << 32),
@@ -193,31 +254,44 @@ impl crate::gpu::backends::backend_trait::GpuBackend for CpuBackend {
         Ok(output)
     }
 
-    fn modulo(&self, _a: &[u32;16], _modulus: &[u32;8]) -> Result<[u32;8]> {
+    fn modulo(&self, _a: &[u32; 16], _modulus: &[u32; 8]) -> Result<[u32; 8]> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn scalar_mul_glv(&self, _p: [[u32;8];3], _k: [u32;8]) -> Result<[[u32;8];3]> {
+    fn scalar_mul_glv(&self, _p: [[u32; 8]; 3], _k: [u32; 8]) -> Result<[[u32; 8]; 3]> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn mod_small(&self, _x: [u32;8], _modulus: u32) -> Result<u32> {
+    fn mod_small(&self, _x: [u32; 8], _modulus: u32) -> Result<u32> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn batch_mod_small(&self, _points: &Vec<[[u32;8];3]>, _modulus: u32) -> Result<Vec<u32>> {
+    fn batch_mod_small(&self, _points: &Vec<[[u32; 8]; 3]>, _modulus: u32) -> Result<Vec<u32>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn rho_walk(&self, _tortoise: [[u32;8];3], _hare: [[u32;8];3], _max_steps: u32) -> Result<super::backend_trait::RhoWalkResult> {
+    fn rho_walk(
+        &self,
+        _tortoise: [[u32; 8]; 3],
+        _hare: [[u32; 8]; 3],
+        _max_steps: u32,
+    ) -> Result<super::backend_trait::RhoWalkResult> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn solve_post_walk(&self, _walk: super::backend_trait::RhoWalkResult, _targets: Vec<[[u32;8];3]>) -> Result<Option<[u32;8]>> {
+    fn solve_post_walk(
+        &self,
+        _walk: super::backend_trait::RhoWalkResult,
+        _targets: Vec<[[u32; 8]; 3]>,
+    ) -> Result<Option<[u32; 8]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn run_gpu_steps(&self, _num_steps: usize, _start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
+    fn run_gpu_steps(
+        &self,
+        _num_steps: usize,
+        _start_state: crate::types::KangarooState,
+    ) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
@@ -225,15 +299,29 @@ impl crate::gpu::backends::backend_trait::GpuBackend for CpuBackend {
         // No-op for CPU
     }
 
-    fn generate_preseed_pos(&self, _range_min: &crate::math::BigInt256, _range_width: &crate::math::BigInt256) -> Result<Vec<f64>> {
+    fn generate_preseed_pos(
+        &self,
+        _range_min: &crate::math::BigInt256,
+        _range_width: &crate::math::BigInt256,
+    ) -> Result<Vec<f64>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn blend_proxy_preseed(&self, _preseed_pos: Vec<f64>, _num_random: usize, _empirical_pos: Option<Vec<f64>>, _weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    fn blend_proxy_preseed(
+        &self,
+        _preseed_pos: Vec<f64>,
+        _num_random: usize,
+        _empirical_pos: Option<Vec<f64>>,
+        _weights: (f64, f64, f64),
+    ) -> Result<Vec<f64>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn analyze_preseed_cascade(&self, _proxy_pos: &[f64], _bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    fn analyze_preseed_cascade(
+        &self,
+        _proxy_pos: &[f64],
+        _bins: usize,
+    ) -> Result<(Vec<f64>, Vec<f64>)> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 }

@@ -4,9 +4,9 @@
 
 use crate::dp::table::DpTable;
 use crate::math::bigint::BigInt256;
-use tokio::sync::Mutex;
-use std::sync::Arc;
 use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// DP table pruning manager
 pub struct DpPruning {
@@ -34,8 +34,7 @@ impl DpPruning {
             let needs_pruning = {
                 let table = self.dp_table.lock().await;
                 stats.entries_before = table.stats().total_entries;
-                table.needs_pruning() ||
-                table.stats().utilization >= self.pruning_threshold
+                table.needs_pruning() || table.stats().utilization >= self.pruning_threshold
             };
 
             if !needs_pruning {
@@ -61,7 +60,9 @@ impl DpPruning {
         // Get entries sorted by value score
         let entries_to_prune = {
             let table = self.dp_table.lock().await;
-            let mut entries: Vec<(f64, u64)> = table.get_entries().iter()
+            let mut entries: Vec<(f64, u64)> = table
+                .get_entries()
+                .iter()
                 .filter_map(|(hash, entry)| {
                     // Calculate real value score based on distance and cluster density
                     let dist_score = entry.state.distance.to_f64_approx();
@@ -72,13 +73,21 @@ impl DpPruning {
                 .collect();
 
             entries.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-            entries.into_iter().take(self.chunk_size).collect::<Vec<_>>()
+            entries
+                .into_iter()
+                .take(self.chunk_size)
+                .collect::<Vec<_>>()
         };
 
         // Remove entries using the actual DpTable remove method
         {
             let mut table = self.dp_table.lock().await;
-            let removed_count = table.remove_dps(&entries_to_prune.iter().map(|(_, hash)| *hash).collect::<Vec<_>>());
+            let removed_count = table.remove_dps(
+                &entries_to_prune
+                    .iter()
+                    .map(|(_, hash)| *hash)
+                    .collect::<Vec<_>>(),
+            );
             stats.entries_removed = removed_count;
             stats.entries_after = table.stats().total_entries;
         }
@@ -94,7 +103,11 @@ impl DpPruning {
         // Get all DP entries - collect them before any lock dropping
         let entries: Vec<_> = {
             let table = self.dp_table.lock().await;
-            table.get_entries().iter().map(|(k, v)| (*k, v.clone())).collect()
+            table
+                .get_entries()
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect()
         };
 
         if entries.len() < k_clusters * 2 {
@@ -103,12 +116,25 @@ impl DpPruning {
         }
 
         // Extract features for clustering (using x-coordinate and distance)
-        let samples: Vec<[f64; 2]> = entries.iter().map(|(_, entry)| {
-            [
-                (entry.point.x[0] as f64) / u32::MAX as f64,  // Normalize x-coordinate
-                { let dist_bigint = BigInt256 { limbs: [entry.state.distance.limbs[0], entry.state.distance.limbs[1], entry.state.distance.limbs[2], entry.state.distance.limbs[3]] }; dist_bigint.to_f64_approx().log2().max(0.0) / 64.0 },  // Log distance normalized
-            ]
-        }).collect();
+        let samples: Vec<[f64; 2]> = entries
+            .iter()
+            .map(|(_, entry)| {
+                [
+                    (entry.point.x[0] as f64) / u32::MAX as f64, // Normalize x-coordinate
+                    {
+                        let dist_bigint = BigInt256 {
+                            limbs: [
+                                entry.state.distance.limbs[0],
+                                entry.state.distance.limbs[1],
+                                entry.state.distance.limbs[2],
+                                entry.state.distance.limbs[3],
+                            ],
+                        };
+                        dist_bigint.to_f64_approx().log2().max(0.0) / 64.0
+                    }, // Log distance normalized
+                ]
+            })
+            .collect();
 
         // Perform simple k-means clustering
         let cluster_result = self.simple_kmeans(&samples, k_clusters, 50);
@@ -145,14 +171,23 @@ impl DpPruning {
 
         if !hashes_to_remove.is_empty() {
             stats.chunks_processed = 1;
-            stats.additional_info = format!("Clustered {} entries into {} groups", entries.len(), k_clusters);
+            stats.additional_info = format!(
+                "Clustered {} entries into {} groups",
+                entries.len(),
+                k_clusters
+            );
         }
 
         Ok(stats)
     }
 
     /// Simple k-means clustering implementation
-    fn simple_kmeans(&self, samples: &[[f64; 2]], k: usize, max_iterations: usize) -> Result<Vec<usize>> {
+    fn simple_kmeans(
+        &self,
+        samples: &[[f64; 2]],
+        k: usize,
+        max_iterations: usize,
+    ) -> Result<Vec<usize>> {
         use rand::Rng;
 
         if samples.is_empty() || k == 0 {
@@ -271,7 +306,8 @@ impl DpPruning {
                 PruningMethod::ValueBased
             },
             target_utilization: 0.8,
-            estimated_entries_to_remove: ((stats.utilization - 0.8) * stats.max_size as f64) as usize,
+            estimated_entries_to_remove: ((stats.utilization - 0.8) * stats.max_size as f64)
+                as usize,
         }
     }
 }
@@ -399,4 +435,4 @@ mod tests {
         // Should have removed some entries from small clusters
         // May be 0 if clustering doesn't identify clear outliers
     }
-    }
+}

@@ -8,10 +8,8 @@ use k256::{ProjectivePoint, Scalar};
 // Cycle via index % 32 — provides unique starts per kangaroo without bias.
 // From the original Magic 9 discovery runs.
 pub const PRIME_MULTIPLIERS: [u64; 32] = [
-    131, 137, 139, 149, 151, 157, 163, 167,
-    173, 179, 181, 191, 193, 197, 199, 211,
-    223, 227, 229, 233, 239, 241, 251, 257,
-    263, 269, 271, 277, 281, 283, 293, 307,
+    131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229,
+    233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307,
 ];
 
 // Unify with bias mods - get biased prime for mod-based selection
@@ -22,7 +20,10 @@ pub fn get_biased_prime(index: usize, bias_mod: u64) -> u64 {
 
 // Sacred kangaroo start initialization from original code
 // wild_start = prime_i * target_pubkey - allows inversion in collision solving
-pub fn initialize_kangaroo_start(target_pubkey: &ProjectivePoint, kangaroo_index: usize) -> ProjectivePoint {
+pub fn initialize_kangaroo_start(
+    target_pubkey: &ProjectivePoint,
+    kangaroo_index: usize,
+) -> ProjectivePoint {
     let prime_index = kangaroo_index % PRIME_MULTIPLIERS.len();
     let prime_u64 = PRIME_MULTIPLIERS[prime_index];
     let prime_scalar = Scalar::from(prime_u64);
@@ -38,7 +39,13 @@ pub fn initialize_tame_start() -> ProjectivePoint {
 }
 
 // Sacred bucket selection — tame deterministic, wild state-mixed
-pub fn select_bucket(_point: &ProjectivePoint, _dist: &Scalar, seed: u32, step: u32, is_tame: bool) -> u32 {
+pub fn select_bucket(
+    _point: &ProjectivePoint,
+    _dist: &Scalar,
+    seed: u32,
+    step: u32,
+    is_tame: bool,
+) -> u32 {
     const WALK_BUCKETS: u32 = 32;
 
     if is_tame {
@@ -57,7 +64,7 @@ pub fn setup_kangaroos(targets: &[ProjectivePoint], num_kangaroos: usize) -> Vec
 
     for target in targets {
         // Generate tame kangaroos (first half)
-        for i in 0..num_kangaroos/2 {
+        for i in 0..num_kangaroos / 2 {
             let tame_start = initialize_tame_start();
             // Tame starts from G with small additive offsets
             let offset_scalar = Scalar::from((i + 1) as u64);
@@ -66,7 +73,7 @@ pub fn setup_kangaroos(targets: &[ProjectivePoint], num_kangaroos: usize) -> Vec
         }
 
         // Generate wild kangaroos (second half) - multiplicative from target
-        for i in 0..num_kangaroos/2 {
+        for i in 0..num_kangaroos / 2 {
             let wild_kangaroo = initialize_kangaroo_start(target, i);
             all_kangaroos.push(wild_kangaroo);
         }

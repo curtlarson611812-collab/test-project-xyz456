@@ -3,10 +3,10 @@
 //! Tests all CUDA operations for CPU/GPU equivalence
 //! Covers all 31 CUDA files with bit-perfect validation
 
-use crate::types::{Point, KangarooState};
+use crate::gpu::{CpuBackend, GpuBackend};
 use crate::math::bigint::BigInt256;
 use crate::math::secp::Secp256k1;
-use crate::gpu::{GpuBackend, CpuBackend};
+use crate::types::{KangarooState, Point};
 use anyhow::Result;
 use std::time::Instant;
 
@@ -64,7 +64,9 @@ impl ParityFramework {
 
         #[cfg(feature = "wgpu")]
         {
-            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+            if let Ok(vulkan_backend) =
+                crate::gpu::backends::vulkan_backend::WgpuBackend::new().await
+            {
                 // Test batch modular inverse
                 let test_values = vec![
                     [1u32, 0, 0, 0, 0, 0, 0, 0], // 1
@@ -143,7 +145,8 @@ impl ParityFramework {
                 let modulus = 7u32;
 
                 if let Ok(result) = vulkan_backend.mod_small(x, modulus) {
-                    if result == 1 { // 15 mod 7 = 1
+                    if result == 1 {
+                        // 15 mod 7 = 1
                         passed += 1;
                     } else {
                         failed += 1;
@@ -171,7 +174,9 @@ impl ParityFramework {
 
         #[cfg(feature = "wgpu")]
         {
-            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+            if let Ok(vulkan_backend) =
+                crate::gpu::backends::vulkan_backend::WgpuBackend::new().await
+            {
                 // Test safe_diff_mod_n
                 let tame = [10u32, 0, 0, 0, 0, 0, 0, 0];
                 let wild = [3u32, 0, 0, 0, 0, 0, 0, 0];
@@ -222,7 +227,9 @@ impl ParityFramework {
 
         #[cfg(feature = "wgpu")]
         {
-            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+            if let Ok(vulkan_backend) =
+                crate::gpu::backends::vulkan_backend::WgpuBackend::new().await
+            {
                 // Test batch_mod_small for bias calculations
                 let test_points = vec![
                     [[15u32, 0, 0, 0, 0, 0, 0, 0]; 3], // x = 15
@@ -309,7 +316,9 @@ impl ParityFramework {
 
             #[cfg(feature = "wgpu")]
             {
-                if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+                if let Ok(vulkan_backend) =
+                    crate::gpu::backends::vulkan_backend::WgpuBackend::new().await
+                {
                     // Test Vulkan scalar multiplication
                     let vulkan_result = vulkan_backend.scalar_mul_glv(point_u32, scalar_u32);
                     match vulkan_result {
@@ -369,7 +378,8 @@ impl ParityFramework {
                     // Test modular inverse
                     if let Ok(Some(gpu_inv)) = cuda_backend.batch_inverse(&vec![a_u32], n_u32) {
                         let gpu_inv_big = BigInt256::from_u32_limbs(gpu_inv[0]);
-                        let cpu_inv = crate::math::secp::Secp256k1::mod_inverse(&a, &modulus).unwrap_or(BigInt256::zero());
+                        let cpu_inv = crate::math::secp::Secp256k1::mod_inverse(&a, &modulus)
+                            .unwrap_or(BigInt256::zero());
                         if gpu_inv_big == cpu_inv {
                             passed += 1;
                         } else {
@@ -379,7 +389,8 @@ impl ParityFramework {
 
                     // Test bigint multiplication
                     if let Ok(gpu_mul) = cuda_backend.batch_bigint_mul(&vec![a_u32], &vec![b_u32]) {
-                        let gpu_mul_big = BigInt256::from_u32_limbs(gpu_mul[0][..8].try_into().unwrap());
+                        let gpu_mul_big =
+                            BigInt256::from_u32_limbs(gpu_mul[0][..8].try_into().unwrap());
                         let gpu_mul_reduced = gpu_mul_big % &modulus;
                         if gpu_mul_reduced == cpu_mul {
                             passed += 1;
@@ -426,33 +437,39 @@ impl ParityFramework {
         }
 
         // Test batch stepping
-        let positions: Vec<[[u32; 8]; 3]> = test_kangaroos.iter()
+        let positions: Vec<[[u32; 8]; 3]> = test_kangaroos
+            .iter()
             .map(|k| self.point_to_u32_array(&k.position))
             .collect();
-        let distances: Vec<[u32; 8]> = test_kangaroos.iter()
+        let distances: Vec<[u32; 8]> = test_kangaroos
+            .iter()
             .map(|k| k.distance.to_u32_limbs())
             .collect();
-        let types: Vec<u32> = test_kangaroos.iter()
-            .map(|k| k.kangaroo_type)
-            .collect();
+        let types: Vec<u32> = test_kangaroos.iter().map(|k| k.kangaroo_type).collect();
 
         #[cfg(feature = "wgpu")]
         {
-            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+            if let Ok(vulkan_backend) =
+                crate::gpu::backends::vulkan_backend::WgpuBackend::new().await
+            {
                 let mut gpu_positions = positions.clone();
                 let mut gpu_distances = distances.clone();
 
                 // GPU stepping
-                let _traps = vulkan_backend.step_batch(&mut gpu_positions, &mut gpu_distances, &types)?;
+                let _traps =
+                    vulkan_backend.step_batch(&mut gpu_positions, &mut gpu_distances, &types)?;
 
                 // CPU stepping for comparison
                 let mut cpu_positions = positions.clone();
                 let mut cpu_distances = distances.clone();
-                let _cpu_traps = self.cpu_backend.step_batch(&mut cpu_positions, &mut cpu_distances, &types)?;
+                let _cpu_traps =
+                    self.cpu_backend
+                        .step_batch(&mut cpu_positions, &mut cpu_distances, &types)?;
 
                 // Compare results
                 for i in 0..positions.len() {
-                    if gpu_positions[i] == cpu_positions[i] && gpu_distances[i] == cpu_distances[i] {
+                    if gpu_positions[i] == cpu_positions[i] && gpu_distances[i] == cpu_distances[i]
+                    {
                         passed += 1;
                     } else {
                         failed += 1;
@@ -498,7 +515,8 @@ impl ParityFramework {
         }
 
         // Test batch solving
-        let _targets: Vec<[[u32; 8]; 3]> = test_dps.iter()
+        let _targets: Vec<[[u32; 8]; 3]> = test_dps
+            .iter()
             .map(|dp| self.point_to_u32_array(&dp.point))
             .collect();
 
@@ -545,10 +563,13 @@ impl ParityFramework {
 
         #[cfg(feature = "wgpu")]
         {
-            if let Ok(vulkan_backend) = crate::gpu::backends::vulkan_backend::WgpuBackend::new().await {
+            if let Ok(vulkan_backend) =
+                crate::gpu::backends::vulkan_backend::WgpuBackend::new().await
+            {
                 // Test standard jump table
                 if let Ok(table) = vulkan_backend.precomp_table(base_u32, 8) {
-                    if table.len() == 256 { // 2^(8-1) = 128, but might be different implementation
+                    if table.len() == 256 {
+                        // 2^(8-1) = 128, but might be different implementation
                         passed += 1;
                     } else {
                         failed += 1;
@@ -557,9 +578,30 @@ impl ParityFramework {
 
                 // Test GLV jump table
                 let base_u32_flat = [
-                    base_u32[0][0], base_u32[0][1], base_u32[0][2], base_u32[0][3], base_u32[0][4], base_u32[0][5], base_u32[0][6], base_u32[0][7],
-                    base_u32[1][0], base_u32[1][1], base_u32[1][2], base_u32[1][3], base_u32[1][4], base_u32[1][5], base_u32[1][6], base_u32[1][7],
-                    base_u32[2][0], base_u32[2][1], base_u32[2][2], base_u32[2][3], base_u32[2][4], base_u32[2][5], base_u32[2][6], base_u32[2][7],
+                    base_u32[0][0],
+                    base_u32[0][1],
+                    base_u32[0][2],
+                    base_u32[0][3],
+                    base_u32[0][4],
+                    base_u32[0][5],
+                    base_u32[0][6],
+                    base_u32[0][7],
+                    base_u32[1][0],
+                    base_u32[1][1],
+                    base_u32[1][2],
+                    base_u32[1][3],
+                    base_u32[1][4],
+                    base_u32[1][5],
+                    base_u32[1][6],
+                    base_u32[1][7],
+                    base_u32[2][0],
+                    base_u32[2][1],
+                    base_u32[2][2],
+                    base_u32[2][3],
+                    base_u32[2][4],
+                    base_u32[2][5],
+                    base_u32[2][6],
+                    base_u32[2][7],
                 ];
                 if let Ok(glv_table) = vulkan_backend.precomp_table_glv(base_u32_flat, 8) {
                     if !glv_table.is_empty() {
@@ -596,8 +638,10 @@ impl ParityFramework {
             let step = i as u32 * 678;
 
             // CPU reference
-            let tame_bucket = crate::kangaroo::generator::select_bucket(&point, &distance, seed, step, true);
-            let wild_bucket = crate::kangaroo::generator::select_bucket(&point, &distance, seed, step, false);
+            let tame_bucket =
+                crate::kangaroo::generator::select_bucket(&point, &distance, seed, step, true);
+            let wild_bucket =
+                crate::kangaroo::generator::select_bucket(&point, &distance, seed, step, false);
 
             // Verify bucket ranges
             if tame_bucket < 32 && wild_bucket < 32 {
@@ -607,7 +651,8 @@ impl ParityFramework {
             }
 
             // Verify tame determinism
-            let tame_bucket2 = crate::kangaroo::generator::select_bucket(&point, &distance, seed, step, true);
+            let tame_bucket2 =
+                crate::kangaroo::generator::select_bucket(&point, &distance, seed, step, true);
             if tame_bucket == tame_bucket2 {
                 passed += 1;
             } else {

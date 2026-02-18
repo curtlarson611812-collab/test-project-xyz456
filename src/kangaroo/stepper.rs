@@ -3,8 +3,8 @@
 //! Implements the jump operations for tame and wild kangaroos, updating positions
 //! and alpha/beta coefficients according to the distinguished point method.
 
+use crate::math::{BigInt256, Secp256k1};
 use crate::types::{KangarooState, Point};
-use crate::math::{Secp256k1, BigInt256};
 // use crate::SmallOddPrime_Precise_code as sop; // Module not found
 use anyhow::Result;
 
@@ -23,10 +23,10 @@ pub struct CascadeAnalysis {
 pub struct KangarooStepper {
     curve: Secp256k1,
     _jump_table: Vec<Point>, // Precomputed jump points
-    expanded_mode: bool, // Enable expanded jump table mode for bias adaptation
-    dp_bits: usize, // DP bits for negation check
-    step_count: u32, // Global step counter for tame kangaroo bucket selection
-    seed: u32, // Configurable seed for randomization
+    expanded_mode: bool,     // Enable expanded jump table mode for bias adaptation
+    dp_bits: usize,          // DP bits for negation check
+    step_count: u32,         // Global step counter for tame kangaroo bucket selection
+    seed: u32,               // Configurable seed for randomization
 }
 
 impl KangarooStepper {
@@ -81,16 +81,33 @@ impl KangarooStepper {
         if expanded {
             Self::precompute_jumps_expanded(32)
         } else {
-            (0..16).map(|i| curve.mul_constant_time(&BigInt256::from_u64(i as u64 + 1), &curve.g).unwrap()).collect()
+            (0..16)
+                .map(|i| {
+                    curve
+                        .mul_constant_time(&BigInt256::from_u64(i as u64 + 1), &curve.g)
+                        .unwrap()
+                })
+                .collect()
         }
     }
 
     pub fn precompute_jumps_expanded(size: usize) -> Vec<Point> {
         let curve = Secp256k1::new();
-        (0..size).map(|i| curve.mul_constant_time(&BigInt256::from_u64(i as u64 + 1), &curve.g).unwrap()).collect()
+        (0..size)
+            .map(|i| {
+                curve
+                    .mul_constant_time(&BigInt256::from_u64(i as u64 + 1), &curve.g)
+                    .unwrap()
+            })
+            .collect()
     }
 
-    pub fn step_kangaroo_with_bias(&self, kangaroo: &KangarooState, target: Option<&Point>, bias_mod: u64) -> KangarooState {
+    pub fn step_kangaroo_with_bias(
+        &self,
+        kangaroo: &KangarooState,
+        target: Option<&Point>,
+        bias_mod: u64,
+    ) -> KangarooState {
         let bucket = self.select_sop_bucket(kangaroo, target, bias_mod);
 
         // Choose jump strategy: simple (k_i = d_i mod N) vs cascade
@@ -101,18 +118,30 @@ impl KangarooStepper {
         };
 
         let (new_position, new_distance, alpha_update, beta_update) = if kangaroo.is_tame {
-            let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), &self.curve.g).unwrap();
+            let jump_point = self
+                .curve
+                .mul_constant_time(&BigInt256::from_u64(jump_d), &self.curve.g)
+                .unwrap();
             let new_pos = self.curve.add(&kangaroo.position, &jump_point);
             let new_dist = kangaroo.distance.clone() + BigInt256::from_u64(jump_d);
             (new_pos, new_dist, [jump_d as u64, 0, 0, 0], [0, 0, 0, 0])
         } else {
             if let Some(t) = target {
-                let jump_point = self.curve.mul_constant_time(&BigInt256::from_u64(jump_d), t).unwrap();
+                let jump_point = self
+                    .curve
+                    .mul_constant_time(&BigInt256::from_u64(jump_d), t)
+                    .unwrap();
                 let new_pos = self.curve.add(&kangaroo.position, &jump_point);
-                let new_dist = kangaroo.distance.clone() * BigInt256::from_u64(jump_d) % self.curve.n.clone();
+                let new_dist =
+                    kangaroo.distance.clone() * BigInt256::from_u64(jump_d) % self.curve.n.clone();
                 (new_pos, new_dist, [0, 0, 0, 0], [jump_d as u64, 0, 0, 0])
             } else {
-                (kangaroo.position.clone(), kangaroo.distance.clone(), [0;4], [0;4])
+                (
+                    kangaroo.position.clone(),
+                    kangaroo.distance.clone(),
+                    [0; 4],
+                    [0; 4],
+                )
             }
         };
 
@@ -139,9 +168,9 @@ impl KangarooStepper {
     fn compute_cascade_jump(&self, kangaroo: &KangarooState, bucket: u32) -> u64 {
         // Prime sequences for different jitter patterns (prevents deterministic overshooting)
         const CASCADE_PRIMES: [[u64; 8]; 4] = [
-            [3, 5, 7, 11, 13, 17, 19, 23],     // Conservative cascade
-            [5, 11, 23, 47, 97, 197, 397, 797], // Moderate cascade
-            [7, 19, 53, 149, 419, 1171, 3271, 9157], // Aggressive cascade
+            [3, 5, 7, 11, 13, 17, 19, 23],                // Conservative cascade
+            [5, 11, 23, 47, 97, 197, 397, 797],           // Moderate cascade
+            [7, 19, 53, 149, 419, 1171, 3271, 9157],      // Aggressive cascade
             [11, 31, 101, 331, 1087, 3571, 11719, 38431], // Very aggressive
         ];
 
@@ -172,8 +201,9 @@ impl KangarooStepper {
 
         // Modulo reduction to prevent overflow while maintaining distribution
         // Use secp256k1 group order for mathematically sound reduction
-        let modulus = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
-            .expect("Invalid secp256k1 modulus");
+        let modulus =
+            BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
+                .expect("Invalid secp256k1 modulus");
         let cascade_big = BigInt256::from_u64(cascade_jump as u64); // Approximate for now
         let reduced_jump = (cascade_big % modulus).to_u64();
 
@@ -195,7 +225,10 @@ impl KangarooStepper {
     /// private key k_i is simply the accumulated distance d_i modulo N
     fn compute_simple_jump(&self, kangaroo: &KangarooState, bucket: u32) -> u64 {
         // Use prime from bucket selection (maintains some variation)
-        let primes = [3u64, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137];
+        let primes = [
+            3u64, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83,
+            89, 97, 101, 103, 107, 109, 113, 127, 131, 137,
+        ];
         let base_jump = primes[(bucket as usize).min(primes.len() - 1)];
 
         // Add step-based progression (ensures forward movement)
@@ -211,7 +244,12 @@ impl KangarooStepper {
 
     // ... keep your other methods (select_sop_bucket, update_coefficient, etc.)
 
-    pub fn select_sop_bucket(&self, kangaroo: &KangarooState, _target: Option<&Point>, _bias_mod: u64) -> u32 {
+    pub fn select_sop_bucket(
+        &self,
+        kangaroo: &KangarooState,
+        _target: Option<&Point>,
+        _bias_mod: u64,
+    ) -> u32 {
         if kangaroo.is_tame {
             self.step_count % 32
         } else {
@@ -224,7 +262,12 @@ impl KangarooStepper {
         }
     }
 
-    fn update_coefficient(&self, current: &[u64; 4], update: &[u64; 4], _is_alpha: bool) -> [u64; 4] {
+    fn update_coefficient(
+        &self,
+        current: &[u64; 4],
+        update: &[u64; 4],
+        _is_alpha: bool,
+    ) -> [u64; 4] {
         let mut result = *current;
         for i in 0..4 {
             result[i] = result[i].wrapping_add(update[i]);
@@ -246,8 +289,13 @@ impl KangarooStepper {
     }
 
     /// Step a batch of kangaroos
-    pub fn step_batch(&self, kangaroos: &[KangarooState], target: Option<&Point>) -> Result<Vec<KangarooState>> {
-        kangaroos.iter()
+    pub fn step_batch(
+        &self,
+        kangaroos: &[KangarooState],
+        target: Option<&Point>,
+    ) -> Result<Vec<KangarooState>> {
+        kangaroos
+            .iter()
             .map(|k| Ok(self.step_kangaroo_with_bias(k, target, 1u64)))
             .collect()
     }

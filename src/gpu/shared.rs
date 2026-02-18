@@ -3,10 +3,9 @@
 //! Provides synchronized memory access between CUDA and Vulkan backends
 //! to prevent drift in long-running computations through concurrent execution
 
-
+use anyhow::Result;
 #[cfg(feature = "wgpu")]
 use wgpu;
-use anyhow::Result;
 
 /// Shared buffer for cross-API memory access
 /// Provides synchronized host memory accessible by both CUDA and Vulkan

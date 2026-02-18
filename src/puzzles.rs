@@ -5,16 +5,22 @@
 
 use crate::math::BigInt256;
 use crate::types::Point;
+use anyhow::{anyhow, Result};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use log::{warn, info};
 use std::fs;
 use std::path::Path;
-use anyhow::{Result, anyhow};
 
 /// Debug helper: Analyze hex string character codes for invisible characters
 #[allow(dead_code)]
 fn debug_hex_string(hex: &str, label: &str, puzzle_n: u32) {
-    println!("🔍 Debug {} for puzzle {} (len {}): {:?}", label, puzzle_n, hex.len(), hex.as_bytes());
+    println!(
+        "🔍 Debug {} for puzzle {} (len {}): {:?}",
+        label,
+        puzzle_n,
+        hex.len(),
+        hex.as_bytes()
+    );
     let mut invalid_chars = Vec::new();
 
     for (i, &byte) in hex.as_bytes().iter().enumerate() {
@@ -29,17 +35,37 @@ fn debug_hex_string(hex: &str, label: &str, puzzle_n: u32) {
 
         if !is_valid_hex {
             invalid_chars.push((i, byte, c));
-            println!("❌ INVALID: Byte {}: {} code={:02x} ({})", i, printable, code, if is_valid_hex { "valid" } else { "INVALID" });
+            println!(
+                "❌ INVALID: Byte {}: {} code={:02x} ({})",
+                i,
+                printable,
+                code,
+                if is_valid_hex { "valid" } else { "INVALID" }
+            );
         } else if code < 32 || code > 126 {
             // Non-printable ASCII characters (but still valid hex)
-            println!("⚠️  Non-printable: Byte {}: {} code={:02x} (valid hex but non-printable)", i, printable, code);
+            println!(
+                "⚠️  Non-printable: Byte {}: {} code={:02x} (valid hex but non-printable)",
+                i, printable, code
+            );
         }
     }
 
     if !invalid_chars.is_empty() {
-        println!("🚨 Found {} invalid characters in {} for puzzle {}", invalid_chars.len(), label, puzzle_n);
+        println!(
+            "🚨 Found {} invalid characters in {} for puzzle {}",
+            invalid_chars.len(),
+            label,
+            puzzle_n
+        );
         for (pos, byte, c) in invalid_chars {
-            println!("   Position {}: byte={:02x}, char='{}', code={}", pos, byte, c.escape_default(), byte as u32);
+            println!(
+                "   Position {}: byte={:02x}, char='{}', code={}",
+                pos,
+                byte,
+                c.escape_default(),
+                byte as u32
+            );
         }
     } else {
         println!("✅ All characters in {} are valid hex digits", label);
@@ -55,7 +81,7 @@ fn calculate_fallback_ranges(n: u32) -> (BigInt256, BigInt256) {
 
     // Calculate 2^(n-1)
     let mut min_val = BigInt256::one();
-    for _ in 0..(n-1) {
+    for _ in 0..(n - 1) {
         min_val = min_val.clone() + min_val; // Double for 2^(n-1)
     }
 
@@ -66,7 +92,12 @@ fn calculate_fallback_ranges(n: u32) -> (BigInt256, BigInt256) {
     }
     max_val = max_val - BigInt256::one(); // Subtract 1 for 2^n - 1
 
-    info!("Calculated fallback ranges for puzzle {}: min={}, max={}", n, min_val.to_hex(), max_val.to_hex());
+    info!(
+        "Calculated fallback ranges for puzzle {}: min={}, max={}",
+        n,
+        min_val.to_hex(),
+        max_val.to_hex()
+    );
     (min_val, max_val)
 }
 
@@ -98,10 +129,15 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
     let contents = fs::read_to_string(file_path)?;
 
     // Check for non-ASCII characters that could cause parsing issues
-    let contents_ascii = contents.chars().filter(|&c| c.is_ascii()).collect::<String>();
+    let contents_ascii = contents
+        .chars()
+        .filter(|&c| c.is_ascii())
+        .collect::<String>();
     if contents.len() != contents_ascii.len() {
-        warn!("Warning: puzzles.txt contains {} non-ASCII characters. This may cause parsing issues.",
-              contents.len() - contents_ascii.len());
+        warn!(
+            "Warning: puzzles.txt contains {} non-ASCII characters. This may cause parsing issues.",
+            contents.len() - contents_ascii.len()
+        );
         // Continue with ASCII-only content to be safe
         let _contents = contents_ascii;
     }
@@ -116,14 +152,23 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
 
         let parts: Vec<&str> = line.split('|').collect();
         if parts.len() < 9 {
-            warn!("Skipping invalid puzzle line {}: expected 9 fields, got {}", line_num + 1, parts.len());
+            warn!(
+                "Skipping invalid puzzle line {}: expected 9 fields, got {}",
+                line_num + 1,
+                parts.len()
+            );
             continue;
         }
 
         let n: u32 = match parts[0].trim().parse() {
             Ok(v) => v,
             Err(e) => {
-                warn!("Invalid n '{}' in line {}: {}, skipping", parts[0], line_num + 1, e);
+                warn!(
+                    "Invalid n '{}' in line {}: {}, skipping",
+                    parts[0],
+                    line_num + 1,
+                    e
+                );
                 continue;
             }
         };
@@ -132,25 +177,35 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
             "UNSOLVED" => PuzzleStatus::Unsolved,
             "REVEALED" => PuzzleStatus::Revealed,
             _ => {
-                warn!("Unknown status '{}' in line {}, skipping", parts[1], line_num + 1);
+                warn!(
+                    "Unknown status '{}' in line {}, skipping",
+                    parts[1],
+                    line_num + 1
+                );
                 continue;
             }
         };
         let btc_reward: f64 = match parts[2].trim().parse() {
             Ok(v) => v,
             Err(e) => {
-                warn!("Invalid btc_reward '{}' in line {}: {}, skipping", parts[2], line_num + 1, e);
+                warn!(
+                    "Invalid btc_reward '{}' in line {}: {}, skipping",
+                    parts[2],
+                    line_num + 1,
+                    e
+                );
                 continue;
             }
         };
         // For revealed puzzles, pub key is in field 3, for solved it's in field 4
-        let pub_key_hex = if status == PuzzleStatus::Revealed && !parts[3].trim().contains("UNKNOWN") {
-            parts[3].trim().to_string()
-        } else if status == PuzzleStatus::Solved {
-            parts[3].trim().to_string()
-        } else {
-            "".to_string() // Unknown for unsolved
-        };
+        let pub_key_hex =
+            if status == PuzzleStatus::Revealed && !parts[3].trim().contains("UNKNOWN") {
+                parts[3].trim().to_string()
+            } else if status == PuzzleStatus::Solved {
+                parts[3].trim().to_string()
+            } else {
+                "".to_string() // Unknown for unsolved
+            };
         let privkey_hex = if status == PuzzleStatus::Solved && parts.len() > 4 {
             if parts[4].trim().is_empty() || parts[4].trim().contains("UNKNOWN") {
                 None
@@ -160,7 +215,11 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         } else {
             None
         };
-        let target_address = if parts.len() > 5 { parts[5].trim().to_string() } else { "".to_string() };
+        let target_address = if parts.len() > 5 {
+            parts[5].trim().to_string()
+        } else {
+            "".to_string()
+        };
         // Parse ranges - for puzzles, we typically have range_max, and range_min = 2^(n-1)
         let search_space_bits: u32 = n;
         let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
@@ -174,7 +233,7 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
                 "1"
             } else {
                 let mut min_val = BigInt256::one();
-                for _ in 0..(n-1) {
+                for _ in 0..(n - 1) {
                     min_val = min_val.clone() + min_val; // Double
                 }
                 &min_val.to_hex()
@@ -197,7 +256,10 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
         // Note: Disabled to focus on DP and collision debugging
 
         // Parse ranges with comprehensive fallback for unsolved puzzles
-        let (range_min, range_max) = match (BigInt256::from_hex(range_min_hex), BigInt256::from_hex(range_max_hex)) {
+        let (range_min, range_max) = match (
+            BigInt256::from_hex(range_min_hex),
+            BigInt256::from_hex(range_max_hex),
+        ) {
             (Ok(parsed_min), Ok(parsed_max)) => {
                 // Validate ranges make sense (max > min, both > 0)
                 if parsed_max <= parsed_min || parsed_min.is_zero() {
@@ -212,11 +274,17 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
                 calculate_fallback_ranges(n)
             }
             (Err(min_err), Ok(_)) => {
-                warn!("Puzzle {}: Hex parsing failed for min range ({}), using fallback calculation", n, min_err);
+                warn!(
+                    "Puzzle {}: Hex parsing failed for min range ({}), using fallback calculation",
+                    n, min_err
+                );
                 calculate_fallback_ranges(n)
             }
             (Ok(_), Err(max_err)) => {
-                warn!("Puzzle {}: Hex parsing failed for max range ({}), using fallback calculation", n, max_err);
+                warn!(
+                    "Puzzle {}: Hex parsing failed for max range ({}), using fallback calculation",
+                    n, max_err
+                );
                 calculate_fallback_ranges(n)
             }
         };
@@ -247,19 +315,26 @@ pub fn get_puzzle(n: u32) -> Result<Option<PuzzleEntry>> {
 /// Get all solved puzzles (for testing)
 pub fn get_solved_puzzles() -> Result<Vec<PuzzleEntry>> {
     let puzzles = load_puzzles_from_file()?;
-    Ok(puzzles.into_iter().filter(|p| p.status == PuzzleStatus::Solved).collect())
+    Ok(puzzles
+        .into_iter()
+        .filter(|p| p.status == PuzzleStatus::Solved)
+        .collect())
 }
 
 /// Get all revealed but unsolved puzzles (high priority targets)
 pub fn get_revealed_unsolved_puzzles() -> Result<Vec<PuzzleEntry>> {
     let puzzles = load_puzzles_from_file()?;
-    Ok(puzzles.into_iter().filter(|p| p.status == PuzzleStatus::Revealed).collect())
+    Ok(puzzles
+        .into_iter()
+        .filter(|p| p.status == PuzzleStatus::Revealed)
+        .collect())
 }
 
 /// Calculate total remaining prize pool
 pub fn calculate_remaining_prize_pool() -> Result<f64> {
     let puzzles = load_puzzles_from_file()?;
-    Ok(puzzles.iter()
+    Ok(puzzles
+        .iter()
         .filter(|p| p.status != PuzzleStatus::Solved)
         .map(|p| p.btc_reward)
         .sum())
@@ -268,8 +343,8 @@ pub fn calculate_remaining_prize_pool() -> Result<f64> {
 /// Validate that a puzzle's public key matches its target address
 /// Implements basic Bitcoin address validation using secp256k1 public key to address conversion
 pub fn validate_puzzle_address(puzzle: &PuzzleEntry) -> Result<bool> {
-    use sha2::{Sha256, Digest};
     use ripemd::Ripemd160;
+    use sha2::{Digest, Sha256};
 
     // Convert the puzzle's target public key to compressed format
     let pubkey_hex = puzzle.pub_key_hex.trim_start_matches("0x");
@@ -315,8 +390,10 @@ pub fn validate_puzzle_address(puzzle: &PuzzleEntry) -> Result<bool> {
     let matches = calculated_address == puzzle.target_address;
 
     if !matches {
-        warn!("Puzzle {} address validation failed: expected {}, calculated {}",
-              puzzle.n, puzzle.target_address, calculated_address);
+        warn!(
+            "Puzzle {} address validation failed: expected {}, calculated {}",
+            puzzle.n, puzzle.target_address, calculated_address
+        );
     } else {
         info!("Puzzle {} address validation successful", puzzle.n);
     }
@@ -338,7 +415,7 @@ pub fn get_sequential_puzzle_ranges(start: u32, end: u32) -> Vec<(u32, BigInt256
 
         // Calculate 2^(n-1)
         let mut current_min = BigInt256::one();
-        for _ in 0..(n-1) {
+        for _ in 0..(n - 1) {
             current_min = current_min.clone() + current_min; // Double the value
         }
 
@@ -376,7 +453,10 @@ pub fn validate_parity_puzzles() -> Result<()> {
                     // This would indicate data corruption or implementation error
                 }
             } else {
-                info!("ℹ️  Puzzle #{} is unsolved (expected for parity check)", puzzle_num);
+                info!(
+                    "ℹ️  Puzzle #{} is unsolved (expected for parity check)",
+                    puzzle_num
+                );
                 passed += 1; // Unsolved is acceptable for parity
             }
         } else {
@@ -386,9 +466,15 @@ pub fn validate_parity_puzzles() -> Result<()> {
 
     let success_rate = (passed as f64 / total as f64) * 100.0;
     if success_rate >= 95.0 {
-        info!("🎉 Parity validation PASSED: {}/{} puzzles validated ({:.1}%)", passed, total, success_rate);
+        info!(
+            "🎉 Parity validation PASSED: {}/{} puzzles validated ({:.1}%)",
+            passed, total, success_rate
+        );
     } else {
-        warn!("⚠️  Parity validation issues: {}/{} puzzles validated ({:.1}%)", passed, total, success_rate);
+        warn!(
+            "⚠️  Parity validation issues: {}/{} puzzles validated ({:.1}%)",
+            passed, total, success_rate
+        );
     }
 
     Ok(())
@@ -409,12 +495,18 @@ pub fn run_full_puzzle_integrity_check() -> Result<()> {
 
         // Check BTC reward is reasonable
         if puzzle.btc_reward <= 0.0 || puzzle.btc_reward > 100.0 {
-            issues.push(format!("Puzzle {}: suspicious BTC reward {}", puzzle.n, puzzle.btc_reward));
+            issues.push(format!(
+                "Puzzle {}: suspicious BTC reward {}",
+                puzzle.n, puzzle.btc_reward
+            ));
         }
 
         // Check address format (basic validation)
         if !puzzle.target_address.starts_with('1') && !puzzle.target_address.starts_with('3') {
-            issues.push(format!("Puzzle {}: invalid Bitcoin address format", puzzle.n));
+            issues.push(format!(
+                "Puzzle {}: invalid Bitcoin address format",
+                puzzle.n
+            ));
         }
 
         // For solved puzzles, validate pubkey/address consistency
@@ -426,12 +518,18 @@ pub fn run_full_puzzle_integrity_check() -> Result<()> {
     }
 
     if issues.is_empty() {
-        info!("✅ Puzzle integrity check PASSED: {} puzzles validated", puzzles.len());
+        info!(
+            "✅ Puzzle integrity check PASSED: {} puzzles validated",
+            puzzles.len()
+        );
     } else {
         for issue in &issues {
             warn!("⚠️  Integrity issue: {}", issue);
         }
-        warn!("❌ Puzzle integrity check FAILED: {} issues found", issues.len());
+        warn!(
+            "❌ Puzzle integrity check FAILED: {} issues found",
+            issues.len()
+        );
     }
 
     Ok(())
@@ -443,7 +541,11 @@ pub fn get_puzzle_145_for_solving() -> Result<Option<PuzzleEntry>> {
     if let Some(ref p) = puzzle {
         if p.status == PuzzleStatus::Revealed {
             info!("🎯 Targeting puzzle #145 for solving (revealed, high bias potential)");
-            info!("   Range: {} to {}", p.range_min.to_hex(), p.range_max.to_hex());
+            info!(
+                "   Range: {} to {}",
+                p.range_min.to_hex(),
+                p.range_max.to_hex()
+            );
             info!("   BTC Reward: {} BTC", p.btc_reward);
         }
     }
@@ -545,7 +647,8 @@ if __name__ == "__main__":
 
     print("Testing Puzzle #130 verification...")
     verify_puzzle(priv_hex, pub_hex, target_address)
-"#.to_string()
+"#
+    .to_string()
 }
 
 /// Generate configuration for testing with solved puzzles
@@ -554,21 +657,20 @@ pub fn generate_test_config() -> Result<String> {
     let mut config = String::from("# SpeedBitCrackV3 Test Configuration - Solved Puzzles\n\n");
 
     for puzzle in solved {
-        config.push_str(&format!(
-            "# Puzzle #{}\n",
-            puzzle.n
-        ));
+        config.push_str(&format!("# Puzzle #{}\n", puzzle.n));
         config.push_str(&format!(
             "puzzle_{}_pubkey = \"{}\"\n",
             puzzle.n, puzzle.pub_key_hex
         ));
         config.push_str(&format!(
             "puzzle_{}_range_min = \"{}\"\n",
-            puzzle.n, puzzle.range_min.to_hex()
+            puzzle.n,
+            puzzle.range_min.to_hex()
         ));
         config.push_str(&format!(
             "puzzle_{}_range_max = \"{}\"\n\n",
-            puzzle.n, puzzle.range_max.to_hex()
+            puzzle.n,
+            puzzle.range_max.to_hex()
         ));
     }
 

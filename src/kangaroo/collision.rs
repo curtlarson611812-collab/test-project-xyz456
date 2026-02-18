@@ -1,15 +1,15 @@
-use crate::types::{Solution, KangarooState, Point, DpEntry, Scalar};
-use crate::dp::DpTable;
-use crate::math::{Secp256k1, BigInt256};
 use crate::config::Config;
+use crate::dp::DpTable;
 use crate::math::constants::JUMP_TABLE;
+use crate::math::{BigInt256, Secp256k1};
+use crate::types::{DpEntry, KangarooState, Point, Scalar, Solution};
 use crate::utils::hash;
-use anyhow::{Result, Error};
+use anyhow::{Error, Result};
+use k256::{elliptic_curve::sec1::ToEncodedPoint, ProjectivePoint};
+use log::{debug, info};
 use num_bigint::BigUint;
-use log::{info, debug};
-use std::ops::Add;
 use std::collections::HashMap;
-use k256::{ProjectivePoint, elliptic_curve::sec1::ToEncodedPoint};
+use std::ops::Add;
 
 #[derive(Clone, Debug)]
 pub struct Trap {
@@ -40,7 +40,9 @@ fn hash_to_jump_index(point: &ProjectivePoint) -> usize {
     if let Some(x) = encoded.x() {
         // Use to_vec() instead of deprecated as_slice()
         let x_bytes = x.to_vec();
-        let hash_val = x_bytes.iter().fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
+        let hash_val = x_bytes
+            .iter()
+            .fold(0u32, |acc, &b| acc.wrapping_add(b as u32));
         (hash_val as usize) % JUMP_TABLE.len()
     } else {
         0
@@ -99,9 +101,9 @@ impl CollisionDetector {
     /// Calculate optimal Near-G threshold based on range width and DP bits
     /// Balances brute force cost vs probability of near-G detection
     pub fn optimal_near_g_threshold(range_width: &BigInt256, dp_bits: u32) -> u64 {
-        let prob_based = 1u64 << (dp_bits / 2);           // Balance with probability 2^(-dp_bits/2)
-        let cost_based = range_width.limbs[0] / 1000;     // Cost feasibility: range/1000 (low 64 bits)
-        prob_based.min(cost_based)                         // Take minimum of probability and cost based
+        let prob_based = 1u64 << (dp_bits / 2); // Balance with probability 2^(-dp_bits/2)
+        let cost_based = range_width.limbs[0] / 1000; // Cost feasibility: range/1000 (low 64 bits)
+        prob_based.min(cost_based) // Take minimum of probability and cost based
     }
 
     /// Create new CollisionDetector with configurable near threshold
@@ -144,7 +146,7 @@ impl CollisionDetector {
     pub async fn check_collisions_gpu(
         &self,
         gpu_backend: &dyn crate::gpu::backend::GpuBackend,
-        dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>
+        dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>,
     ) -> Result<Option<Solution>> {
         let dp_table_guard = dp_table.lock().await;
         let entries = dp_table_guard.entries();
@@ -156,7 +158,10 @@ impl CollisionDetector {
         // Group entries by x_hash for potential collisions
         let mut hash_groups = std::collections::HashMap::new();
         for entry in entries.values() {
-            hash_groups.entry(entry.x_hash).or_insert_with(Vec::new).push(entry);
+            hash_groups
+                .entry(entry.x_hash)
+                .or_insert_with(Vec::new)
+                .push(entry);
         }
 
         // Process groups with potential collisions
@@ -166,7 +171,7 @@ impl CollisionDetector {
             // For GPU acceleration, prepare batch collision checking
             // Convert to format suitable for GPU batch operations
             for i in 0..group.len() {
-                for j in (i+1)..group.len() {
+                for j in (i + 1)..group.len() {
                     // Check if points are equal (GPU could batch this)
                     if group[i].point.x == group[j].point.x {
                         collision_candidates.push((group[i].clone(), group[j].clone()));
@@ -196,21 +201,29 @@ impl CollisionDetector {
             let n = self.bigint_to_u32_array(&self.curve.n());
 
             // Use GPU batch collision solving
-            match gpu_backend.batch_solve_collision(alphas_t, alphas_w, betas_t, betas_w, targets, n) {
+            match gpu_backend
+                .batch_solve_collision(alphas_t, alphas_w, betas_t, betas_w, targets, n)
+            {
                 Ok(solutions) => {
                     // Check for valid solutions
                     for i in 0..solutions.len() {
                         if let Some(solution) = &solutions[i] {
-                            if solution.iter().any(|&x| x != 0) { // Non-zero solution found
+                            if solution.iter().any(|&x| x != 0) {
+                                // Non-zero solution found
                                 // Convert [u32; 8] to BigInt256 directly
                                 let mut limbs = [0u64; 4];
                                 for j in 0..4 {
-                                    limbs[j] = (solution[j * 2] as u64) | ((solution[j * 2 + 1] as u64) << 32);
+                                    limbs[j] = (solution[j * 2] as u64)
+                                        | ((solution[j * 2 + 1] as u64) << 32);
                                 }
-                            let solution_big = BigInt256 { limbs };
-                            if let Some(verified_solution) = self.verify_collision_solution(&collision_candidates[i].0, &collision_candidates[i].1, &solution_big) {
-                                return Ok(Some(verified_solution));
-                            }
+                                let solution_big = BigInt256 { limbs };
+                                if let Some(verified_solution) = self.verify_collision_solution(
+                                    &collision_candidates[i].0,
+                                    &collision_candidates[i].1,
+                                    &solution_big,
+                                ) {
+                                    return Ok(Some(verified_solution));
+                                }
                             }
                         }
                     }
@@ -260,7 +273,12 @@ impl CollisionDetector {
     // }
 
     /// Verify collision solution is correct
-    fn verify_collision_solution(&self, entry1: &DpEntry, entry2: &DpEntry, solution: &BigInt256) -> Option<Solution> {
+    fn verify_collision_solution(
+        &self,
+        entry1: &DpEntry,
+        entry2: &DpEntry,
+        solution: &BigInt256,
+    ) -> Option<Solution> {
         // Verify: G * k == pubkey using constant-time equality
         let g = self.curve.g();
         let computed_point = self.curve.mul(solution, g);
@@ -272,7 +290,11 @@ impl CollisionDetector {
         if entry1_match || entry2_match {
             Some(Solution {
                 private_key: solution.clone().to_u64_array(),
-                target_point: if entry1_match { entry1.point.clone() } else { entry2.point.clone() },
+                target_point: if entry1_match {
+                    entry1.point.clone()
+                } else {
+                    entry2.point.clone()
+                },
                 total_ops: BigInt256::zero(),
                 time_seconds: 0.0,
                 verified: true,
@@ -282,21 +304,29 @@ impl CollisionDetector {
         }
     }
 
-    pub async fn check_collisions(&self, dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>) -> Result<CollisionResult> {
+    pub async fn check_collisions(
+        &self,
+        dp_table: &std::sync::Arc<tokio::sync::Mutex<DpTable>>,
+    ) -> Result<CollisionResult> {
         let dp_table_guard = dp_table.lock().await;
         let entries = dp_table_guard.entries();
         let mut hash_groups = std::collections::HashMap::new();
 
         for entry in entries.values() {
-            hash_groups.entry(entry.x_hash).or_insert_with(Vec::new).push(entry);
+            hash_groups
+                .entry(entry.x_hash)
+                .or_insert_with(Vec::new)
+                .push(entry);
         }
 
         // Check for exact collisions first
         for group in hash_groups.values().filter(|g| g.len() > 1) {
             for i in 0..group.len() {
-                for j in (i+1)..group.len() {
+                for j in (i + 1)..group.len() {
                     if group[i].point.x == group[j].point.x {
-                        if let Some(solution) = self.find_collision(&group[i].state, &group[j].state) {
+                        if let Some(solution) =
+                            self.find_collision(&group[i].state, &group[j].state)
+                        {
                             return Ok(CollisionResult::Full(solution));
                         }
                     }
@@ -310,8 +340,12 @@ impl CollisionDetector {
 
         for entry1 in entries.values() {
             for entry2 in entries.values() {
-                if entry1.state.id == entry2.state.id { continue; }
-                if entry1.state.is_tame == entry2.state.is_tame { continue; } // Must be tame vs wild
+                if entry1.state.id == entry2.state.id {
+                    continue;
+                }
+                if entry1.state.is_tame == entry2.state.is_tame {
+                    continue;
+                } // Must be tame vs wild
 
                 // Check DP bit similarity (Hamming distance on low bits)
                 let x1_hash = entry1.x_hash;
@@ -336,16 +370,27 @@ impl CollisionDetector {
                         alpha: entry2.state.alpha,
                     };
 
-                    if let Some(offset) = self.resolve_near_collision(&trap1, &trap2, dp_bit_threshold) {
+                    if let Some(offset) =
+                        self.resolve_near_collision(&trap1, &trap2, dp_bit_threshold)
+                    {
                         // Construct solution from resolved offset
-                        let private_key = [offset.limbs[0], offset.limbs[1], offset.limbs[2], offset.limbs[3]];
-                        let total_ops = entry1.state.distance.clone() + entry2.state.distance.clone();
+                        let private_key = [
+                            offset.limbs[0],
+                            offset.limbs[1],
+                            offset.limbs[2],
+                            offset.limbs[3],
+                        ];
+                        let total_ops =
+                            entry1.state.distance.clone() + entry2.state.distance.clone();
                         let solution = Solution::new(private_key, entry1.point, total_ops, 0.0);
                         return Ok(CollisionResult::Full(solution));
                     }
 
                     // Attempt walk back/forward to find exact collision
-                    if let Some(solution) = self.walk_back_forward_near_collision(&entry1.state, &entry2.state).await? {
+                    if let Some(solution) = self
+                        .walk_back_forward_near_collision(&entry1.state, &entry2.state)
+                        .await?
+                    {
                         return Ok(CollisionResult::Full(solution));
                     }
 
@@ -358,7 +403,13 @@ impl CollisionDetector {
         if near_candidates.is_empty() {
             Ok(CollisionResult::None)
         } else {
-            Ok(CollisionResult::Near(near_candidates.into_iter().map(|(t, w)| vec![t, w]).flatten().collect()))
+            Ok(CollisionResult::Near(
+                near_candidates
+                    .into_iter()
+                    .map(|(t, w)| vec![t, w])
+                    .flatten()
+                    .collect(),
+            ))
         }
     }
 
@@ -375,10 +426,14 @@ impl CollisionDetector {
     fn solve_trap_collision(&self, tame: &Trap, wild: &Trap) -> Option<Solution> {
         let n_limbs = self.curve.n.clone().to_u64_array();
         let n = BigUint::from_slice(&[
-            n_limbs[0] as u32, (n_limbs[0] >> 32) as u32,
-            n_limbs[1] as u32, (n_limbs[1] >> 32) as u32,
-            n_limbs[2] as u32, (n_limbs[2] >> 32) as u32,
-            n_limbs[3] as u32, (n_limbs[3] >> 32) as u32,
+            n_limbs[0] as u32,
+            (n_limbs[0] >> 32) as u32,
+            n_limbs[1] as u32,
+            (n_limbs[1] >> 32) as u32,
+            n_limbs[2] as u32,
+            (n_limbs[2] >> 32) as u32,
+            n_limbs[3] as u32,
+            (n_limbs[3] >> 32) as u32,
         ]);
 
         let priv_big = if tame.dist >= wild.dist {
@@ -394,13 +449,19 @@ impl CollisionDetector {
 
         let solution = Solution::new(
             priv_array,
-            Point { x: tame.x, y: [0; 4], z: [1; 4] },
+            Point {
+                x: tame.x,
+                y: [0; 4],
+                z: [1; 4],
+            },
             BigInt256::from_u64(1), // Placeholder for total operations
             0.0,
         );
 
         // Verify solution
-        let computed_point = self.curve.mul(&BigInt256::from_u64_array(priv_array), &self.curve.g);
+        let computed_point = self
+            .curve
+            .mul(&BigInt256::from_u64_array(priv_array), &self.curve.g);
         if computed_point.x == self.target.x && computed_point.y == self.target.y {
             Some(solution)
         } else {
@@ -436,20 +497,23 @@ impl CollisionDetector {
     /// Check for near collisions (partial DP matches) - legacy method for KangarooState
     pub fn check_near_collisions(&self, kangaroos: &[KangarooState]) -> Vec<KangarooState> {
         // Convert KangarooState to Trap format for consistency
-        let traps: Vec<Trap> = kangaroos.iter().map(|k| {
-            Trap {
-                x: k.position.x, // Assuming affine x is stored
-                dist: k.distance.to_biguint(),
-                is_tame: k.is_tame,
-                alpha: k.alpha,
-            }
-        }).collect();
+        let traps: Vec<Trap> = kangaroos
+            .iter()
+            .map(|k| {
+                Trap {
+                    x: k.position.x, // Assuming affine x is stored
+                    dist: k.distance.to_biguint(),
+                    is_tame: k.is_tame,
+                    alpha: k.alpha,
+                }
+            })
+            .collect();
 
         // Check for near collisions using distance differences
         let mut near_collisions = Vec::new();
 
         for i in 0..traps.len() {
-            for j in (i+1)..traps.len() {
+            for j in (i + 1)..traps.len() {
                 if traps[i].is_tame != traps[j].is_tame {
                     let dist_diff = if traps[i].dist > traps[j].dist {
                         &traps[i].dist - &traps[j].dist
@@ -461,7 +525,8 @@ impl CollisionDetector {
                         // Check if hybrid BSGS is enabled for near collision solving
                         if self.config.use_hybrid_bsgs {
                             // Try to solve near collision using BSGS
-                            let solution = self.solve_near_collision_with_bsgs(&traps[i], &traps[j]);
+                            let solution =
+                                self.solve_near_collision_with_bsgs(&traps[i], &traps[j]);
                             if let Some(sol) = solution {
                                 // TODO: Handle the solution - perhaps return it or store it
                                 info!("🎯 Near collision solved with BSGS: {:?}", sol.private_key);
@@ -491,7 +556,12 @@ impl CollisionDetector {
     }
 
     /// Perform Baby-Step Giant-Step search for discrete log
-    fn bsgs_search(&self, target: &BigUint, _base_point: &[u64; 4], _target_point: &[u64; 4]) -> Option<Solution> {
+    fn bsgs_search(
+        &self,
+        target: &BigUint,
+        _base_point: &[u64; 4],
+        _target_point: &[u64; 4],
+    ) -> Option<Solution> {
         // Simplified BSGS implementation for near collisions
         // In production, this would use full BSGS algorithm with precomputed tables
         use num_bigint::BigUint;
@@ -513,7 +583,11 @@ impl CollisionDetector {
 
     /// Walk back/forward near collision detection - retrace paths 10k-50k steps on near hits
     /// Implements sacred rule: walk backs/forwards retrace paths on hit
-    pub async fn walk_back_forward_near_collision(&self, tame: &KangarooState, wild: &KangarooState) -> Result<Option<Solution>> {
+    pub async fn walk_back_forward_near_collision(
+        &self,
+        tame: &KangarooState,
+        wild: &KangarooState,
+    ) -> Result<Option<Solution>> {
         info!("🚶 Starting walk back/forward for near collision detection (sacred rule implementation)");
 
         let max_walk_steps = 50000; // 50k steps as per sacred rules
@@ -524,7 +598,8 @@ impl CollisionDetector {
         for step in 0..walk_back_steps {
             // Simplified backward walk: try small negative jumps
             // In practice, this would need proper jump reversal or history tracking
-            for test_jump in 1..=100 {  // Try small backward jumps
+            for test_jump in 1..=100 {
+                // Try small backward jumps
                 let jump_neg = BigInt256::from_u64(test_jump);
                 let _jump_neg_u64 = test_jump;
                 match self.curve.mul_constant_time(&jump_neg, &tame_walk.position) {
@@ -543,7 +618,10 @@ impl CollisionDetector {
 
                         // Check if this backward position matches the wild kangaroo
                         if self.positions_match(&back_pos.position, &wild.position) {
-                            info!("🎯 Walk back found collision at step {} with jump {}", step, test_jump);
+                            info!(
+                                "🎯 Walk back found collision at step {} with jump {}",
+                                step, test_jump
+                            );
                             if let Some(solution) = self.find_collision(&back_pos, wild) {
                                 return Ok(Some(solution));
                             }
@@ -585,7 +663,10 @@ impl CollisionDetector {
 
                         // Check if this forward position matches the tame kangaroo
                         if self.positions_match(&fwd_pos.position, &tame.position) {
-                            info!("🎯 Walk forward found collision at step {} with jump {}", step, test_jump);
+                            info!(
+                                "🎯 Walk forward found collision at step {} with jump {}",
+                                step, test_jump
+                            );
                             if let Some(solution) = self.find_collision(tame, &fwd_pos) {
                                 return Ok(Some(solution));
                             }
@@ -603,7 +684,10 @@ impl CollisionDetector {
             }
         }
 
-        info!("Walk back/forward completed - no exact collision found in {} steps", max_walk_steps + walk_back_steps);
+        info!(
+            "Walk back/forward completed - no exact collision found in {} steps",
+            max_walk_steps + walk_back_steps
+        );
         Ok(None)
     }
 
@@ -615,16 +699,28 @@ impl CollisionDetector {
     }
 
     /// Calculated near collision solve - tries direct k-brute for small diffs
-    pub fn calculated_near_solve(&self, t: &Trap, w: &Trap, _range_width: &BigInt256) -> Option<Solution> {
-        let diff = if t.dist > w.dist { &t.dist - &w.dist } else { &w.dist - &t.dist };
-        if diff > BigUint::from(self.near_threshold) { return None; }
+    pub fn calculated_near_solve(
+        &self,
+        t: &Trap,
+        w: &Trap,
+        _range_width: &BigInt256,
+    ) -> Option<Solution> {
+        let diff = if t.dist > w.dist {
+            &t.dist - &w.dist
+        } else {
+            &w.dist - &t.dist
+        };
+        if diff > BigUint::from(self.near_threshold) {
+            return None;
+        }
 
         info!("Near collision diff={}, attempting calculated solve", diff);
 
         // Near-G optimization (low x limbs)
         if t.x[0] < self.near_g_thresh {
             info!("Near-G subgroup detected, brute k=0..diff");
-            for k in 0..diff.to_u64_digits()[0].min(10000) {  // Limit to prevent excessive computation
+            for k in 0..diff.to_u64_digits()[0].min(10000) {
+                // Limit to prevent excessive computation
                 let k_big = BigInt256::from_u64(k);
                 let computed = self.curve.mul(&k_big, &self.curve.g);
                 if computed.x == t.x {
@@ -635,7 +731,11 @@ impl CollisionDetector {
         }
 
         // Symmetry check P and -P (doubles effective detection probability)
-        let neg_t = self.rho_negation_map(&Point { x: t.x, y: [0; 4], z: [1; 4] });
+        let neg_t = self.rho_negation_map(&Point {
+            x: t.x,
+            y: [0; 4],
+            z: [1; 4],
+        });
         if neg_t.x == w.x {
             info!("Symmetry near collision detected (P/-P match), solving");
             return self.solve_trap_collision(t, w);
@@ -659,7 +759,11 @@ impl CollisionDetector {
         let mut neg = point.clone();
         // For secp256k1, compute -y mod p
         let y_big = BigInt256::from_u64_array(neg.y);
-        let neg_y_big = if y_big.is_zero() { BigInt256::zero() } else { self.curve.p.clone() - y_big };
+        let neg_y_big = if y_big.is_zero() {
+            BigInt256::zero()
+        } else {
+            self.curve.p.clone() - y_big
+        };
         neg.y = neg_y_big.to_u64_array();
         neg
     }
@@ -671,7 +775,12 @@ impl CollisionDetector {
     }
 
     /// Walk forward from collision point (for verification or path reconstruction)
-    pub fn walk_forward(&self, start_point: &Point, target_point: &Point, max_steps: usize) -> Option<Vec<Point>> {
+    pub fn walk_forward(
+        &self,
+        start_point: &Point,
+        target_point: &Point,
+        max_steps: usize,
+    ) -> Option<Vec<Point>> {
         let mut path = Vec::new();
         let current_point = *start_point;
         path.push(current_point);
@@ -698,7 +807,12 @@ impl CollisionDetector {
     }
 
     /// Apply G-Link solving when attractor is found (advanced kangaroo technique)
-    pub fn apply_g_link(&self, _attractor_point: &Point, tame_distance: u64, _target_point: &Point) -> Option<[u64; 4]> {
+    pub fn apply_g_link(
+        &self,
+        _attractor_point: &Point,
+        tame_distance: u64,
+        _target_point: &Point,
+    ) -> Option<[u64; 4]> {
         // G-Link solving: When we find an attractor point (where tame and wild meet),
         // we can solve for keys in a subgroup by computing:
         // k = (distance_from_attractor_to_target) * modular_inverse(step_size) mod subgroup_order
@@ -717,10 +831,14 @@ impl CollisionDetector {
             // For Magic 9, we might have specific subgroup orders
             let n_limbs = self.curve.n.clone().to_u64_array();
             let subgroup_order = BigUint::from_slice(&[
-                n_limbs[0] as u32, (n_limbs[0] >> 32) as u32,
-                n_limbs[1] as u32, (n_limbs[1] >> 32) as u32,
-                n_limbs[2] as u32, (n_limbs[2] >> 32) as u32,
-                n_limbs[3] as u32, (n_limbs[3] >> 32) as u32,
+                n_limbs[0] as u32,
+                (n_limbs[0] >> 32) as u32,
+                n_limbs[1] as u32,
+                (n_limbs[1] >> 32) as u32,
+                n_limbs[2] as u32,
+                (n_limbs[2] >> 32) as u32,
+                n_limbs[3] as u32,
+                (n_limbs[3] >> 32) as u32,
             ]); // Convert u64 limbs to u32 words
 
             if let Some(inv_dist) = self.mod_inverse_big(&tame_dist_big, &subgroup_order) {
@@ -784,16 +902,31 @@ impl CollisionDetector {
 
     /// Detect exact collisions: same x, different type, solve priv = dist_t - dist_w mod n
     pub fn detect_exact_collisions(&self, traps: &[Trap]) -> Option<Solution> {
-        (0..traps.len()).flat_map(|i| ((i + 1)..traps.len()).map(move |j| (i, j)))
+        (0..traps.len())
+            .flat_map(|i| ((i + 1)..traps.len()).map(move |j| (i, j)))
             .find_map(|(i, j)| {
                 if traps[i].x == traps[j].x && traps[i].is_tame != traps[j].is_tame {
-                    let (t, w) = if traps[i].is_tame { (&traps[i], &traps[j]) } else { (&traps[j], &traps[i]) };
+                    let (t, w) = if traps[i].is_tame {
+                        (&traps[i], &traps[j])
+                    } else {
+                        (&traps[j], &traps[i])
+                    };
                     self.solve_trap_collision(t, w)
-                } else { None }
+                } else {
+                    None
+                }
             })
     }
 
-    pub fn walk_back_near_collision(&self, t: &Trap, w: &Trap, jump_table: &[(BigUint, Point)], hash_fn: &impl Fn(&Point) -> usize, range_width: &BigInt256, _biases: &std::collections::HashMap<u32, f64>) -> Option<Solution> {
+    pub fn walk_back_near_collision(
+        &self,
+        t: &Trap,
+        w: &Trap,
+        jump_table: &[(BigUint, Point)],
+        hash_fn: &impl Fn(&Point) -> usize,
+        range_width: &BigInt256,
+        _biases: &std::collections::HashMap<u32, f64>,
+    ) -> Option<Solution> {
         // Try calculated approach first for near collisions
         if let Some(sol) = self.calculated_near_solve(t, w, range_width) {
             return Some(sol);
@@ -802,19 +935,41 @@ impl CollisionDetector {
         info!("Calculated solve failed, falling back to lambda walk back");
 
         // Convert trap x coordinates back to Point for curve operations
-        let mut pos_l = Point { x: t.x, y: [0; 4], z: [1; 4] }; // Assume we have y=0 for affine start
+        let mut pos_l = Point {
+            x: t.x,
+            y: [0; 4],
+            z: [1; 4],
+        }; // Assume we have y=0 for affine start
         let mut dist_l = t.dist.clone();
         let l_tame = t.is_tame;
 
-        let mut pos_s = Point { x: w.x, y: [0; 4], z: [1; 4] };
+        let mut pos_s = Point {
+            x: w.x,
+            y: [0; 4],
+            z: [1; 4],
+        };
         let mut dist_s = w.dist.clone();
 
-        let mut diff = if dist_l >= dist_s { &dist_l - &dist_s } else { &dist_s - &dist_l };
+        let mut diff = if dist_l >= dist_s {
+            &dist_l - &dist_s
+        } else {
+            &dist_s - &dist_l
+        };
 
         // Early return for close distances (legacy check, now redundant but kept for safety)
         if diff < BigUint::from(self.near_threshold) {
-            let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame, alpha: [0; 4] };
-            let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame, alpha: [0; 4] };
+            let trap_l = Trap {
+                x: pos_l.x,
+                dist: dist_l,
+                is_tame: l_tame,
+                alpha: [0; 4],
+            };
+            let trap_s = Trap {
+                x: pos_s.x,
+                dist: dist_s,
+                is_tame: !l_tame,
+                alpha: [0; 4],
+            };
             return self.solve_trap_collision(&trap_l, &trap_s);
         }
 
@@ -826,11 +981,25 @@ impl CollisionDetector {
             let neg_pt = pt.negate(&self.curve);
             pos_l = self.curve.add(&pos_l, &neg_pt);
             dist_l -= size;
-            diff = if dist_l >= dist_s { &dist_l - &dist_s } else { &dist_s - &dist_l };
+            diff = if dist_l >= dist_s {
+                &dist_l - &dist_s
+            } else {
+                &dist_s - &dist_l
+            };
 
             if pos_l.x == pos_s.x {
-                let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame, alpha: [0; 4] };
-                let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame, alpha: [0; 4] };
+                let trap_l = Trap {
+                    x: pos_l.x,
+                    dist: dist_l,
+                    is_tame: l_tame,
+                    alpha: [0; 4],
+                };
+                let trap_s = Trap {
+                    x: pos_s.x,
+                    dist: dist_s,
+                    is_tame: !l_tame,
+                    alpha: [0; 4],
+                };
                 return self.solve_trap_collision(&trap_l, &trap_s);
             }
         }
@@ -838,8 +1007,18 @@ impl CollisionDetector {
         // Fine alternating rewind
         for step in 0..200 {
             if pos_l.x == pos_s.x {
-                let trap_l = Trap { x: pos_l.x, dist: dist_l, is_tame: l_tame, alpha: [0; 4] };
-                let trap_s = Trap { x: pos_s.x, dist: dist_s, is_tame: !l_tame, alpha: [0; 4] };
+                let trap_l = Trap {
+                    x: pos_l.x,
+                    dist: dist_l,
+                    is_tame: l_tame,
+                    alpha: [0; 4],
+                };
+                let trap_s = Trap {
+                    x: pos_s.x,
+                    dist: dist_s,
+                    is_tame: !l_tame,
+                    alpha: [0; 4],
+                };
                 return self.solve_trap_collision(&trap_l, &trap_s);
             }
 
@@ -848,7 +1027,7 @@ impl CollisionDetector {
                 let buck = hash_fn(&aff_l) % jump_table.len();
                 let (size, pt) = &jump_table[buck];
                 let neg_pt = pt.negate(&self.curve);
-            pos_l = self.curve.add(&pos_l, &neg_pt);
+                pos_l = self.curve.add(&pos_l, &neg_pt);
                 dist_l -= size;
             } else {
                 let aff_s = self.curve.to_affine(&pos_s);
@@ -863,24 +1042,56 @@ impl CollisionDetector {
     }
 
     /// Main collision detector: Check exact, then near collisions with calculated first, then walk-back
-    pub fn process_traps(&self, traps: Vec<Trap>, jump_table: Vec<(BigUint, Point)>, hash_fn: impl Fn(&Point) -> usize, range_width: &BigInt256, biases: &std::collections::HashMap<u32, f64>) -> Option<Solution> {
+    pub fn process_traps(
+        &self,
+        traps: Vec<Trap>,
+        jump_table: Vec<(BigUint, Point)>,
+        hash_fn: impl Fn(&Point) -> usize,
+        range_width: &BigInt256,
+        biases: &std::collections::HashMap<u32, f64>,
+    ) -> Option<Solution> {
         self.detect_exact_collisions(&traps).or_else(|| {
-            (0..traps.len()).flat_map(|i| ((i + 1)..traps.len()).map(move |j| (i, j)))
+            (0..traps.len())
+                .flat_map(|i| ((i + 1)..traps.len()).map(move |j| (i, j)))
                 .find_map(|(i, j)| {
                     if traps[i].is_tame != traps[j].is_tame {
-                        let diff = if traps[i].dist > traps[j].dist { &traps[i].dist - &traps[j].dist } else { &traps[j].dist - &traps[i].dist };
+                        let diff = if traps[i].dist > traps[j].dist {
+                            &traps[i].dist - &traps[j].dist
+                        } else {
+                            &traps[j].dist - &traps[i].dist
+                        };
                         if diff < BigUint::from(self.near_threshold) {
-                            let (t, w) = if traps[i].is_tame { (&traps[i], &traps[j]) } else { (&traps[j], &traps[i]) };
-                            self.walk_back_near_collision(t, w, &jump_table, &hash_fn, range_width, biases)
-                        } else { None }
-                    } else { None }
+                            let (t, w) = if traps[i].is_tame {
+                                (&traps[i], &traps[j])
+                            } else {
+                                (&traps[j], &traps[i])
+                            };
+                            self.walk_back_near_collision(
+                                t,
+                                w,
+                                &jump_table,
+                                &hash_fn,
+                                range_width,
+                                biases,
+                            )
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 })
         })
     }
 
     /// Solve collision using SmallOddPrime inversion
-    pub fn solve_collision_with_prime(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
-        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
+    pub fn solve_collision_with_prime(
+        &self,
+        tame: &KangarooState,
+        wild: &KangarooState,
+        wild_index: usize,
+    ) -> Option<BigInt256> {
+        use crate::math::constants::{CURVE_ORDER_BIGINT, PRIME_MULTIPLIERS};
 
         let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
         let prime_u64 = PRIME_MULTIPLIERS[prime_idx];
@@ -894,7 +1105,13 @@ impl CollisionDetector {
     }
 
     /// Solve collision with inversion: k = inv(prime) * (d_tame - d_wild) mod n
-    pub fn solve_collision_inversion(&self, prime: u64, d_tame: BigInt256, d_wild: BigInt256, n: &BigInt256) -> Option<BigInt256> {
+    pub fn solve_collision_inversion(
+        &self,
+        prime: u64,
+        d_tame: BigInt256,
+        d_wild: BigInt256,
+        n: &BigInt256,
+    ) -> Option<BigInt256> {
         use num_bigint::BigUint;
         use num_integer::Integer;
 
@@ -932,8 +1149,13 @@ impl CollisionDetector {
     }
 
     /// Solve collision using prime factorization approach with Euclidean algorithm
-    pub fn solve_collision_with_prime_euclidean(&self, tame: &KangarooState, wild: &KangarooState, wild_index: usize) -> Option<BigInt256> {
-        use crate::math::constants::{PRIME_MULTIPLIERS, CURVE_ORDER_BIGINT};
+    pub fn solve_collision_with_prime_euclidean(
+        &self,
+        tame: &KangarooState,
+        wild: &KangarooState,
+        wild_index: usize,
+    ) -> Option<BigInt256> {
+        use crate::math::constants::{CURVE_ORDER_BIGINT, PRIME_MULTIPLIERS};
 
         let prime_idx = wild_index % PRIME_MULTIPLIERS.len();
         let prime = BigInt256::from_u64(PRIME_MULTIPLIERS[prime_idx]);
@@ -988,7 +1210,8 @@ impl CollisionDetector {
         }
 
         // If small diff, use BSGS for mini-ECDLP
-        if self.config.use_hybrid_bsgs && effective_diff < BigUint::from(self.config.bsgs_threshold) {
+        if self.config.use_hybrid_bsgs && effective_diff < BigUint::from(self.config.bsgs_threshold)
+        {
             return self.bsgs_mini_ecdlp(trap_i, trap_j);
         }
 
@@ -997,7 +1220,8 @@ impl CollisionDetector {
             let prime_scalar = Scalar::new(BigInt256::from_u64_array(trap_i.alpha));
             if let Some(inv_prime) = self.compute_inverse(&prime_scalar.value) {
                 let diff_bigint = BigInt256::from_biguint(&diff);
-                let k_candidate = (inv_prime.clone() * diff_bigint + BigInt256::one()) % self.curve.n.clone();
+                let k_candidate =
+                    (inv_prime.clone() * diff_bigint + BigInt256::one()) % self.curve.n.clone();
                 let computed = self.curve.mul(&k_candidate, &self.curve.g);
                 if computed.x == self.target.x && computed.y == self.target.y {
                     return Some(k_candidate);
@@ -1037,7 +1261,9 @@ impl CollisionDetector {
             if let Some(baby) = baby_table.get(&current.x) {
                 let solution = baby + j * m;
                 // Verify solution
-                let verify_point = self.curve.mul(&BigInt256::from_u64(solution), &self.curve.g);
+                let verify_point = self
+                    .curve
+                    .mul(&BigInt256::from_u64(solution), &self.curve.g);
                 if verify_point.x == self.target.x && verify_point.y == self.target.y {
                     return Some(BigInt256::from_u64(solution));
                 }
@@ -1090,8 +1316,18 @@ mod tests {
         detector = detector.with_target(target);
 
         let traps = vec![
-            Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true, alpha: [0; 4] },
-            Trap { x: [1, 2, 3, 4], dist: BigUint::from(50u64), is_tame: false, alpha: [0; 4] },
+            Trap {
+                x: [1, 2, 3, 4],
+                dist: BigUint::from(100u64),
+                is_tame: true,
+                alpha: [0; 4],
+            },
+            Trap {
+                x: [1, 2, 3, 4],
+                dist: BigUint::from(50u64),
+                is_tame: false,
+                alpha: [0; 4],
+            },
         ];
 
         let solution = detector.detect_exact_collisions(&traps);
@@ -1105,8 +1341,18 @@ mod tests {
     fn test_no_collision() {
         let detector = CollisionDetector::new();
         let traps = vec![
-            Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true, alpha: [0; 4] },
-            Trap { x: [5, 6, 7, 8], dist: BigUint::from(50u64), is_tame: false, alpha: [0; 4] },
+            Trap {
+                x: [1, 2, 3, 4],
+                dist: BigUint::from(100u64),
+                is_tame: true,
+                alpha: [0; 4],
+            },
+            Trap {
+                x: [5, 6, 7, 8],
+                dist: BigUint::from(50u64),
+                is_tame: false,
+                alpha: [0; 4],
+            },
         ];
 
         let solution = detector.detect_exact_collisions(&traps);
@@ -1116,76 +1362,100 @@ mod tests {
     #[test]
     fn test_hash_position() {
         let detector = CollisionDetector::new();
-        let point = Point { x: [1, 2, 3, 4], y: [5, 6, 7, 8], z: [1, 0, 0, 0] };
+        let point = Point {
+            x: [1, 2, 3, 4],
+            y: [5, 6, 7, 8],
+            z: [1, 0, 0, 0],
+        };
         let _hash = detector.hash_position(&point);
         // Just verify it runs
     }
 
-#[test]
-fn test_walk_back_near_collision() {
-    let detector = CollisionDetector::new();
-    let tame_trap = Trap { x: [1, 2, 3, 4], dist: BigUint::from(100u64), is_tame: true, alpha: [0; 4] };
-    let wild_trap = Trap { x: [5, 6, 7, 8], dist: BigUint::from(50u64), is_tame: false, alpha: [0; 4] };
-    let jump_table = vec![];
-    let hash_fn = |p: &Point| p.x[0] as usize;
-    let range_width = BigInt256::from_u64(100000);
+    #[test]
+    fn test_walk_back_near_collision() {
+        let detector = CollisionDetector::new();
+        let tame_trap = Trap {
+            x: [1, 2, 3, 4],
+            dist: BigUint::from(100u64),
+            is_tame: true,
+            alpha: [0; 4],
+        };
+        let wild_trap = Trap {
+            x: [5, 6, 7, 8],
+            dist: BigUint::from(50u64),
+            is_tame: false,
+            alpha: [0; 4],
+        };
+        let jump_table = vec![];
+        let hash_fn = |p: &Point| p.x[0] as usize;
+        let range_width = BigInt256::from_u64(100000);
 
-    // Test that walk_back_near_collision tries calculated first
-    let result = detector.walk_back_near_collision(&tame_trap, &wild_trap, &jump_table, &hash_fn, &range_width, &std::collections::HashMap::new());
-    // Should either solve via calculated approach or fallback gracefully
-    assert!(result.is_some() || result.is_none());
+        // Test that walk_back_near_collision tries calculated first
+        let result = detector.walk_back_near_collision(
+            &tame_trap,
+            &wild_trap,
+            &jump_table,
+            &hash_fn,
+            &range_width,
+            &std::collections::HashMap::new(),
+        );
+        // Should either solve via calculated approach or fallback gracefully
+        assert!(result.is_some() || result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_near_collision() {
+        let config = Config {
+            use_hybrid_bsgs: true,
+            bsgs_threshold: 10000,
+            ..Default::default()
+        };
+        let detector = CollisionDetector::new_with_config(&config).with_target(Point::infinity());
+
+        // Create test traps with small difference
+        let tame_trap = Trap {
+            x: [1, 2, 3, 4],
+            dist: BigUint::from(100u64),
+            is_tame: true,
+            alpha: [0; 4],
+        };
+        let wild_trap = Trap {
+            x: [5, 6, 7, 8],
+            dist: BigUint::from(90u64),
+            is_tame: false,
+            alpha: [2, 0, 0, 0], // Prime 2
+        };
+
+        // Test BSGS path for small diff
+        let result = detector.resolve_near_collision(&tame_trap, &wild_trap, 20);
+        // Should either find a solution or return None gracefully
+        assert!(result.is_some() || result.is_none());
+    }
 }
-
-#[test]
-fn test_resolve_near_collision() {
-    let config = Config {
-        use_hybrid_bsgs: true,
-        bsgs_threshold: 10000,
-        ..Default::default()
-    };
-    let detector = CollisionDetector::new_with_config(&config).with_target(Point::infinity());
-
-    // Create test traps with small difference
-    let tame_trap = Trap {
-        x: [1, 2, 3, 4],
-        dist: BigUint::from(100u64),
-        is_tame: true,
-        alpha: [0; 4],
-    };
-    let wild_trap = Trap {
-        x: [5, 6, 7, 8],
-        dist: BigUint::from(90u64),
-        is_tame: false,
-        alpha: [2, 0, 0, 0], // Prime 2
-    };
-
-    // Test BSGS path for small diff
-    let result = detector.resolve_near_collision(&tame_trap, &wild_trap, 20);
-    // Should either find a solution or return None gracefully
-    assert!(result.is_some() || result.is_none());
-}
-}
-
 
 /// Check if a point is near a distinguished point (within threshold)
 /// Used for early collision detection in kangaroo algorithm
 pub fn check_near_collision(point: &Point, dp_bits: u32, threshold: f64) -> bool {
     // Convert point to affine coordinates (assume z=1 for simplicity)
     // In practice, would need proper affine conversion
-    let x_bytes = point.x.iter().flat_map(|&limb| limb.to_le_bytes()).collect::<Vec<u8>>();
-    
+    let x_bytes = point
+        .x
+        .iter()
+        .flat_map(|&limb| limb.to_le_bytes())
+        .collect::<Vec<u8>>();
+
     // Use fast hash as per project rules for DP computation
     let x_hash = crate::utils::hash::fast_hash(&x_bytes);
-    
+
     // Create DP mask
     let mask = (1u64 << dp_bits) - 1;
     let dp_val = x_hash & mask;
-    
+
     // Near-collision: check if high bits match within threshold
     // e.g., threshold=0.8 means 80% of DP bits must match
     let near_bits = (dp_bits as f64 * threshold) as u32;
     let near_mask = (1u64 << near_bits) - 1;
-    
+
     // Point is near-DP if low near_bits match zero (indicating potential DP)
     (dp_val & near_mask) == 0
 }
@@ -1237,7 +1507,11 @@ pub fn adaptive_timeout(base: u64, dp_found: usize, total: usize) -> u64 {
 /// Security: Zeroize sensitive data after use
 /// Performance: O(1) storage operation
 /// Usefulness: Enables #145 bounty claim with cryptographic proof
-pub fn store_solution(k: BigInt256, _pubkey: &k256::ProjectivePoint, puzzle_num: u32) -> Result<(), Box<dyn std::error::Error>> {
+pub fn store_solution(
+    k: BigInt256,
+    _pubkey: &k256::ProjectivePoint,
+    puzzle_num: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
     use std::fs::OpenOptions;
     use std::io::Write;
 
@@ -1246,13 +1520,22 @@ pub fn store_solution(k: BigInt256, _pubkey: &k256::ProjectivePoint, puzzle_num:
         .append(true)
         .open("found_solutions.txt")?;
 
-    writeln!(file, "PUZZLE #{}: {}", puzzle_num, hex::encode(k.to_bytes_be()))?;
+    writeln!(
+        file,
+        "PUZZLE #{}: {}",
+        puzzle_num,
+        hex::encode(k.to_bytes_be())
+    )?;
     writeln!(file, "PUBLIC KEY: compressed format")?; // Full k256 encoding would be added here
 
     // Verify solution one more time before storage
     if validate_solution(&k, _pubkey) {
         writeln!(file, "VALIDATION: PASSED ✅")?;
-        info!("🎉 Solution stored for puzzle #{}: {}", puzzle_num, hex::encode(&k.to_bytes_be()[..8]));
+        info!(
+            "🎉 Solution stored for puzzle #{}: {}",
+            puzzle_num,
+            hex::encode(&k.to_bytes_be()[..8])
+        );
         Ok(())
     } else {
         writeln!(file, "VALIDATION: FAILED ❌")?;
@@ -1309,10 +1592,10 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
                     // Mathematical: Store (x, distance, tame/wild, alpha/beta) for collision solving
                     // Memory: ~64 bytes per DP entry (scalable to millions)
                     let dp_entry = Trap {
-                        x: x_limbs, // Full 256-bit x-coordinate
+                        x: x_limbs,                 // Full 256-bit x-coordinate
                         dist: BigUint::from(steps), // Walk distance for collision solving
-                        is_tame: false, // Wild kangaroo (tame would start from G)
-                        alpha: [0; 4], // Will track GLV decomposition scalars
+                        is_tame: false,             // Wild kangaroo (tame would start from G)
+                        alpha: [0; 4],              // Will track GLV decomposition scalars
                     };
                     let _ = tx_clone.send(dp_entry);
                 }
@@ -1350,50 +1633,53 @@ pub fn vow_parallel_rho(pubkey: &ProjectivePoint, m: usize, theta: f64) -> Scala
         return Scalar::from_u64(0);
     }
 
-/// Production-ready walk-back path reconstruction from collision point
-/// Mathematical derivation: Backward iteration P_{i-1} = P_i - J_{hash(P_i)}
-/// Security: Constant-time operations prevent timing analysis of paths
-/// Performance: O(path_length) reconstruction, typically fast for collision resolution
-/// Correctness: Derives from group law associativity and inverse operations
-#[allow(dead_code)]
-pub fn walk_back(collision: &Point, steps: u64, _jump_table_neg: &[ProjectivePoint]) -> Result<Vec<Point>, Error> {
-    let mut path = vec![];
-    let current = *collision;
-    let mut dist = BigInt256::from_u64(steps);
-    for _ in 0..steps {
-        let idx = (current.x[0] as usize) % JUMP_TABLE.len(); // Simple hash based on x coordinate
-        // Simplified walk-back - just add points to path for now
-        path.push(current.clone());
-        dist = dist.saturating_sub(1u64 << (idx % 64));
-        if dist.is_zero() {
-            break;
-        }
-    }
-    Ok(path)
-}
-
-/// Trigger walk-back on near-collision detection for enhanced resolution
-/// Mathematical basis: Near-collisions may resolve to full collisions with path reconstruction
-/// Performance: O(near_threshold) walk-back attempts
-/// Usefulness: Increases collision detection success rate by ~15-25%
-#[allow(dead_code)]
-pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
-    // Attempt walk-back to find actual collision
-    match walk_back(near_point, steps, &[]) {
-        Ok(path) => {
-            // Check if reconstructed path leads to a valid collision
-            // This is a simplified check - in practice would verify against DP table
-            if path.len() > steps as usize / 2 {
-                Some(*near_point) // Return the near-collision as potential solution
-            } else {
-                None
+    /// Production-ready walk-back path reconstruction from collision point
+    /// Mathematical derivation: Backward iteration P_{i-1} = P_i - J_{hash(P_i)}
+    /// Security: Constant-time operations prevent timing analysis of paths
+    /// Performance: O(path_length) reconstruction, typically fast for collision resolution
+    /// Correctness: Derives from group law associativity and inverse operations
+    #[allow(dead_code)]
+    pub fn walk_back(
+        collision: &Point,
+        steps: u64,
+        _jump_table_neg: &[ProjectivePoint],
+    ) -> Result<Vec<Point>, Error> {
+        let mut path = vec![];
+        let current = *collision;
+        let mut dist = BigInt256::from_u64(steps);
+        for _ in 0..steps {
+            let idx = (current.x[0] as usize) % JUMP_TABLE.len(); // Simple hash based on x coordinate
+                                                                  // Simplified walk-back - just add points to path for now
+            path.push(current.clone());
+            dist = dist.saturating_sub(1u64 << (idx % 64));
+            if dist.is_zero() {
+                break;
             }
         }
-        Err(_) => None,
+        Ok(path)
+    }
+
+    /// Trigger walk-back on near-collision detection for enhanced resolution
+    /// Mathematical basis: Near-collisions may resolve to full collisions with path reconstruction
+    /// Performance: O(near_threshold) walk-back attempts
+    /// Usefulness: Increases collision detection success rate by ~15-25%
+    #[allow(dead_code)]
+    pub fn trigger_walk_back(near_point: &Point, steps: u64) -> Option<Point> {
+        // Attempt walk-back to find actual collision
+        match walk_back(near_point, steps, &[]) {
+            Ok(path) => {
+                // Check if reconstructed path leads to a valid collision
+                // This is a simplified check - in practice would verify against DP table
+                if path.len() > steps as usize / 2 {
+                    Some(*near_point) // Return the near-collision as potential solution
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        }
     }
 }
-}
-
 
 /// Placeholder Fermat ECDLP factoring difference
 pub fn fermat_ecdlp_diff(p: &BigInt256, q: &BigInt256) -> k256::Scalar {

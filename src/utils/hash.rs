@@ -136,7 +136,7 @@ pub fn blake3_hash_dp_cluster(x_high_bits: u64, y_high_bits: u64) -> u32 {
 
 /// Hash for attractor detection (Blake3 for consistency)
 pub fn attractor_hash(point_x: &[u64; 4], point_y: &[u64; 4]) -> u64 {
-    blake3_hash_point(point_x, point_y)  // Use Blake3 for consistency
+    blake3_hash_point(point_x, point_y) // Use Blake3 for consistency
 }
 
 // Chunk: DP Hash (utils/hash.rs)

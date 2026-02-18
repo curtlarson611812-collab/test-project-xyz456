@@ -1,17 +1,17 @@
 #[cfg(test)]
 mod tests {
-    use crate::config::{Config, BiasMode};
+    use crate::config::{BiasMode, Config};
     use crate::kangaroo::collision::Trap;
-    use crate::math::BigInt256;
-    use crate::kangaroo::CollisionDetector;
-    use crate::SmallOddPrime_Precise_code as sop;
-    use crate::math::constants::CURVE_ORDER_BIGINT;
-    use crate::kangaroo::generator::{generate_wild_herds, generate_tame_herds};
-    use crate::kangaroo::SearchConfig;
-    use crate::types::KangarooState;
-    use crate::math::Secp256k1;
     use crate::kangaroo::generator::select_bucket;
+    use crate::kangaroo::generator::{generate_tame_herds, generate_wild_herds};
     use crate::kangaroo::stepper::KangarooStepper;
+    use crate::kangaroo::CollisionDetector;
+    use crate::kangaroo::SearchConfig;
+    use crate::math::constants::CURVE_ORDER_BIGINT;
+    use crate::math::BigInt256;
+    use crate::math::Secp256k1;
+    use crate::types::KangarooState;
+    use crate::SmallOddPrime_Precise_code as sop;
 
     #[test]
     fn test_near_g_threshold() {
@@ -36,8 +36,8 @@ mod tests {
         };
 
         let _range_width = BigInt256::from_u64(1 << 20); // Small range for testing
-        // This should trigger near-G brute force logic
-        // (We can't easily test the full collision solve without mocking)
+                                                         // This should trigger near-G brute force logic
+                                                         // (We can't easily test the full collision solve without mocking)
     }
 
     #[test]
@@ -56,7 +56,7 @@ mod tests {
         config.dp_bits = 20;
         config.herd_size = 1000; // Set required field
         config.jump_mean = 1000; // Set required field
-        // Set valid bias mode for gold_bias_combo (which defaults to false now)
+                                 // Set valid bias mode for gold_bias_combo (which defaults to false now)
         config.bias_mode = BiasMode::Magic9;
         config.gold_bias_combo = true;
 
@@ -72,8 +72,8 @@ mod tests {
     #[test]
     fn test_prime_multipliers() {
         assert_eq!(sop::PRIME_MULTIPLIERS.len(), 32);
-        assert_eq!(sop::PRIME_MULTIPLIERS[0], 179);  // First sacred prime
-        assert_eq!(sop::PRIME_MULTIPLIERS[31], 1583);  // Last sacred prime
+        assert_eq!(sop::PRIME_MULTIPLIERS[0], 179); // First sacred prime
+        assert_eq!(sop::PRIME_MULTIPLIERS[31], 1583); // Last sacred prime
 
         // Verify all are >128, odd, and low Hamming weight
         for &prime in &sop::PRIME_MULTIPLIERS {
@@ -85,20 +85,20 @@ mod tests {
     #[test]
     fn test_get_biased_prime() {
         // Test basic cycling - all should return PRIME_MULTIPLIERS[0] = 179 for index 0
-        assert_eq!(sop::get_biased_prime(0, 81), 179);  // (0 % 81) % 32 = 0 -> 179
-        assert_eq!(sop::get_biased_prime(0, 9), 179);   // (0 % 9) % 32 = 0 -> 179
-        assert_eq!(sop::get_biased_prime(0, 27), 179);  // (0 % 27) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(0, 81), 179); // (0 % 81) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(0, 9), 179); // (0 % 9) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(0, 27), 179); // (0 % 27) % 32 = 0 -> 179
 
         // Test cycling
-        assert_eq!(sop::get_biased_prime(32, 81), 179);  // (32 % 81) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(32, 81), 179); // (32 % 81) % 32 = 0 -> 179
 
         // Test different indices
-        assert_eq!(sop::get_biased_prime(1, 81), 257);  // (1 % 81) % 32 = 1 -> 257
+        assert_eq!(sop::get_biased_prime(1, 81), 257); // (1 % 81) % 32 = 1 -> 257
         assert_eq!(sop::get_biased_prime(31, 81), 1583); // (31 % 81) % 32 = 31 -> 1583
 
         // Test edge case: bias_mod = 1
-        assert_eq!(sop::get_biased_prime(0, 1), 179);   // (0 % 1) % 32 = 0 -> 179
-        assert_eq!(sop::get_biased_prime(1, 1), 179);   // (1 % 1) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(0, 1), 179); // (0 % 1) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(1, 1), 179); // (1 % 1) % 32 = 0 -> 179
     }
 
     #[test]
@@ -106,7 +106,12 @@ mod tests {
         // Verify low Hamming weight (fast GPU multiplication)
         for &prime in &sop::PRIME_MULTIPLIERS {
             let hamming = (prime as u64).count_ones();
-            assert!(hamming <= 8, "Prime {} has high Hamming weight: {}", prime, hamming);
+            assert!(
+                hamming <= 8,
+                "Prime {} has high Hamming weight: {}",
+                prime,
+                hamming
+            );
         }
 
         // Verify primes are distinct
@@ -119,12 +124,17 @@ mod tests {
 
     #[test]
     fn test_multiplicative_wild_herds() {
-        let config = SearchConfig { batch_per_target: 3, ..Default::default() };
+        let config = SearchConfig {
+            batch_per_target: 3,
+            ..Default::default()
+        };
         let curve = Secp256k1::new();
         let target = curve.g;
         let herds = generate_wild_herds(&target, &config, "magic9");
         assert_eq!(herds.len(), 3);
-        let expected_first = curve.mul_constant_time(&BigInt256::from_u64(179), &target).unwrap();
+        let expected_first = curve
+            .mul_constant_time(&BigInt256::from_u64(179), &target)
+            .unwrap();
         assert_eq!(herds[0], expected_first);
         for herd in &herds {
             assert!(herd.is_valid(&curve)); // From secp.rs
@@ -133,13 +143,18 @@ mod tests {
 
     #[test]
     fn test_additive_tame_herds() {
-        let config = SearchConfig { batch_per_target: 3, ..Default::default() };
+        let config = SearchConfig {
+            batch_per_target: 3,
+            ..Default::default()
+        };
         let curve = Secp256k1::new();
         let herds = generate_tame_herds(&config, "magic9");
         assert_eq!(herds.len(), 3);
         // Verify accumulation: 179 + 257 + 281 = 717 * G for last
         let expected_sum = 179 + 257 + 281;
-        let expected_last = curve.mul_constant_time(&BigInt256::from_u64(expected_sum), &curve.g).unwrap();
+        let expected_last = curve
+            .mul_constant_time(&BigInt256::from_u64(expected_sum), &curve.g)
+            .unwrap();
         let expected_affine = curve.to_affine(&expected_last);
         let actual_affine = curve.to_affine(&herds[2]);
         assert_eq!(expected_affine.x, actual_affine.x);
@@ -148,7 +163,6 @@ mod tests {
             assert!(herd.is_valid(&curve));
         }
     }
-
 
     // === Phase 5: Integration Testing Stepping and Bucket ===
 
@@ -177,14 +191,14 @@ mod tests {
         // Test tame kangaroo step
         let tame_state = KangarooState::new(
             curve.g.clone(),
-            BigInt256::zero(),   // distance as BigInt256
-            [0u64; 4], // alpha
-            [0u64; 4], // beta
-            true,   // is_tame
-            false,  // is_dp
-            0,      // id
-            0,      // step
-            0,      // kangaroo_type
+            BigInt256::zero(), // distance as BigInt256
+            [0u64; 4],         // alpha
+            [0u64; 4],         // beta
+            true,              // is_tame
+            false,             // is_dp
+            0,                 // id
+            0,                 // step
+            0,                 // kangaroo_type
         );
         let stepper = KangarooStepper::new(false);
         let new_tame_state = stepper.step_kangaroo_with_bias(&tame_state, None, 81);
@@ -196,14 +210,14 @@ mod tests {
 
         let wild_state = KangarooState::new(
             curve.g.clone(),
-            BigInt256::zero(),   // distance as BigInt256
-            [0u64; 4], // alpha
-            [0u64; 4], // beta
-            false,  // is_tame
-            false,  // is_dp
-            1,      // id
-            0,      // step
-            0,      // kangaroo_type
+            BigInt256::zero(), // distance as BigInt256
+            [0u64; 4],         // alpha
+            [0u64; 4],         // beta
+            false,             // is_tame
+            false,             // is_dp
+            1,                 // id
+            0,                 // step
+            0,                 // kangaroo_type
         );
 
         let new_wild_state = stepper.step_kangaroo_with_bias(&wild_state, Some(&curve.g), 81);
@@ -224,7 +238,9 @@ mod tests {
         let d_tame = BigInt256::from_hex("10000000000000000").expect("Invalid hex"); // Large >u64
         let d_wild = BigInt256::from_hex("5000000000000000").expect("Invalid hex");
 
-        let k = detector.solve_collision_inversion(prime, d_tame.clone(), d_wild.clone(), &CURVE_ORDER_BIGINT).expect("Inversion failed");
+        let k = detector
+            .solve_collision_inversion(prime, d_tame.clone(), d_wild.clone(), &CURVE_ORDER_BIGINT)
+            .expect("Inversion failed");
 
         // Verify: k * prime ≡ (d_tame - d_wild) mod n
         // Expected: k = inv(prime) * (d_tame - d_wild) mod n

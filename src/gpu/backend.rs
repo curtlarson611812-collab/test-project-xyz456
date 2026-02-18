@@ -38,7 +38,10 @@ pub fn detect_gpu_backend() -> String {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
         });
-        if !instance.enumerate_adapters(wgpu::Backends::PRIMARY).is_empty() {
+        if !instance
+            .enumerate_adapters(wgpu::Backends::PRIMARY)
+            .is_empty()
+        {
             return "vulkan".to_string();
         }
     }

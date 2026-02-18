@@ -3,17 +3,17 @@
 //! Manages concurrent CUDA/Vulkan execution with shared memory
 //! and drift monitoring for precision-critical computations
 
-use super::shared::SharedBuffer;
-use super::backends::hybrid_backend::HybridBackend;
 use super::backends::backend_trait::GpuBackend;
-use crate::types::{Point, Solution, KangarooState};
-use crate::math::bigint::BigInt256;
-use crate::kangaroo::collision::Trap;
-use crate::math::secp::Secp256k1;
+use super::backends::hybrid_backend::HybridBackend;
+use super::shared::SharedBuffer;
 use crate::config::Config;
-use anyhow::{Result, anyhow};
+use crate::kangaroo::collision::Trap;
+use crate::math::bigint::BigInt256;
+use crate::math::secp::Secp256k1;
+use crate::types::{KangarooState, Point, Solution};
+use anyhow::{anyhow, Result};
+use log::{debug, warn};
 use std::sync::{Arc, Mutex};
-use log::{warn, debug};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -21,8 +21,8 @@ use std::time::{Duration, Instant};
 #[derive(Debug, Clone)]
 pub struct DriftMetrics {
     pub error_rate: f64,
-    pub cuda_throughput: f64,    // ops/sec
-    pub vulkan_throughput: f64,  // ops/sec
+    pub cuda_throughput: f64,   // ops/sec
+    pub vulkan_throughput: f64, // ops/sec
     pub swap_count: u64,
     pub last_swap_time: Instant,
 }
@@ -41,11 +41,11 @@ pub struct FlowControlState {
 /// Flow execution modes
 #[derive(Debug, Clone, PartialEq)]
 pub enum FlowExecutionMode {
-    Sequential,        // One flow at a time
-    Parallel,          // Multiple flows concurrently
-    Pipeline,          // Pipelined execution
-    Adaptive,          // Dynamic mode switching
-    PriorityBased,     // Priority queue execution
+    Sequential,    // One flow at a time
+    Parallel,      // Multiple flows concurrently
+    Pipeline,      // Pipelined execution
+    Adaptive,      // Dynamic mode switching
+    PriorityBased, // Priority queue execution
 }
 
 /// Flow instance tracking
@@ -135,7 +135,7 @@ pub struct HybridGpuManager {
     hybrid_backend: HybridBackend,
     curve: Secp256k1,
     drift_threshold: f64,
-    config: Arc<Config>,  // Full config for bias/bsgs/bloom/gold propagation
+    config: Arc<Config>, // Full config for bias/bsgs/bloom/gold propagation
     metrics: Arc<Mutex<DriftMetrics>>,
     flow_control: Arc<Mutex<FlowControlState>>,
     scheduler: Arc<Mutex<crate::gpu::backends::hybrid_backend::HybridScheduler>>,
@@ -164,7 +164,11 @@ impl HybridGpuManager {
 
     /// Calculate drift error between CPU and GPU implementations
     /// Returns average absolute error in coordinate values (0.0 = perfect match)
-    pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn calculate_drift_error(
+        &self,
+        buffer: &SharedBuffer<Point>,
+        sample_size: usize,
+    ) -> Result<f64, Box<dyn std::error::Error>> {
         if sample_size == 0 {
             return Ok(0.0);
         }
@@ -230,7 +234,11 @@ impl HybridGpuManager {
     }
 
     /// Create new hybrid manager with drift monitoring and config propagation
-    pub async fn new(config: &Config, drift_threshold: f64, _check_interval_secs: u64) -> Result<Self> {
+    pub async fn new(
+        config: &Config,
+        drift_threshold: f64,
+        _check_interval_secs: u64,
+    ) -> Result<Self> {
         let hybrid_backend = HybridBackend::new().await?;
         // Log CUDA version for compatibility (only if CUDA feature enabled)
         #[cfg(feature = "rustacuda")]
@@ -268,7 +276,7 @@ impl HybridGpuManager {
 
         // Initialize advanced scheduler
         let scheduler = Arc::new(Mutex::new(hybrid_backend.create_hybrid_scheduler(
-            crate::gpu::backends::hybrid_backend::SchedulingPolicy::Adaptive
+            crate::gpu::backends::hybrid_backend::SchedulingPolicy::Adaptive,
         )));
 
         Ok(Self {
@@ -295,8 +303,19 @@ impl HybridGpuManager {
     }
 
     /// Submit flow for advanced execution management
-    pub async fn submit_flow(&self, flow_name: &str, priority: FlowPriority, dependencies: Vec<String>) -> Result<String, anyhow::Error> {
-        let flow_id = format!("{}_{}", flow_name, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos());
+    pub async fn submit_flow(
+        &self,
+        flow_name: &str,
+        priority: FlowPriority,
+        dependencies: Vec<String>,
+    ) -> Result<String, anyhow::Error> {
+        let flow_id = format!(
+            "{}_{}",
+            flow_name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        );
 
         let flow_instance = FlowInstance {
             id: flow_id.clone(),
@@ -322,7 +341,9 @@ impl HybridGpuManager {
         };
 
         let mut flow_control = self.flow_control.lock().unwrap();
-        flow_control.active_flows.insert(flow_id.clone(), flow_instance);
+        flow_control
+            .active_flows
+            .insert(flow_id.clone(), flow_instance);
 
         // Update priority queue
         self.update_flow_priorities(&mut flow_control);
@@ -339,7 +360,10 @@ impl HybridGpuManager {
             if executable_flows.is_empty() {
                 // Check if all flows are completed
                 let flow_control = self.flow_control.lock().unwrap();
-                let all_completed = flow_control.active_flows.values().all(|f| f.state == FlowState::Completed);
+                let all_completed = flow_control
+                    .active_flows
+                    .values()
+                    .all(|f| f.state == FlowState::Completed);
                 if all_completed {
                     break;
                 }
@@ -351,9 +375,7 @@ impl HybridGpuManager {
             // Execute flows concurrently respecting resource limits
             let execution_handles = executable_flows.into_iter().map(|flow_id| {
                 let self_clone = self.clone_self();
-                tokio::spawn(async move {
-                    self_clone.execute_single_flow(&flow_id).await
-                })
+                tokio::spawn(async move { self_clone.execute_single_flow(&flow_id).await })
             });
 
             // Wait for all executions to complete
@@ -380,7 +402,9 @@ impl HybridGpuManager {
 
             // Check if all dependencies are satisfied
             let dependencies_satisfied = flow.dependencies.iter().all(|dep_id| {
-                flow_control.active_flows.get(dep_id)
+                flow_control
+                    .active_flows
+                    .get(dep_id)
                     .map(|dep_flow| dep_flow.state == FlowState::Completed)
                     .unwrap_or(false)
             });
@@ -393,8 +417,14 @@ impl HybridGpuManager {
         // Sort by priority (highest first)
         let priorities = &flow_control.flow_priorities;
         executable.sort_by(|a, b| {
-            let a_idx = priorities.iter().position(|id| id == a).unwrap_or(usize::MAX);
-            let b_idx = priorities.iter().position(|id| id == b).unwrap_or(usize::MAX);
+            let a_idx = priorities
+                .iter()
+                .position(|id| id == a)
+                .unwrap_or(usize::MAX);
+            let b_idx = priorities
+                .iter()
+                .position(|id| id == b)
+                .unwrap_or(usize::MAX);
             a_idx.cmp(&b_idx)
         });
 
@@ -464,16 +494,36 @@ impl HybridGpuManager {
             // Initialize with sample data
             for i in 0..num_kangaroos {
                 // Initialize positions with generator point G
-                positions[i][0] = [0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07, 0x029BFCDB, 0x2DCE28D9, 0x59F2815B, 0x16F81798][..8].try_into().unwrap_or([0; 8]);
-                positions[i][1] = [0x483ADA77, 0x26A3C465, 0x5DA4FBFC, 0x0E1108A8, 0xFD17B448, 0xA6855419, 0x9C47D08F, 0xFB10D4B8][..8].try_into().unwrap_or([0; 8]);
-                positions[i][2] = [0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000][..8].try_into().unwrap_or([0; 8]);
+                positions[i][0] = [
+                    0x79BE667E, 0xF9DCBBAC, 0x55A06295, 0xCE870B07, 0x029BFCDB, 0x2DCE28D9,
+                    0x59F2815B, 0x16F81798,
+                ][..8]
+                    .try_into()
+                    .unwrap_or([0; 8]);
+                positions[i][1] = [
+                    0x483ADA77, 0x26A3C465, 0x5DA4FBFC, 0x0E1108A8, 0xFD17B448, 0xA6855419,
+                    0x9C47D08F, 0xFB10D4B8,
+                ][..8]
+                    .try_into()
+                    .unwrap_or([0; 8]);
+                positions[i][2] = [
+                    0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+                    0x00000000, 0x00000000,
+                ][..8]
+                    .try_into()
+                    .unwrap_or([0; 8]);
 
                 // Initialize distances with incrementing values
                 let dist_value = i as u64;
                 distances[i] = [
                     dist_value as u32,
                     (dist_value >> 32) as u32,
-                    0, 0, 0, 0, 0, 0
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
                 ];
             }
 
@@ -481,7 +531,7 @@ impl HybridGpuManager {
             let _work_id = self.hybrid_backend.submit_ooo_work(
                 &mut ooo_queue,
                 crate::gpu::backends::hybrid_backend::HybridOperation::StepBatch(
-                    positions, distances, types
+                    positions, distances, types,
                 ),
                 crate::gpu::backends::hybrid_backend::WorkPriority::High,
                 vec![], // No dependencies
@@ -489,10 +539,17 @@ impl HybridGpuManager {
             );
 
             // Execute the queue
-            self.hybrid_backend.execute_ooo_queue(&mut ooo_queue).await?;
+            self.hybrid_backend
+                .execute_ooo_queue(&mut ooo_queue)
+                .await?;
 
             // Record performance
-            self.record_flow_performance(flow_id, num_kangaroos as u64, std::time::Duration::from_millis(50)).await;
+            self.record_flow_performance(
+                flow_id,
+                num_kangaroos as u64,
+                std::time::Duration::from_millis(50),
+            )
+            .await;
         } else {
             return Err(anyhow::anyhow!("Flow configuration not found: {}", flow_id));
         }
@@ -557,7 +614,8 @@ impl HybridGpuManager {
         log::info!("DP maintenance completed in {:?}", maintenance_duration);
 
         // Record performance for this maintenance operation
-        self.record_flow_performance(flow_id, 1000, maintenance_duration).await;
+        self.record_flow_performance(flow_id, 1000, maintenance_duration)
+            .await;
 
         Ok(())
     }
@@ -608,23 +666,33 @@ impl HybridGpuManager {
         }
 
         let execution_duration = execution_start.elapsed();
-        log::info!("Generic flow {} completed in {:?}", flow_id, execution_duration);
+        log::info!(
+            "Generic flow {} completed in {:?}",
+            flow_id,
+            execution_duration
+        );
 
         // Record performance
-        self.record_flow_performance(flow_id, 100, execution_duration).await;
+        self.record_flow_performance(flow_id, 100, execution_duration)
+            .await;
 
         Ok(())
     }
 
     /// Execute collision solve with redundancy for verification
-    async fn execute_redundant_collision_solve(&self, backends: Vec<String>) -> Result<(), anyhow::Error> {
+    async fn execute_redundant_collision_solve(
+        &self,
+        backends: Vec<String>,
+    ) -> Result<(), anyhow::Error> {
         let mut handles = Vec::new();
 
         for backend in &backends {
             let self_clone = self.clone_self();
             let backend_name = backend.clone();
             let handle = tokio::spawn(async move {
-                self_clone.execute_collision_solve_on_backend(&backend_name).await
+                self_clone
+                    .execute_collision_solve_on_backend(&backend_name)
+                    .await
             });
             handles.push(handle);
         }
@@ -644,7 +712,10 @@ impl HybridGpuManager {
     }
 
     /// Execute collision solve on specific backend
-    async fn execute_collision_solve_on_backend(&self, backend: &str) -> Result<Vec<u8>, anyhow::Error> {
+    async fn execute_collision_solve_on_backend(
+        &self,
+        backend: &str,
+    ) -> Result<Vec<u8>, anyhow::Error> {
         // Backend-specific collision solving
         match backend {
             "cuda" => {
@@ -746,7 +817,9 @@ impl HybridGpuManager {
     async fn should_switch_to_parallel(&self) -> Result<bool, anyhow::Error> {
         // Check if there are multiple high-priority flows waiting
         let flow_control = self.flow_control.lock().unwrap();
-        let waiting_high_priority = flow_control.active_flows.values()
+        let waiting_high_priority = flow_control
+            .active_flows
+            .values()
             .filter(|f| f.state == FlowState::Pending && f.priority <= FlowPriority::High)
             .count();
 
@@ -757,7 +830,9 @@ impl HybridGpuManager {
     async fn should_switch_to_pipeline(&self) -> Result<bool, anyhow::Error> {
         // Check if flows have clear dependencies and sequential patterns
         let flow_control = self.flow_control.lock().unwrap();
-        let flows_with_deps = flow_control.active_flows.values()
+        let flows_with_deps = flow_control
+            .active_flows
+            .values()
             .filter(|f| !f.dependencies.is_empty())
             .count();
 
@@ -765,7 +840,9 @@ impl HybridGpuManager {
     }
 
     /// Create scheduling context for advanced scheduling
-    async fn create_scheduling_context(&self) -> Result<crate::gpu::backends::hybrid_backend::SchedulingContext, anyhow::Error> {
+    async fn create_scheduling_context(
+        &self,
+    ) -> Result<crate::gpu::backends::hybrid_backend::SchedulingContext, anyhow::Error> {
         Ok(crate::gpu::backends::hybrid_backend::SchedulingContext {
             vulkan_load: crate::gpu::backends::hybrid_backend::BackendLoad {
                 backend_name: "vulkan".to_string(),
@@ -787,11 +864,17 @@ impl HybridGpuManager {
     }
 
     /// Record flow performance metrics
-    async fn record_flow_performance(&self, flow_id: &str, operations: u64, duration: std::time::Duration) {
+    async fn record_flow_performance(
+        &self,
+        flow_id: &str,
+        operations: u64,
+        duration: std::time::Duration,
+    ) {
         let mut flow_control = self.flow_control.lock().unwrap();
         if let Some(flow) = flow_control.active_flows.get_mut(flow_id) {
             flow.performance_metrics.operations_completed += operations;
-            flow.performance_metrics.throughput_ops_sec = operations as f64 / duration.as_secs_f64();
+            flow.performance_metrics.throughput_ops_sec =
+                operations as f64 / duration.as_secs_f64();
             flow.performance_metrics.latency_ms = duration.as_millis() as u64;
         }
     }
@@ -831,15 +914,32 @@ impl HybridGpuManager {
     pub fn get_flow_performance_summary(&self) -> FlowPerformanceSummary {
         let flow_control = self.flow_control.lock().unwrap();
         let total_flows = flow_control.active_flows.len();
-        let completed_flows = flow_control.active_flows.values().filter(|f| f.state == FlowState::Completed).count();
-        let failed_flows = flow_control.active_flows.values().filter(|f| f.state == FlowState::Failed).count();
-        let running_flows = flow_control.active_flows.values().filter(|f| f.state == FlowState::Running).count();
+        let completed_flows = flow_control
+            .active_flows
+            .values()
+            .filter(|f| f.state == FlowState::Completed)
+            .count();
+        let failed_flows = flow_control
+            .active_flows
+            .values()
+            .filter(|f| f.state == FlowState::Failed)
+            .count();
+        let running_flows = flow_control
+            .active_flows
+            .values()
+            .filter(|f| f.state == FlowState::Running)
+            .count();
 
-        let avg_throughput = flow_control.active_flows.values()
+        let avg_throughput = flow_control
+            .active_flows
+            .values()
             .map(|f| f.performance_metrics.throughput_ops_sec)
-            .sum::<f64>() / total_flows as f64;
+            .sum::<f64>()
+            / total_flows as f64;
 
-        let total_errors = flow_control.active_flows.values()
+        let total_errors = flow_control
+            .active_flows
+            .values()
             .map(|f| f.performance_metrics.error_count)
             .sum::<u64>();
 
@@ -869,7 +969,9 @@ impl HybridGpuManager {
         let dp_hash = self.hash_dp_point(dp);
         if self.mock_dp_table_contains(dp_hash) {
             // Solve: priv = tame_dist - wild_dist mod order
-            let order = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+            let order = BigInt256::from_hex(
+                "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
+            );
             let diff = if mock_stored_distance > tame_distance {
                 mock_stored_distance - tame_distance
             } else {
@@ -944,12 +1046,15 @@ impl HybridGpuManager {
     //     }
     // }
 
-
     /// Dispatch hybrid operations with CPU/GPU balancing heuristics
     /// RTX 5090: ~90% GPU for EC ops, CPU for validation/low-latency tasks
-    pub async fn dispatch_hybrid_balanced(&self, steps: u64, gpu_load: f64) -> Result<Option<BigInt256>, anyhow::Error> {
+    pub async fn dispatch_hybrid_balanced(
+        &self,
+        steps: u64,
+        gpu_load: f64,
+    ) -> Result<Option<BigInt256>, anyhow::Error> {
         // Heuristic: GPU gets 90% load on RTX 5090 (high parallelism), CPU handles validation
-        let gpu_steps = (steps as f64 * gpu_load.max(0.8).min(0.95)) as u64;  // 80-95% GPU
+        let gpu_steps = (steps as f64 * gpu_load.max(0.8).min(0.95)) as u64; // 80-95% GPU
         let _cpu_steps = steps - gpu_steps;
 
         // Async dispatch: GPU for bulk steps, CPU for collision detection
@@ -959,14 +1064,28 @@ impl HybridGpuManager {
         let cpu_result = async {
             // CPU validation: check attractor rates, bias convergence
             let attractor_rate = self.get_attractor_rate(&vec![Point::from_affine(
-                [0x79BE667E_u64, 0xF9DCBBAC_u64, 0x55A06295_u64, 0xCE870B07_u64],
-                [0x29BFCDB_u64, 0x2DCE28D9_u64, 0x59F2815B_u64, 0x16F81798_u64]
+                [
+                    0x79BE667E_u64,
+                    0xF9DCBBAC_u64,
+                    0x55A06295_u64,
+                    0xCE870B07_u64,
+                ],
+                [
+                    0x29BFCDB_u64,
+                    0x2DCE28D9_u64,
+                    0x59F2815B_u64,
+                    0x16F81798_u64,
+                ],
             )]); // Sample generator points for attractor analysis
             if attractor_rate < 10.0 {
-                log::warn!("Low attractor rate {:.1}%, consider bias adjustment", attractor_rate);
+                log::warn!(
+                    "Low attractor rate {:.1}%, consider bias adjustment",
+                    attractor_rate
+                );
             }
             None
-        }.await;
+        }
+        .await;
 
         // Combine results: GPU takes precedence if successful
         let gpu_key = gpu_result?; // Propagate GPU errors
@@ -985,14 +1104,16 @@ impl HybridGpuManager {
     /// Concise Block: Hybrid Test on Real Pubkey Attractor
     pub fn test_real_pubkey_attractor(&self, pubkey: &Point) -> Result<bool> {
         // Run prime mul test on pubkey
-        if !self.dispatch_prime_mul_test(pubkey)? { return Ok(false); } // From prior block
-        // Compute proxy on CPU, validate
+        if !self.dispatch_prime_mul_test(pubkey)? {
+            return Ok(false);
+        } // From prior block
+          // Compute proxy on CPU, validate
         use crate::utils::pubkey_loader::is_attractor_proxy;
         Ok(is_attractor_proxy(&BigInt256::from_u64_array(pubkey.x)))
     }
 
     /// Concise Block: Dispatch CUDA Mod9 Check
-    pub fn dispatch_mod9_check(&self, x_limbs: &Vec<[u64;4]>) -> Result<Vec<bool>> {
+    pub fn dispatch_mod9_check(&self, x_limbs: &Vec<[u64; 4]>) -> Result<Vec<bool>> {
         // Note: In real implementation, would use CUDA buffers
         // For now, simulate with CPU computation
         let mut results = Vec::with_capacity(x_limbs.len());
@@ -1008,7 +1129,11 @@ impl HybridGpuManager {
 
     /// GPU-accelerated bias check for Magic 9 sniper mode
     /// Checks if scalars pass mod9, mod27, mod81, and pos filters
-    pub fn dispatch_magic9_bias_check(&self, scalars: &Vec<[u64;4]>, biases: (u8, u8, u8, bool)) -> Result<Vec<bool>> {
+    pub fn dispatch_magic9_bias_check(
+        &self,
+        scalars: &Vec<[u64; 4]>,
+        biases: (u8, u8, u8, bool),
+    ) -> Result<Vec<bool>> {
         // For now, implement CPU version - would integrate CUDA common_bias_attractor_check kernel
         let mut results = Vec::with_capacity(scalars.len());
 
@@ -1017,7 +1142,9 @@ impl HybridGpuManager {
             let scalar = BigInt256::from_u64_array(*limbs);
 
             // Apply bias filters using the kangaroo generator functions
-            let passes = crate::kangaroo::generator::apply_biases(&scalar, biases.0, biases.1, biases.2, biases.3);
+            let passes = crate::kangaroo::generator::apply_biases(
+                &scalar, biases.0, biases.1, biases.2, biases.3,
+            );
             results.push(passes);
         }
 
@@ -1031,16 +1158,32 @@ impl HybridGpuManager {
         points: &mut Vec<[u64; 12]>, // [x,y,z] limbs
         attractor_x: &[u64; 4],
         biases: (u8, u8, u8, bool),
-        max_attempts_per_step: usize
-    ) -> Result<Vec<bool>> { // Returns whether each point reached attractor
+        max_attempts_per_step: usize,
+    ) -> Result<Vec<bool>> {
+        // Returns whether each point reached attractor
         // For now, implement CPU version - would use CUDA for point operations
         let mut reached_attractor = Vec::with_capacity(points.len());
 
         for point_limbs in points.iter_mut() {
             let mut current_point = Point {
-                x: [point_limbs[0], point_limbs[1], point_limbs[2], point_limbs[3]],
-                y: [point_limbs[4], point_limbs[5], point_limbs[6], point_limbs[7]],
-                z: [point_limbs[8], point_limbs[9], point_limbs[10], point_limbs[11]],
+                x: [
+                    point_limbs[0],
+                    point_limbs[1],
+                    point_limbs[2],
+                    point_limbs[3],
+                ],
+                y: [
+                    point_limbs[4],
+                    point_limbs[5],
+                    point_limbs[6],
+                    point_limbs[7],
+                ],
+                z: [
+                    point_limbs[8],
+                    point_limbs[9],
+                    point_limbs[10],
+                    point_limbs[11],
+                ],
             };
 
             let attractor_x_bigint = BigInt256::from_u64_array(*attractor_x);
@@ -1055,9 +1198,17 @@ impl HybridGpuManager {
             let mut jump_found = false;
             for _attempt in 0..max_attempts_per_step {
                 let random_scalar = BigInt256::from_u64(rand::random::<u64>() % 1000000 + 1);
-                if crate::kangaroo::generator::apply_biases(&random_scalar, biases.0, biases.1, biases.2, biases.3) {
+                if crate::kangaroo::generator::apply_biases(
+                    &random_scalar,
+                    biases.0,
+                    biases.1,
+                    biases.2,
+                    biases.3,
+                ) {
                     // Apply jump: current_point += random_scalar * G
-                    let jump_point = Secp256k1::new().mul_constant_time(&random_scalar, &Secp256k1::new().g).unwrap();
+                    let jump_point = Secp256k1::new()
+                        .mul_constant_time(&random_scalar, &Secp256k1::new().g)
+                        .unwrap();
                     current_point = Secp256k1::new().add(&current_point, &jump_point);
                     jump_found = true;
                     break;
@@ -1072,7 +1223,8 @@ impl HybridGpuManager {
 
                 // Check if now at attractor
                 let new_affine = Secp256k1::new().to_affine(&current_point);
-                reached_attractor.push(BigInt256::from_u64_array(new_affine.x) == attractor_x_bigint);
+                reached_attractor
+                    .push(BigInt256::from_u64_array(new_affine.x) == attractor_x_bigint);
             } else {
                 reached_attractor.push(false); // No valid jump found
             }
@@ -1098,15 +1250,35 @@ impl HybridGpuManager {
             // Execute computation using hybrid backend
             {
                 // Convert to Vec for backend API
-                let positions_vec: Vec<[[u32; 8]; 3]> = shared_points.as_slice().iter().map(|p| [
-                    p.x.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
-                    p.y.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
-                    p.z.iter().flat_map(|&x| [x as u32, (x >> 32) as u32]).collect::<Vec<_>>().try_into().unwrap_or([0; 8]),
-                ]).collect();
+                let positions_vec: Vec<[[u32; 8]; 3]> = shared_points
+                    .as_slice()
+                    .iter()
+                    .map(|p| {
+                        [
+                            p.x.iter()
+                                .flat_map(|&x| [x as u32, (x >> 32) as u32])
+                                .collect::<Vec<_>>()
+                                .try_into()
+                                .unwrap_or([0; 8]),
+                            p.y.iter()
+                                .flat_map(|&x| [x as u32, (x >> 32) as u32])
+                                .collect::<Vec<_>>()
+                                .try_into()
+                                .unwrap_or([0; 8]),
+                            p.z.iter()
+                                .flat_map(|&x| [x as u32, (x >> 32) as u32])
+                                .collect::<Vec<_>>()
+                                .try_into()
+                                .unwrap_or([0; 8]),
+                        ]
+                    })
+                    .collect();
 
-                let distances_vec: Vec<[u32; 8]> = shared_distances.as_slice().iter().map(|&d| [
-                    d as u32, (d >> 32) as u32, 0, 0, 0, 0, 0, 0
-                ]).collect();
+                let distances_vec: Vec<[u32; 8]> = shared_distances
+                    .as_slice()
+                    .iter()
+                    .map(|&d| [d as u32, (d >> 32) as u32, 0, 0, 0, 0, 0, 0])
+                    .collect();
 
                 let _types_vec: Vec<u32> = vec![1; batch_size]; // Simplified - all tame
 
@@ -1123,16 +1295,17 @@ impl HybridGpuManager {
                     if i < shared_points.len() {
                         let point = &mut shared_points.as_mut_slice()[i];
                         for j in 0..4 {
-                            point.x[j] = ((pos[0][j*2 + 1] as u64) << 32) | pos[0][j*2] as u64;
-                            point.y[j] = ((pos[1][j*2 + 1] as u64) << 32) | pos[1][j*2] as u64;
-                            point.z[j] = ((pos[2][j*2 + 1] as u64) << 32) | pos[2][j*2] as u64;
+                            point.x[j] = ((pos[0][j * 2 + 1] as u64) << 32) | pos[0][j * 2] as u64;
+                            point.y[j] = ((pos[1][j * 2 + 1] as u64) << 32) | pos[1][j * 2] as u64;
+                            point.z[j] = ((pos[2][j * 2 + 1] as u64) << 32) | pos[2][j * 2] as u64;
                         }
                     }
                 }
 
                 for (i, dist) in distances_vec.iter().enumerate() {
                     if i < shared_distances.len() {
-                        shared_distances.as_mut_slice()[i] = ((dist[1] as u64) << 32) | dist[0] as u64;
+                        shared_distances.as_mut_slice()[i] =
+                            ((dist[1] as u64) << 32) | dist[0] as u64;
                     }
                 }
             }
@@ -1140,7 +1313,8 @@ impl HybridGpuManager {
             steps_completed += batch_size as u64;
 
             // Periodic drift checking
-            if steps_completed % 10000 == 0 { // Check every 10k steps
+            if steps_completed % 10000 == 0 {
+                // Check every 10k steps
                 let error = self.compute_drift_error(shared_points, shared_distances, &self.curve);
 
                 let mut metrics = self.metrics.lock().unwrap();
@@ -1149,7 +1323,10 @@ impl HybridGpuManager {
                 if error > self.drift_threshold {
                     metrics.swap_count += 1;
                     metrics.last_swap_time = Instant::now();
-                    log::warn!("Drift detected (error: {:.6}), potential precision loss", error);
+                    log::warn!(
+                        "Drift detected (error: {:.6}), potential precision loss",
+                        error
+                    );
                 }
 
                 // Update throughput
@@ -1162,9 +1339,12 @@ impl HybridGpuManager {
         }
 
         let total_time = start_time.elapsed();
-        log::info!("Hybrid computation completed {} steps in {:.2}s ({:.0} ops/s)",
-                  steps_completed, total_time.as_secs_f64(),
-                  steps_completed as f64 / total_time.as_secs_f64());
+        log::info!(
+            "Hybrid computation completed {} steps in {:.2}s ({:.0} ops/s)",
+            steps_completed,
+            total_time.as_secs_f64(),
+            steps_completed as f64 / total_time.as_secs_f64()
+        );
 
         Ok(())
     }
@@ -1172,7 +1352,12 @@ impl HybridGpuManager {
     /// Run Vulkan computation with drift monitoring - removed as unused
 
     /// Compute drift error by comparing sample points to CPU ground truth
-    fn compute_drift_error(&self, points: &SharedBuffer<Point>, distances: &SharedBuffer<u64>, curve: &Secp256k1) -> f64 {
+    fn compute_drift_error(
+        &self,
+        points: &SharedBuffer<Point>,
+        distances: &SharedBuffer<u64>,
+        curve: &Secp256k1,
+    ) -> f64 {
         let sample_size = (points.len() / 100).max(1).min(10); // Sample 1% or at least 1, max 10
 
         let mut total_error = 0.0;
@@ -1195,9 +1380,9 @@ impl HybridGpuManager {
             let point_valid = gpu_point.validate_curve(curve);
 
             // Check if coordinates are reasonable (not corrupted)
-            let coords_reasonable = gpu_point.x.iter().all(|&x| x < curve.p.limbs[0] * 2) &&
-                                   gpu_point.y.iter().all(|&x| x < curve.p.limbs[0] * 2) &&
-                                   gpu_point.z.iter().all(|&x| x < curve.p.limbs[0] * 2);
+            let coords_reasonable = gpu_point.x.iter().all(|&x| x < curve.p.limbs[0] * 2)
+                && gpu_point.y.iter().all(|&x| x < curve.p.limbs[0] * 2)
+                && gpu_point.z.iter().all(|&x| x < curve.p.limbs[0] * 2);
 
             if !point_valid || !coords_reasonable {
                 total_error += 1.0; // Full error for invalid points
@@ -1220,12 +1405,12 @@ impl HybridGpuManager {
     /// Returns true if bias factors have stabilized (delta < 5% over 10 steps)
     pub fn check_bias_convergence(rate_history: &Vec<f64>, target: f64) -> bool {
         if rate_history.len() < 10 {
-            return false;  // Need minimum history for convergence check
+            return false; // Need minimum history for convergence check
         }
-        let recent_rates = &rate_history[rate_history.len().saturating_sub(5)..];  // Last 5 rates
-        let ema = recent_rates.iter().sum::<f64>() / recent_rates.len() as f64;  // Simple EMA approximation
-        let delta = (ema - target).abs() / target;  // Relative error
-        delta < 0.05  // Within 5% of target = converged (stable bias adjustment)
+        let recent_rates = &rate_history[rate_history.len().saturating_sub(5)..]; // Last 5 rates
+        let ema = recent_rates.iter().sum::<f64>() / recent_rates.len() as f64; // Simple EMA approximation
+        let delta = (ema - target).abs() / target; // Relative error
+        delta < 0.05 // Within 5% of target = converged (stable bias adjustment)
     }
 
     /// Get current drift metrics
@@ -1243,38 +1428,47 @@ impl HybridGpuManager {
         // If hybrid BSGS is enabled, offload near-collision resolution to GPU
         if self.config.use_hybrid_bsgs {
             // Convert traps to the format expected by batch_bsgs_solve
-            let deltas: Vec<[[u32; 8]; 3]> = traps.iter().map(|_trap| {
-                // Compute delta = target - trap.point (simplified)
-                // In practice, this would be more complex based on collision type
-                let mut delta = [[0u32; 8]; 3];
-                // Simplified: just copy target as delta
-                for i in 0..8 {
-                    delta[0][i] = target.x[i] as u32;
-                    delta[1][i] = target.y[i] as u32;
-                    delta[2][i] = target.z[i] as u32;
-                }
-                delta
-            }).collect();
-
-            let alphas: Vec<[u32; 8]> = traps.iter().map(|trap| {
-                let mut alpha_array = [0u32; 8];
-                for i in 0..4.min(trap.alpha.len()) {
-                    alpha_array[i * 2] = trap.alpha[i] as u32;
-                    if i * 2 + 1 < 8 {
-                        alpha_array[i * 2 + 1] = (trap.alpha[i] >> 32) as u32;
+            let deltas: Vec<[[u32; 8]; 3]> = traps
+                .iter()
+                .map(|_trap| {
+                    // Compute delta = target - trap.point (simplified)
+                    // In practice, this would be more complex based on collision type
+                    let mut delta = [[0u32; 8]; 3];
+                    // Simplified: just copy target as delta
+                    for i in 0..8 {
+                        delta[0][i] = target.x[i] as u32;
+                        delta[1][i] = target.y[i] as u32;
+                        delta[2][i] = target.z[i] as u32;
                     }
-                }
-                alpha_array
-            }).collect();
+                    delta
+                })
+                .collect();
 
-            let distances: Vec<[u32; 8]> = traps.iter().map(|trap| {
-                let mut dist_array = [0u32; 8];
-                let dist_bytes = trap.dist.to_bytes_le();
-                for i in 0..dist_bytes.len().min(8) {
-                    dist_array[i] = dist_bytes[i] as u32;
-                }
-                dist_array
-            }).collect();
+            let alphas: Vec<[u32; 8]> = traps
+                .iter()
+                .map(|trap| {
+                    let mut alpha_array = [0u32; 8];
+                    for i in 0..4.min(trap.alpha.len()) {
+                        alpha_array[i * 2] = trap.alpha[i] as u32;
+                        if i * 2 + 1 < 8 {
+                            alpha_array[i * 2 + 1] = (trap.alpha[i] >> 32) as u32;
+                        }
+                    }
+                    alpha_array
+                })
+                .collect();
+
+            let distances: Vec<[u32; 8]> = traps
+                .iter()
+                .map(|trap| {
+                    let mut dist_array = [0u32; 8];
+                    let dist_bytes = trap.dist.to_bytes_le();
+                    for i in 0..dist_bytes.len().min(8) {
+                        dist_array[i] = dist_bytes[i] as u32;
+                    }
+                    dist_array
+                })
+                .collect();
 
             // Call the backend's BSGS solver
             match self.dispatch_batch_bsgs_solve(deltas, alphas, distances) {
@@ -1288,7 +1482,12 @@ impl HybridGpuManager {
                                 (solution_u32[4] as u64) | ((solution_u32[5] as u64) << 32),
                                 (solution_u32[6] as u64) | ((solution_u32[7] as u64) << 32),
                             ];
-                            let solution = Solution::new(private_key[..4].try_into().unwrap(), *target, BigInt256::zero(), 0.0);
+                            let solution = Solution::new(
+                                private_key[..4].try_into().unwrap(),
+                                *target,
+                                BigInt256::zero(),
+                                0.0,
+                            );
                             solutions.push(solution);
                         }
                     }
@@ -1303,16 +1502,23 @@ impl HybridGpuManager {
     }
 
     /// Dispatch batch BSGS solving to appropriate backend
-    fn dispatch_batch_bsgs_solve(&self, deltas: Vec<[[u32;8];3]>, alphas: Vec<[u32;8]>, distances: Vec<[u32;8]>) -> Result<Vec<Option<[u32;8]>>> {
+    fn dispatch_batch_bsgs_solve(
+        &self,
+        deltas: Vec<[[u32; 8]; 3]>,
+        alphas: Vec<[u32; 8]>,
+        distances: Vec<[u32; 8]>,
+    ) -> Result<Vec<Option<[u32; 8]>>> {
         // Dispatch to CUDA for BSGS solving (most efficient for this operation)
         #[cfg(feature = "rustacuda")]
         {
-            self.cuda.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+            self.cuda
+                .batch_bsgs_solve(deltas, alphas, distances, &self.config)
         }
         #[cfg(not(feature = "rustacuda"))]
         {
             // Fallback to CPU implementation via hybrid backend
-            self.hybrid_backend.batch_bsgs_solve(deltas, alphas, distances, &self.config)
+            self.hybrid_backend
+                .batch_bsgs_solve(deltas, alphas, distances, &self.config)
         }
     }
 
@@ -1321,7 +1527,10 @@ impl HybridGpuManager {
     fn bsgs_solve_gpu(&self, _delta: &Point, threshold: u64) -> Option<[u64; 4]> {
         // This would call the CUDA backend's BSGS implementation
         // For now, return None to indicate GPU BSGS not yet implemented
-        debug!("GPU BSGS requested but not yet implemented for threshold {}", threshold);
+        debug!(
+            "GPU BSGS requested but not yet implemented for threshold {}",
+            threshold
+        );
         None
     }
 
@@ -1421,7 +1630,8 @@ impl HybridGpuManager {
 
     /// Concise Block: Runtime Prime Mul Test in Hybrid Steps
     pub fn step_with_prime_test(&self, points: &mut [Point], current_steps: u64) -> Result<()> {
-        if current_steps % 1_000_000 == 0 { // Every 10^6
+        if current_steps % 1_000_000 == 0 {
+            // Every 10^6
             let sample_target = points[0];
             if !self.dispatch_prime_mul_test(&sample_target)? {
                 println!("Hybrid drift in prime mul! Swapping to CUDA only.");
@@ -1433,7 +1643,12 @@ impl HybridGpuManager {
     }
 
     /// Concise Block: Parallel Rho Dispatch in Hybrid
-    pub fn dispatch_parallel_rho(&self, _g: Point, _p: Point, _num_walks: usize) -> Option<BigInt256> {
+    pub fn dispatch_parallel_rho(
+        &self,
+        _g: Point,
+        _p: Point,
+        _num_walks: usize,
+    ) -> Option<BigInt256> {
         // Launch CUDA walks: Each thread rho walk until DP, collect collisions
         // Rho walk implementation: random start, function iteration until cycle or distinguished point
         // On collision X_i = X_j, solve k = (a_i - a_j) / (b_j - b_i) mod n
@@ -1441,7 +1656,13 @@ impl HybridGpuManager {
     }
 
     /// Concise Block: Parallel Brent's Rho in Hybrid
-    pub fn dispatch_parallel_brents_rho(&self, _g: Point, _p: Point, _num_walks: usize, _bias_mod: u64) -> Option<BigInt256> {
+    pub fn dispatch_parallel_brents_rho(
+        &self,
+        _g: Point,
+        _p: Point,
+        _num_walks: usize,
+        _bias_mod: u64,
+    ) -> Option<BigInt256> {
         // Brent's rho algorithm for cycle detection in ECDLP
         // Phase 5: Full CUDA implementation with bias optimization
 
@@ -1458,4 +1679,3 @@ impl HybridGpuManager {
         None
     }
 }
-

@@ -13,8 +13,9 @@ pub fn validate_scalar(scalar: &BigInt256) -> Result<(), &'static str> {
         return Err("Scalar cannot be zero");
     }
 
-    let secp256k1_order = BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
-        .expect("Invalid secp256k1 order");
+    let secp256k1_order =
+        BigInt256::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
+            .expect("Invalid secp256k1 order");
     if *scalar >= secp256k1_order {
         return Err("Scalar is too large (must be < secp256k1 order)");
     }
@@ -23,7 +24,10 @@ pub fn validate_scalar(scalar: &BigInt256) -> Result<(), &'static str> {
 }
 
 /// Validate that a public key point is valid and not in a small subgroup
-pub fn validate_public_key(point: &crate::types::Point, curve: &crate::math::secp::Secp256k1) -> Result<(), &'static str> {
+pub fn validate_public_key(
+    point: &crate::types::Point,
+    curve: &crate::math::secp::Secp256k1,
+) -> Result<(), &'static str> {
     point.validate(curve)
 }
 

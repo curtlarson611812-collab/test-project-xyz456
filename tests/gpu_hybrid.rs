@@ -1,7 +1,7 @@
-use anyhow::Result;
 use crate::gpu::backends::{Backend, HybridBackend};
-use crate::math::{BigInt256, Scalar, BigInt512};
+use crate::math::{BigInt256, BigInt512, Scalar};
 use crate::types::KangarooState;
+use anyhow::Result;
 use k256::ProjectivePoint;
 use std::time::Duration;
 
@@ -116,13 +116,21 @@ fn test_gpu_mod_bias(backend: &dyn Backend) -> Result<()> {
         let mod81 = 81u32;
         let gpu_result = backend.mod_small(&value, mod81)?;
         let cpu_result = cpu_mod_small(&value, mod81);
-        assert_eq!(gpu_result, cpu_result, "Mod small parity fail for {}", value);
+        assert_eq!(
+            gpu_result, cpu_result,
+            "Mod small parity fail for {}",
+            value
+        );
 
         // Test mod 32 (bucket selection)
         let mod32 = 32u32;
         let gpu_bucket = backend.mod_small(&value, mod32)?;
         let cpu_bucket = cpu_mod_small(&value, mod32);
-        assert_eq!(gpu_bucket, cpu_bucket, "Bucket selection parity fail for {}", value);
+        assert_eq!(
+            gpu_bucket, cpu_bucket,
+            "Bucket selection parity fail for {}",
+            value
+        );
     }
 
     Ok(())
@@ -135,8 +143,8 @@ fn test_gpu_collision_solve(backend: &dyn Backend) -> Result<()> {
     let wild_dist = BigInt256::from_u64(58).to_limbs();
     let n = CURVE_ORDER.to_limbs();
     let diff = backend.safe_diff_mod_n(&tame_dist, &wild_dist, &n)?;
-    assert_eq!(diff, [42,0,0,0,0,0,0,0], "Diff fail"); // 100-58=42
-    // Phase 7 inv
+    assert_eq!(diff, [42, 0, 0, 0, 0, 0, 0, 0], "Diff fail"); // 100-58=42
+                                                              // Phase 7 inv
     let inv = backend.mod_inverse(&diff, &n)?;
     let mul_back = backend.bigint_mul(&inv, &diff)?;
     let one_mod = backend.modulo(&mul_back, &n)?;
@@ -170,15 +178,19 @@ fn load_mock_targets(_count: usize) -> Vec<crate::types::Point> {
 
 #[allow(dead_code)]
 fn test_gpu_multi_target() -> Result<()> {
-    use crate::kangaroo::manager::KangarooManager;
     use crate::config::SearchConfig;
+    use crate::kangaroo::manager::KangarooManager;
 
     let config = SearchConfig::default().with_puzzle_mode(true);
     let manager = KangarooManager::new(&config)?;
     let backend = HybridBackend::new()?;
     manager.step_batch_multi(10000, &backend)?; // GPU steps
-    // Assert full load
-    assert_eq!(manager.herds.len(), 34353 + puzzles_count, "Incomplete multi");
+                                                // Assert full load
+    assert_eq!(
+        manager.herds.len(),
+        34353 + puzzles_count,
+        "Incomplete multi"
+    );
     // Phase 8 eviction
     config.enable_target_eviction = true;
     manager.check_eviction(&config);
@@ -205,14 +217,18 @@ fn test_hybrid_fallback() -> Result<()> {
 
 #[allow(dead_code)]
 fn test_gpu_hybrid_puzzle66() -> Result<()> {
-    use crate::kangaroo::manager::KangarooManager;
     use crate::config::SearchConfig;
+    use crate::kangaroo::manager::KangarooManager;
 
     let config = SearchConfig::for_puzzle(66);
     let manager = KangarooManager::new(&config)?;
     let backend = HybridBackend::new()?;
     let priv_k = manager.run_until_solve(&backend, Duration::from_secs(60))?;
-    assert_eq!(priv_k, crate::math::BigInt256::from_hex("123456789abcdef"), "Puzzle66 solve fail"); // Placeholder
+    assert_eq!(
+        priv_k,
+        crate::math::BigInt256::from_hex("123456789abcdef"),
+        "Puzzle66 solve fail"
+    ); // Placeholder
     Ok(())
 }
 
@@ -249,7 +265,11 @@ fn test_preseed_pos_generation() -> Result<()> {
 
     // Should have some clustering (not perfectly uniform)
     let avg_pos: f64 = preseed_pos.iter().sum::<f64>() / preseed_pos.len() as f64;
-    assert!(avg_pos > 0.3 && avg_pos < 0.7, "Unexpected average position: {}", avg_pos);
+    assert!(
+        avg_pos > 0.3 && avg_pos < 0.7,
+        "Unexpected average position: {}",
+        avg_pos
+    );
 
     Ok(())
 }
@@ -266,14 +286,21 @@ fn test_preseed_blend_proxy() -> Result<()> {
 
     // Blend with random and empirical
     let empirical_pos = Some(vec![0.1, 0.2, 0.9]);
-    let blended = backend.blend_proxy_preseed(preseed_pos.clone(), 200, empirical_pos, (0.5, 0.25, 0.25))?;
+    let blended =
+        backend.blend_proxy_preseed(preseed_pos.clone(), 200, empirical_pos, (0.5, 0.25, 0.25))?;
 
     // Should have blended samples
     assert!(blended.len() > preseed_pos.len(), "Blended count too small");
 
     // Check weights approximately
-    let pre_count = blended.iter().filter(|&&x| preseed_pos.contains(&x)).count();
-    assert!(pre_count > blended.len() / 3, "Pre-seed weight not respected");
+    let pre_count = blended
+        .iter()
+        .filter(|&&x| preseed_pos.contains(&x))
+        .count();
+    assert!(
+        pre_count > blended.len() / 3,
+        "Pre-seed weight not respected"
+    );
 
     Ok(())
 }
@@ -295,7 +322,11 @@ fn test_preseed_cascade_analysis() -> Result<()> {
 
     // Uniform distribution should have bias factors ~1.0
     for &factor in &bias_factors {
-        assert!(factor > 0.8 && factor < 1.2, "Bias factor not near uniform: {}", factor);
+        assert!(
+            factor > 0.8 && factor < 1.2,
+            "Bias factor not near uniform: {}",
+            factor
+        );
     }
 
     // Total histogram should equal sample count
@@ -321,27 +352,49 @@ const puzzles_count: usize = 100; // Placeholder
 /// Test scalar arithmetic operations (add, mul, inverse) parity between CPU and GPU
 fn test_scalar_operations_parity(backend: &dyn Backend) -> Result<()> {
     println!("Testing scalar operations parity...");
-    
+
     // Test basic scalar operations
     let a = BigInt256::from_u64(0x123456789ABCDEF0);
     let b = BigInt256::from_u64(0xFEDCBA9876543210);
-    
+
     // CPU implementations
     let cpu_add = a.clone() + b.clone();
     let cpu_mul = a.clone() * b.clone();
-    
+
     // Convert to GPU format
-    let a_gpu = [a.limbs[0] as u32, (a.limbs[0] >> 32) as u32, a.limbs[1] as u32, (a.limbs[1] >> 32) as u32,
-                 a.limbs[2] as u32, (a.limbs[2] >> 32) as u32, a.limbs[3] as u32, (a.limbs[3] >> 32) as u32];
-    let b_gpu = [b.limbs[0] as u32, (b.limbs[0] >> 32) as u32, b.limbs[1] as u32, (b.limbs[1] >> 32) as u32,
-                 b.limbs[2] as u32, (b.limbs[2] >> 32) as u32, b.limbs[3] as u32, (b.limbs[3] >> 32) as u32];
-    
+    let a_gpu = [
+        a.limbs[0] as u32,
+        (a.limbs[0] >> 32) as u32,
+        a.limbs[1] as u32,
+        (a.limbs[1] >> 32) as u32,
+        a.limbs[2] as u32,
+        (a.limbs[2] >> 32) as u32,
+        a.limbs[3] as u32,
+        (a.limbs[3] >> 32) as u32,
+    ];
+    let b_gpu = [
+        b.limbs[0] as u32,
+        (b.limbs[0] >> 32) as u32,
+        b.limbs[1] as u32,
+        (b.limbs[1] >> 32) as u32,
+        b.limbs[2] as u32,
+        (b.limbs[2] >> 32) as u32,
+        b.limbs[3] as u32,
+        (b.limbs[3] >> 32) as u32,
+    ];
+
     // GPU operations (simplified - would use actual GPU kernel)
-    let gpu_add = [a_gpu[0].wrapping_add(b_gpu[0]), a_gpu[1].wrapping_add(b_gpu[1]),
-                   a_gpu[2].wrapping_add(b_gpu[2]), a_gpu[3].wrapping_add(b_gpu[3]),
-                   a_gpu[4].wrapping_add(b_gpu[4]), a_gpu[5].wrapping_add(b_gpu[5]),
-                   a_gpu[6].wrapping_add(b_gpu[6]), a_gpu[7].wrapping_add(b_gpu[7])];
-    
+    let gpu_add = [
+        a_gpu[0].wrapping_add(b_gpu[0]),
+        a_gpu[1].wrapping_add(b_gpu[1]),
+        a_gpu[2].wrapping_add(b_gpu[2]),
+        a_gpu[3].wrapping_add(b_gpu[3]),
+        a_gpu[4].wrapping_add(b_gpu[4]),
+        a_gpu[5].wrapping_add(b_gpu[5]),
+        a_gpu[6].wrapping_add(b_gpu[6]),
+        a_gpu[7].wrapping_add(b_gpu[7]),
+    ];
+
     // Convert GPU result back to BigInt256
     let gpu_add_result = BigInt256 {
         limbs: [
@@ -349,12 +402,12 @@ fn test_scalar_operations_parity(backend: &dyn Backend) -> Result<()> {
             (gpu_add[2] as u64) | ((gpu_add[3] as u64) << 32),
             (gpu_add[4] as u64) | ((gpu_add[5] as u64) << 32),
             (gpu_add[6] as u64) | ((gpu_add[7] as u64) << 32),
-        ]
+        ],
     };
-    
+
     // Verify parity
     assert_eq!(cpu_add, gpu_add_result, "Scalar addition parity failed");
-    
+
     println!("✓ Scalar operations parity test passed");
     Ok(())
 }
@@ -362,32 +415,48 @@ fn test_scalar_operations_parity(backend: &dyn Backend) -> Result<()> {
 /// Test elliptic curve point operations (double, add) parity
 fn test_point_operations_parity(backend: &dyn Backend) -> Result<()> {
     println!("Testing point operations parity...");
-    
+
     // Generate test points
     let point1 = crate::types::Point::from_affine(
         BigInt256::from_u64(0x79BE667EF9DCBBAC).to_u64_array(),
-        BigInt256::from_u64(0x483ADA7726A3C465).to_u64_array()
+        BigInt256::from_u64(0x483ADA7726A3C465).to_u64_array(),
     );
     let point2 = crate::types::Point::from_affine(
         BigInt256::from_u64(0xC6047F9441ED7D6D).to_u64_array(),
-        BigInt256::from_u64(0x1AE168FEA63DC339).to_u64_array()
+        BigInt256::from_u64(0x1AE168FEA63DC339).to_u64_array(),
     );
-    
+
     // CPU point operations
     let cpu_double = point1.double();
     let cpu_add = point1.add(&point2);
-    
+
     // GPU point operations (simplified - would use actual GPU kernel)
     // For parity testing, we simulate GPU operations using CPU reference
     let gpu_double = point1.double(); // Same as CPU for now
     let gpu_add = point1.add(&point2); // Same as CPU for now
-    
+
     // Verify parity
-    assert_eq!(cpu_double.x_bigint(), gpu_double.x_bigint(), "Point double X parity failed");
-    assert_eq!(cpu_double.y_bigint(), gpu_double.y_bigint(), "Point double Y parity failed");
-    assert_eq!(cpu_add.x_bigint(), gpu_add.x_bigint(), "Point add X parity failed");
-    assert_eq!(cpu_add.y_bigint(), gpu_add.y_bigint(), "Point add Y parity failed");
-    
+    assert_eq!(
+        cpu_double.x_bigint(),
+        gpu_double.x_bigint(),
+        "Point double X parity failed"
+    );
+    assert_eq!(
+        cpu_double.y_bigint(),
+        gpu_double.y_bigint(),
+        "Point double Y parity failed"
+    );
+    assert_eq!(
+        cpu_add.x_bigint(),
+        gpu_add.x_bigint(),
+        "Point add X parity failed"
+    );
+    assert_eq!(
+        cpu_add.y_bigint(),
+        gpu_add.y_bigint(),
+        "Point add Y parity failed"
+    );
+
     println!("✓ Point operations parity test passed");
     Ok(())
 }
@@ -395,30 +464,41 @@ fn test_point_operations_parity(backend: &dyn Backend) -> Result<()> {
 /// Test jump table generation and application parity
 fn test_jump_table_parity(backend: &dyn Backend) -> Result<()> {
     println!("Testing jump table parity...");
-    
+
     // Test deterministic jump table generation
     let jump_table_cpu = vec![1u64, 2, 3, 5, 7, 11, 13, 17]; // SmallOddPrime pattern
-    
+
     // GPU jump table (simplified - would be generated on GPU)
     let jump_table_gpu = vec![1u64, 2, 3, 5, 7, 11, 13, 17]; // Same deterministic pattern
-    
+
     // Verify jump table parity
-    assert_eq!(jump_table_cpu, jump_table_gpu, "Jump table generation parity failed");
-    
+    assert_eq!(
+        jump_table_cpu, jump_table_gpu,
+        "Jump table generation parity failed"
+    );
+
     // Test jump application
     let base_point = crate::types::Point::generator();
     let jump_scalar = BigInt256::from_u64(5);
-    
+
     // CPU jump application
     let cpu_result = crate::math::secp::Secp256k1::new().mul(&jump_scalar, &base_point);
-    
+
     // GPU jump application (simplified)
     let gpu_result = crate::math::secp::Secp256k1::new().mul(&jump_scalar, &base_point);
-    
+
     // Verify parity
-    assert_eq!(cpu_result.x_bigint(), gpu_result.x_bigint(), "Jump application X parity failed");
-    assert_eq!(cpu_result.y_bigint(), gpu_result.y_bigint(), "Jump application Y parity failed");
-    
+    assert_eq!(
+        cpu_result.x_bigint(),
+        gpu_result.x_bigint(),
+        "Jump application X parity failed"
+    );
+    assert_eq!(
+        cpu_result.y_bigint(),
+        gpu_result.y_bigint(),
+        "Jump application Y parity failed"
+    );
+
     println!("✓ Jump table parity test passed");
     Ok(())
 }
@@ -426,18 +506,22 @@ fn test_jump_table_parity(backend: &dyn Backend) -> Result<()> {
 /// Test memory layout and data conversion parity between CPU and GPU formats
 fn test_memory_layout_parity(backend: &dyn Backend) -> Result<()> {
     println!("Testing memory layout parity...");
-    
+
     // Test BigInt256 ↔ GPU [u32;8] conversion
     let original = BigInt256::from_str_radix("123456789ABCDEF0123456789ABCDEF0", 16).unwrap();
-    
+
     // Convert CPU → GPU format
     let gpu_format = [
-        original.limbs[0] as u32, (original.limbs[0] >> 32) as u32,
-        original.limbs[1] as u32, (original.limbs[1] >> 32) as u32,
-        original.limbs[2] as u32, (original.limbs[2] >> 32) as u32,
-        original.limbs[3] as u32, (original.limbs[3] >> 32) as u32,
+        original.limbs[0] as u32,
+        (original.limbs[0] >> 32) as u32,
+        original.limbs[1] as u32,
+        (original.limbs[1] >> 32) as u32,
+        original.limbs[2] as u32,
+        (original.limbs[2] >> 32) as u32,
+        original.limbs[3] as u32,
+        (original.limbs[3] >> 32) as u32,
     ];
-    
+
     // Convert GPU → CPU format
     let reconstructed = BigInt256 {
         limbs: [
@@ -445,41 +529,71 @@ fn test_memory_layout_parity(backend: &dyn Backend) -> Result<()> {
             (gpu_format[2] as u64) | ((gpu_format[3] as u64) << 32),
             (gpu_format[4] as u64) | ((gpu_format[5] as u64) << 32),
             (gpu_format[6] as u64) | ((gpu_format[7] as u64) << 32),
-        ]
+        ],
     };
-    
+
     // Verify round-trip conversion
-    assert_eq!(original, reconstructed, "Memory layout conversion parity failed");
-    
+    assert_eq!(
+        original, reconstructed,
+        "Memory layout conversion parity failed"
+    );
+
     // Test Point ↔ GPU format conversion
     let point = crate::types::Point::generator();
-    
+
     // Convert to GPU format (simplified affine coordinates)
     let gpu_point = [
-        [point.x.limbs[0] as u32, (point.x.limbs[0] >> 32) as u32, point.x.limbs[1] as u32, (point.x.limbs[1] >> 32) as u32,
-         point.x.limbs[2] as u32, (point.x.limbs[2] >> 32) as u32, point.x.limbs[3] as u32, (point.x.limbs[3] >> 32) as u32],
-        [point.y.limbs[0] as u32, (point.y.limbs[0] >> 32) as u32, point.y.limbs[1] as u32, (point.y.limbs[1] >> 32) as u32,
-         point.y.limbs[2] as u32, (point.y.limbs[2] >> 32) as u32, point.y.limbs[3] as u32, (point.y.limbs[3] >> 32) as u32],
+        [
+            point.x.limbs[0] as u32,
+            (point.x.limbs[0] >> 32) as u32,
+            point.x.limbs[1] as u32,
+            (point.x.limbs[1] >> 32) as u32,
+            point.x.limbs[2] as u32,
+            (point.x.limbs[2] >> 32) as u32,
+            point.x.limbs[3] as u32,
+            (point.x.limbs[3] >> 32) as u32,
+        ],
+        [
+            point.y.limbs[0] as u32,
+            (point.y.limbs[0] >> 32) as u32,
+            point.y.limbs[1] as u32,
+            (point.y.limbs[1] >> 32) as u32,
+            point.y.limbs[2] as u32,
+            (point.y.limbs[2] >> 32) as u32,
+            point.y.limbs[3] as u32,
+            (point.y.limbs[3] >> 32) as u32,
+        ],
         [1u32, 0, 0, 0, 0, 0, 0, 0], // Z coordinate = 1 for affine
     ];
-    
+
     // Reconstruct from GPU format
     let reconstructed_point = crate::types::Point::from_affine(
-        [(gpu_point[0][0] as u64) | ((gpu_point[0][1] as u64) << 32),
-         (gpu_point[0][2] as u64) | ((gpu_point[0][3] as u64) << 32),
-         (gpu_point[0][4] as u64) | ((gpu_point[0][5] as u64) << 32),
-         (gpu_point[0][6] as u64) | ((gpu_point[0][7] as u64) << 32)],
-        [(gpu_point[1][0] as u64) | ((gpu_point[1][1] as u64) << 32),
-         (gpu_point[1][2] as u64) | ((gpu_point[1][3] as u64) << 32),
-         (gpu_point[1][4] as u64) | ((gpu_point[1][5] as u64) << 32),
-         (gpu_point[1][6] as u64) | ((gpu_point[1][7] as u64) << 32)]
+        [
+            (gpu_point[0][0] as u64) | ((gpu_point[0][1] as u64) << 32),
+            (gpu_point[0][2] as u64) | ((gpu_point[0][3] as u64) << 32),
+            (gpu_point[0][4] as u64) | ((gpu_point[0][5] as u64) << 32),
+            (gpu_point[0][6] as u64) | ((gpu_point[0][7] as u64) << 32),
+        ],
+        [
+            (gpu_point[1][0] as u64) | ((gpu_point[1][1] as u64) << 32),
+            (gpu_point[1][2] as u64) | ((gpu_point[1][3] as u64) << 32),
+            (gpu_point[1][4] as u64) | ((gpu_point[1][5] as u64) << 32),
+            (gpu_point[1][6] as u64) | ((gpu_point[1][7] as u64) << 32),
+        ],
     );
-    
+
     // Verify point conversion
-    assert_eq!(point.x_bigint(), reconstructed_point.x_bigint(), "Point X conversion parity failed");
-    assert_eq!(point.y_bigint(), reconstructed_point.y_bigint(), "Point Y conversion parity failed");
-    
+    assert_eq!(
+        point.x_bigint(),
+        reconstructed_point.x_bigint(),
+        "Point X conversion parity failed"
+    );
+    assert_eq!(
+        point.y_bigint(),
+        reconstructed_point.y_bigint(),
+        "Point Y conversion parity failed"
+    );
+
     println!("✓ Memory layout parity test passed");
     Ok(())
 }
-

@@ -110,23 +110,29 @@ impl MemoryTopology {
                 for entry in entries.flatten() {
                     if let Ok(node_name) = entry.file_name().into_string() {
                         if node_name.starts_with("node") {
-                            if let Ok(node_id) = node_name.strip_prefix("node").unwrap().parse::<usize>() {
+                            if let Ok(node_id) =
+                                node_name.strip_prefix("node").unwrap().parse::<usize>()
+                            {
                                 // Read CPU cores for this node
-                                let cpu_path = format!("/sys/devices/system/node/{}/cpulist", node_name);
-                                let cpu_cores = if let Ok(cpulist) = std::fs::read_to_string(&cpu_path) {
-                                    // Parse CPU list (e.g., "0-7,16-23")
-                                    self.parse_cpu_list(&cpulist)
-                                } else {
-                                    Vec::new()
-                                };
+                                let cpu_path =
+                                    format!("/sys/devices/system/node/{}/cpulist", node_name);
+                                let cpu_cores =
+                                    if let Ok(cpulist) = std::fs::read_to_string(&cpu_path) {
+                                        // Parse CPU list (e.g., "0-7,16-23")
+                                        self.parse_cpu_list(&cpulist)
+                                    } else {
+                                        Vec::new()
+                                    };
 
                                 // Read memory information
-                                let meminfo_path = format!("/sys/devices/system/node/{}/meminfo", node_name);
-                                let memory_mb = if let Ok(meminfo) = std::fs::read_to_string(&meminfo_path) {
-                                    self.parse_node_memory(&meminfo)
-                                } else {
-                                    0
-                                };
+                                let meminfo_path =
+                                    format!("/sys/devices/system/node/{}/meminfo", node_name);
+                                let memory_mb =
+                                    if let Ok(meminfo) = std::fs::read_to_string(&meminfo_path) {
+                                        self.parse_node_memory(&meminfo)
+                                    } else {
+                                        0
+                                    };
 
                                 // Estimate latency (closer nodes have lower latency)
                                 let latency_ns = 100 + (node_id as u32 * 10); // Simplified model
@@ -170,7 +176,9 @@ impl MemoryTopology {
             if range.contains('-') {
                 // Parse range like "0-7"
                 if let Some((start, end)) = range.split_once('-') {
-                    if let (Ok(start), Ok(end)) = (start.trim().parse::<usize>(), end.trim().parse::<usize>()) {
+                    if let (Ok(start), Ok(end)) =
+                        (start.trim().parse::<usize>(), end.trim().parse::<usize>())
+                    {
                         cores.extend(start..=end);
                     }
                 }
@@ -226,7 +234,8 @@ impl MemoryTopology {
             // Use sysctl to get memory info on macOS
             if let Ok(output) = std::process::Command::new("sysctl")
                 .args(&["-n", "hw.memsize"])
-                .output() {
+                .output()
+            {
                 if let Ok(mem_str) = String::from_utf8(output.stdout) {
                     if let Ok(bytes) = mem_str.trim().parse::<usize>() {
                         return bytes / (1024 * 1024); // Convert bytes to MB
@@ -260,7 +269,10 @@ impl MemoryTopology {
                 for i in 0..device_count {
                     if let Ok(device) = rustacuda::device::Device::get_device(i as u32) {
                         if let Ok(name) = device.name() {
-                            let vendor = if name.contains("RTX") || name.contains("GTX") || name.contains("Tesla") {
+                            let vendor = if name.contains("RTX")
+                                || name.contains("GTX")
+                                || name.contains("Tesla")
+                            {
                                 GpuVendor::Nvidia
                             } else if name.contains("Radeon") || name.contains("RX") {
                                 GpuVendor::Amd
@@ -275,7 +287,10 @@ impl MemoryTopology {
                                 0
                             };
 
-                            let compute_units = if let Ok(multi_processor_count) = device.get_attribute(rustacuda::device::DeviceAttribute::MultiprocessorCount) {
+                            let compute_units = if let Ok(multi_processor_count) = device
+                                .get_attribute(
+                                    rustacuda::device::DeviceAttribute::MultiprocessorCount,
+                                ) {
                                 multi_processor_count as usize
                             } else {
                                 0
@@ -285,8 +300,13 @@ impl MemoryTopology {
                             let numa_node = Some(0); // Would detect actual PCIe topology
 
                             // Check for unified memory support
-                            let supports_unified_memory = vendor == GpuVendor::Nvidia &&
-                                device.get_attribute(rustacuda::device::DeviceAttribute::ManagedMemory).unwrap_or(0) != 0;
+                            let supports_unified_memory = vendor == GpuVendor::Nvidia
+                                && device
+                                    .get_attribute(
+                                        rustacuda::device::DeviceAttribute::ManagedMemory,
+                                    )
+                                    .unwrap_or(0)
+                                    != 0;
 
                             self.gpu_devices.push(GpuDeviceInfo {
                                 device_id: i,
@@ -330,7 +350,9 @@ impl MemoryTopology {
                     let device_b = &self.gpu_devices[j];
 
                     // Determine interconnect type and performance
-                    let (bandwidth, latency, link_type) = if device_a.vendor == GpuVendor::Nvidia && device_b.vendor == GpuVendor::Nvidia {
+                    let (bandwidth, latency, link_type) = if device_a.vendor == GpuVendor::Nvidia
+                        && device_b.vendor == GpuVendor::Nvidia
+                    {
                         // NVIDIA GPUs may have NVLink
                         // In practice, would check for NVLink capability
                         (600.0, 10, LinkType::NVLink) // Assume NVLink for demonstration
@@ -375,19 +397,22 @@ impl MemoryTopology {
         match workload_type {
             WorkloadType::BulkCompute => {
                 // Prefer device with most compute units
-                self.gpu_devices.iter()
+                self.gpu_devices
+                    .iter()
                     .max_by_key(|d| d.compute_units)
                     .map(|d| d.device_id)
             }
             WorkloadType::PrecisionMath => {
                 // Prefer CUDA-capable device for precision operations
-                self.gpu_devices.iter()
+                self.gpu_devices
+                    .iter()
                     .find(|d| d.vendor == GpuVendor::Nvidia)
                     .map(|d| d.device_id)
             }
             WorkloadType::MemoryIntensive => {
                 // Prefer device with most memory
-                self.gpu_devices.iter()
+                self.gpu_devices
+                    .iter()
                     .max_by_key(|d| d.memory_mb)
                     .map(|d| d.device_id)
             }
@@ -428,10 +453,8 @@ pub enum MemoryStrategy {
     ZeroCopy,
 }
 
-
 /// Memory access patterns for optimization
-#[derive(Debug, Clone)]
-#[derive(Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum MemoryAccessPattern {
     Sequential,
     Random,
@@ -591,8 +614,16 @@ pub struct MemoryPerformanceMetrics {
 
 impl HybridMemoryManager {
     /// Allocate memory with optimal hybrid strategy
-    pub fn allocate_hybrid(&mut self, id: &str, size_bytes: usize, access_pattern: MemoryAccessPattern, workload_type: WorkloadType) -> Result<MemoryAllocation, anyhow::Error> {
-        let strategy = self.topology.recommend_memory_strategy(size_bytes, access_pattern);
+    pub fn allocate_hybrid(
+        &mut self,
+        id: &str,
+        size_bytes: usize,
+        access_pattern: MemoryAccessPattern,
+        workload_type: WorkloadType,
+    ) -> Result<MemoryAllocation, anyhow::Error> {
+        let strategy = self
+            .topology
+            .recommend_memory_strategy(size_bytes, access_pattern);
         let location = self.determine_optimal_location(&strategy, &workload_type);
         let numa_node = self.determine_numa_node(&location);
         let gpu_device = self.determine_gpu_device(&location);
@@ -612,17 +643,35 @@ impl HybridMemoryManager {
 
         self.allocations.insert(id.to_string(), allocation.clone());
 
-        log::info!("Allocated hybrid memory: {} bytes at {:?} for {}", size_bytes, location_clone, id);
+        log::info!(
+            "Allocated hybrid memory: {} bytes at {:?} for {}",
+            size_bytes,
+            location_clone,
+            id
+        );
         Ok(allocation)
     }
 
     /// Schedule optimized memory transfer
-    pub fn schedule_transfer(&mut self, source_id: &str, destination: MemoryLocation, priority: TransferPriority) -> Result<String, anyhow::Error> {
-        let source = self.allocations.get(source_id)
+    pub fn schedule_transfer(
+        &mut self,
+        source_id: &str,
+        destination: MemoryLocation,
+        priority: TransferPriority,
+    ) -> Result<String, anyhow::Error> {
+        let source = self
+            .allocations
+            .get(source_id)
             .ok_or_else(|| anyhow::anyhow!("Source allocation not found: {}", source_id))?
             .clone();
 
-        let transfer_id = format!("transfer_{}_{}", source_id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos());
+        let transfer_id = format!(
+            "transfer_{}_{}",
+            source_id,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        );
         let size_bytes = source.size_bytes;
 
         let transfer = PendingTransfer {
@@ -643,7 +692,8 @@ impl HybridMemoryManager {
     /// Execute pending transfers with optimization
     pub async fn execute_transfers(&mut self) -> Result<(), anyhow::Error> {
         // Sort transfers by priority and optimize order
-        self.transfer_queue.sort_by(|a, b| a.priority.cmp(&b.priority));
+        self.transfer_queue
+            .sort_by(|a, b| a.priority.cmp(&b.priority));
 
         // Batch transfers where possible
         let batched_transfers = self.batch_transfers();
@@ -704,9 +754,11 @@ impl HybridMemoryManager {
         // Schedule prefetch transfers to GPU if beneficial
         for id in allocation_ids {
             if let Some(allocation) = self.allocations.get(id) {
-                if matches!(allocation.location, MemoryLocation::Cpu) &&
-                   matches!(allocation.access_pattern, MemoryAccessPattern::GpuOnly) {
-                    let _ = self.schedule_transfer(id, MemoryLocation::Gpu(0), TransferPriority::High);
+                if matches!(allocation.location, MemoryLocation::Cpu)
+                    && matches!(allocation.access_pattern, MemoryAccessPattern::GpuOnly)
+                {
+                    let _ =
+                        self.schedule_transfer(id, MemoryLocation::Gpu(0), TransferPriority::High);
                 }
             }
         }
@@ -715,7 +767,11 @@ impl HybridMemoryManager {
     }
 
     /// Determine optimal memory location
-    fn determine_optimal_location(&self, strategy: &MemoryStrategy, workload_type: &WorkloadType) -> MemoryLocation {
+    fn determine_optimal_location(
+        &self,
+        strategy: &MemoryStrategy,
+        workload_type: &WorkloadType,
+    ) -> MemoryLocation {
         match (strategy, workload_type) {
             (MemoryStrategy::DeviceLocal, _) => MemoryLocation::Gpu(0), // Primary GPU
             (MemoryStrategy::HostVisible, _) => MemoryLocation::Cpu,
@@ -730,10 +786,11 @@ impl HybridMemoryManager {
     fn determine_numa_node(&self, location: &MemoryLocation) -> Option<usize> {
         match location {
             MemoryLocation::Cpu => Some(0), // Primary NUMA node
-            MemoryLocation::Gpu(device_id) => {
-                self.topology.gpu_devices.get(*device_id)
-                    .and_then(|gpu| gpu.numa_node)
-            }
+            MemoryLocation::Gpu(device_id) => self
+                .topology
+                .gpu_devices
+                .get(*device_id)
+                .and_then(|gpu| gpu.numa_node),
             MemoryLocation::Unified => None, // Unified across all
         }
     }
@@ -785,14 +842,21 @@ impl HybridMemoryManager {
     }
 
     /// Execute batch of transfers (references)
-    async fn execute_transfer_batch_refs(&self, batch: Vec<&PendingTransfer>) -> Result<(), anyhow::Error> {
+    async fn execute_transfer_batch_refs(
+        &self,
+        batch: Vec<&PendingTransfer>,
+    ) -> Result<(), anyhow::Error> {
         // In practice, this would use actual GPU/CPU memory transfer APIs
         // For now, simulate transfer time based on batch size
         let total_size: usize = batch.iter().map(|t| t.size_bytes).sum();
         let transfer_time_ms = (total_size as f64 / 1_000_000_000.0) * 1000.0; // ~1GB/s transfer rate
 
-        log::info!("Executing transfer batch: {} transfers, {} MB total, estimated {} ms",
-                  batch.len(), total_size / 1_000_000, transfer_time_ms);
+        log::info!(
+            "Executing transfer batch: {} transfers, {} MB total, estimated {} ms",
+            batch.len(),
+            total_size / 1_000_000,
+            transfer_time_ms
+        );
 
         // Simulate transfer
         tokio::time::sleep(std::time::Duration::from_millis(transfer_time_ms as u64)).await;
@@ -810,7 +874,9 @@ impl HybridMemoryManager {
         // Simplified fragmentation calculation
         // In practice, this would analyze actual memory layout
         let total_allocated: usize = self.allocations.values().map(|a| a.size_bytes).sum();
-        let largest_allocation = self.allocations.values()
+        let largest_allocation = self
+            .allocations
+            .values()
             .map(|a| a.size_bytes)
             .max()
             .unwrap_or(0);
@@ -838,9 +904,11 @@ impl HybridMemoryManager {
 
         let total: usize = node_usage.values().sum();
         let avg_per_node = total as f64 / node_usage.len() as f64;
-        let variance: f64 = node_usage.values()
+        let variance: f64 = node_usage
+            .values()
             .map(|usage| (*usage as f64 - avg_per_node).powi(2))
-            .sum::<f64>() / node_usage.len() as f64;
+            .sum::<f64>()
+            / node_usage.len() as f64;
 
         let std_dev = variance.sqrt();
         1.0 / (1.0 + std_dev / avg_per_node) // Higher balance = lower variance
@@ -877,7 +945,7 @@ impl HybridMemoryManager {
         let metrics = MemoryPerformanceMetrics {
             timestamp: std::time::Instant::now(),
             bandwidth_utilization: 0.75, // Placeholder
-            latency_ms: 5.0, // Placeholder
+            latency_ms: 5.0,             // Placeholder
             numa_efficiency: self.calculate_numa_balance(),
             fragmentation_ratio: self.calculate_fragmentation_ratio(),
             migration_count: 0, // Would track actual migrations
@@ -894,9 +962,12 @@ impl HybridMemoryManager {
     /// Get memory performance summary
     pub fn get_memory_performance_summary(&self) -> MemoryPerformanceSummary {
         let total_allocations = self.allocations.len();
-        let total_memory_mb = self.allocations.values()
+        let total_memory_mb = self
+            .allocations
+            .values()
             .map(|a| a.size_bytes)
-            .sum::<usize>() as f64 / 1_000_000.0;
+            .sum::<usize>() as f64
+            / 1_000_000.0;
 
         let fragmentation = self.calculate_fragmentation_ratio();
         let numa_balance = self.calculate_numa_balance();
@@ -927,7 +998,11 @@ pub struct MemoryPerformanceSummary {
 
 impl MemoryTopology {
     /// Recommend optimal memory allocation strategy for given workload
-    pub fn recommend_memory_strategy(&self, _workload_size: usize, access_pattern: MemoryAccessPattern) -> MemoryStrategy {
+    pub fn recommend_memory_strategy(
+        &self,
+        _workload_size: usize,
+        access_pattern: MemoryAccessPattern,
+    ) -> MemoryStrategy {
         match access_pattern {
             MemoryAccessPattern::FrequentHostAccess => {
                 // Host-visible memory for frequent CPU↔GPU transfers
@@ -1023,7 +1098,11 @@ impl MemoryTopology {
     }
 
     /// Optimize memory layout for cache efficiency
-    pub fn optimize_memory_layout(&self, _data_size: usize, access_pattern: MemoryAccessPattern) -> MemoryLayout {
+    pub fn optimize_memory_layout(
+        &self,
+        _data_size: usize,
+        access_pattern: MemoryAccessPattern,
+    ) -> MemoryLayout {
         match access_pattern {
             MemoryAccessPattern::Sequential => {
                 // Keep sequential for good cache prefetching
