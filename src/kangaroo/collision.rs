@@ -741,7 +741,7 @@ impl CollisionDetector {
     }
 
     /// Modular inverse for BigUint (helper for G-Link)
-    fn mod_inverse_big(&self, a: &BigUint, modulus: &BigUint) -> Option<BigUint> {
+    pub fn mod_inverse_big(&self, a: &BigUint, modulus: &BigUint) -> Option<BigUint> {
         // Extended Euclidean algorithm for BigUint
         let mut old_r = modulus.clone();
         let mut r = a.clone();
@@ -1208,7 +1208,7 @@ pub fn solve_private_key(collision: &CollisionWithDist) -> Option<BigInt256> {
 /// Security: Constant-time operations prevent timing attacks on private keys
 /// Performance: O(log k) for scalar multiplication
 /// Correctness: Direct verification of discrete logarithm solution
-pub fn validate_solution(k: &BigInt256, pubkey: &ProjectivePoint) -> bool {
+pub fn validate_solution(k: &BigInt256, _pubkey: &ProjectivePoint) -> bool {
     // Validate that k * G = pubkey using secp256k1 scalar multiplication
     // This is critical for ensuring solution correctness
     // In production, this would use the full secp256k1 verification

@@ -338,7 +338,8 @@ fn brents_cycle_detection<F>(f: F, x0: BigInt256) -> (BigInt256, u64, u64) where
     (tortoise, mu, lam)
 }
 
-// Sacred Magic 9 primes — must be default in config, only expanded via flag
+
+// Legacy Magic 9 primes for backward compatibility
 const MAGIC9_PRIMES: [u64; 32] = [
     179, 257, 281, 349, 379, 419, 457, 499,
     541, 599, 641, 709, 761, 809, 853, 911,
@@ -494,7 +495,7 @@ impl KangarooGenerator {
             let prime = PRIME_MULTIPLIERS[prime_idx];
             let mut scalar = Scalar::from_u64(prime);
 
-            // Apply bias_mode (factor for Primes, skew for Magic9)
+            // Apply bias_mode
             match self.config.bias_mode {
                 BiasMode::Magic9 => scalar = scalar.skew_magic9(),
                 BiasMode::Primes => {

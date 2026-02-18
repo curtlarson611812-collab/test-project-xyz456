@@ -24,7 +24,7 @@ use regex::Regex;
 use bincode;
 #[allow(unused_imports)]
 use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
-use std::ops::{Add, Sub};
+use std::ops::Sub;
 use speedbitcrack::math::secp::Secp256k1;
 use speedbitcrack::math::bigint::BigInt256;
 use speedbitcrack::types::Point;
@@ -278,12 +278,23 @@ async fn main() -> Result<()> {
         }
         if config.test_puzzles {
             println!("[TEST] Running puzzle validation suite...");
-            // TODO: Implement test_all_puzzles function
-            println!("[TEST] Puzzle validation not yet implemented in simplified main");
+        // Run comprehensive parity checks
+        if let Err(e) = speedbitcrack::puzzles::validate_parity_puzzles() {
+            warn!("Parity puzzle validation failed: {}", e);
+        } else {
+            println!("[TEST] ✅ Parity puzzle validation completed");
         }
 
-        use speedbitcrack::kangaroo::manager;
-        if let Err(e) = manager::run_full_range(&config).await {
+        // Run full puzzle integrity check
+        if let Err(e) = speedbitcrack::puzzles::run_full_puzzle_integrity_check() {
+            warn!("Full puzzle integrity check failed: {}", e);
+        } else {
+            println!("[TEST] ✅ Full puzzle integrity check completed");
+        }
+        }
+
+        
+        if let Err(e) = speedbitcrack::kangaroo::manager::KangarooManager::run_full_range_hunt_from_config(&config).await {
             println!("❌ Hunt failed: {:?}", e);
             return Ok(());
         }
@@ -312,10 +323,44 @@ async fn main() -> Result<()> {
         println!("  🏮 Bloom Filter: {}", config.use_bloom);
         println!("  🔮 Hybrid BSGS: {}", config.use_hybrid_bsgs);
         println!("  🏆 GOLD Combo: {}", config.gold_bias_combo);
+
+        // Special handling for puzzle 145 (revealed, high bias potential)
+        if puzzle_num == 145 {
+            println!("🎯 Targeting puzzle #145 for solving (revealed, higher bias patterns)");
+            // Enable special optimizations for high-bias puzzles
+            config.bias_mode = speedbitcrack::config::BiasMode::Combined;
+            config.enable_bias_hunting = true;
+            config.gold_bias_combo = true;
+            config.birthday_paradox_mode = true; // Enable birthday paradox for faster solving
+            config.dp_bits = 18; // Very low DP bits for rapid collisions
+            config.enable_near_collisions = 0.8; // Higher near collision threshold
+            println!("  🚀 Enabled: Combined bias + Birthday paradox + Near collisions (0.8) + DP bits=18 for #145");
+        }
+
+        // Valuable gold P2PK optimization is handled through bias system
+        // GOLD bias, mod81, mod9, mod27, mod3, POS, and near collision detection
+        // are all automatically applied through the bias validation system
         println!("  📊 BSGS Threshold: {}", config.bsgs_threshold);
         test_solved_puzzle(puzzle_num)?;
         return Ok(());
     }
+
+    // Handle Magic 9 cluster solving
+    if config.solve_magic_9 {
+        println!("🎯 MAGIC 9 CLUSTER SOLVER ACTIVATED");
+        println!("This will run targeted kangaroos to solve all 9 Magic 9 keys");
+
+        use speedbitcrack::kangaroo::manager;
+        if let Err(e) = manager::KangarooManager::solve_magic_9_cluster(&config).await {
+            println!("❌ Magic 9 cluster solving failed: {:?}", e);
+            return Ok(());
+        }
+        println!("🎉 Magic 9 cluster solving completed!");
+        return Ok(());
+    }
+
+    // Valuable gold P2PK solving is handled through the bias system
+    // Run standard hunt - bias optimizations are automatically applied
 
     // Handle specific puzzle cracking
     if let Some(puzzle_num) = config.real_puzzle {

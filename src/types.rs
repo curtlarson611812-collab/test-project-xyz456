@@ -335,6 +335,7 @@ pub struct TaggedKangarooState {
     pub initial_offset: BigInt256,
 }
 
+
 impl KangarooState {
     /// Create new kangaroo state
     pub fn new(position: Point, distance: BigInt256, alpha: [u64; 4], beta: [u64; 4], is_tame: bool, is_dp: bool, id: u64, step: u64, kangaroo_type: u32) -> Self {
@@ -505,8 +506,8 @@ impl JumpOp {
 pub struct Target {
     /// Target point to solve for
     pub point: Point,
-    /// Expected key range (for puzzles)
-    pub key_range: Option<(u64, u64)>,
+    /// Expected key range (for puzzles) - supports large ranges with BigInt256
+    pub key_range: Option<(BigInt256, BigInt256)>,
     /// Target ID for tracking
     pub id: u64,
     /// Priority score (higher = more valuable)
@@ -515,6 +516,17 @@ pub struct Target {
     pub address: Option<String>,
     /// Value in BTC (if known)
     pub value_btc: Option<f64>,
+    /// Computed bias targets for optimized solving
+    pub biases: Option<(u8, u8, u8, bool)>,
+}
+
+/// Collision between tame and wild distinguished points
+#[derive(Debug, Clone)]
+pub struct Collision {
+    /// Distinguished point from tame kangaroo
+    pub tame_dp: DpEntry,
+    /// Distinguished point from wild kangaroo
+    pub wild_dp: DpEntry,
 }
 
 impl Target {
@@ -527,6 +539,7 @@ impl Target {
             priority: 0.0,
             address: None,
             value_btc: None,
+            biases: None,
         }
     }
 }

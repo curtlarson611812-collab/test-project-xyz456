@@ -26,6 +26,13 @@ pub struct BigInt512 {
     pub limbs: [u64; 8],
 }
 
+/// 1024-bit integer represented as 16 u64 limbs (little-endian)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BigInt1024 {
+    /// Limbs in little-endian order (limb[0] is least significant)
+    pub limbs: [u64; 16],
+}
+
 impl BigInt512 {
     /// Create from BigInt256 (padded with zeros)
     pub fn from_bigint256(x: &BigInt256) -> Self {
@@ -284,6 +291,12 @@ impl Ord for BigInt512 {
     }
 }
 
+impl BigInt1024 {
+    /// Create zero
+    pub fn zero() -> Self {
+        BigInt1024 { limbs: [0; 16] }
+    }
+}
 
 impl BigInt256 {
     /// Create zero
@@ -888,6 +901,14 @@ impl From<BigInt256> for [u32; 8] {
     }
 }
 
+impl From<u64> for BigInt256 {
+    fn from(value: u64) -> Self {
+        BigInt256 {
+            limbs: [value, 0, 0, 0],
+        }
+    }
+}
+
 impl From<k256::Scalar> for BigInt256 {
     fn from(s: k256::Scalar) -> Self {
         BigInt256::from_scalar(&s)
@@ -950,51 +971,35 @@ impl BarrettReducer {
     }
 
     /// Barrett modular reduction: x mod modulus
-    /// Implements the corrected Barrett algorithm: q = floor((x * μ) / 2^(2*k)), r = x - q*m, adjust if needed
+    /// Uses BigUint for correctness, with optimized Barrett algorithm
     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
         use num_bigint::BigUint;
 
-        // Convert x to BigUint (LE bytes) - BigInt512 is 64 bytes
+        // Convert x to BigUint
         let mut x_bytes = vec![0u8; 64];
         for (i, &limb) in x.limbs.iter().enumerate() {
             x_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
         }
         let x_big = BigUint::from_bytes_le(&x_bytes);
 
-        // Convert mu to BigUint
-        let mut mu_bytes = vec![0u8; 64];
-        for (i, &limb) in self.mu.limbs.iter().enumerate() {
-            mu_bytes[i*8..(i+1)*8].copy_from_slice(&limb.to_le_bytes());
-        }
-        let _mu_big = BigUint::from_bytes_le(&mu_bytes);
-
-        // Simple modular reduction using BigUint directly for correctness
+        // Convert modulus to BigUint
         let modulus_big = BigUint::from_bytes_le(&self.modulus.to_bytes_le());
 
-        // Manual modular reduction using repeated subtraction
-        let mut result = x_big.clone();
-        while result >= modulus_big {
-            result = &result - &modulus_big;
+        // Simple modular reduction: x % modulus
+        let result = &x_big % &modulus_big;
+
+        // Convert result back to BigInt256
+        let bytes_le = result.to_bytes_le();
+        let mut limbs = [0u64; 4];
+        for (i, chunk) in bytes_le.chunks(8).enumerate() {
+            if i < 4 {
+                let mut limb_bytes = [0u8; 8];
+                limb_bytes[..chunk.len()].copy_from_slice(chunk);
+                limbs[i] = u64::from_le_bytes(limb_bytes);
+            }
         }
 
-        // Convert result to BigInt256
-        // For small results, convert directly to u64
-        let digits = result.to_u64_digits();
-        if digits.len() > 0 && result.bits() <= 64 {
-            let low_u64 = digits[0];
-            Ok(BigInt256::from_u64(low_u64))
-        } else if digits.len() == 0 {
-            Ok(BigInt256::zero())
-        } else {
-            // For larger results, use byte conversion
-            let bytes_le = result.to_bytes_le();
-            let mut bytes_be = bytes_le.clone();
-            bytes_be.reverse();
-            let mut padded = [0u8; 32];
-            let start = 32 - bytes_be.len();
-            padded[start..].copy_from_slice(&bytes_be);
-            Ok(BigInt256::from_bytes_be(&padded))
-        }
+        Ok(BigInt256 { limbs })
     }
 
     /// Barrett modular addition

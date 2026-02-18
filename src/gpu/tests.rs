@@ -168,13 +168,12 @@ mod tests {
     #[cfg(feature = "wgpu")]
     #[tokio::test]
     async fn test_vulkan_kangaroo_step() {
-        use crate::kangaroo::stepper::KangarooStepper;
         use crate::types::KangarooState;
 
-        let hybrid = HybridBackend::new().await.unwrap();
+        let _hybrid = HybridBackend::new().await.unwrap();
         // Create mock wild kangaroo states
         let secp = Secp256k1::new();
-        let target = secp.g.clone();
+        let _target = secp.g.clone();
         let wild_states = vec![
             KangarooState::new(
                 secp.g.clone(),
@@ -324,7 +323,7 @@ mod tests {
 
         #[cfg(feature = "wgpu")]
         {
-            if let Ok(mut vulkan_backend) = WgpuBackend::new().await {
+            if let Ok(_vulkan_backend) = WgpuBackend::new().await {
                 // TODO: Implement step_kangaroo method
                 // let gpu_tame = vulkan_backend.step_kangaroo(&tame_state, None, 81).unwrap();
                 // let gpu_wild = vulkan_backend.step_kangaroo(&wild_state, Some(&curve.g), 81).unwrap();
@@ -402,7 +401,7 @@ mod tests {
         // Test parameters for deterministic behavior
         let num_kangaroos = 16;
         let steps = 1000;
-        let dp_bits = 20;
+        let _dp_bits = 20;
 
         // Create test kangaroos with known initial state
         let mut positions = Vec::new();
@@ -424,7 +423,7 @@ mod tests {
         }
 
         // CPU reference implementation
-        let mut cpu_positions = positions.clone();
+        let cpu_positions = positions.clone();
         let mut cpu_distances = distances.clone();
 
         for _ in 0..steps {
@@ -474,8 +473,8 @@ mod tests {
 
         #[cfg(feature = "wgpu")]
         {
-            if let Ok(vulkan_backend) = WgpuBackend::new().await {
-                let mut gpu_positions = positions.clone();
+            if let Ok(_vulkan_backend) = WgpuBackend::new().await {
+                let gpu_positions = positions.clone();
                 let mut gpu_distances = distances.clone();
 
                 // Step multiple times to accumulate effects

@@ -95,8 +95,8 @@ proptest = "1.0"   # Property-based testing
 tokio-test = "0.4" # Async testing utilities
 
 [[bin]]
-name = "bias_analyze"
-path = "bin/bias_analyze.rs"
+name = "simple_bias_analyze"
+path = "bin/simple_bias_analyze.rs"
 
 [[test]]
 name = "magic9"

@@ -1,0 +1,15 @@
+[package]
+name = "bias_analyzer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+anyhow = "1.0"
+k256 = { version = "0.13", features = ["arithmetic"] }
+hex = "0.4"
+rayon = "1.10"
+
+[dependencies.speedbitcrack]
+path = ".."
+optional = true

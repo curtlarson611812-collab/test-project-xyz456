@@ -60,7 +60,7 @@ impl ParityFramework {
         let start_time = Instant::now();
         let mut passed = 0;
         let mut failed = 0;
-        let mut max_error = 0.0f64;
+        let max_error = 0.0f64;
 
         #[cfg(feature = "wgpu")]
         {
@@ -167,7 +167,7 @@ impl ParityFramework {
         let start_time = Instant::now();
         let mut passed = 0;
         let mut failed = 0;
-        let mut max_error = 0.0f64;
+        let max_error = 0.0f64;
 
         #[cfg(feature = "wgpu")]
         {
@@ -218,7 +218,7 @@ impl ParityFramework {
         let start_time = Instant::now();
         let mut passed = 0;
         let mut failed = 0;
-        let mut max_error = 0.0f64;
+        let max_error = 0.0f64;
 
         #[cfg(feature = "wgpu")]
         {
@@ -343,9 +343,9 @@ impl ParityFramework {
     /// Test modular arithmetic operations
     async fn test_modular_arithmetic(&self) -> Result<ParityTestResult> {
         let start = Instant::now();
-        let mut passed = 0;
-        let mut failed = 0;
-        let mut max_error: f64 = 0.0;
+        let passed = 0;
+        let failed = 0;
+        let max_error: f64 = 0.0;
 
         let modulus = self.curve.n.clone();
 
@@ -355,12 +355,12 @@ impl ParityFramework {
             let b = BigInt256::from_u64((i * 987654321) as u64) % modulus.clone();
 
             // CPU reference operations
-            let cpu_add = (a.clone() + b.clone()) % modulus.clone();
-            let cpu_mul = self.curve.barrett_n.mul(&a, &b);
+            let _cpu_add = (a.clone() + b.clone()) % modulus.clone();
+            let _cpu_mul = self.curve.barrett_n.mul(&a, &b);
 
-            let a_u32 = a.to_u32_limbs();
-            let b_u32 = b.to_u32_limbs();
-            let n_u32 = modulus.to_u32_limbs();
+            let _a_u32 = a.to_u32_limbs();
+            let _b_u32 = b.to_u32_limbs();
+            let _n_u32 = modulus.to_u32_limbs();
 
             // Test modular operations on GPU
             #[cfg(feature = "rustacuda")]
@@ -406,7 +406,7 @@ impl ParityFramework {
         let start = Instant::now();
         let mut passed = 0;
         let mut failed = 0;
-        let mut max_error: f64 = 0.0;
+        let max_error: f64 = 0.0;
 
         // Create test kangaroos
         let mut test_kangaroos = Vec::new();
@@ -426,10 +426,10 @@ impl ParityFramework {
         }
 
         // Test batch stepping
-        let mut positions: Vec<[[u32; 8]; 3]> = test_kangaroos.iter()
+        let positions: Vec<[[u32; 8]; 3]> = test_kangaroos.iter()
             .map(|k| self.point_to_u32_array(&k.position))
             .collect();
-        let mut distances: Vec<[u32; 8]> = test_kangaroos.iter()
+        let distances: Vec<[u32; 8]> = test_kangaroos.iter()
             .map(|k| k.distance.to_u32_limbs())
             .collect();
         let types: Vec<u32> = test_kangaroos.iter()
@@ -474,9 +474,9 @@ impl ParityFramework {
     /// Test collision detection
     async fn test_collision_detection(&self) -> Result<ParityTestResult> {
         let start = Instant::now();
-        let mut passed = 0;
-        let mut failed = 0;
-        let mut max_error: f64 = 0.0;
+        let passed = 0;
+        let failed = 0;
+        let max_error: f64 = 0.0;
 
         // Create test DP entries
         let mut test_dps = Vec::new();
@@ -498,7 +498,7 @@ impl ParityFramework {
         }
 
         // Test batch solving
-        let targets: Vec<[[u32; 8]; 3]> = test_dps.iter()
+        let _targets: Vec<[[u32; 8]; 3]> = test_dps.iter()
             .map(|dp| self.point_to_u32_array(&dp.point))
             .collect();
 
@@ -537,7 +537,7 @@ impl ParityFramework {
         let start = Instant::now();
         let mut passed = 0;
         let mut failed = 0;
-        let mut max_error: f64 = 0.0;
+        let max_error: f64 = 0.0;
 
         // Test jump table precomputation
         let base_point = self.curve.g.clone();
@@ -586,7 +586,7 @@ impl ParityFramework {
         let start = Instant::now();
         let mut passed = 0;
         let mut failed = 0;
-        let mut max_error: f64 = 0.0;
+        let max_error: f64 = 0.0;
 
         // Test SmallOddPrime bucket selection
         for i in 0..1000 {

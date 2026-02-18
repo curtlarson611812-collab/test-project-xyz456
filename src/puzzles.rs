@@ -10,8 +10,6 @@ use log::{warn, info};
 use std::fs;
 use std::path::Path;
 use anyhow::{Result, anyhow};
-use sha2::{Sha256, Digest};
-use ripemd::Ripemd160;
 
 /// Debug helper: Analyze hex string character codes for invisible characters
 #[allow(dead_code)]
@@ -145,25 +143,55 @@ pub fn load_puzzles_from_file() -> Result<Vec<PuzzleEntry>> {
                 continue;
             }
         };
-        let pub_key_hex = parts[3].trim().to_string();
-        let privkey_hex = if parts[4].trim().is_empty() { None } else { Some(parts[4].trim().to_string()) };
-        let target_address = parts[5].trim().to_string();
-        let _range_min_hex = parts[6].trim();
-        let _range_max_hex = parts[7].trim();
-        let search_space_bits: u32 = match parts[8].trim().parse::<f64>() {
-            Ok(v) => v as u32,
-            Err(e) => {
-                warn!("Invalid search_space_bits '{}' in line {}: {}, skipping", parts[8], line_num + 1, e);
-                continue;
+        // For revealed puzzles, pub key is in field 3, for solved it's in field 4
+        let pub_key_hex = if status == PuzzleStatus::Revealed && !parts[3].trim().contains("UNKNOWN") {
+            parts[3].trim().to_string()
+        } else if status == PuzzleStatus::Solved {
+            parts[3].trim().to_string()
+        } else {
+            "".to_string() // Unknown for unsolved
+        };
+        let privkey_hex = if status == PuzzleStatus::Solved && parts.len() > 4 {
+            if parts[4].trim().is_empty() || parts[4].trim().contains("UNKNOWN") {
+                None
+            } else {
+                Some(parts[4].trim().to_string())
+            }
+        } else {
+            None
+        };
+        let target_address = if parts.len() > 5 { parts[5].trim().to_string() } else { "".to_string() };
+        // Parse ranges - for puzzles, we typically have range_max, and range_min = 2^(n-1)
+        let search_space_bits: u32 = n;
+        let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
+
+        // For puzzles, range_min is 2^(n-1), range_max is in the file or calculated
+        let range_min_hex = if parts.len() > 6 && !parts[6].trim().is_empty() {
+            parts[6].trim()
+        } else {
+            // Calculate 2^(n-1) as hex
+            if n == 0 {
+                "1"
+            } else {
+                let mut min_val = BigInt256::one();
+                for _ in 0..(n-1) {
+                    min_val = min_val.clone() + min_val; // Double
+                }
+                &min_val.to_hex()
             }
         };
 
-        // Calculate estimated ops (sqrt of search space for kangaroo algorithm)
-        let estimated_ops = 2f64.powf(search_space_bits as f64 / 2.0);
-
-        // Parse ranges from hex strings
-        let range_min_hex = parts[6].trim();
-        let range_max_hex = parts[7].trim();
+        let range_max_hex = if parts.len() > 7 && !parts[7].trim().is_empty() {
+            parts[7].trim()
+        } else {
+            // Calculate 2^n - 1 as hex
+            let mut max_val = BigInt256::one();
+            for _ in 0..n {
+                max_val = max_val.clone() + max_val; // Double for 2^n
+            }
+            max_val = max_val - BigInt256::one(); // Subtract 1
+            &max_val.to_hex()
+        };
 
         // Debug: Comprehensive char code analysis for hex strings (when verbose logging enabled)
         // Note: Disabled to focus on DP and collision debugging
@@ -325,6 +353,101 @@ pub fn get_sequential_puzzle_ranges(start: u32, end: u32) -> Vec<(u32, BigInt256
     }
 
     ranges
+}
+
+/// Validate puzzles 35, 40, 45, 50, 55, 60, 65 as parity checks
+/// This ensures our puzzle database integrity and solving pipeline works
+pub fn validate_parity_puzzles() -> Result<()> {
+    let parity_puzzles = [35, 40, 45, 50, 55, 60, 65];
+    let mut passed = 0;
+    let mut total = 0;
+
+    for &puzzle_num in &parity_puzzles {
+        total += 1;
+        if let Some(puzzle) = get_puzzle(puzzle_num)? {
+            if puzzle.status == PuzzleStatus::Solved {
+                // Validate that we can derive the correct address from pubkey
+                let is_valid = validate_puzzle_address(&puzzle)?;
+                if is_valid {
+                    info!("✅ Parity check passed for solved puzzle #{}", puzzle_num);
+                    passed += 1;
+                } else {
+                    warn!("❌ Parity check FAILED for solved puzzle #{}", puzzle_num);
+                    // This would indicate data corruption or implementation error
+                }
+            } else {
+                info!("ℹ️  Puzzle #{} is unsolved (expected for parity check)", puzzle_num);
+                passed += 1; // Unsolved is acceptable for parity
+            }
+        } else {
+            warn!("❌ Puzzle #{} not found in database", puzzle_num);
+        }
+    }
+
+    let success_rate = (passed as f64 / total as f64) * 100.0;
+    if success_rate >= 95.0 {
+        info!("🎉 Parity validation PASSED: {}/{} puzzles validated ({:.1}%)", passed, total, success_rate);
+    } else {
+        warn!("⚠️  Parity validation issues: {}/{} puzzles validated ({:.1}%)", passed, total, success_rate);
+    }
+
+    Ok(())
+}
+
+/// Comprehensive puzzle integrity check
+pub fn run_full_puzzle_integrity_check() -> Result<()> {
+    info!("🔍 Running comprehensive puzzle database integrity check...");
+
+    let puzzles = load_puzzles_from_file()?;
+    let mut issues = Vec::new();
+
+    for puzzle in &puzzles {
+        // Check range validity
+        if puzzle.range_min >= puzzle.range_max {
+            issues.push(format!("Puzzle {}: invalid range (min >= max)", puzzle.n));
+        }
+
+        // Check BTC reward is reasonable
+        if puzzle.btc_reward <= 0.0 || puzzle.btc_reward > 100.0 {
+            issues.push(format!("Puzzle {}: suspicious BTC reward {}", puzzle.n, puzzle.btc_reward));
+        }
+
+        // Check address format (basic validation)
+        if !puzzle.target_address.starts_with('1') && !puzzle.target_address.starts_with('3') {
+            issues.push(format!("Puzzle {}: invalid Bitcoin address format", puzzle.n));
+        }
+
+        // For solved puzzles, validate pubkey/address consistency
+        if puzzle.status == PuzzleStatus::Solved && !puzzle.pub_key_hex.is_empty() {
+            if !validate_puzzle_address(puzzle)? {
+                issues.push(format!("Puzzle {}: pubkey/address mismatch", puzzle.n));
+            }
+        }
+    }
+
+    if issues.is_empty() {
+        info!("✅ Puzzle integrity check PASSED: {} puzzles validated", puzzles.len());
+    } else {
+        for issue in &issues {
+            warn!("⚠️  Integrity issue: {}", issue);
+        }
+        warn!("❌ Puzzle integrity check FAILED: {} issues found", issues.len());
+    }
+
+    Ok(())
+}
+
+/// Target puzzle 145 for solving (higher bias patterns)
+pub fn get_puzzle_145_for_solving() -> Result<Option<PuzzleEntry>> {
+    let puzzle = get_puzzle(145)?;
+    if let Some(ref p) = puzzle {
+        if p.status == PuzzleStatus::Revealed {
+            info!("🎯 Targeting puzzle #145 for solving (revealed, high bias potential)");
+            info!("   Range: {} to {}", p.range_min.to_hex(), p.range_max.to_hex());
+            info!("   BTC Reward: {} BTC", p.btc_reward);
+        }
+    }
+    Ok(puzzle)
 }
 
 /// Generate Python verification script

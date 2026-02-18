@@ -192,6 +192,7 @@ impl TargetLoader {
             priority: 1.0, // Default priority for raw hex keys
             address,
             value_btc: Some(btc_value),
+            biases: None, // Will be computed automatically in manager
         })
     }
 
@@ -248,9 +249,8 @@ impl TargetLoader {
                 continue;
             }
 
-            // For now, we'll use None for key_range since Target expects (u64, u64) but we have BigInt256
-            // TODO: Update Target struct to support BigInt256 ranges for large puzzles
-            let key_range = None;
+            // Use the actual BigInt256 ranges from the puzzle
+            let key_range = Some((puzzle.range_min.clone(), puzzle.range_max.clone()));
 
             // Calculate priority: BTC value + bonus for lower puzzle numbers
             let priority = puzzle.btc_reward + (1000.0 / puzzle.n as f64);
@@ -262,6 +262,7 @@ impl TargetLoader {
                 priority,
                 address: Some(puzzle.target_address.clone()),
                 value_btc: Some(puzzle.btc_reward),
+                biases: None, // Will be computed automatically in manager
             });
         }
 

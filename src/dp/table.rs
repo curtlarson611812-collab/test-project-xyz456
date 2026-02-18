@@ -223,7 +223,7 @@ impl DpTable {
     }
 
     /// Get all DP entries for checkpointing
-    pub async fn get_all_entries(&self) -> Result<Vec<DpEntry>> {
+    pub fn get_all_entries(&self) -> Result<Vec<DpEntry>> {
         Ok(self.entries.values().cloned().collect())
     }
 

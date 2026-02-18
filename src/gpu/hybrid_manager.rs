@@ -10,10 +10,10 @@ use crate::types::{Point, Solution, KangarooState};
 use crate::math::bigint::BigInt256;
 use crate::kangaroo::collision::Trap;
 use crate::math::secp::Secp256k1;
-use crate::config::{Config, BiasMode};
+use crate::config::Config;
 use anyhow::{Result, anyhow};
 use std::sync::{Arc, Mutex};
-use log::{info, warn, debug};
+use log::{warn, debug};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -154,20 +154,62 @@ pub struct FlowPerformanceSummary {
 }
 
 impl HybridGpuManager {
-    /// Get CUDA backend for direct access
+    /// Get CUDA backend for direct access (Phase 5 - CUDA integration)
     #[cfg(feature = "rustacuda")]
     fn cuda_backend(&self) -> &crate::gpu::backends::cuda_backend::CudaBackend {
-        // This assumes HybridBackend has a cuda field - may need adjustment
-        // Phase 5: Implement proper CUDA backend access
-        panic!("CUDA backend access not yet implemented")
+        // CUDA backend access requires proper HybridBackend field access
+        // Phase 5: Implement full CUDA/Vulkan hybrid integration
+        unimplemented!("CUDA backend access requires Phase 5 hybrid integration")
     }
 
-    /// TEMPORARILY DISABLED: GPU EC operations cause inconsistent results
-    /// The CUDA kernels have separate EC math implementations that don't match CPU
-    /// This causes the hybrid system to produce invalid points
-    pub fn calculate_drift_error(&self, _buffer: &SharedBuffer<Point>, _sample_size: usize) -> Result<f64, Box<dyn std::error::Error>> {
-        // Return low error to prefer CPU operations for now
-        Ok(0.0)
+    /// Calculate drift error between CPU and GPU implementations
+    /// Returns average absolute error in coordinate values (0.0 = perfect match)
+    pub fn calculate_drift_error(&self, buffer: &SharedBuffer<Point>, sample_size: usize) -> Result<f64, Box<dyn std::error::Error>> {
+        if sample_size == 0 {
+            return Ok(0.0);
+        }
+
+        let mut total_error = 0.0;
+        let points = buffer.as_slice();
+
+        // Sample points for drift calculation
+        let step = (points.len() / sample_size).max(1);
+        let mut sample_count = 0;
+
+        for i in (0..points.len()).step_by(step) {
+            if sample_count >= sample_size {
+                break;
+            }
+
+            let gpu_point = &points[i];
+
+            // Recalculate point using CPU implementation for comparison
+            // This is a simplified drift check - full implementation would require
+            // access to the original scalar and generator used
+            let cpu_x = BigInt256 { limbs: gpu_point.x };
+            let cpu_y = BigInt256 { limbs: gpu_point.y };
+
+            // For now, check if point satisfies curve equation: y² = x³ + 7
+            // Use BigInt256 modular arithmetic
+            let x_squared = (cpu_x.clone() * cpu_x.clone()) % self.curve.modulus().clone();
+            let x_cubed = (x_squared.clone() * cpu_x.clone()) % self.curve.modulus().clone();
+            let x_cubed_plus_7 = (x_cubed + BigInt256::from_u64(7)) % self.curve.modulus().clone();
+            let y_squared = (cpu_y.clone() * cpu_y.clone()) % self.curve.modulus().clone();
+
+            let diff = if x_cubed_plus_7.to_u64() >= y_squared.to_u64() {
+                (x_cubed_plus_7.to_u64() - y_squared.to_u64()) as f64
+            } else {
+                (y_squared.to_u64() - x_cubed_plus_7.to_u64()) as f64
+            };
+
+            // Convert difference to error metric
+            let error = diff; // diff is already f64
+            total_error += error;
+
+            sample_count += 1;
+        }
+
+        Ok(total_error / sample_count as f64)
     }
 
     /// CPU validation of curve equation: y² = x³ + 7 mod p
@@ -409,7 +451,7 @@ impl HybridGpuManager {
             flow_control.active_flows.get(flow_id).cloned()
         };
 
-        if let Some(flow) = flow_config {
+        if let Some(_flow) = flow_config {
             // Create OOO execution queue for kangaroo operations
             let mut ooo_queue = self.hybrid_backend.create_ooo_queue(8);
 
@@ -436,7 +478,7 @@ impl HybridGpuManager {
             }
 
             // Submit kangaroo stepping work items
-            let work_id = self.hybrid_backend.submit_ooo_work(
+            let _work_id = self.hybrid_backend.submit_ooo_work(
                 &mut ooo_queue,
                 crate::gpu::backends::hybrid_backend::HybridOperation::StepBatch(
                     positions, distances, types
@@ -459,7 +501,7 @@ impl HybridGpuManager {
     }
 
     /// Execute collision solving flow
-    async fn execute_collision_solve_flow(&self, flow_id: &str) -> Result<(), anyhow::Error> {
+    async fn execute_collision_solve_flow(&self, _flow_id: &str) -> Result<(), anyhow::Error> {
         // High-priority collision solving with redundant execution
         let context = self.create_scheduling_context().await?;
         let selection = {
@@ -664,7 +706,7 @@ impl HybridGpuManager {
     /// Adapt execution mode based on performance metrics
     async fn adapt_execution_mode(&self) -> Result<(), anyhow::Error> {
         let flow_control = self.flow_control.lock().unwrap();
-        let metrics = &flow_control.adaptation_metrics;
+        let _metrics = &flow_control.adaptation_metrics;
 
         // Analyze performance and switch modes if beneficial
         let current_mode = flow_control.current_mode.clone();

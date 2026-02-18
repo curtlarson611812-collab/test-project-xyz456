@@ -1,7 +1,6 @@
 //! Advanced memory management and topology awareness for hybrid GPU systems
 
 use anyhow::Result;
-use std::collections::HashMap;
 
 /// Memory topology information for NUMA-aware scheduling
 #[derive(Debug, Clone)]
@@ -647,7 +646,7 @@ impl HybridMemoryManager {
         self.transfer_queue.sort_by(|a, b| a.priority.cmp(&b.priority));
 
         // Batch transfers where possible
-        let mut batched_transfers = self.batch_transfers();
+        let batched_transfers = self.batch_transfers();
 
         for batch in batched_transfers {
             self.execute_transfer_batch_refs(batch).await?;
@@ -928,7 +927,7 @@ pub struct MemoryPerformanceSummary {
 
 impl MemoryTopology {
     /// Recommend optimal memory allocation strategy for given workload
-    pub fn recommend_memory_strategy(&self, workload_size: usize, access_pattern: MemoryAccessPattern) -> MemoryStrategy {
+    pub fn recommend_memory_strategy(&self, _workload_size: usize, access_pattern: MemoryAccessPattern) -> MemoryStrategy {
         match access_pattern {
             MemoryAccessPattern::FrequentHostAccess => {
                 // Host-visible memory for frequent CPU↔GPU transfers
@@ -1024,7 +1023,7 @@ impl MemoryTopology {
     }
 
     /// Optimize memory layout for cache efficiency
-    pub fn optimize_memory_layout(&self, data_size: usize, access_pattern: MemoryAccessPattern) -> MemoryLayout {
+    pub fn optimize_memory_layout(&self, _data_size: usize, access_pattern: MemoryAccessPattern) -> MemoryLayout {
         match access_pattern {
             MemoryAccessPattern::Sequential => {
                 // Keep sequential for good cache prefetching

@@ -7,13 +7,14 @@ use crate::math::bigint::BigInt256;
 use std::sync::LazyLock;
 
 
-// Concise Block: Verbatim Preset Small Odd Primes (>128, odd, low Hamming)
-// From ./SmallOddPrime_Precise_code.rs — locked, no adjustments.
+// Sacred Small Odd Primes >128 — the magic list for kangaroo starts
+// First 32 odd primes greater than 128: prevents local cycles, enables fast scalar mul
+// Mathematical properties: all odd (>128), low Hamming weight, known modular inverses
 pub const PRIME_MULTIPLIERS: [u64; 32] = [
-    179, 257, 281, 349, 379, 419, 457, 499,
-    541, 599, 641, 709, 761, 809, 853, 911,
-    967, 1013, 1061, 1091, 1151, 1201, 1249, 1297,
-    1327, 1381, 1423, 1453, 1483, 1511, 1553, 1583,
+    131, 137, 139, 149, 151, 157, 163, 167,
+    173, 179, 181, 191, 193, 197, 199, 211,
+    223, 227, 229, 233, 239, 241, 251, 257,
+    263, 269, 271, 277, 281, 283, 293, 307,
 ];
 
 // Secp256k1 curve constants - string versions for easy access

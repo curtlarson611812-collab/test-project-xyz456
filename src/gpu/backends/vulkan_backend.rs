@@ -185,7 +185,7 @@ impl GpuBackend for WgpuBackend {
         use crate::kangaroo::stepper::KangarooStepper;
         use crate::types::KangarooState;
 
-        let mut traps = Vec::new();
+        let traps = Vec::new();
         let stepper = KangarooStepper::new(false); // Use standard mode
 
         // Process each kangaroo
@@ -391,7 +391,6 @@ impl GpuBackend for WgpuBackend {
             log::info!("GPU batch inverse computation submitted - using CPU verification for results");
 
             // CPU verification (matches GPU computation)
-            use crate::math::bigint::BigInt256;
             let modulus_bigint = self.u32_array_to_bigint(&modulus);
             let mut results = Vec::with_capacity(a.len());
 
@@ -444,7 +443,7 @@ impl GpuBackend for WgpuBackend {
 
         let mut results = Vec::with_capacity(dps.len());
 
-        for (i, dp) in dps.iter().enumerate() {
+        for (_i, dp) in dps.iter().enumerate() {
             // Simple collision detection - check if DP point matches any target
             let mut found_solution = None;
 
@@ -1075,7 +1074,7 @@ impl GpuBackend for WgpuBackend {
         for i in 0..8 {
             mu_u64[i] = ((mu[i*2 + 1] as u64) << 32) | (mu[i*2] as u64);
         }
-        let mu_bigint = BigInt512 { limbs: mu_u64 }.to_bigint256();
+        let _mu_bigint = BigInt512 { limbs: mu_u64 }.to_bigint256();
 
         // Perform Barrett reduction
         let reduced = match crate::math::bigint::BarrettReducer::new(&modulus_bigint)
@@ -1206,8 +1205,6 @@ impl GpuBackend for WgpuBackend {
 
     fn run_gpu_steps(&self, num_steps: usize, start_state: crate::types::KangarooState) -> Result<(Vec<crate::types::Point>, Vec<crate::math::BigInt256>)> {
         use crate::kangaroo::stepper::KangarooStepper;
-        use crate::types::Point;
-        use crate::math::bigint::BigInt256;
 
         let mut positions = Vec::with_capacity(num_steps);
         let mut distances = Vec::with_capacity(num_steps);
@@ -1297,12 +1294,12 @@ impl GpuBackend for WgpuBackend {
         Ok(vec![0.5; 100])
     }
 
-    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, num_random: usize, empirical_pos: Option<Vec<f64>>, weights: (f64, f64, f64)) -> Result<Vec<f64>> {
+    fn blend_proxy_preseed(&self, preseed_pos: Vec<f64>, _num_random: usize, _empirical_pos: Option<Vec<f64>>, _weights: (f64, f64, f64)) -> Result<Vec<f64>> {
         // Placeholder implementation
         Ok(preseed_pos)
     }
 
-    fn analyze_preseed_cascade(&self, proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
+    fn analyze_preseed_cascade(&self, _proxy_pos: &[f64], bins: usize) -> Result<(Vec<f64>, Vec<f64>)> {
         // Placeholder implementation
         Ok((vec![0.0; bins], vec![0.0; bins]))
     }

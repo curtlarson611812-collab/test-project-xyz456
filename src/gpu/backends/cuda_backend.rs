@@ -7,10 +7,8 @@
 
 use crate::gpu::backends::GpuBackend;
 use crate::kangaroo::collision::Trap;
-use crate::types::{DpEntry, RhoState};
+use crate::types::DpEntry;
 use anyhow::{Result, anyhow};
-use std::collections::HashMap;
-use std::ffi::CString;
 
 /// Direct CUDA kernel caller for all operations
 #[cfg(feature = "rustacuda")]

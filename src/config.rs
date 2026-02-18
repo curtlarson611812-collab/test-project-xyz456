@@ -61,6 +61,24 @@ pub enum BiasMode {
     Combined,    // Multi-bias combination mode
 }
 
+impl std::fmt::Display for BiasMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BiasMode::Auto => write!(f, "auto"),
+            BiasMode::Uniform => write!(f, "uniform"),
+            BiasMode::Magic9 => write!(f, "magic9"),
+            BiasMode::Primes => write!(f, "primes"),
+            BiasMode::Mod3 => write!(f, "mod3"),
+            BiasMode::Mod9 => write!(f, "mod9"),
+            BiasMode::Mod27 => write!(f, "mod27"),
+            BiasMode::Mod81 => write!(f, "mod81"),
+            BiasMode::Gold => write!(f, "gold"),
+            BiasMode::Pos => write!(f, "pos"),
+            BiasMode::Combined => write!(f, "combined"),
+        }
+    }
+}
+
 /// SpeedBitCrack V3 - Multi-target Pollard's rho/kangaroo ECDLP solver for secp256k1
 ///
 /// High-performance implementation targeting early unspent P2PK outputs (blocks 1–500k, >1 BTC)
@@ -97,8 +115,9 @@ pub struct Config {
     #[arg(long)]
     pub valuable: bool,
 
-    /// Distinguished point bits (tradeoff: higher = fewer DPs)
-    #[arg(short = 'd', long, default_value = "26")]
+    /// Distinguished point bits (tradeoff: higher = fewer DPs, lower = more DPs)
+    /// Recommendation: 20-24 for good collision rate without excessive DPs
+    #[arg(short = 'd', long, default_value = "24")]
     pub dp_bits: usize,
 
     /// Kangaroo herd size (GPU memory limited)
@@ -368,6 +387,14 @@ pub struct Config {
     #[arg(long, value_name = "PUZZLE_NUM")]
     pub validate_puzzle: Option<u32>,
 
+    /// Solve Magic 9 cluster (special mode)
+    #[arg(long)]
+    pub solve_magic_9: bool,
+
+    /// Enable birthday paradox near collision solving
+    #[arg(long)]
+    pub birthday_paradox_mode: bool,
+
     /// Force continue on parity/checkpoint failures
     #[arg(long)]
     pub force_continue: bool,
@@ -518,6 +545,8 @@ impl Default for Config {
             poisson_lambda: 1.3,
             priority_list: None,
             validate_puzzle: None,
+            solve_magic_9: false,
+            birthday_paradox_mode: false,
             force_continue: false,
             output_dir: "output".into(),
             checkpoint_interval: 4294967296,
