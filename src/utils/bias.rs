@@ -899,9 +899,9 @@ fn build_pop_statistical_model(puzzle_num: u32) -> PopStatisticalModel {
     }
 }
 
-/// Recursive keyspace partitioning using POP bias statistical model
-/// Implements the user's insight: recursively cut in half, keeping only the most promising half
-/// This gives exponential reduction: 50% → 75% → 87.5% → etc.
+/// Multi-level keyspace partitioning using POP bias histogram analysis
+/// Creates multiple partitions based on statistical density analysis
+/// Unlike recursive reduction, this creates parallel partitions for comprehensive coverage
 fn recursive_keyspace_partitioning(
     current_range: (BigInt256, BigInt256),
     model: &PopStatisticalModel,
@@ -911,32 +911,92 @@ fn recursive_keyspace_partitioning(
         return vec![current_range];
     }
 
-    // Find the densest region to determine which half to keep
-    let densest_region = find_densest_region_in_range(&current_range, model);
+    // Use histogram data to create intelligent partitions
+    let partitions = create_histogram_based_partitions(&current_range, model, max_iterations);
 
-    // Split at midpoint for exponential reduction
-    // For puzzle #145 range [2^144, 2^145-1], split at 2^144 + 2^143 = 2^144 + 2^143 = 1.5 * 2^144
-    // This gives us [2^144, 1.5*2^144] and [1.5*2^144, 2^145-1]
+    if partitions.len() > 1 {
+        println!("🎯 POP partitioning: created {} histogram-based partitions", partitions.len());
+        return partitions;
+    }
+
+    // Fallback to binary split if histogram analysis doesn't yield multiple partitions
     let split_point = BigInt256::from_hex("17FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").unwrap_or_else(|_| {
-        // Fallback: if parsing fails, use the start of range + approximate half
-        // This is a rough approximation but better than nothing
         BigInt256::from_u64(current_range.0.to_u64() + (current_range.1.to_u64() - current_range.0.to_u64()) / 2)
     });
 
-    println!("🎯 POP partitioning: splitting range at midpoint {}", split_point.to_hex());
+    println!("🎯 POP partitioning round {}: binary split at {}", 4 - max_iterations, split_point.to_hex());
 
-    println!("🎯 POP partitioning round {}: keeping most promising half", 4 - max_iterations);
+    let left_partitions = recursive_keyspace_partitioning(
+        (current_range.0.clone(), split_point.clone()),
+        model,
+        max_iterations - 1
+    );
 
-    // Choose which half to keep based on POP bias analysis
-    // For now, we'll keep the first half (could be enhanced with actual POP analysis)
-    let chosen_range = if should_keep_first_half(&current_range, &split_point, model) {
-        (current_range.0.clone(), split_point.clone())
-    } else {
-        (split_point.clone(), current_range.1.clone())
-    };
+    let right_partitions = recursive_keyspace_partitioning(
+        (split_point, current_range.1.clone()),
+        model,
+        max_iterations - 1
+    );
 
-    // Continue recursively on the chosen half
-    recursive_keyspace_partitioning(chosen_range, model, max_iterations - 1)
+    [left_partitions, right_partitions].concat()
+}
+
+/// Create partitions based on histogram density analysis
+fn create_histogram_based_partitions(
+    range: &(BigInt256, BigInt256),
+    model: &PopStatisticalModel,
+    max_splits: usize
+) -> Vec<(BigInt256, BigInt256)> {
+    let mut partitions = Vec::new();
+
+    // Find all density regions that overlap with our range
+    let overlapping_regions: Vec<&DensityRegion> = model.density_regions.iter()
+        .filter(|region| {
+            // Convert BigInt range to normalized [0,1] space for comparison
+            let range_start_norm = normalize_key(&range.0, range);
+            let range_end_norm = normalize_key(&range.1, range);
+
+            // Check if region overlaps with our search range
+            region.end > range_start_norm && region.start < range_end_norm
+        })
+        .collect();
+
+    if overlapping_regions.is_empty() {
+        println!("🎯 POP partitioning: no overlapping histogram regions found, using binary split");
+        return vec![];
+    }
+
+    println!("🎯 Found {} overlapping density regions in histogram", overlapping_regions.len());
+
+    // Sort regions by density (highest first)
+    let mut sorted_regions = overlapping_regions.clone();
+    sorted_regions.sort_by(|a, b| b.density.partial_cmp(&a.density).unwrap());
+
+    // Take the top N most dense regions (limited by max_splits)
+    let num_partitions = max_splits.min(sorted_regions.len()).max(1);
+
+    for (i, region) in sorted_regions.iter().take(num_partitions).enumerate() {
+        // Create partition around this density region
+        let region_start = denormalize_position(region.start.max(0.0), range);
+        let region_end = denormalize_position(region.end.min(1.0), range);
+
+        // Add some padding around the dense region (10% on each side)
+        let region_size = region_end.to_u64().saturating_sub(region_start.to_u64());
+        let padding = (region_size / 10).max(1);
+
+        let padded_start = if region_start.to_u64() > padding {
+            BigInt256::from_u64(region_start.to_u64() - padding)
+        } else {
+            region_start.clone()
+        };
+        let padded_end = BigInt256::from_u64(region_end.to_u64() + padding);
+
+        partitions.push((padded_start, padded_end));
+        println!("🎯 Partition {}: density {:.1}x around [{:.3}, {:.3}] normalized range",
+                 i + 1, region.density, region.start, region.end);
+    }
+
+    partitions
 }
 
 /// Determine which half to keep based on POP bias analysis
