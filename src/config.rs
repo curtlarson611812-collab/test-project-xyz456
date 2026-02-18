@@ -674,10 +674,10 @@ impl Config {
             );
         }
 
-        // Validate gold combo only with magic9/primes
-        if self.gold_bias_combo && self.bias_mode == BiasMode::Uniform {
+        // Validate gold combo requires a non-uniform bias mode
+        if self.gold_bias_combo && matches!(self.bias_mode, BiasMode::Uniform) {
             return Err(anyhow!(
-                "GOLD bias combo requires bias_mode magic9 or primes"
+                "GOLD bias combo requires a non-uniform bias mode (try --bias-mode magic9 or --bias-mode primes)"
             ));
         }
 
