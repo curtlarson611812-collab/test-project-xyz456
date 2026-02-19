@@ -1639,8 +1639,9 @@ impl BigInt256 {
         let mut high = self.clone();
 
         while low < high {
-            let mid = (&low + &high) / BigInt256::from_u64(2);
-            let mid_squared = &mid * &mid;
+            let sum = low.clone() + high.clone();
+            let mid = sum / BigInt256::from_u64(2);
+            let mid_squared = mid.clone() * mid.clone();
 
             if mid_squared <= *self {
                 low = mid + BigInt256::one();
