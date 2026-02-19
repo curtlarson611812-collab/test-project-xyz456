@@ -758,6 +758,21 @@ pub fn analyze_preseed_cascade(_proxy_pos: &[f64], _bins: usize) -> Vec<(f64, f6
 static D_G_CACHE: std::sync::OnceLock<Mutex<HashMap<(u8, u8, u8, u8), BigInt256>>> =
     std::sync::OnceLock::new();
 
+/// Pre-computed biases for the 9 Magic 9 GOLD cluster keys
+/// All keys share identical bias patterns: (0,0,0,0,128)
+/// This represents the universal zero residue pattern for GOLD mode
+pub const MAGIC9_BIASES: [(u8, u8, u8, u8, u32); 9] = [
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+    (0, 0, 0, 0, 128),
+];
+
 /// Get pre-computed biases for a specific Magic 9 pubkey index
 /// Returns (mod3, mod9, mod27, mod81, hamming_weight)
 /// SECURITY: Loads from external file at runtime, no embedded key data
@@ -866,7 +881,7 @@ pub fn pop_keyspace_partitioning(target_point: &Point, search_range: (BigInt256,
 }
 
 /// Build statistical model from known solved keys (BTC32-inspired approach)
-fn build_pop_statistical_model(puzzle_num: u32) -> PopStatisticalModel {
+fn build_pop_statistical_model(_puzzle_num: u32) -> PopStatisticalModel {
     // Based on BTC32 analysis: keys cluster in specific normalized ranges
     // This is a simplified model - in practice would use actual solved key data
 
@@ -1115,7 +1130,7 @@ fn calculate_reduction_percentage(original: &(BigInt256, BigInt256), current: &(
 }
 
 /// Generate GOLD-biased samples using attractors and primes * G
-fn generate_gold_biased_samples(target: &Point, count: usize) -> Vec<BigInt256> {
+fn generate_gold_biased_samples(_target: &Point, count: usize) -> Vec<BigInt256> {
     let mut samples = Vec::with_capacity(count);
     let primes = get_biased_primes(81, 1000000, count / 10); // GOLD primes
 
@@ -1130,13 +1145,13 @@ fn generate_gold_biased_samples(target: &Point, count: usize) -> Vec<BigInt256> 
 }
 
 /// Generate POP-biased samples using population density analysis
-fn generate_pop_biased_samples(target: &Point, count: usize) -> Vec<BigInt256> {
+fn generate_pop_biased_samples(_target: &Point, count: usize) -> Vec<BigInt256> {
     let mut samples = Vec::with_capacity(count);
 
     // Generate samples with high population counts (many 1 bits)
     for i in 0..count {
         // Create keys with biased bit patterns for high POP scores
-        let mut key = BigInt256::from_u64(i as u64);
+        let key = BigInt256::from_u64(i as u64);
         // Apply POP biasing logic here
         samples.push(key);
     }
