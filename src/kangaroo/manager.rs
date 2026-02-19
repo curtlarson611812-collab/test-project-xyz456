@@ -16,7 +16,7 @@ use crate::performance_monitor::PerformanceMonitor;
 use crate::types::{DpEntry, KangarooState, Point, Solution, Target};
 use crate::utils::pubkey_loader;
 use anyhow::anyhow;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
@@ -129,6 +129,7 @@ pub struct KangarooManager {
     total_ops: u64,
     current_steps: u64,
     start_time: std::time::Instant,
+    solutions: Vec<BigInt256>,
 }
 impl KangarooManager {
     pub fn target_count(&self) -> usize {
@@ -145,8 +146,34 @@ impl KangarooManager {
             "Starting kangaroo solving with {} targets",
             self.targets.len()
         );
-        info!("Hunt simulation - target loading test successful!");
-        Ok(None)
+
+        // Actually run the hunt algorithm
+        self.run_full_range_hunt().await?;
+
+        // Check if any solutions were found
+        if !self.solutions.is_empty() {
+            let private_key = self.solutions[0].clone(); // Take first solution
+            info!("🎉 SOLUTION FOUND! Private key: {:?}", private_key);
+
+            // Find which target this solves
+            // For now, just return the first target as solved
+            // In production, would need to match the target
+            if let Some(target_point) = self.targets.first() {
+                let solution = Solution::new(
+                    private_key.to_u64_array(),
+                    target_point.point.clone(),
+                    BigInt256::from_u64(1000000), // Placeholder ops count
+                    1.0, // Placeholder time
+                );
+                Ok(Some(solution))
+            } else {
+                warn!("Solution found but no targets available");
+                Ok(None)
+            }
+        } else {
+            info!("Hunt completed without finding solution");
+            Ok(None)
+        }
     }
     pub async fn new(config: Config) -> anyhow::Result<Self> {
         let dp_bits = config.dp_bits;
@@ -245,6 +272,7 @@ impl KangarooManager {
             total_ops: 0,
             current_steps: 0,
             start_time: std::time::Instant::now(),
+            solutions: Vec::new(),
         };
         Ok(manager)
     }
@@ -303,13 +331,14 @@ impl KangarooManager {
             total_ops: 0,
             current_steps: 0,
             start_time: std::time::Instant::now(),
+            solutions: Vec::new(),
         };
         Ok(manager)
     }
 
     pub async fn run_full_range_hunt_from_config(
         config: &Config,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         println!(
             "[LAUNCH] Starting 34k P2PK + Magic9 hunt | Herd: {} | DP: {}",
             config.herd_size, config.dp_bits
@@ -330,9 +359,25 @@ impl KangarooManager {
         match &config.mode {
             SearchMode::FullRange => {
                 manager.run_full_range_hunt().await?;
+                if !manager.solutions.is_empty() {
+                    println!("🎉 HUNT SUCCESSFUL! Found {} solutions", manager.solutions.len());
+                    for (i, solution) in manager.solutions.iter().enumerate() {
+                        println!("  Solution {}: {:?}", i + 1, solution);
+                    }
+                } else {
+                    println!("Hunt completed without finding solution");
+                }
             }
             SearchMode::Interval { low, high } => {
                 manager.run_interval_hunt(*low, *high).await?;
+                if !manager.solutions.is_empty() {
+                    println!("🎉 HUNT SUCCESSFUL! Found {} solutions", manager.solutions.len());
+                    for (i, solution) in manager.solutions.iter().enumerate() {
+                        println!("  Solution {}: {:?}", i + 1, solution);
+                    }
+                } else {
+                    println!("Hunt completed without finding solution");
+                }
             }
         }
 
@@ -340,7 +385,7 @@ impl KangarooManager {
     }
 
     /// Run full range hunt (default P2PK + puzzles)
-    async fn run_full_range_hunt(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_full_range_hunt(&mut self) -> anyhow::Result<()> {
         // Simple real hunt loop - step kangaroos in reasonable batches
         let steps_per_batch = 100; // Reasonable step count per cycle
         for cycle in 0..50 {
@@ -354,12 +399,21 @@ impl KangarooManager {
             );
 
             // Check for distinguished points and collisions
-            let dp_count = self.check_distinguished_points()?;
+            let (dp_count, solutions) = self.check_distinguished_points()?;
             if dp_count > 0 {
                 println!("[CYCLE {}] Found {} distinguished points", cycle, dp_count);
                 if let Some(ref cli) = self.cli {
                     cli.set_status(format!("Found {} DPs in cycle {}", dp_count, cycle));
                 }
+            }
+
+            // If we found solutions, store them and return immediately
+            if !solutions.is_empty() {
+                println!("🎯 SOLUTIONS FOUND! Storing {} solutions.", solutions.len());
+                self.solutions.extend(solutions);
+                // For now, return after finding first solution
+                // In production, might want to continue hunting for all targets
+                return Ok(());
             }
 
             // Update CLI with current progress
@@ -422,7 +476,7 @@ impl KangarooManager {
         &mut self,
         low: u64,
         high: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         println!(
             "[INTERVAL] Starting range-based hunt | Low: {} | High: {} | Herd: {} | DP: {}",
             low, high, self.config.herd_size, self.config.dp_bits
@@ -440,7 +494,7 @@ impl KangarooManager {
                 .await?;
 
             // Check for distinguished points and collisions
-            let dp_count = self.check_distinguished_points()?;
+            let (dp_count, _) = self.check_distinguished_points()?;
             if dp_count > 0 {
                 println!(
                     "[CYCLE {}] Found {} distinguished points in range [{}, {}]",
@@ -534,7 +588,7 @@ impl KangarooManager {
     }
 
     /// Check for completed solutions using birthday paradox near collision architecture
-    fn check_solutions(&self) -> Result<Option<Solution>, Box<dyn std::error::Error>> {
+    fn check_solutions(&self) -> anyhow::Result<Option<Solution>> {
         // First check for exact collisions (traditional approach)
         if let Some(solution) = self.check_exact_collisions()? {
             return Ok(Some(solution));
@@ -547,7 +601,7 @@ impl KangarooManager {
     }
 
     /// Check for exact tame-wild collisions (traditional Pollard)
-    fn check_exact_collisions(&self) -> Result<Option<Solution>, Box<dyn std::error::Error>> {
+    fn check_exact_collisions(&self) -> anyhow::Result<Option<Solution>> {
         let dp_entries = self.dp_table.lock().unwrap().get_all_entries()?;
 
         if dp_entries.is_empty() {
@@ -603,7 +657,7 @@ impl KangarooManager {
     /// reveal private key relationships even without exact matches
     fn check_near_collisions_birthday_paradox(
         &self,
-    ) -> Result<Option<Solution>, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<Option<Solution>> {
         let dp_entries = self.dp_table.lock().unwrap().get_all_entries()?;
 
         if dp_entries.len() < 1000 {
@@ -645,7 +699,7 @@ impl KangarooManager {
     fn analyze_proximity_group_birthday_paradox(
         &self,
         group: &[DpEntry],
-    ) -> Result<Option<Solution>, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<Option<Solution>> {
         if group.len() < 2 {
             return Ok(None);
         }
@@ -657,7 +711,7 @@ impl KangarooManager {
 
         let n_order = BigInt256::from_hex(
             "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
-        )?;
+        ).map_err(anyhow::Error::msg)?;
 
         // Find pairs with minimal distance differences (birthday paradox candidates)
         for i in 0..group.len() {
@@ -707,7 +761,7 @@ impl KangarooManager {
         &self,
         tame_dp: &DpEntry,
         wild_dp: &DpEntry,
-    ) -> Result<Option<Solution>, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<Option<Solution>> {
         // Use the mathematical relationship from Pollard's rho:
         // If tame and wild meet at same point P:
         // tame_start + tame_distance = wild_start + wild_distance + k * order
@@ -735,7 +789,7 @@ impl KangarooManager {
             // Modular subtraction: tame_beta - wild_beta mod order
             let order = BigInt256::from_hex(
                 "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
-            )?;
+            ).map_err(anyhow::Error::msg)?;
             order + tame_beta - wild_beta
         };
 
@@ -750,14 +804,14 @@ impl KangarooManager {
         } else {
             let order = BigInt256::from_hex(
                 "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
-            )?;
+            ).map_err(anyhow::Error::msg)?;
             order + tame_dist - wild_dist
         };
 
         // Compute modular inverse of denominator
         let order = BigInt256::from_hex(
             "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
-        )?;
+        ).map_err(anyhow::Error::msg)?;
         let inv_denominator = match self.compute_modular_inverse(&denominator, &order) {
             Some(inv) => inv,
             None => return Ok(None), // No inverse exists
@@ -788,7 +842,7 @@ impl KangarooManager {
         &self,
         tame_dp: &DpEntry,
         wild_dp: &DpEntry,
-    ) -> Result<Option<Solution>, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<Option<Solution>> {
         // Extract distance and coefficient vectors
         let d_tame = tame_dp.state.distance.clone();
         let d_wild = wild_dp.state.distance.clone();
@@ -806,7 +860,7 @@ impl KangarooManager {
 
         let n_order = BigInt256::from_hex(
             "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
-        )?;
+        ).map_err(anyhow::Error::msg)?;
 
         // Calculate numerator: d_tame - d_wild
         let numerator = if d_tame >= d_wild {
@@ -970,7 +1024,7 @@ impl KangarooManager {
     async fn save_checkpoint(
         &mut self,
         current_cycle: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         // Get current performance metrics
         let perf_summary = self
             .performance_monitor
@@ -1030,7 +1084,7 @@ impl KangarooManager {
     }
 
     /// Resume hunt from latest checkpoint
-    pub async fn resume_from_checkpoint(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn resume_from_checkpoint(config: &Config) -> anyhow::Result<()> {
         let checkpoint_manager = CheckpointManager::new(
             config.output_dir.join("checkpoints"),
             10,
@@ -1125,6 +1179,7 @@ impl KangarooManager {
             total_ops: checkpoint.total_ops,
             current_steps: 0,
             start_time: std::time::Instant::now(),
+            solutions: Vec::new(),
         };
 
         // Restore kangaroo herds
@@ -1149,7 +1204,7 @@ impl KangarooManager {
     }
 
     /// Resume full range hunt from checkpoint
-    async fn resume_full_range_hunt(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn resume_full_range_hunt(&mut self) -> anyhow::Result<()> {
         let mut cycle = self.current_cycle;
         let max_cycles = self.config.max_cycles.max(1);
 
@@ -1165,12 +1220,19 @@ impl KangarooManager {
                 .await?;
 
             // Check for distinguished points and collisions
-            let dp_count = self.check_distinguished_points()?;
+            let (dp_count, solutions) = self.check_distinguished_points()?;
             if dp_count > 0 {
                 println!("[CYCLE {}] Found {} distinguished points", cycle, dp_count);
                 if let Some(ref cli) = self.cli {
                     cli.set_status(format!("Found {} DPs in cycle {}", dp_count, cycle));
                 }
+            }
+
+            // If we found solutions, store them and return immediately
+            if !solutions.is_empty() {
+                println!("🎯 SOLUTIONS FOUND in interval hunt! Storing {} solutions.", solutions.len());
+                self.solutions.extend(solutions);
+                return Ok(());
             }
 
             // Update CLI and checkpoint as before...
@@ -1185,7 +1247,7 @@ impl KangarooManager {
         &mut self,
         low: u64,
         high: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         let mut cycle = self.current_cycle;
         let max_cycles = self.config.max_cycles.max(1);
 
@@ -1204,7 +1266,7 @@ impl KangarooManager {
                 .await?;
 
             // Check for distinguished points and collisions
-            let dp_count = self.check_distinguished_points()?;
+            let (dp_count, _) = self.check_distinguished_points()?;
             if dp_count > 0 {
                 println!(
                     "[CYCLE {}] Found {} distinguished points in range [{}, {}]",
@@ -1229,6 +1291,7 @@ impl KangarooManager {
                     high,
                     key_bigint.to_hex()
                 );
+                self.solutions.push(key_bigint);
                 return Ok(());
             }
 
@@ -1425,7 +1488,7 @@ impl KangarooManager {
     /// Standalone function for running full range hunt
     pub async fn run_full_range_standalone(
         config: &Config,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         Self::run_full_range_hunt_from_config(config).await
     }
 
@@ -1601,6 +1664,8 @@ impl KangarooManager {
                     &mut gpu_positions,
                     &mut gpu_distances,
                     &gpu_types,
+                    None,
+                    None,
                     &self.config,
                 )?;
             }
@@ -1622,6 +1687,8 @@ impl KangarooManager {
                     &mut gpu_positions,
                     &mut gpu_distances,
                     &gpu_types,
+                    None,
+                    None,
                     &self.config,
                 )?;
             }
@@ -1670,6 +1737,8 @@ impl KangarooManager {
                             &mut gpu_positions,
                             &mut gpu_distances,
                             &gpu_types,
+                            None,
+                            None,
                             &self.config,
                         )?;
                     }
@@ -1693,6 +1762,8 @@ impl KangarooManager {
                             &mut gpu_positions,
                             &mut gpu_distances,
                             &gpu_types,
+                            None,
+                            None,
                             &self.config,
                         )?;
                     }
@@ -1822,10 +1893,11 @@ impl KangarooManager {
     }
 
     /// Check for distinguished points and handle collisions
-    pub fn check_distinguished_points(&mut self) -> anyhow::Result<usize> {
+    pub fn check_distinguished_points(&mut self) -> anyhow::Result<(usize, Vec<BigInt256>)> {
         let mut dp_count = 0;
         let dp_bits = self.config.dp_bits;
         let mut collisions_found = Vec::new();
+        let mut solutions_found = Vec::new();
 
         // Collect wild kangaroos with distinguished points first
         let wild_dps: Vec<KangarooState> = self
@@ -1893,12 +1965,11 @@ impl KangarooManager {
         for collision in collisions_found {
             if let Some(solution) = self.solve_collision(collision)? {
                 println!("🎉 COLLISION SOLVED! Private key found: {:?}", solution);
-                // In a real implementation, this would return the solution
-                // For now, just log it
+                solutions_found.push(solution);
             }
         }
 
-        Ok(dp_count)
+        Ok((dp_count, solutions_found))
     }
 
     /// Hash a point for DP table lookup
