@@ -1286,6 +1286,35 @@ pub fn load_valuable_p2pk_keys(path: &str) -> io::Result<(Vec<Point>, SearchConf
     Ok((points, config))
 }
 
+/// Load a specific real unsolved puzzle by number
+/// Returns the compressed public key point for the given puzzle number
+pub fn load_real_puzzle(
+    n: u32,
+    curve: &Secp256k1,
+) -> Result<Point, Box<dyn std::error::Error>> {
+    let hex = match n {
+        135 => "02145d2611c823a396ef6712ce0f712f09b9b4f3135e3e0aa3230fb9b6d08d1e16",
+        140 => "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+        145 => "03afdda497369e219a2c1c369954a930e4d3740968e5e4352475bcffce3140dae5",
+        150 => "03137807790ea7dc6e97901c2bc87411f45ed74a5629315c4e4b03a0a102250c49",
+        155 => "035cd1854cae45391ca4ec428cc7e6c7d9984424b954209a8eea197b9e364c05f6",
+        160 => "02e0a8b039282faf6fe0fd769cfbc4b6b4cf8758ba68220eac420e32b91ddfa673",
+        _ => return Err(format!("Unknown puzzle #{}", n).into()),
+    };
+
+    let bytes = hex::decode(hex)?;
+    if bytes.len() != 33 {
+        return Err(format!("Invalid hex length for puzzle #{}", n).into());
+    }
+
+    let mut comp = [0u8; 33];
+    comp.copy_from_slice(&bytes);
+
+    curve
+        .decompress_point(&comp)
+        .ok_or_else(|| format!("Failed to decompress puzzle #{}", n).into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
