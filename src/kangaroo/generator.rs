@@ -1071,7 +1071,10 @@ impl KangarooGenerator {
 
     /// Concise Block: Dynamic Rho m with Bias Prob
     pub fn rho_dynamic_m(&self, n: BigInt256, bias_prob: f64) -> u64 {
-        (n.to_f64().sqrt() * bias_prob.sqrt()) as u64 // Adjust sqrt for bias
+        // Use integer square root to maintain precision, then convert bias_prob.sqrt() to comparable scale
+        let n_sqrt = n.integer_sqrt().to_f64();
+        let bias_factor = bias_prob.sqrt();
+        (n_sqrt * bias_factor) as u64 // Adjust sqrt for bias
     }
 
     /// Setup Kangaroos for Multi-Target with Precise Starts

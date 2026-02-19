@@ -1627,6 +1627,33 @@ impl BigInt256 {
     }
 
     /// Convert to f64 (approximate, for performance calculations)
+    /// Compute integer square root using binary search
+    /// Returns the largest integer x such that x*x <= self
+    pub fn integer_sqrt(&self) -> BigInt256 {
+        if self.is_zero() {
+            return BigInt256::zero();
+        }
+
+        // Binary search for square root
+        let mut low = BigInt256::one();
+        let mut high = self.clone();
+
+        while low < high {
+            let mid = (&low + &high) / BigInt256::from_u64(2);
+            let mid_squared = &mid * &mid;
+
+            if mid_squared <= *self {
+                low = mid + BigInt256::one();
+            } else {
+                high = mid;
+            }
+        }
+
+        // low is now the smallest number where low*low > self
+        // so (low-1) is the largest where (low-1)*(low-1) <= self
+        low - BigInt256::one()
+    }
+
     pub fn to_f64(&self) -> f64 {
         let mut result = 0.0f64;
         for i in 0..4 {
