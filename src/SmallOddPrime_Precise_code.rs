@@ -53,7 +53,7 @@ pub fn select_bucket(
     } else {
         // Wild: simplified state-mixed for now
         // TODO: Implement full coordinate-based mixing when k256 API stable
-        let mix = (seed as u64 ^ step as u64) as u32;
+        let mix = (u64::from(seed) ^ u64::from(step)) as u32;
         mix % WALK_BUCKETS
     }
 }

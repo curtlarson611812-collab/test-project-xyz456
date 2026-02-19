@@ -124,7 +124,7 @@ pub struct Config {
     pub dp_bits: usize,
 
     /// Kangaroo herd size (GPU memory limited)
-    #[arg(short = 'H', long, default_value = "500000000")]
+    #[arg(short = 'H', long, default_value = "500_000_000")]
     pub herd_size: usize,
 
     /// GPU kernel batch size (power of 2)
@@ -220,9 +220,17 @@ pub struct Config {
     #[arg(short = 'n', long, default_value = "0.0")]
     pub enable_near_collisions: f64,
 
+    /// Enable fast k_i/d_i mathematical solving for near collisions (before BSGS)
+    #[arg(long)]
+    pub fast_ki_di_solving: Option<bool>,
+
+    /// Near collision threshold (0.0-1.0, percentage of DP bits)
+    #[arg(long)]
+    pub near_collision_threshold: Option<u32>,
+
     /// Number of walk-back steps on stagnation
     #[arg(long, default_value = "0")]
-    pub enable_walk_backs: u32,
+    pub walk_back_steps: Option<u32>,
 
     /// Enable cluster-based DP pruning
     #[arg(long)]
@@ -474,14 +482,14 @@ impl Default for Config {
             test_mode: false,
             valuable: false,
             dp_bits: 26,
-            herd_size: 500000000,
+            herd_size: 500_000_000,
             gpu_batch: 131072,
             threads: 256,
             max_cycles: 0,
-            tame_count: 1000000,
-            wild_count: 1000000,
-            steps_per_batch: 1000000,
-            max_steps: 1000000000000,
+            tame_count: 1_000_000,
+            wild_count: 1_000_000,
+            steps_per_batch: 1_000_000,
+            max_steps: 1_000_000_000_000,
             gold_mod_level: None,
             stop_on_first_solve: false,
 
@@ -504,7 +512,9 @@ impl Default for Config {
 
             // Performance & Tuning
             enable_near_collisions: 0.0,
-            enable_walk_backs: 0,
+            fast_ki_di_solving: Some(true), // Enable by default
+            near_collision_threshold: Some(80), // 80% of DP bits
+            walk_back_steps: Some(20000),
             enable_smart_pruning: false,
             enable_stagnant_restart: false,
             enable_adaptive_jumps: false,
@@ -512,7 +522,7 @@ impl Default for Config {
             enable_magic9_attractor: false,
             use_bloom: false,
             use_hybrid_bsgs: false,
-            bsgs_threshold: 4294967296,
+            bsgs_threshold: 4_294_967_296,
 
             // Analysis & Debug
             bias_analysis: false,
@@ -538,8 +548,8 @@ impl Default for Config {
             near_threshold: 1000,
             enable_multi_herd_merge: false,
             enable_dp_feedback: false,
-            near_g_thresh: 1048576,
-            max_ops: 1000000000000,
+            near_g_thresh: 1_048_576,
+            max_ops: 1_000_000_000_000,
             wild_primes: vec![179, 257, 347, 461, 577, 691, 797, 919],
             prime_spacing_with_entropy: false,
             expanded_prime_spacing: false,
@@ -559,7 +569,7 @@ impl Default for Config {
             birthday_paradox_mode: false,
             force_continue: false,
             output_dir: "output".into(),
-            checkpoint_interval: 4294967296,
+            checkpoint_interval: 4_294_967_296,
             log_level: "info".into(),
             glv_dim: 2,
             enable_lll_reduction: false,
@@ -645,11 +655,13 @@ impl Config {
         }
 
         // Validate walk backs steps
-        if self.enable_walk_backs > 0 && self.enable_walk_backs < 1000 {
-            return Err(anyhow!(
-                "Walk backs steps must be 0 (disabled) or >= 1000, got {}",
-                self.enable_walk_backs
-            ));
+        if let Some(steps) = self.walk_back_steps {
+            if steps > 0 && steps < 1000 {
+                return Err(anyhow!(
+                    "Walk backs steps must be 0 (disabled) or >= 1000, got {}",
+                    steps
+                ));
+            }
         }
 
         // Validate puzzle number

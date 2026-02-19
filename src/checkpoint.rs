@@ -121,7 +121,7 @@ impl CheckpointManager {
             });
         }
 
-        CheckpointManager {
+        Self {
             checkpoint_dir,
             max_checkpoints,
             auto_save_interval_seconds,
@@ -399,7 +399,7 @@ impl Default for CheckpointManager {
 
 impl Default for SearchParameters {
     fn default() -> Self {
-        SearchParameters {
+        Self {
             search_mode: "full-range".to_string(),
             dp_bits: 26,
             herd_size: 500_000_000,
@@ -412,7 +412,7 @@ impl Default for SearchParameters {
 
 impl Default for HuntStatistics {
     fn default() -> Self {
-        HuntStatistics {
+        Self {
             dp_found: 0,
             collisions_tested: 0,
             false_positives: 0,
