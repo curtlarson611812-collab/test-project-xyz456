@@ -140,10 +140,8 @@ pub fn hash_to_index(point: &Point) -> usize {
 // Usefulness: Primes ensure coprimality with curve order, uniform distribution
 pub fn sieve_primes(n: usize) -> Vec<u64> {
     let mut is_prime = vec![true; n + 1];
-    #[allow(unused_comparisons)]
-    if n >= 0 {
-        is_prime[0] = false;
-    }
+    // Mark 0 as not prime
+    is_prime[0] = false;
     if n >= 1 {
         is_prime[1] = false;
     }

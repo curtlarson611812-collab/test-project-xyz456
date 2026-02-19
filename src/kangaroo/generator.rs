@@ -1388,14 +1388,15 @@ impl KangarooGenerator {
         let jumps = jump_table();
         let detector = CollisionDetector::new();
 
-        loop {
+        // Limit iterations to prevent infinite loops in placeholder implementation
+        for _ in 0..10 {
             self.pollard_run_split(&mut states, 10000, &jumps, biases);
             if let Some(key) = self.pollard_resolve_split(&states, &dp_table, &detector, biases) {
                 return Some(key);
             }
-            // Prevent infinite loop in tests
-            return None;
         }
+        // Placeholder: Not implemented yet
+        None
     }
 
     /// Select bias-aware jump operation with hierarchical modulus preferences (mod9 -> mod27 -> mod81 -> pos)
