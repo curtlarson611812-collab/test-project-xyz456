@@ -1666,10 +1666,21 @@ impl BigInt256 {
 
     /// Convert to f64 approximation (for scoring/metrics)
     pub fn to_f64_approx(&self) -> f64 {
-        (self.limbs[0] as f64)
-            + (self.limbs[1] as f64) * (2u64.pow(64) as f64)
-            + (self.limbs[2] as f64) * (2u64.pow(128) as f64)
-            + (self.limbs[3] as f64) * (2u64.pow(192) as f64)
+        // For cryptographic distances, use logarithmic approximation to avoid overflow
+        // Most significant bit position gives us the magnitude
+        if self.limbs[3] != 0 {
+            // Very large number, return max f64
+            f64::MAX
+        } else if self.limbs[2] != 0 {
+            // Large number, approximate
+            (self.limbs[2] as f64) * (2u64.pow(64) as f64) + (self.limbs[1] as f64)
+        } else if self.limbs[1] != 0 {
+            // Medium number
+            (self.limbs[1] as f64) * (2u64.pow(32) as f64) + (self.limbs[0] as f64)
+        } else {
+            // Small number
+            self.limbs[0] as f64
+        }
     }
 
     /// Saturating subtraction (clamp to zero)
