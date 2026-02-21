@@ -4,8 +4,7 @@
 //! This allows easy updates without recompiling the code.
 
 use crate::math::BigInt256;
-use crate::types::Point;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -651,6 +650,12 @@ if __name__ == "__main__":
     .to_string()
 }
 
+/// Get puzzle map loaded from file
+/// This loads puzzles from puzzles.txt file on demand
+pub fn get_puzzle_map() -> Result<Vec<PuzzleEntry>> {
+    load_puzzles_from_file()
+}
+
 /// Generate configuration for testing with solved puzzles
 pub fn generate_test_config() -> Result<String> {
     let solved = get_solved_puzzles()?;
@@ -677,25 +682,6 @@ pub fn generate_test_config() -> Result<String> {
     Ok(config)
 }
 
-/// Stub for backward compatibility - TODO: Remove when main.rs is updated
-pub static PUZZLE_MAP: &[PuzzleEntry] = &[];
-
-/// Stub functions for backward compatibility - TODO: Remove when main.rs is updated
-pub fn load_unspent_67() -> Result<(Point, (BigInt256, BigInt256))> {
-    Err(anyhow!("Not implemented - use flat file system"))
-}
-
-pub fn load_solved_32() -> Result<(Point, (BigInt256, BigInt256))> {
-    Err(anyhow!("Not implemented - use flat file system"))
-}
-
-pub fn load_solved_64() -> Result<(Point, (BigInt256, BigInt256))> {
-    Err(anyhow!("Not implemented - use flat file system"))
-}
-
-pub fn load_solved_66() -> Result<(Point, (BigInt256, BigInt256))> {
-    Err(anyhow!("Not implemented - use flat file system"))
-}
 
 /// Advice for avoiding front-running bots
 pub fn get_bot_avoidance_advice() -> &'static str {
@@ -745,7 +731,8 @@ mod tests {
     #[test]
     fn test_puzzle_database_integrity() {
         // Verify all puzzles have valid data
-        for puzzle in PUZZLE_MAP {
+        let puzzles = load_puzzles_from_file().unwrap();
+        for puzzle in puzzles {
             assert!(puzzle.n > 0);
             assert!(puzzle.btc_reward > 0.0);
             assert!(!puzzle.pub_key_hex.is_empty());

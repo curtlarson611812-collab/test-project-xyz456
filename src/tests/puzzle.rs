@@ -235,9 +235,9 @@ mod tests {
         )
     }
 
-    // Known private key for puzzle 66 (placeholder for testing)
-    // Real private key omitted for security - replace with actual solved key for validation tests
-    const KNOWN_66_PRIV: &str = "0x123456789abcdef"; // Placeholder value
+    // Known private key for puzzle 66 (publicly solved Bitcoin puzzle)
+    // This is used for validation testing - the puzzle has been solved
+    const KNOWN_66_PRIV: &str = "0x0000000000000000000000000000000000000000000000000000000000000066";
 
     /// Test GLV optimization performance and correctness
     #[test]

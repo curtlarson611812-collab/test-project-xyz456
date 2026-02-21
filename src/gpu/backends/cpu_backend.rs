@@ -74,6 +74,22 @@ impl CpuBackend {
             }
         }
     }
+
+    fn detect_near_collisions_cuda(
+        &self,
+        #[allow(unused_variables)] collision_pairs: Vec<(usize, usize)>,
+        #[allow(unused_variables)] kangaroo_states: &Vec<[[u32; 8]; 4]>,
+        #[allow(unused_variables)] tame_params: &[u32; 8],
+        #[allow(unused_variables)] wild_params: &[u32; 8],
+        #[allow(unused_variables)] max_walk_steps: u32,
+        #[allow(unused_variables)] m_bsgs: u32,
+        #[allow(unused_variables)] config: &crate::config::Config,
+    ) -> Result<Vec<crate::gpu::backends::backend_trait::NearCollisionResult>> {
+        // CPU implementation - return empty for now
+        Ok(Vec::new())
+    }
+
+
 }
 // Implement GpuBackend trait for CpuBackend (for fallback/testing purposes)
 #[async_trait::async_trait]
@@ -94,34 +110,48 @@ impl crate::gpu::backends::backend_trait::GpuBackend for CpuBackend {
         Vec<[u32; 8]>,
         Vec<u32>,
     )> {
-        // CPU fallback - return error since CPU should not be used for production
-        Err(anyhow!("CRITICAL: CPU backend cannot be used for kangaroo initialization! Use CUDA or Vulkan backends. CPU is reserved for parity testing only."))
-    }
-
-    fn precomp_table(&self, _base: [[u32; 8]; 3], _window: u32) -> Result<Vec<[[u32; 8]; 3]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
-    fn precomp_table_glv(&self, _base: [u32; 8 * 3], _window: u32) -> Result<Vec<[[u32; 8]; 3]>> {
+    fn precomp_table(&self, #[allow(unused_variables)] base: [[u32; 8]; 3], #[allow(unused_variables)] window: u32) -> Result<Vec<[[u32; 8]; 3]>> {
+        Err(anyhow!("CPU backend not supported for production use"))
+    }
+
+    fn precomp_table_glv(&self, #[allow(unused_variables)] base: [u32; 24], #[allow(unused_variables)] window: u32) -> Result<Vec<[[u32; 8]; 3]>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
     fn step_batch(
         &self,
-        _positions: &mut Vec<[[u32; 8]; 3]>,
-        _distances: &mut Vec<[u32; 8]>,
-        _types: &Vec<u32>,
+        #[allow(unused_variables)] positions: &mut Vec<[[u32; 8]; 3]>,
+        #[allow(unused_variables)] distances: &mut Vec<[u32; 8]>,
+        #[allow(unused_variables)] types: &Vec<u32>,
     ) -> Result<Vec<super::backend_trait::Trap>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
     fn step_batch_bias(
         &self,
-        _positions: &mut Vec<[[u32; 8]; 3]>,
-        _distances: &mut Vec<[u32; 8]>,
-        _types: &Vec<u32>,
-        _config: &crate::config::Config,
+        #[allow(unused_variables)] positions: &mut Vec<[[u32; 8]; 3]>,
+        #[allow(unused_variables)] distances: &mut Vec<[u32; 8]>,
+        #[allow(unused_variables)] types: &Vec<u32>,
+        #[allow(unused_variables)] kangaroo_states: Option<&[crate::types::KangarooState]>,
+        #[allow(unused_variables)] target_point: Option<&crate::types::Point>,
+        #[allow(unused_variables)] config: &crate::config::Config,
     ) -> Result<Vec<super::backend_trait::Trap>> {
+        Err(anyhow!("CPU backend not supported for production use"))
+    }
+
+    fn detect_near_collisions_cuda(
+        &self,
+        _collision_pairs: Vec<(usize, usize)>,
+        _kangaroo_states: &Vec<[[u32; 8]; 4]>,
+        _tame_params: &[u32; 8],
+        _wild_params: &[u32; 8],
+        _max_walk_steps: u32,
+        _m_bsgs: u32,
+        _config: &crate::config::Config,
+    ) -> Result<Vec<crate::gpu::backends::backend_trait::NearCollisionResult>> {
         Err(anyhow!("CPU backend not supported for production use"))
     }
 
@@ -166,8 +196,8 @@ impl crate::gpu::backends::backend_trait::GpuBackend for CpuBackend {
     fn batch_barrett_reduce(
         &self,
         _x: Vec<[u32; 16]>,
-        _mu: [u32; 9],
-        _modulus: [u32; 8],
+        _mu: &[u32; 16],
+        _modulus: &[u32; 8],
         _use_montgomery: bool,
     ) -> Result<Vec<[u32; 8]>> {
         Err(anyhow!("CPU backend not supported for production use"))
@@ -323,6 +353,24 @@ impl crate::gpu::backends::backend_trait::GpuBackend for CpuBackend {
         _bins: usize,
     ) -> Result<(Vec<f64>, Vec<f64>)> {
         Err(anyhow!("CPU backend not supported for production use"))
+    }
+
+    fn detect_near_collisions_walk(
+        &self,
+        #[allow(unused_variables)] positions: &mut Vec<[[u32; 8]; 3]>,
+        #[allow(unused_variables)] distances: &mut Vec<[u32; 8]>,
+        #[allow(unused_variables)] types: &Vec<u32>,
+        #[allow(unused_variables)] threshold_bits: usize,
+        #[allow(unused_variables)] walk_steps: usize,
+        #[allow(unused_variables)] config: &crate::config::Config,
+    ) -> Result<Vec<super::backend_trait::Trap>> {
+        Err(anyhow!("CPU backend not supported for production use"))
+    }
+
+    fn compute_euclidean_inverse(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+        // CPU implementation - use the standalone function
+        use crate::gpu::backends::vulkan_backend::compute_euclidean_inverse;
+        compute_euclidean_inverse(a, modulus)
     }
 }
 

@@ -82,14 +82,9 @@ fn uint256_sub(a: array<u32, 8>, b: array<u32, 8>) -> array<u32, 8> {
     var borrow = 0u;
 
     for (var i = 0; i < 8; i++) {
-        let diff = a[i] as i32 - b[i] as i32 - borrow as i32;
-        if (diff < 0) {
-            result[i] = (diff + 0x100000000) as u32;
-            borrow = 1u;
-        } else {
-            result[i] = diff as u32;
-            borrow = 0u;
-        }
+        let b_with_borrow = b[i] + borrow;
+        result[i] = a[i] - b_with_borrow;
+        borrow = select(1u, 0u, a[i] < b_with_borrow);
     }
 
     return result;
@@ -137,14 +132,9 @@ fn uint256_sub_mod(a: array<u32, 8>, b: array<u32, 8>) -> array<u32, 8> {
     var borrow = 0u;
 
     for (var i = 0; i < 8; i++) {
-        let diff = a[i] as i32 - b[i] as i32 - borrow as i32;
-        if (diff < 0) {
-            result[i] = (diff + 0x100000000) as u32;
-            borrow = 1u;
-        } else {
-            result[i] = diff as u32;
-            borrow = 0u;
-        }
+        let b_with_borrow = b[i] + borrow;
+        result[i] = a[i] - b_with_borrow;
+        borrow = select(1u, 0u, a[i] < b_with_borrow);
     }
 
     // If result is negative, add P

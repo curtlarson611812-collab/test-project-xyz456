@@ -95,7 +95,7 @@ pub struct Config {
     pub mode: SearchMode,
 
     /// Target public keys file (one per line)
-    #[arg(short = 't', long, default_value = "pubkeys.txt")]
+    #[arg(short = 't', long, default_value = "test_tiny.txt")]
     pub targets: PathBuf,
 
     /// Path to valuable P2PK public keys file (legacy compatibility)
@@ -124,7 +124,7 @@ pub struct Config {
     pub dp_bits: usize,
 
     /// Kangaroo herd size (GPU memory limited)
-    #[arg(short = 'H', long, default_value = "500_000_000")]
+    #[arg(short = 'H', long, default_value = "1000")]
     pub herd_size: usize,
 
     /// GPU kernel batch size (power of 2)
@@ -482,14 +482,14 @@ impl Default for Config {
             test_mode: false,
             valuable: false,
             dp_bits: 26,
-            herd_size: 500_000_000,
+            herd_size: 500000000,
             gpu_batch: 131072,
             threads: 256,
             max_cycles: 0,
-            tame_count: 1_000_000,
-            wild_count: 1_000_000,
-            steps_per_batch: 1_000_000,
-            max_steps: 1_000_000_000_000,
+            tame_count: 1000000,
+            wild_count: 1000000,
+            steps_per_batch: 1000000,
+            max_steps: 1000000000000,
             gold_mod_level: None,
             stop_on_first_solve: false,
 
@@ -522,7 +522,7 @@ impl Default for Config {
             enable_magic9_attractor: false,
             use_bloom: false,
             use_hybrid_bsgs: false,
-            bsgs_threshold: 4_294_967_296,
+            bsgs_threshold: 4294967296,
 
             // Analysis & Debug
             bias_analysis: false,
@@ -548,8 +548,8 @@ impl Default for Config {
             near_threshold: 1000,
             enable_multi_herd_merge: false,
             enable_dp_feedback: false,
-            near_g_thresh: 1_048_576,
-            max_ops: 1_000_000_000_000,
+            near_g_thresh: 1048576,
+            max_ops: 1000000000000,
             wild_primes: vec![179, 257, 347, 461, 577, 691, 797, 919],
             prime_spacing_with_entropy: false,
             expanded_prime_spacing: false,
@@ -569,7 +569,7 @@ impl Default for Config {
             birthday_paradox_mode: false,
             force_continue: false,
             output_dir: "output".into(),
-            checkpoint_interval: 4_294_967_296,
+            checkpoint_interval: 4294967296,
             log_level: "info".into(),
             glv_dim: 2,
             enable_lll_reduction: false,

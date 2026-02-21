@@ -1,142 +1,46 @@
 # Rust Analyzer Configuration for SpeedBitCrackV3
-# Optimized configuration using only supported options from rust-analyzer documentation
-
-[cargo]
-# Enable cargo features for better understanding of dependencies and conditional compilation
-features = ["wgpu", "hybrid"]
-extraEnv = { "RUST_BACKTRACE" = "1" }
+# Minimal valid configuration - all options verified against current rust-analyzer schema
 
 [check]
-# Enable comprehensive checking with hybrid features
-features = ["wgpu", "hybrid"]
-extraArgs = ["--cfg", "feature=\"wgpu\"", "--cfg", "feature=\"hybrid\""]
-ignore = ["dead_code", "unused_variables", "unused_imports"]
+# Enable warnings that are actually meaningful
+allTargets = false
 
 [completion]
-# Configure completion for large GPU codebase
-addSemicolonToUnit = true
+# Basic completion settings
 autoimport.enable = true
-callable.snippets = "fill_arguments"
-fullFunctionSignatures.enable = true
 postfix.enable = true
-privateEditable.enable = false
-termSearch.enable = false
 
 [diagnostics]
-# Enable comprehensive diagnostics
+# Enable diagnostics but reduce noise
 enable = true
-experimental.enable = true
 styleLints.enable = false
-warningsAsHint = []
-warningsAsInfo = []
-
-[files]
-# Exclude non-Rust files from analysis
-exclude = ["gpu/backends/vulkan/shaders/**", "gpu/backends/cuda/kernels/**"]
-
-[hover]
-# Configure hover information
-actions.enable = true
-actions.debug.enable = true
-actions.implementations.enable = true
-actions.references.enable = false
-actions.run.enable = true
-documentation.enable = true
-memoryLayout.enable = true
-memoryLayout.niches = false
-memoryLayout.size = "both"
-show.fields = 5
-show.enumVariants = 5
 
 [imports]
-# Configure import handling for large codebase
+# Configure import handling
 granularity.group = "crate"
 group.enable = true
-merge.glob = true
 prefix = "crate"
-prefixExternPrelude = false
 
 [inlayHints]
-# Enable inlay hints for better code understanding
-bindingModeHints.enable = false
-chainingHints.enable = true
-closingBraceHints.enable = true
-closingBraceHints.minLines = 25
-closureReturnTypeHints.enable = "never"
-discriminantHints.enable = "never"
-expressionAdjustmentHints.enable = "never"
-genericParameterHints.const.enable = true
-genericParameterHints.lifetime.enable = false
-genericParameterHints.type.enable = false
-implicitDrops.enable = false
-implicitSizedBoundHints.enable = false
-impliedDynTraitHints.enable = true
-lifetimeElisionHints.enable = "never"
+# Essential inlay hints
 parameterHints.enable = true
-rangeExclusiveHints.enable = false
-reborrowHints.enable = "never"
-renderColons = true
 typeHints.enable = true
-typeHints.hideClosureInitialization = false
+chainingHints.enable = true
 
 [lens]
-# Enable code lens for navigation
+# Code lens for navigation
 enable = true
-debug.enable = true
 implementations.enable = true
-location = "above_name"
-references.adt.enable = false
-references.enumVariant.enable = false
-references.method.enable = false
-references.trait.enable = false
 run.enable = true
 
-[linkedProjects]
-# Link to the main Cargo.toml for proper feature understanding
-linkedProjects = ["Cargo.toml"]
-
-[lru]
-# Increase capacity for large codebase
-capacity = 2048
-
-[notifications]
-# Reduce noise from missing Cargo.toml notifications
-cargoTomlNotFound = false
-
 [procMacro]
-# Enable proc macro expansion for GPU code generation
+# Enable proc macro expansion
 enable = true
-attributes.enable = true
-
-[references]
-# Configure reference finding
-excludeImports = false
-excludeTests = false
-
-[runnables]
-# Configure test and benchmark running
-extraArgs = ["--release"]
 
 [semanticHighlighting]
-# Configure semantic highlighting
-comments.enable = true
-doc.comment.inject.enable = true
-nonStandardTokens = true
-operator.enable = true
-operator.specialization.enable = false
-punctuation.enable = false
-punctuation.separate.macro.bang = false
-punctuation.specialization.enable = false
+# Basic semantic highlighting
 strings.enable = true
 
 [signatureInfo]
-# Configure signature help
+# Signature help
 detail = "full"
-documentation.enable = true
-
-[workspace]
-# Configure workspace-wide settings
-symbol.search.excludeImports = false
-symbol.search.kind = "only_types"
-symbol.search.limit = 128
-symbol.search.scope = "workspace"

@@ -1017,7 +1017,8 @@ impl BarrettReducer {
         // Calculate k = ceil(bit_length(modulus) / 64) + 1 for Barrett reduction
         let k = modulus.bit_length() + 63 / 64; // Correct: ceil(bit_length / 64), 4 for 256-bit
 
-        // Exact mu calculation using BigUint: floor(2^512 / modulus)
+        // Standard Barrett mu calculation: floor(2^(2*k) / modulus) where k >= bitlength(modulus)
+        // For 256-bit modulus, use k=256, so mu = floor(2^(512) / modulus)
         let p_big = BigUint::from_bytes_be(&modulus.to_bytes_be());
         let two_to_512 = BigUint::from(1u32) << 512;
         let mu_big: BigUint = two_to_512 / p_big;
@@ -1045,35 +1046,22 @@ impl BarrettReducer {
     }
 
     /// Barrett modular reduction: x mod modulus
-    /// Uses BigUint for correctness, with optimized Barrett algorithm
+    /// Uses BigUint for correctness - optimized GPU implementations handle performance
     pub fn reduce(&self, x: &BigInt512) -> Result<BigInt256, Box<dyn Error>> {
         use num_bigint::BigUint;
 
-        // Convert x to BigUint
-        let mut x_bytes = vec![0u8; 64];
-        for (i, &limb) in x.limbs.iter().enumerate() {
-            x_bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb.to_le_bytes());
-        }
-        let x_big = BigUint::from_bytes_le(&x_bytes);
+        // Convert x to BigUint using the same method as BigInt256
+        let x_big = BigUint::from_bytes_le(&x.to_bytes_le());
 
-        // Convert modulus to BigUint
+        // Convert modulus to BigUint using the same method as BigInt256
         let modulus_big = BigUint::from_bytes_le(&self.modulus.to_bytes_le());
 
-        // Simple modular reduction: x % modulus
+        // Simple modular reduction using BigUint for bit-perfect correctness
+        // GPU implementations use optimized Barrett reduction for performance
         let result = &x_big % &modulus_big;
 
-        // Convert result back to BigInt256
-        let bytes_le = result.to_bytes_le();
-        let mut limbs = [0u64; 4];
-        for (i, chunk) in bytes_le.chunks(8).enumerate() {
-            if i < 4 {
-                let mut limb_bytes = [0u8; 8];
-                limb_bytes[..chunk.len()].copy_from_slice(chunk);
-                limbs[i] = u64::from_le_bytes(limb_bytes);
-            }
-        }
-
-        Ok(BigInt256 { limbs })
+        // Convert result back to BigInt256 using the same method
+        Ok(BigInt256::from_biguint(&result))
     }
 
     /// Barrett modular addition
@@ -2365,12 +2353,9 @@ mod tests {
             BigInt256::from_hex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
                 .expect("Invalid secp256k1 modulus");
         let reducer = BarrettReducer::new(&p);
-        let two_256 = BigInt512::from_bigint256(
-            &BigInt256::from_hex(
-                "1000000000000000000000000000000000000000000000000000000000000000",
-            )
-            .expect("Invalid 2^256"),
-        );
+        // Create 2^256 as BigInt512 directly
+        let mut two_256 = BigInt512::zero();
+        two_256.limbs[4] = 1; // 2^256 = 1 << 256, which is limb[4] = 1 (since each limb is 64 bits)
         let reduced = reducer.reduce(&two_256).unwrap();
         let expected = BigInt256::from_u64(0x1000003d1);
         assert_eq!(reduced, expected);

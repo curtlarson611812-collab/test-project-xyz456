@@ -52,7 +52,7 @@ rustacuda_derive = { version = "0.1", optional = true } # Derive macros
 cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }  # Raw CUDA runtime API for cuFFT
 cuda-sys = { version = "0.2.0", optional = true }  # Raw CUDA driver API for advanced operations
 libfuzzer-sys = { version = "0.4", optional = true }  # Fuzz testing
-# cudarc = "0.19.2" # Not used, using rustacuda instead
+# Using rustacuda for CUDA backend implementation
 
 [features]
 default = ["wgpu"]  # Enable Vulkan by default for GPU acceleration
@@ -68,7 +68,7 @@ laptop = []  # Enable laptop optimizations (sm_86, lower resources)
 portable_simd = []  # Enable portable SIMD operations for CPU acceleration
 legacy = []  # Enable legacy modules with potential compatibility issues
 phase4 = []  # Enable Phase 4 features and tests
-cudarc = [] # Not used
+nvml = [] # Enable NVIDIA management library for GPU monitoring
 
 [build-dependencies]
 naga = { version = "0.19", features = ["wgsl-in"] }                     # WGSL shader validation

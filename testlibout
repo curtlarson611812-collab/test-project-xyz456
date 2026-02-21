@@ -1,0 +1,673 @@
+warning: variable does not need to be mutable
+   --> src/parity/framework.rs:510:13
+    |
+510 |         let mut passed = 0;
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/parity/framework.rs:511:13
+    |
+511 |         let mut failed = 0;
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `device_id`
+    --> src/gpu/backends/hybrid_backend.rs:1943:46
+     |
+1943 |     pub fn get_optimal_workgroup_size(&self, device_id: usize) -> u32 {
+     |                                              ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_device_id`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kangaroo_states`
+    --> src/gpu/backends/hybrid_backend.rs:3100:9
+     |
+3100 |         kangaroo_states: Option<&[crate::types::KangarooState]>,
+     |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kangaroo_states`
+
+warning: unused variable: `target_point`
+    --> src/gpu/backends/hybrid_backend.rs:3101:9
+     |
+3101 |         target_point: Option<&crate::types::Point>,
+     |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_target_point`
+
+warning: unused variable: `hybrid_backend`
+   --> src/gpu/tests.rs:346:23
+    |
+346 |                 Ok(Ok(hybrid_backend)) => {
+    |                       ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_hybrid_backend`
+
+warning: unused variable: `targets`
+   --> src/parity/framework.rs:534:13
+    |
+534 |         let targets: Vec<[[u32; 8]; 3]> = test_dps
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_targets`
+
+warning: unused variable: `distance`
+    --> src/kangaroo/manager.rs:2130:13
+     |
+2130 |         let distance = BigInt256::from_biguint(&trap.dist);
+     |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_distance`
+
+warning: unused variable: `inv_coeff`
+    --> src/kangaroo/manager.rs:2151:13
+     |
+2151 |         let inv_coeff = match self.compute_extended_euclidean_inverse(&one_minus_alpha, &n_order) {
+     |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_inv_coeff`
+
+warning: unused variable: `meeting_point_x`
+    --> src/kangaroo/manager.rs:2158:13
+     |
+2158 |         let meeting_point_x = BigInt256::from_u64_array(trap.x);
+     |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_meeting_point_x`
+
+warning: fields `start_time` and `update_interval` are never read
+  --> src/cli.rs:50:5
+   |
+47 | pub struct AdvancedCli {
+   |            ----------- fields in this struct
+...
+50 |     start_time: Instant,
+   |     ^^^^^^^^^^
+51 |     update_interval: Duration,
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `detect_near_collisions_cuda` is never used
+  --> src/gpu/backends/cpu_backend.rs:78:8
+   |
+22 | impl CpuBackend {
+   | --------------- method in this implementation
+...
+78 |     fn detect_near_collisions_cuda(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `topology` and `power_management` are never read
+  --> src/gpu/backends/hybrid_backend.rs:31:5
+   |
+29 | pub struct GpuCluster {
+   |            ---------- fields in this struct
+30 |     pub devices: Vec<GpuDevice>,
+31 |     topology: GpuTopology,
+   |     ^^^^^^^^
+32 |     power_management: PowerManagement,
+   |     ^^^^^^^^^^^^^^^^
+   |
+   = note: `GpuCluster` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `name`, `memory_gb`, `compute_units`, `current_load`, `power_consumption`, and `api_type` are never read
+  --> src/gpu/backends/hybrid_backend.rs:40:5
+   |
+38 | pub struct GpuDevice {
+   |            --------- fields in this struct
+39 |     id: usize,
+40 |     name: String,
+   |     ^^^^
+41 |     memory_gb: f64,
+   |     ^^^^^^^^^
+42 |     compute_units: u32,
+   |     ^^^^^^^^^^^^^
+43 |     current_load: f64,
+   |     ^^^^^^^^^^^^
+44 |     temperature: f64,
+45 |     power_consumption: f64,
+   |     ^^^^^^^^^^^^^^^^^
+46 |     api_type: GpuApiType,
+   |     ^^^^^^^^
+   |
+   = note: `GpuDevice` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `pci_bandwidth_matrix`, `numa_domains`, and `nvlink_mask` are never read
+  --> src/gpu/backends/hybrid_backend.rs:52:5
+   |
+51 | pub struct GpuTopology {
+   |            ----------- fields in this struct
+52 |     pci_bandwidth_matrix: Vec<Vec<f64>>, // GB/s between devices
+   |     ^^^^^^^^^^^^^^^^^^^^
+53 |     numa_domains: Vec<Vec<usize>>,       // Device groups by NUMA node
+   |     ^^^^^^^^^^^^
+54 |     nvlink_mask: Vec<Vec<bool>>,         // NVLink connectivity
+   |     ^^^^^^^^^^^
+   |
+   = note: `GpuTopology` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `device_weights`, `workload_patterns`, `performance_history`, and `balancing_strategy` are never read
+  --> src/gpu/backends/hybrid_backend.rs:60:5
+   |
+59 | pub struct AdaptiveLoadBalancer {
+   |            -------------------- fields in this struct
+60 |     device_weights: HashMap<usize, f64>,
+   |     ^^^^^^^^^^^^^^
+61 |     workload_patterns: Vec<WorkloadPattern>,
+   |     ^^^^^^^^^^^^^^^^^
+62 |     performance_history: Vec<PerformanceSnapshot>,
+   |     ^^^^^^^^^^^^^^^^^^^
+63 |     balancing_strategy: BalancingStrategy,
+   |     ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `AdaptiveLoadBalancer` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `shared_memory_regions`, `peer_to_peer_enabled`, and `result_aggregation` are never read
+  --> src/gpu/backends/hybrid_backend.rs:69:5
+   |
+68 | pub struct CrossGpuCommunication {
+   |            --------------------- fields in this struct
+69 |     shared_memory_regions: Vec<SharedMemoryRegion>,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+70 |     peer_to_peer_enabled: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^
+71 |     result_aggregation: ResultAggregator,
+   |     ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `CrossGpuCommunication` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `power_limit_per_gpu`, `total_cluster_limit`, and `efficiency_optimizer` are never read
+  --> src/gpu/backends/hybrid_backend.rs:77:5
+   |
+76 | pub struct PowerManagement {
+   |            --------------- fields in this struct
+77 |     power_limit_per_gpu: f64, // Watts
+   |     ^^^^^^^^^^^^^^^^^^^
+78 |     total_cluster_limit: f64, // Watts
+   |     ^^^^^^^^^^^^^^^^^^^
+79 |     efficiency_optimizer: EfficiencyOptimizer,
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `PowerManagement` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `cooling_strategy` and `hotspot_detection` are never read
+  --> src/gpu/backends/hybrid_backend.rs:86:5
+   |
+84 | pub struct ThermalCoordination {
+   |            ------------------- fields in this struct
+85 |     max_temp_per_gpu: f64, // Celsius
+86 |     cooling_strategy: CoolingStrategy,
+   |     ^^^^^^^^^^^^^^^^
+87 |     hotspot_detection: HotspotDetection,
+   |     ^^^^^^^^^^^^^^^^^
+   |
+   = note: `ThermalCoordination` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `operation_type`, `device_preference`, `expected_duration`, and `pattern_type` are never read
+   --> src/gpu/backends/hybrid_backend.rs:99:5
+    |
+ 98 | pub struct WorkloadPattern {
+    |            --------------- fields in this struct
+ 99 |     operation_type: String,
+    |     ^^^^^^^^^^^^^^
+100 |     device_preference: HashMap<usize, f64>,
+    |     ^^^^^^^^^^^^^^^^^
+101 |     expected_duration: std::time::Duration,
+    |     ^^^^^^^^^^^^^^^^^
+102 |     pattern_type: PatternType,
+    |     ^^^^^^^^^^^^
+    |
+    = note: `WorkloadPattern` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `timestamp`, `device_loads`, and `throughput` are never read
+   --> src/gpu/backends/hybrid_backend.rs:110:5
+    |
+109 | pub struct PerformanceSnapshot {
+    |            ------------------- fields in this struct
+110 |     timestamp: std::time::Instant,
+    |     ^^^^^^^^^
+111 |     device_loads: HashMap<usize, f64>,
+    |     ^^^^^^^^^^^^
+112 |     throughput: f64,
+    |     ^^^^^^^^^^
+    |
+    = note: `PerformanceSnapshot` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `id`, `size_bytes`, and `mapped_devices` are never read
+   --> src/gpu/backends/hybrid_backend.rs:125:5
+    |
+124 | pub struct SharedMemoryRegion {
+    |            ------------------ fields in this struct
+125 |     id: String,
+    |     ^^
+126 |     size_bytes: usize,
+    |     ^^^^^^^^^^
+127 |     mapped_devices: Vec<usize>,
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: `SharedMemoryRegion` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `pending_results` and `aggregation_strategy` are never read
+   --> src/gpu/backends/hybrid_backend.rs:132:5
+    |
+131 | pub struct ResultAggregator {
+    |            ---------------- fields in this struct
+132 |     pending_results: HashMap<String, Vec<GpuResult>>,
+    |     ^^^^^^^^^^^^^^^
+133 |     aggregation_strategy: AggregationStrategy,
+    |     ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `ResultAggregator` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `power_efficiency_target` and `performance_per_watt` are never read
+   --> src/gpu/backends/hybrid_backend.rs:138:5
+    |
+137 | pub struct EfficiencyOptimizer {
+    |            ------------------- fields in this struct
+138 |     power_efficiency_target: f64,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+139 |     performance_per_watt: HashMap<usize, f64>,
+    |     ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `EfficiencyOptimizer` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `temperature_threshold` and `affected_devices` are never read
+   --> src/gpu/backends/hybrid_backend.rs:151:5
+    |
+150 | pub struct HotspotDetection {
+    |            ---------------- fields in this struct
+151 |     temperature_threshold: f64,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+152 |     affected_devices: Vec<usize>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `HotspotDetection` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `device_id`, `data`, `confidence`, and `timestamp` are never read
+   --> src/gpu/backends/hybrid_backend.rs:164:5
+    |
+163 | pub struct GpuResult {
+    |            --------- fields in this struct
+164 |     device_id: usize,
+    |     ^^^^^^^^^
+165 |     data: Vec<u8>,
+    |     ^^^^
+166 |     confidence: f64,
+    |     ^^^^^^^^^^
+167 |     timestamp: std::time::Instant,
+    |     ^^^^^^^^^
+    |
+    = note: `GpuResult` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: method `record_performance_metrics` is never used
+    --> src/gpu/backends/hybrid_backend.rs:2013:8
+     |
+1967 | impl HybridBackend {
+     | ------------------ method in this implementation
+...
+2013 |     fn record_performance_metrics(&mut self, operation: &str, backend: &str, duration_ms: u128) {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `profile_vulkan_performance` is never used
+    --> src/gpu/backends/hybrid_backend.rs:2206:14
+     |
+2128 | impl HybridBackend {
+     | ------------------ method in this implementation
+...
+2206 |     async fn profile_vulkan_performance(&self) -> f32 {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> src/gpu/backends/hybrid_backend.rs:4153:8
+     |
+4151 | impl AdaptiveLoadBalancer {
+     | ------------------------- methods in this implementation
+4152 |     /// Update device weights based on current performance
+4153 |     fn update_weights(&mut self, devices: &[GpuDevice]) {
+     |        ^^^^^^^^^^^^^^
+...
+4178 |     fn distribute_operations(
+     |        ^^^^^^^^^^^^^^^^^^^^^
+...
+4202 |     fn distribute_round_robin(
+     |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+4217 |     fn distribute_load_balanced(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+4237 |     fn distribute_performance_based(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+4254 |     fn distribute_adaptive(
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+4284 |     fn get_operation_type(&self, op: &HybridOperation) -> String {
+     |        ^^^^^^^^^^^^^^^^^^
+...
+4300 |     fn find_best_device_for_operation(&self, _op_type: &str) -> usize {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `aggregate_results` and `compare_result_confidence` are never used
+    --> src/gpu/backends/hybrid_backend.rs:4313:8
+     |
+4311 | impl CrossGpuCommunication {
+     | -------------------------- methods in this implementation
+4312 |     /// Aggregate results from multiple devices
+4313 |     fn aggregate_results(&self, results: Vec<WorkResult>) -> Result<Vec<WorkResult>> {
+     |        ^^^^^^^^^^^^^^^^^
+...
+4334 |     fn compare_result_confidence(&self, a: &WorkResult, b: &WorkResult) -> std::cmp::Ordering {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> src/gpu/backends/vulkan_backend.rs:2441:8
+     |
+2055 | impl WgpuBackend {
+     | ---------------- methods in this implementation
+...
+2441 |     fn points_collide(&self, p1: &[[u32; 8]; 3], p2: &[[u32; 8]; 3]) -> bool {
+     |        ^^^^^^^^^^^^^^
+...
+2480 |     fn safe_diff_mod_n(&self, tame: [u32; 8], wild: [u32; 8], n: [u32; 8]) -> Result<[u32; 8]> {
+     |        ^^^^^^^^^^^^^^^
+...
+2495 |     fn barrett_reduce(
+     |        ^^^^^^^^^^^^^^
+...
+2529 |     fn mul_glv_opt(&self, p: [[u32; 8]; 3], k: [u32; 8]) -> Result<[[u32; 8]; 3]> {
+     |        ^^^^^^^^^^^
+...
+2554 |     fn mod_inverse(&self, a: &[u32; 8], modulus: &[u32; 8]) -> Result<[u32; 8]> {
+     |        ^^^^^^^^^^^
+...
+2564 |     fn bigint_mul(&self, a: &[u32; 8], b: &[u32; 8]) -> Result<[u32; 16]> {
+     |        ^^^^^^^^^^
+...
+2585 |     fn modulo(&self, a: &[u32; 16], modulus: &[u32; 8]) -> Result<[u32; 8]> {
+     |        ^^^^^^
+...
+2607 |     fn scalar_mul_glv(&self, p: [[u32; 8]; 3], k: [u32; 8]) -> Result<[[u32; 8]; 3]> {
+     |        ^^^^^^^^^^^^^^
+...
+2613 |     fn mod_small(&self, x: [u32; 8], modulus: u32) -> Result<u32> {
+     |        ^^^^^^^^^
+...
+2622 |     fn batch_mod_small(&self, points: &Vec<[[u32; 8]; 3]>, modulus: u32) -> Result<Vec<u32>> {
+     |        ^^^^^^^^^^^^^^^
+...
+2634 |     fn rho_walk(
+     |        ^^^^^^^^
+...
+2647 |     fn solve_post_walk(
+     |        ^^^^^^^^^^^^^^^
+...
+2655 |     fn run_gpu_steps(
+     |        ^^^^^^^^^^^^^
+...
+2681 |     fn simulate_cuda_fail(&mut self, _fail: bool) {
+     |        ^^^^^^^^^^^^^^^^^^
+...
+2685 |     fn batch_init_kangaroos(
+     |        ^^^^^^^^^^^^^^^^^^^^
+...
+2782 |     fn generate_preseed_pos(
+     |        ^^^^^^^^^^^^^^^^^^^^
+...
+2791 |     fn blend_proxy_preseed(
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+2802 |     fn analyze_preseed_cascade(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `get_small_prime_spacing` and `mul_small_constant` are never used
+    --> src/gpu/backends/vulkan_backend.rs:2871:8
+     |
+2812 | impl WgpuBackend {
+     | ---------------- methods in this implementation
+...
+2871 |     fn get_small_prime_spacing(&self, _index: usize) -> u64 {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^
+...
+2879 |     fn mul_small_constant(&self, _point: &crate::types::Point, _constant: u64) -> crate::types::Point {
+     |        ^^^^^^^^^^^^^^^^^^
+
+warning: field `numa_scheduler` is never read
+   --> src/gpu/memory.rs:491:5
+    |
+486 | pub struct HybridMemoryManager {
+    |            ------------------- field in this struct
+...
+491 |     numa_scheduler: NumaScheduler,
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: `HybridMemoryManager` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `solve_collision_from_dps`, `compute_modular_inverse`, and `validate_solution` are never used
+    --> src/kangaroo/manager.rs:840:8
+     |
+ 134 | impl KangarooManager {
+     | -------------------- methods in this implementation
+...
+ 840 |     fn solve_collision_from_dps(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1070 |     fn compute_modular_inverse(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256> {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^
+...
+1102 |     fn validate_solution(&self, private_key: &BigInt256, target_point: &Point) -> bool {
+     |        ^^^^^^^^^^^^^^^^^
+
+warning: field `mu` is never read
+    --> src/math/bigint.rs:1006:5
+     |
+1002 | pub struct BarrettReducer {
+     |            -------------- field in this struct
+...
+1006 |     mu: BigInt512,
+     |     ^^
+     |
+     = note: `BarrettReducer` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: function `should_keep_first_half` is never used
+    --> src/utils/bias.rs:1018:4
+     |
+1018 | fn should_keep_first_half(range: &(BigInt256, BigInt256), split_point: &BigInt256, model: &PopStatisticalModel) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `find_densest_region_in_range` is never used
+    --> src/utils/bias.rs:1033:4
+     |
+1033 | fn find_densest_region_in_range(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `total_density` and `confidence` are never read
+    --> src/utils/bias.rs:1099:5
+     |
+1097 | struct PopStatisticalModel {
+     |        ------------------- fields in this struct
+1098 |     density_regions: Vec<DensityRegion>,
+1099 |     total_density: f64,
+     |     ^^^^^^^^^^^^^
+1100 |     confidence: f64,
+     |     ^^^^^^^^^^
+     |
+     = note: `PopStatisticalModel` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `DenseRegion` is never constructed
+    --> src/utils/bias.rs:1113:8
+     |
+1113 | struct DenseRegion {
+     |        ^^^^^^^^^^^
+
+warning: function `generate_gold_biased_samples` is never used
+    --> src/utils/bias.rs:1133:4
+     |
+1133 | fn generate_gold_biased_samples(_target: &Point, count: usize) -> Vec<BigInt256> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `generate_pop_biased_samples` is never used
+    --> src/utils/bias.rs:1148:4
+     |
+1148 | fn generate_pop_biased_samples(_target: &Point, count: usize) -> Vec<BigInt256> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `combine_gold_pop_samples` is never used
+    --> src/utils/bias.rs:1163:4
+     |
+1163 | fn combine_gold_pop_samples(gold: &[BigInt256], pop: &[BigInt256]) -> Vec<BigInt256> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `speedbitcrack` (lib test) generated 42 warnings (run `cargo fix --lib -p speedbitcrack --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/speedbitcrack-e4a279d1e0a7519b)
+
+running 164 tests
+test SmallOddPrime_Precise_code::tests::test_bucket_selection_tame ... ok
+test SmallOddPrime_Precise_code::tests::test_bucket_selection_wild ... ok
+test SmallOddPrime_Precise_code::tests::test_biased_prime ... FAILED
+test SmallOddPrime_Precise_code::tests::test_prime_multipliers ... FAILED
+test cli::tests::test_format_duration ... ok
+test cli::tests::test_format_large_number ... ok
+test checkpoint::tests::test_checkpoint_validation ... FAILED
+test cuda_parity_test::test_cuda_backend_stub ... ok
+test checkpoint::tests::test_checkpoint_manager_info ... ok
+test dp::table::tests::test_batch_step ... ok
+test dp::table::tests::test_chunked_pruning_edge_cases ... ok
+test checkpoint::tests::test_checkpoint_creation ... ok
+test gpu::shared::tests::test_shared_buffer_creation ... ok
+test gpu::backends::cpu_backend::tests::test_cpu_backend_basic ... ok
+test gpu::tests::tests::test_bigint_unified_reductions ... ok
+test gpu::tests::tests::test_gpu_parity_kangaroo_step ... ignored
+test dp::table::tests::test_dense_cluster_pruning_priority ... ok
+test gpu::tests::tests::test_smalloddprime_bucket_selection_gpu ... ok
+test gpu::tests::tests::test_cpu_ec_math_reference ... ok
+test dp::table::tests::test_chunked_pruning_large_dataset ... ok
+test kangaroo::collision::tests::test_exact_collision ... ok
+test kangaroo::collision::tests::test_hash_position ... ok
+test gpu::tests::tests::test_smalloddprime_gpu_step_integration ... ok
+test kangaroo::collision::tests::test_no_collision ... ok
+test kangaroo::collision::tests::test_resolve_near_collision ... ok
+test kangaroo::search_config::tests::test_config_validation ... ok
+test kangaroo::search_config::tests::test_default_config ... ok
+test kangaroo::search_config::tests::test_puzzle_range_config ... ok
+test kangaroo::search_config::tests::test_test_config ... ok
+test kangaroo::search_config::tests::test_unsolved_config ... ok
+test kangaroo::search_config::tests::test_valuable_config ... ok
+test kangaroo::collision::tests::test_walk_back_near_collision ... FAILED
+test kangaroo::stepper::tests::test_batch_step ... ok
+test kangaroo::stepper::tests::test_coefficient_update ... ok
+test kangaroo::stepper::tests::test_distinguished_point ... FAILED
+test dp::table::tests::test_pruning ... FAILED
+test dp::pruning::tests::test_dp_pruning_value_based ... FAILED
+test kangaroo::tests::tests::test_bloom_filter_dp ... ok
+test kangaroo::tests::tests::test_collision_detector_config ... ok
+test kangaroo::stepper::tests::test_jump_table ... FAILED
+test kangaroo::tests::tests::test_collision_inversion_large ... ok
+test kangaroo::tests::tests::test_get_biased_prime ... FAILED
+test kangaroo::tests::tests::test_collision_inversion_non_co_prime ... FAILED
+test kangaroo::stepper::tests::test_single_step ... FAILED
+test kangaroo::tests::tests::test_prime_multipliers ... FAILED
+test kangaroo::tests::tests::test_prime_properties ... ok
+test dp::table::tests::test_sled_disk_operations ... ok
+test kangaroo::tests::tests::test_near_g_threshold ... ok
+test kangaroo::tests::tests::test_select_sop_bucket ... ok
+test dp::table::tests::test_value_score ... FAILED
+test dp::table::tests::test_add_dp ... FAILED
+test dp::table::tests::test_clustering ... ok
+test dp::table::tests::test_stats ... FAILED
+test math::bigint::tests::test_barrett_basic ... ok
+test math::bigint::tests::test_barrett_edge_cases ... ok
+test math::bigint::tests::test_barrett_large ... FAILED
+test math::bigint::tests::test_barrett_large_reduce ... ok
+test math::bigint::tests::test_barrett_puzzle_range ... ok
+test math::bigint::tests::test_barrett_montgomery_consistency ... ok
+test math::bigint::tests::test_barrett_reduction_secp256k1 ... ok
+test math::bigint::tests::test_bigint256_arithmetic ... ok
+test math::bigint::tests::test_barrett_vs_montgomery ... ok
+test dp::pruning::tests::test_dp_pruning_cluster_based ... FAILED
+test dp::table::tests::test_comprehensive_workflow ... FAILED
+test math::bigint::tests::test_large_number_operations ... ok
+test math::bigint::tests::test_bigint_methods ... FAILED
+test math::bigint::tests::test_modular_inverse ... ok
+test math::bigint::tests::test_mont_associativity ... FAILED
+test math::bigint::tests::test_montgomery_basic ... ok
+test math::bigint::tests::test_mont_vs_barrett_random ... FAILED
+test math::bigint::tests::test_montgomery_correctness ... FAILED
+test math::bigint::tests::test_montgomery_full_redc ... FAILED
+test math::bigint::tests::test_montgomery_reduction_secp256k1 ... ok
+test math::bigint::tests::test_mul_edge ... ok
+test math::bigint::tests::test_mul_large ... FAILED
+test math::bigint::tests::test_mul_small ... ok
+test math::bigint::tests::test_montgomery_round_trip ... FAILED
+test math::bigint::tests::test_no_plain_modmul ... ok
+test math::bigint::tests::test_secp256k1_order_operations ... ok
+test math::bigint::tests::test_mod_inverse_full ... FAILED
+test math::secp::tests::benchmark_ec_montgomery_3g ... FAILED
+test math::secp::tests::benchmark_full_glv_suite ... FAILED
+test kangaroo::tests::tests::test_step_kangaroo_with_bias ... ok
+test math::bigint::tests::benchmark_barrett_chain_operations ... ok
+test math::bigint::tests::benchmark_barrett_single_reduce ... ok
+test math::secp::tests::test_4g_vector ... FAILED
+test math::secp::tests::test_add_non_affine_z ... FAILED
+test math::secp::tests::test_bigint_methods ... FAILED
+test math::secp::tests::test_add_jacobian ... FAILED
+test math::bigint::tests::benchmark_barrett_mul_operation ... ok
+test math::secp::tests::test_batch_to_affine ... FAILED
+test math::secp::tests::test_constant_time_mul_infinity ... ok
+test math::secp::tests::test_constant_time_mul_vectors ... FAILED
+test math::secp::tests::test_double_chain ... ok
+test math::secp::tests::test_curve_validation ... ok
+test math::secp::tests::test_double_returns_valid_point ... FAILED
+test math::secp::tests::test_g_multiples_precomputation ... FAILED
+test math::secp::tests::test_constant_time_mul ... ok
+test math::secp::tests::test_glv_basic ... FAILED
+test kangaroo::tests::tests::test_additive_tame_herds ... FAILED
+test kangaroo::tests::tests::test_multiplicative_wild_herds ... FAILED
+test math::secp::tests::test_k256_conversion_roundtrip ... ok
+test math::bigint::tests::benchmark_montgomery_vs_naive ... ok
+test math::secp::tests::test_mod_inverse ... ok
+test gpu::tests::tests::test_gpu_bit_perfect_parity ... ok
+test math::secp::tests::test_point_compression ... FAILED
+test math::secp::tests::test_point_negation ... ok
+test math::secp::tests::test_random_scalar ... ok
+test math::secp::tests::test_rule_4_enforcement ... ok
+test math::secp::tests::test_secp256k1_creation ... ok
+test math::tests::cuda_vulkan_integration_test ... ok
+test math::tests::simulate_lll_proof ... FAILED
+test math::tests::test_babai_fermat_vow_integration ... ok
+test math::secp::tests::test_constant_time_vs_glv ... FAILED
+test math::tests::test_rho_with_lll_proofs ... FAILED
+test math::secp::tests::test_3g_vector ... FAILED
+test math::tests::tests::test_barrett_reduction ... ok
+test math::tests::tests::test_bigint512_mul ... ok
+test math::tests::tests::test_decompress_135 ... ok
+test math::tests::tests::test_decompress_puzzles ... ok
+test math::tests::tests::test_mod_inverse ... ok
+test math::secp::tests::test_generator_operations ... ok
+test gpu::tests::tests::test_vulkan_ec_math ... ok
+test math::tests::tests::test_pow_mod ... ok
+test math::tests::tests::test_tonelli_shanks ... ok
+test performance_monitor::tests::test_bottleneck_detection ... ok
+test performance_monitor::tests::test_efficiency_score_calculation ... ok
+test performance_monitor::tests::test_performance_monitor_creation ... ok
+test puzzles::tests::benchmark_load_puzzles ... ok
+test puzzles::tests::benchmark_range_calculations ... ok
+test puzzles::tests::test_puzzle_database_integrity ... ok
+test math::tests::tests::test_tonelli_shanks_comprehensive ... ok
+test puzzles::tests::test_range_hex_parsing ... FAILED
+test math::secp::tests::test_glv_k3_verification ... FAILED
+test puzzles::tests::test_remaining_prize_pool ... FAILED
+test puzzles::tests::test_solved_puzzles_have_private_keys ... ok
+test test_basic::benchmark_tests::test_test_mode ... ok
+test test_basic::tests::test_g_times_3 ... ok
+test types::tests::test_point_has_magic9_bias ... ok
+test types::tests::test_point_mod_residue ... ok
+test gpu::tests::tests::test_vulkan_kangaroo_step ... FAILED
+test test_basic::tests::test_glv_decomposition_correctness ... FAILED
+test types::tests::test_scalar_has_magic9_bias ... ok
+test types::tests::test_scalar_mod_residue ... ok
+test types::tests::test_scalar_skew_magic9 ... ok
+test utils::output::tests::test_calculate_hashrate ... ok
+test types::tests::test_scalar_mod_small_primes ... ok
+test utils::output::tests::test_format_duration ... ok
+test utils::pubkey_loader::tests::test_load_pubkeys_empty_file ... ok
+test types::tests::test_point_validate_with_subgroup ... ok
+test math::secp::tests::test_glv_speedup_benchmark ... FAILED
+test math::secp::tests::test_known_vectors ... FAILED
+test utils::pubkey_loader::tests::test_puzzle_pubkeys_loading ... ok
+test math::secp::tests::test_scalar_mul_properties ... FAILED
+test math::secp::tests::test_glv_correctness ... FAILED
+test math::tests::tests::test_mul_glv_opt ... FAILED
+test dp::table::tests::test_chunk_size_boundary_conditions ... ok
+test test_basic::benchmark_tests::test_valuable_mode ... ok

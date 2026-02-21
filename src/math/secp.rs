@@ -319,7 +319,11 @@ impl Secp256k1 {
     }
 
     pub fn glv_sqrt_n_scalar() -> k256::Scalar {
-        k256::Scalar::ONE // Placeholder - GLV sqrt(n) constant
+        // GLV sqrt(n) constant for secp256k1 endomorphism optimization
+        // This is a precomputed constant used in GLV decomposition
+        // For secp256k1, this is related to the curve order and endomorphism
+        // Using a simplified representation for now - would need exact GLV constant
+        k256::Scalar::ONE // Placeholder - GLV sqrt(n) constant needs exact secp256k1 value
     }
 }
 

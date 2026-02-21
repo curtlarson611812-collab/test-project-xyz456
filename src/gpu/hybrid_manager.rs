@@ -4,7 +4,7 @@
 //! and drift monitoring for precision-critical computations
 
 use super::backends::backend_trait::GpuBackend;
-use super::backends::hybrid_backend::HybridBackend;
+use super::backends::hybrid::HybridBackend;
 use super::shared::SharedBuffer;
 use crate::config::Config;
 use crate::kangaroo::collision::Trap;
@@ -138,7 +138,7 @@ pub struct HybridGpuManager {
     config: Arc<Config>, // Full config for bias/bsgs/bloom/gold propagation
     metrics: Arc<Mutex<DriftMetrics>>,
     flow_control: Arc<Mutex<FlowControlState>>,
-    scheduler: Arc<Mutex<crate::gpu::backends::hybrid_backend::HybridScheduler>>,
+    scheduler: Arc<Mutex<crate::gpu::backends::hybrid::HybridScheduler>>,
 }
 
 /// Flow performance summary
@@ -276,7 +276,7 @@ impl HybridGpuManager {
 
         // Initialize advanced scheduler
         let scheduler = Arc::new(Mutex::new(hybrid_backend.create_hybrid_scheduler(
-            crate::gpu::backends::hybrid_backend::SchedulingPolicy::Adaptive,
+            crate::gpu::backends::hybrid::SchedulingPolicy::Balanced,
         )));
 
         Ok(Self {
@@ -373,14 +373,26 @@ impl HybridGpuManager {
             }
 
             // Execute flows concurrently respecting resource limits
-            let execution_handles = executable_flows.into_iter().map(|flow_id| {
-                let self_clone = self.clone_self();
-                tokio::spawn(async move { self_clone.execute_single_flow(&flow_id).await })
-            });
+            // When CUDA is enabled, we can't use tokio::spawn due to Send trait constraints
+            #[cfg(feature = "rustacuda")]
+            {
+                for flow_id in executable_flows {
+                    let self_clone = self.clone_self();
+                    let _ = self_clone.execute_single_flow(&flow_id).await;
+                }
+            }
 
-            // Wait for all executions to complete
-            for handle in execution_handles {
-                let _ = handle.await;
+            #[cfg(not(feature = "rustacuda"))]
+            {
+                let execution_handles = executable_flows.into_iter().map(|flow_id| {
+                    let self_clone = self.clone_self();
+                    tokio::spawn(async move { self_clone.execute_single_flow(&flow_id).await })
+                });
+
+                // Wait for all executions to complete
+                for handle in execution_handles {
+                    let _ = handle.await;
+                }
             }
 
             // Adapt execution mode based on performance
@@ -530,12 +542,12 @@ impl HybridGpuManager {
             // Submit kangaroo stepping work items
             let _work_id = self.hybrid_backend.submit_ooo_work(
                 &mut ooo_queue,
-                crate::gpu::backends::hybrid_backend::HybridOperation::StepBatch(
+                crate::gpu::backends::hybrid::HybridOperation::StepBatch(
                     positions, distances, types,
                 ),
-                crate::gpu::backends::hybrid_backend::WorkPriority::High,
+                crate::gpu::backends::hybrid::WorkPriority::High,
                 vec![], // No dependencies
-                crate::gpu::backends::hybrid_backend::BackendPreference::Auto,
+                crate::gpu::backends::hybrid::BackendPreference::Auto,
             );
 
             // Execute the queue
@@ -568,12 +580,12 @@ impl HybridGpuManager {
                 "batch_solve_collision",
                 100, // Small data size
                 &context,
-            )
+            )?
         }; // Drop the scheduler lock here
 
         // Execute based on scheduling decision
         match selection {
-            crate::gpu::backends::hybrid_backend::BackendSelection::Redundant(backends) => {
+            crate::gpu::backends::hybrid::BackendSelection::Redundant(backends) => {
                 // Execute on multiple backends for verification
                 self.execute_redundant_collision_solve(backends).await?;
             }
@@ -689,18 +701,32 @@ impl HybridGpuManager {
         for backend in &backends {
             let self_clone = self.clone_self();
             let backend_name = backend.clone();
-            let handle = tokio::spawn(async move {
-                self_clone
+
+            #[cfg(feature = "rustacuda")]
+            {
+                // Execute directly when CUDA is enabled (no tokio::spawn due to Send constraints)
+                let result = self_clone
                     .execute_collision_solve_on_backend(&backend_name)
-                    .await
-            });
-            handles.push(handle);
+                    .await;
+                handles.push(async move { result });
+            }
+
+            #[cfg(not(feature = "rustacuda"))]
+            {
+                let handle = tokio::spawn(async move {
+                    self_clone
+                        .execute_collision_solve_on_backend(&backend_name)
+                        .await
+                });
+                handles.push(handle);
+            }
         }
 
         // Wait for all executions and verify consistency
         let mut results = Vec::new();
         for handle in handles {
-            results.push(handle.await??);
+            let result = handle.await.map_err(|e| anyhow!("Join error: {:?}", e))??;
+            results.push(result);
         }
 
         // Verify all results match
@@ -842,22 +868,24 @@ impl HybridGpuManager {
     /// Create scheduling context for advanced scheduling
     async fn create_scheduling_context(
         &self,
-    ) -> Result<crate::gpu::backends::hybrid_backend::SchedulingContext, anyhow::Error> {
-        Ok(crate::gpu::backends::hybrid_backend::SchedulingContext {
-            vulkan_load: crate::gpu::backends::hybrid_backend::BackendLoad {
+    ) -> Result<crate::gpu::backends::hybrid::SchedulingContext, anyhow::Error> {
+        Ok(crate::gpu::backends::hybrid::SchedulingContext {
+            vulkan_load: crate::gpu::backends::hybrid::BackendLoad {
                 backend_name: "vulkan".to_string(),
                 active_operations: 1,
                 queue_depth: 0,
                 memory_usage_percent: 50.0,
                 compute_utilization_percent: 60.0,
             },
-            cuda_load: crate::gpu::backends::hybrid_backend::BackendLoad {
+            cuda_load: crate::gpu::backends::hybrid::BackendLoad {
                 backend_name: "cuda".to_string(),
                 active_operations: 1,
                 queue_depth: 0,
                 memory_usage_percent: 30.0,
                 compute_utilization_percent: 40.0,
             },
+            thermal_state: 70.0,
+            power_budget: 400.0,
             system_memory_pressure: 0.4,
             thermal_throttling_active: false,
         })

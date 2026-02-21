@@ -178,6 +178,37 @@ impl DpTable {
         self.cuckoo_filter.contains(&hash)
     }
 
+    /// Add DP entry and check for collisions with existing entries
+    pub fn add_dp_and_check_collision(&mut self, entry: DpEntry) -> Result<Option<crate::types::Collision>> {
+        let hash = entry.x_hash;
+
+        // Check if we already have a DP at this position
+        if let Some(existing) = self.entries.get(&hash) {
+            // Check if it's a different type (tame vs wild)
+            if existing.state.is_tame != entry.state.is_tame {
+                // Found a collision!
+                let collision = crate::types::Collision {
+                    tame_dp: if existing.state.is_tame {
+                        existing.clone()
+                    } else {
+                        entry.clone()
+                    },
+                    wild_dp: if existing.state.is_tame {
+                        entry
+                    } else {
+                        existing.clone()
+                    },
+                };
+                return Ok(Some(collision));
+            }
+        } else {
+            // Add new DP to table
+            self.add_dp(entry)?;
+        }
+
+        Ok(None)
+    }
+
     /// Get DP entry by hash
     pub fn get_entry(&self, hash: u64) -> Option<&DpEntry> {
         self.entries.get(&hash)

@@ -3,8 +3,8 @@ use std::env;
 fn main() {
     // Set up CUDA environment variables if CUDA is available
     if let Ok(cuda_home) = env::var("CUDA_HOME") {
-        println!("cargo:rustc-env=CUDA_HOME={}", cuda_home);
-        println!("cargo:rustc-link-search=native={}/lib64", cuda_home);
+        println!("cargo:rustc-env=CUDA_HOME={cuda_home}");
+        println!("cargo:rustc-link-search=native={cuda_home}/lib64");
         println!("cargo:rustc-link-lib=cudart");
         println!("cargo:rustc-link-lib=cublas");
     }
@@ -30,7 +30,7 @@ fn generate_prime_sets() {
 }
 
 // Validate Vulkan WGSL shaders at build time
-fn validate_vulkan_shaders() {
+const fn validate_vulkan_shaders() {
     #[cfg(feature = "wgpu")]
     {
         // Skip WGSL validation for now - naga API may have changed

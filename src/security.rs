@@ -105,7 +105,7 @@ pub fn security_audit() -> Vec<&'static str> {
     // The module-level #[allow(unsafe_code)] attribute overrides the crate-level deny
 
     // Check for CUDA availability
-    #[cfg(not(feature = "cudarc"))]
+    #[cfg(not(feature = "cuda"))]
     issues.push("CUDA not enabled - reduced performance may enable timing attacks");
 
     issues

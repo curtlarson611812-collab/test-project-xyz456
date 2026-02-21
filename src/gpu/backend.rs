@@ -15,8 +15,8 @@ use wgpu;
 pub use super::backends::*;
 
 /// Create a new hybrid backend with optimal GPU configuration
-pub async fn create_backend() -> anyhow::Result<super::backends::HybridBackend> {
-    super::backends::HybridBackend::new().await
+pub async fn create_backend() -> anyhow::Result<super::backends::hybrid::HybridBackend> {
+    super::backends::hybrid::HybridBackend::new().await
 }
 
 /// Runtime GPU backend detection for optimal selection

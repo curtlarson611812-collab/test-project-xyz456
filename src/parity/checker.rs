@@ -130,6 +130,8 @@ impl ParityChecker {
                     &mut gpu_positions,
                     &mut gpu_distances,
                     &gpu_types,
+                    None,
+                    None,
                     &config,
                 )?;
             }

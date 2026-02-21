@@ -4,6 +4,7 @@
 
 pub use crate::kangaroo::collision::Trap;
 pub use crate::types::DpEntry;
+use crate::math::bigint::BigInt256;
 use anyhow::Result;
 
 #[derive(Debug, Clone)]
@@ -11,6 +12,17 @@ pub struct RhoWalkResult {
     pub cycle_len: u32,
     pub cycle_point: [[u32; 8]; 3],
     pub cycle_dist: [u32; 8],
+}
+
+/// Result from near collision detection and resolution
+#[derive(Debug, Clone)]
+pub struct NearCollisionResult {
+    pub kangaroo_a: usize,
+    pub kangaroo_b: usize,
+    pub distance_found: bool,
+    pub distance: [u32; 8],
+    pub solution_found: bool,
+    pub solution: [u32; 8],
 }
 
 /// Unified GPU backend trait for hybrid Vulkan+CUDA acceleration
@@ -60,6 +72,8 @@ pub trait GpuBackend {
         positions: &mut Vec<[[u32; 8]; 3]>,
         distances: &mut Vec<[u32; 8]>,
         types: &Vec<u32>,
+        kangaroo_states: Option<&[crate::types::KangarooState]>,
+        target_point: Option<&crate::types::Point>,
         config: &crate::config::Config,
     ) -> Result<Vec<Trap>>;
 
@@ -93,12 +107,37 @@ pub trait GpuBackend {
         config: &crate::config::Config,
     ) -> Result<Vec<Option<[u32; 8]>>>;
 
+    /// Advanced near collision detection with CUDA acceleration
+    /// Uses the mature near_collision_bsgs.cu kernel for GPU-accelerated near collision resolution
+    fn detect_near_collisions_cuda(
+        &self,
+        collision_pairs: Vec<(usize, usize)>,
+        kangaroo_states: &Vec<[[u32; 8]; 4]>, // [x,y,z,distance] per kangaroo
+        tame_params: &[u32; 8],
+        wild_params: &[u32; 8],
+        max_walk_steps: u32,
+        m_bsgs: u32,
+        config: &crate::config::Config,
+    ) -> Result<Vec<NearCollisionResult>>;
+
+    /// Vulkan walk-back near collision detection
+    /// Uses efficient walk-back/forward algorithms on GPU for exact collision finding
+    fn detect_near_collisions_walk(
+        &self,
+        positions: &mut Vec<[[u32; 8]; 3]>,
+        distances: &mut Vec<[u32; 8]>,
+        types: &Vec<u32>,
+        threshold_bits: usize,
+        walk_steps: usize,
+        config: &crate::config::Config,
+    ) -> Result<Vec<Trap>>;
+
     /// Barrett modular reduction for 512-bit to 256-bit reduction
     fn batch_barrett_reduce(
         &self,
         x: Vec<[u32; 16]>,
-        mu: [u32; 9],
-        modulus: [u32; 8],
+        mu: &[u32; 16],
+        modulus: &[u32; 8],
         use_montgomery: bool,
     ) -> Result<Vec<[u32; 8]>>;
 
@@ -160,6 +199,9 @@ pub trait GpuBackend {
 
     /// Simulate CUDA fail for fallback tests
     fn simulate_cuda_fail(&mut self, fail: bool);
+
+    /// Compute extended Euclidean inverse for modular arithmetic (zero drift)
+    fn compute_euclidean_inverse(&self, a: &BigInt256, modulus: &BigInt256) -> Option<BigInt256>;
 
     /// Generate pre-seed positional bias points
     fn generate_preseed_pos(

@@ -1016,17 +1016,23 @@ fn create_histogram_based_partitions(
 
 /// Determine which half to keep based on POP bias analysis
 fn should_keep_first_half(range: &(BigInt256, BigInt256), split_point: &BigInt256, model: &PopStatisticalModel) -> bool {
-    // Simple heuristic: check if the first half contains any high-density regions
-    let split_normalized = normalize_key(split_point, range);
+    // Use sophisticated POP analysis: find the densest region in the current range
+    if let Some(dense_region) = find_densest_region_in_range(range, model) {
+        let split_normalized = normalize_key(split_point, range);
+        let dense_center_normalized = normalize_key(&dense_region.center_key, range);
 
-    for region in &model.density_regions {
-        if region.start < split_normalized && region.density > 1.5 {
-            return true; // Keep first half if it contains high-density regions
+        // Keep the half that contains the densest region
+        dense_center_normalized < split_normalized
+    } else {
+        // Fallback: simple heuristic if no dense region found
+        let split_normalized = normalize_key(split_point, range);
+        for region in &model.density_regions {
+            if region.start < split_normalized && region.density > 1.5 {
+                return true; // Keep first half if it contains high-density regions
+            }
         }
+        true // Default: keep first half
     }
-
-    // Default: keep first half
-    true
 }
 
 /// Find densest region in current key range using statistical model

@@ -55,14 +55,21 @@ pub fn load_pubkeys_from_file(path: &str) -> io::Result<Vec<Point>> {
             io::Error::new(io::ErrorKind::InvalidData, format!("Invalid hex: {}", e))
         })?;
 
+        // Debug output
+        log::debug!("Processing pubkey: {} (len={})", &hex_str[..20], hex_str.len());
+        log::debug!("Decoded bytes length: {}, first byte: 0x{:02x}", bytes.len(), bytes.get(0).unwrap_or(&0));
+
         // Parse based on format
         let point = if bytes.len() == 65 && bytes[0] == 0x04 {
             // Uncompressed: 04 + 32 bytes x + 32 bytes y
+            log::debug!("Parsing as uncompressed pubkey");
             parse_uncompressed(&bytes)?
         } else if bytes.len() == 33 && (bytes[0] == 0x02 || bytes[0] == 0x03) {
             // Compressed: 02/03 + 32 bytes x, decompress to get y
+            log::debug!("Parsing as compressed pubkey");
             parse_compressed_bytes(&bytes)?
         } else {
+            log::error!("Invalid pubkey length {} or format for: {}", bytes.len(), &hex_str[..20]);
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Invalid pubkey length {} or format", bytes.len()),
