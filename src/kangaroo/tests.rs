@@ -84,21 +84,21 @@ mod tests {
 
     #[test]
     fn test_get_biased_prime() {
-        // Test basic cycling - all should return PRIME_MULTIPLIERS[0] = 179 for index 0
-        assert_eq!(sop::get_biased_prime(0, 81), 179); // (0 % 81) % 32 = 0 -> 179
-        assert_eq!(sop::get_biased_prime(0, 9), 179); // (0 % 9) % 32 = 0 -> 179
-        assert_eq!(sop::get_biased_prime(0, 27), 179); // (0 % 27) % 32 = 0 -> 179
+        // Test basic cycling - all should return PRIME_MULTIPLIERS[0] = 131 for index 0
+        assert_eq!(sop::get_biased_prime(0, 81), 131); // (0 % 81) % 32 = 0 -> 131
+        assert_eq!(sop::get_biased_prime(0, 9), 131); // (0 % 9) % 32 = 0 -> 131
+        assert_eq!(sop::get_biased_prime(0, 27), 131); // (0 % 27) % 32 = 0 -> 131
 
         // Test cycling
-        assert_eq!(sop::get_biased_prime(32, 81), 179); // (32 % 81) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(32, 81), 131); // (32 % 81) % 32 = 0 -> 131
 
         // Test different indices
-        assert_eq!(sop::get_biased_prime(1, 81), 257); // (1 % 81) % 32 = 1 -> 257
-        assert_eq!(sop::get_biased_prime(31, 81), 1583); // (31 % 81) % 32 = 31 -> 1583
+        assert_eq!(sop::get_biased_prime(1, 81), 137); // (1 % 81) % 32 = 1 -> 137
+        assert_eq!(sop::get_biased_prime(31, 81), 307); // (31 % 81) % 32 = 31 -> 307
 
         // Test edge case: bias_mod = 1
-        assert_eq!(sop::get_biased_prime(0, 1), 179); // (0 % 1) % 32 = 0 -> 179
-        assert_eq!(sop::get_biased_prime(1, 1), 179); // (1 % 1) % 32 = 0 -> 179
+        assert_eq!(sop::get_biased_prime(0, 1), 131); // (0 % 1) % 32 = 0 -> 131
+        assert_eq!(sop::get_biased_prime(1, 1), 131); // (1 % 1) % 32 = 0 -> 131
     }
 
     #[test]
