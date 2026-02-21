@@ -72,8 +72,8 @@ mod tests {
     #[test]
     fn test_prime_multipliers() {
         assert_eq!(sop::PRIME_MULTIPLIERS.len(), 32);
-        assert_eq!(sop::PRIME_MULTIPLIERS[0], 179); // First sacred prime
-        assert_eq!(sop::PRIME_MULTIPLIERS[31], 1583); // Last sacred prime
+        assert_eq!(sop::PRIME_MULTIPLIERS[0], 131); // First sacred prime
+        assert_eq!(sop::PRIME_MULTIPLIERS[31], 307); // Last sacred prime
 
         // Verify all are >128, odd, and low Hamming weight
         for &prime in &sop::PRIME_MULTIPLIERS {

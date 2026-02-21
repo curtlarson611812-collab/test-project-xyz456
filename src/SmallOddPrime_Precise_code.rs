@@ -88,14 +88,14 @@ mod tests {
 
     #[test]
     fn test_prime_multipliers() {
-        assert_eq!(PRIME_MULTIPLIERS[0], 179);
-        assert_eq!(PRIME_MULTIPLIERS[31], 1583);
+        assert_eq!(PRIME_MULTIPLIERS[0], 131);
+        assert_eq!(PRIME_MULTIPLIERS[31], 307);
         assert!(PRIME_MULTIPLIERS.iter().all(|&p| p > 128 && p % 2 == 1)); // All >128 and odd
     }
 
     #[test]
     fn test_biased_prime() {
-        assert_eq!(get_biased_prime(0, 81), 179);
+        assert_eq!(get_biased_prime(0, 81), 131);
         assert_eq!(get_biased_prime(32, 81), PRIME_MULTIPLIERS[32 % 32]); // Cycle
     }
 

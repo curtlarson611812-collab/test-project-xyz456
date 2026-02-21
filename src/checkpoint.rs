@@ -424,6 +424,7 @@ impl Default for HuntStatistics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::RhoState;
     use tempfile::TempDir;
 
     #[test]
@@ -476,15 +477,23 @@ mod tests {
             timestamp: 1234567890,
             total_ops: 1000000,
             current_cycle: 42,
-            wild_states: vec![], // Empty for test
-            tame_states: vec![], // Empty for test
+            wild_states: vec![KangarooState::default()], // Add minimal state for validation
+            tame_states: vec![], // Empty tame states ok when wild exists
             dp_table_snapshot: DpTableSnapshot {
                 total_entries: 1000,
                 memory_usage_mb: 50.0,
                 compression_ratio: 2.5,
                 compressed_data: vec![1, 2, 3, 4],
             },
-            active_targets: vec![], // Empty for test
+            active_targets: vec![Target {
+                point: crate::types::Point::from_affine([0u64; 4], [0u64; 4]),
+                key_range: None,
+                id: 1,
+                priority: 1.0,
+                address: None,
+                value_btc: None,
+                biases: None,
+            }], // Add minimal target for validation
             performance_metrics: PerformanceMetricsSnapshot::default(),
             search_params: SearchParameters::default(),
             hunt_stats: HuntStatistics::default(),
