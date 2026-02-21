@@ -556,8 +556,12 @@ impl HybridOperationMetrics {
 
     /// Record operation completion
     pub fn record_completion(&mut self, success: bool) {
-        self.end_time = Instant::now();
-        self.duration_ms = (self.end_time - self.start_time).as_millis();
+        self.end_time = std::time::SystemTime::now();
+        if let Ok(duration) = self.end_time.duration_since(self.start_time) {
+            self.duration_ms = duration.as_millis();
+        } else {
+            self.duration_ms = 0; // Fallback if time calculation fails
+        }
         self.success = success;
 
         // Calculate efficiency score

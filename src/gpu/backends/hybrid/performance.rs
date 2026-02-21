@@ -1256,7 +1256,7 @@ impl PerformanceOperationsImpl {
             0.5 // Default neutral efficiency
         }
     }
-}
+// }
 
 impl PerformancePredictor {
     fn new() -> Self {
@@ -1961,4 +1961,4 @@ impl ExtendedGpuConfig {
             log::info!("No optimizations applied - current configuration appears optimal");
         }
     }
-// }
+}

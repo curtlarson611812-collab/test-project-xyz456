@@ -1304,14 +1304,27 @@ impl HybridOperations for HybridOperationsImpl {
         // - Multiple collision solving strategies
         // - GPU acceleration for collision computation
 
-        let mut dp_table_clone = dp_table.clone();
+        let mut dp_table_clone = (*dp_table).clone();
 
         // Check collisions for all states
         for tame_state in tame_states {
+            // Convert RhoState to KangarooState for DP entry
+            let kangaroo_state = crate::types::KangarooState {
+                position: tame_state.current.clone(),
+                distance: tame_state.steps.clone(),
+                alpha: [0; 4], // TODO: Compute proper alpha
+                beta: [0; 4],  // TODO: Compute proper beta
+                is_tame: true,
+                is_dp: tame_state.is_dp,
+                id: 0, // TODO: Generate proper ID
+                step: 0, // TODO: Track step count
+                kangaroo_type: 1, // Tame kangaroo
+            };
+
             if let Ok(Some(collision)) = dp_table_clone.add_dp_and_check_collision(
                 crate::types::DpEntry {
                     point: tame_state.current.clone(),
-                    state: tame_state.clone(),
+                    state: kangaroo_state,
                     x_hash: 0,
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
@@ -1327,10 +1340,23 @@ impl HybridOperations for HybridOperationsImpl {
         }
 
         for wild_state in wild_states {
+            // Convert RhoState to KangarooState for DP entry
+            let kangaroo_state = crate::types::KangarooState {
+                position: wild_state.current.clone(),
+                distance: wild_state.steps.clone(),
+                alpha: [0; 4], // TODO: Compute proper alpha
+                beta: [0; 4],  // TODO: Compute proper beta
+                is_tame: false,
+                is_dp: wild_state.is_dp,
+                id: 0, // TODO: Generate proper ID
+                step: 0, // TODO: Track step count
+                kangaroo_type: 0, // Wild kangaroo
+            };
+
             if let Ok(Some(collision)) = dp_table_clone.add_dp_and_check_collision(
                 crate::types::DpEntry {
                     point: wild_state.current.clone(),
-                    state: wild_state.clone(),
+                    state: kangaroo_state,
                     x_hash: 0,
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
@@ -1932,7 +1958,7 @@ impl HybridOperationsImpl {
             // Execute stage operation based on its type
             match &stage.operation {
                 super::HybridOperation::BatchInverse(inputs, modulus) => {
-                    let result = self.batch_inverse(inputs, *modulus)?;
+                    let result = self.batch_inverse(*inputs, *modulus)?;
                     current_data = bincode::serialize(&result)?;
                 }
                 super::HybridOperation::BatchBarrettReduce(inputs, mu, modulus, use_montgomery) => {

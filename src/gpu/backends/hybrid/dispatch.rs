@@ -1287,4 +1287,30 @@ impl HybridBackend {
         let operations = crate::gpu::backends::hybrid::operations::HybridOperationsImpl::new();
         operations.execute_hybrid_operation(vulkan_operation, cuda_operation)
     }
+
+    // TODO: Elite Professor Level - Missing methods temporarily stubbed during Phase 0.1 modular breakout
+    /// Create hybrid scheduler with specified policy
+    pub fn create_hybrid_scheduler(&self, _policy: crate::gpu::backends::hybrid::SchedulingPolicy) -> crate::gpu::backends::hybrid::HybridScheduler {
+        crate::gpu::backends::hybrid::HybridScheduler::new()
+    }
+
+    /// Create out-of-order execution queue with specified capacity
+    pub fn create_ooo_queue(&self, _capacity: usize) -> crate::gpu::backends::hybrid::OooExecutionQueue {
+        crate::gpu::backends::hybrid::OooExecutionQueue::new()
+    }
+
+    /// Submit work item to OOO queue
+    pub fn submit_ooo_work(&self, _queue: &mut crate::gpu::backends::hybrid::OooExecutionQueue, _operation: crate::gpu::backends::hybrid::HybridOperation, _priority: crate::gpu::backends::hybrid::WorkPriority, _dependencies: Vec<usize>) -> usize {
+        0 // Return dummy work ID
+    }
+
+    /// Execute all work in OOO queue
+    pub async fn execute_ooo_queue(&self, _queue: &mut crate::gpu::backends::hybrid::OooExecutionQueue) -> Result<()> {
+        Ok(()) // Stub implementation
+    }
+
+    /// Advanced operation scheduling with context awareness
+    pub fn schedule_operation_advanced(&self, _scheduler: &mut crate::gpu::backends::hybrid::HybridScheduler, _operation_type: &str, _data_size: usize, _context: &crate::gpu::backends::hybrid::SchedulingContext) -> Result<crate::gpu::backends::hybrid::BackendSelection> {
+        Ok(crate::gpu::backends::hybrid::BackendSelection::Auto)
+    }
 }
