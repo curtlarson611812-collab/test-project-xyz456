@@ -51,7 +51,7 @@ pub struct GpuCluster {
     /// Adaptive load balancing engine
     pub load_balancer: AdaptiveLoadBalancer,
     /// Cross-GPU communication and result aggregation
-    pub cross_gpu_communication: CrossGpuCommunication,
+    pub cross_gpu_communication: super::communication::CrossGpuCommunication,
 }
 
 /// Individual GPU device in the cluster
@@ -156,9 +156,9 @@ pub struct WorkloadPattern {
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct PerformanceSnapshot {
-    timestamp: std::time::Instant,
-    device_loads: HashMap<usize, f64>,
-    throughput: f64,
+    pub timestamp: std::time::Instant,
+    pub device_loads: HashMap<usize, f64>,
+    pub throughput: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -172,9 +172,9 @@ pub enum BalancingStrategy {
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct SharedMemoryRegion {
-    id: String,
-    size_bytes: usize,
-    mapped_devices: Vec<usize>,
+    pub id: String,
+    pub size_bytes: usize,
+    pub mapped_devices: Vec<usize>,
 }
 
 #[derive(Debug)]
@@ -382,12 +382,7 @@ impl GpuCluster {
             device_weights.insert(device.id, 1.0);
         }
 
-        AdaptiveLoadBalancer {
-            device_weights,
-            workload_patterns: Vec::new(),
-            performance_history: Vec::new(),
-            balancing_strategy: BalancingStrategy::Adaptive,
-        }
+        AdaptiveLoadBalancer::new()
     }
 
     /// Distribute kangaroo herd across available GPUs using intelligent load balancing
@@ -788,14 +783,7 @@ impl GpuCluster {
 
     /// Initialize cross-GPU communication
     fn initialize_cross_gpu_communication() -> super::communication::CrossGpuCommunication {
-        super::communication::CrossGpuCommunication {
-            shared_memory_regions: Vec::new(),
-            peer_to_peer_enabled: true,
-            result_aggregation: super::cluster::ResultAggregator {
-                pending_results: std::collections::HashMap::new(),
-                aggregation_strategy: super::cluster::AggregationStrategy::FirstResult,
-            },
-        }
+        super::communication::CrossGpuCommunication::new(8) // Assume 8 GPUs as default
     }
 }
 
@@ -906,6 +894,7 @@ pub struct UtilizationStats {
             }
         }
 
+        let device_count = devices.len();
         GpuCluster {
             devices,
             topology: GpuTopology {
@@ -930,6 +919,6 @@ pub struct UtilizationStats {
                 },
             },
             load_balancer: super::load_balancer::AdaptiveLoadBalancer::new(),
-            cross_gpu_communication: initialize_cross_gpu_communication(),
+            cross_gpu_communication: super::communication::CrossGpuCommunication::new(device_count),
         }
     }

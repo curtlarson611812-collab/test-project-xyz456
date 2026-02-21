@@ -33,7 +33,6 @@ use std::hash::{Hash, Hasher};
 /// - Memory-bounded DP table with automatic pruning
 /// - Real-time collision statistics and performance metrics
 /// - Thread-safe operations for concurrent processing
-#[derive(Debug)]
 pub struct DpIntegrationManager {
     /// Core DP table with advanced collision detection
     dp_table: DpTable,
@@ -41,6 +40,16 @@ pub struct DpIntegrationManager {
     dp_bits: usize,
     /// Performance statistics for monitoring
     stats: DpPerformanceStats,
+}
+
+impl std::fmt::Debug for DpIntegrationManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DpIntegrationManager")
+            .field("dp_table", &"<dp table>")
+            .field("dp_bits", &self.dp_bits)
+            .field("stats", &self.stats)
+            .finish()
+    }
 }
 
 /// Performance statistics for DP operations
@@ -198,10 +207,11 @@ impl DpIntegrationManager {
                 // Add to DP table and check for collisions
                 if let Some(collision) = self.dp_table.add_dp_and_check_collision(dp_entry)? {
                     self.stats.collisions_found += 1;
-                    collisions.push(collision);
 
                     log::info!("🎯 DP COLLISION DETECTED! Tame DP #{} collided with Wild DP #{}",
                               collision.tame_dp.state.id, collision.wild_dp.state.id);
+
+                    collisions.push(collision);
                 }
             }
         }
@@ -324,7 +334,12 @@ impl DpIntegrationManager {
         // Check multiple criteria for intelligent pruning decisions
         let table_needs_pruning = self.dp_table.needs_pruning();
         let high_memory_usage = self.stats.memory_usage > 1_000_000_000; // 1GB threshold
-        let low_collision_rate = self.stats.collision_efficiency < 0.001; // <0.1% collision rate
+        let collision_efficiency = if self.stats.total_checks > 0 {
+            self.stats.collisions_found as f64 / self.stats.total_checks as f64
+        } else {
+            0.0
+        };
+        let low_collision_rate = collision_efficiency < 0.001; // <0.1% collision rate
 
         table_needs_pruning || high_memory_usage || low_collision_rate
     }

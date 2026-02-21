@@ -925,7 +925,7 @@ impl GpuBackend for WgpuBackend {
                 });
 
             // Create repeated modulus buffer for each input
-            let moduli_data: Vec<[u32; 8]> = vec![modulus; x.len()];
+            let moduli_data: Vec<[u32; 8]> = vec![*modulus; x.len()];
             let moduli_bytes = bytemuck::cast_slice(&moduli_data);
 
             let moduli_buffer = self
@@ -1111,7 +1111,7 @@ impl GpuBackend for WgpuBackend {
             // CPU verification of Barrett reduction
             use crate::math::bigint::{BigInt256, BigInt512};
 
-            let modulus_bigint = BigInt256::from_u32_limbs(modulus);
+            let modulus_bigint = BigInt256::from_u32_limbs(*modulus);
             let mut results = Vec::with_capacity(x.len());
 
             for value in x {

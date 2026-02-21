@@ -714,7 +714,7 @@ impl AdaptiveLoadBalancer {
             "batch_inverse" | "bsgs_solve" => {
                 // Prefer CUDA for complex math operations
                 self.device_weights.iter()
-                    .filter(|(id, _)| *id >= 8usize) // CUDA devices (8-15)
+                    .filter(|(id, _)| **id >= 8) // CUDA devices (8-15)
                     .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
                     .map(|(id, _)| *id)
                     .unwrap_or(8)
@@ -722,7 +722,7 @@ impl AdaptiveLoadBalancer {
             "step_batch" | "dp_check" => {
                 // Prefer Vulkan for bulk operations
                 self.device_weights.iter()
-                    .filter(|(id, _)| *id < 8) // Vulkan devices (0-7)
+                    .filter(|(id, _)| **id < 8) // Vulkan devices (0-7)
                     .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
                     .map(|(id, _)| *id)
                     .unwrap_or(0)
@@ -964,8 +964,8 @@ impl AdaptiveLoadBalancer {
     /// Calculate backend performance based on historical data
     fn calculate_backend_performance(&self, operation: &str, backend: &str) -> Result<f64> {
         let device_range = match backend {
-            "cuda" => 8..16,  // CUDA devices
-            "vulkan" => 0..8, // Vulkan devices
+            "cuda" => 8usize..16,  // CUDA devices
+            "vulkan" => 0usize..8, // Vulkan devices
             _ => return Ok(1.0),
         };
 
@@ -1144,8 +1144,8 @@ impl AdaptiveLoadBalancer {
         let thermal_history = self.thermal_history.get(&device_id);
         if let Some(history) = thermal_history {
             if let Some(current_temp) = history.back() {
-                let max_safe_temp = 85.0; // Conservative thermal limit
-                let headroom = (max_safe_temp - current_temp) / max_safe_temp;
+                let max_safe_temp = 85.0_f64; // Conservative thermal limit
+                let headroom = (max_safe_temp - *current_temp as f64) / max_safe_temp;
                 headroom.max(0.1_f64).min(1.0_f64) // Clamp to reasonable range
             } else {
                 1.0 // Full headroom if no data
@@ -1307,10 +1307,10 @@ impl AdaptiveLoadBalancer {
 
     /// Distribute workload across devices (called by cluster manager)
     pub fn distribute_workload(
-        &self,
+        &mut self,
         operations: Vec<HybridOperation>,
     ) -> Result<HashMap<usize, Vec<HybridOperation>>> {
-        self.distribute_operations(&operations)
+        self.distribute_operations(operations)
     }
 
     /// Update device state information (called by cluster manager)
@@ -1319,12 +1319,15 @@ impl AdaptiveLoadBalancer {
         // In a real implementation, this would receive full device state
         let mock_device = GpuDevice {
             id: device_id,
-            api_type: if device_id < 8 { GpuApiType::Vulkan } else { GpuApiType::Cuda },
+            name: format!("GPU Device {}", device_id),
+            memory_gb: 24.0, // 24GB
+            compute_units: 128, // RTX 5090 has ~128 SMs
+            current_load: load,
             temperature: 70.0, // Default temperature
             power_consumption: 250.0, // Default power
-            current_load: load as f32,
             memory_used: 0,
             memory_total: (24 * 1024 * 1024 * 1024), // 24GB in bytes
+            api_type: if device_id < 8 { GpuApiType::Vulkan } else { GpuApiType::Cuda },
         };
 
         self.update_weights(&[mock_device])

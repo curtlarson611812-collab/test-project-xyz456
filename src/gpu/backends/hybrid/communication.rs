@@ -222,8 +222,9 @@ impl CrossGpuCommunication {
         };
 
         self.shared_memory_regions.push(region);
+        let region_ref = self.shared_memory_regions.last().unwrap();
         log::info!("Allocated {} byte shared memory region '{}' for devices {:?}",
-                  size_bytes, region_id, device_ids);
+                  size_bytes, region_id, region_ref.mapped_devices);
 
         Ok(region_id)
     }

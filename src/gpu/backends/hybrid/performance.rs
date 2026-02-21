@@ -739,19 +739,37 @@ struct NsightAnalyzer {
 }
 
 /// Workload characterization engine
-#[derive(Debug)]
 struct WorkloadCharacterizer {
     operation_clusters: Vec<OperationCluster>,
     pattern_recognition_engine: PatternRecognitionEngine,
     feature_extractors: Vec<Box<dyn FeatureExtractor>>,
 }
 
+impl std::fmt::Debug for WorkloadCharacterizer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkloadCharacterizer")
+            .field("operation_clusters", &self.operation_clusters)
+            .field("pattern_recognition_engine", &self.pattern_recognition_engine)
+            .field("feature_extractors", &"<feature extractors>")
+            .finish()
+    }
+}
+
 /// Real-time performance monitor
-#[derive(Debug)]
 struct RealTimeMonitor {
     active_monitors: HashMap<String, MonitorHandle>,
     sampling_interval: Duration,
     last_sample_time: Instant,
+}
+
+impl std::fmt::Debug for RealTimeMonitor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RealTimeMonitor")
+            .field("active_monitors", &"<monitor handles>")
+            .field("sampling_interval", &self.sampling_interval)
+            .field("last_sample_time", &self.last_sample_time)
+            .finish()
+    }
 }
 
 /// Alert system for performance notifications
@@ -998,12 +1016,13 @@ impl PerformanceOperationsImpl {
             "step_batch", "solve_collision", "kangaroo_jump"
         ];
 
+        let num_operations = common_operations.len();
         for operation in common_operations {
             let model = PredictionModel::new(operation);
             self.prediction_models.insert(operation.to_string(), model);
         }
 
-        log::info!("🧠 Initialized ML prediction models for {} operation types", common_operations.len());
+        log::info!("🧠 Initialized ML prediction models for {} operation types", num_operations);
     }
 
     /// Enhanced constructor with configuration options
@@ -1029,6 +1048,7 @@ impl PerformanceOperationsImpl {
 
 // TODO: Elite Professor Level - PerformanceOperations trait implementation temporarily disabled during Phase 0.1 modular breakout
 // impl PerformanceOperations for PerformanceOperationsImpl {
+    /*
     fn clear_performance_metrics(&mut self) {
         self.performance_metrics.clear();
         self.performance_history.clear();
@@ -1110,8 +1130,8 @@ impl PerformanceOperationsImpl {
             device_id: 0, // Would be determined from context
             duration_ms,
             queued_duration_ms: 0, // Not measured in basic recording
-            start_time: Instant::now() - Duration::from_millis(duration_ms as u64),
-            end_time: Instant::now(),
+            start_time: std::time::SystemTime::now() - std::time::Duration::from_millis(duration_ms as u64),
+            end_time: std::time::SystemTime::now(),
             data_size,
             memory_used_mb: 0.0, // Would be populated from monitoring
             compute_utilization_percent: 0.0,
@@ -1256,7 +1276,7 @@ impl PerformanceOperationsImpl {
             0.5 // Default neutral efficiency
         }
     // }
-}
+    */
 
 impl PerformancePredictor {
     fn new() -> Self {
@@ -1451,15 +1471,17 @@ impl PerformanceOperationsImpl {
     /// Check for performance anomalies and trigger alerts
     fn check_for_anomalies(&mut self, metric: &HybridOperationMetrics) {
         if metric.z_score.abs() > 3.0 {
+            let anomaly_severity = (metric.z_score.abs() / 6.0).min(1.0);
+            let root_cause = format!("Performance deviation: z-score = {:.2}", metric.z_score);
             let anomaly = PerformanceAnomaly {
                 anomaly_type: if metric.z_score > 0.0 {
                     AnomalyType::SuddenDegradation
                 } else {
                     AnomalyType::UnexplainedVariation
                 },
-                severity: (metric.z_score.abs() / 6.0).min(1.0),
+                severity: anomaly_severity,
                 affected_metrics: vec![format!("{}_latency", metric.operation_type)],
-                root_cause: Some(format!("Performance deviation: z-score = {:.2}", metric.z_score)),
+                root_cause: Some(root_cause.clone()),
                 detection_time: Instant::now(),
             };
 
@@ -1468,11 +1490,11 @@ impl PerformanceOperationsImpl {
                 self.anomaly_detector.recent_anomalies.pop_front();
             }
 
-            if anomaly.severity > 0.7 {
+            if anomaly_severity > 0.7 {
                 let alert = PerformanceAlert {
                     alert_type: AlertType::Anomaly,
-                    severity: if anomaly.severity > 0.8 { AlertSeverity::Critical } else { AlertSeverity::Warning },
-                    message: format!("Performance anomaly in {}: {}", metric.operation, anomaly.root_cause.as_ref().unwrap()),
+                    severity: if anomaly_severity > 0.8 { AlertSeverity::Critical } else { AlertSeverity::Warning },
+                    message: format!("Performance anomaly in {}: {}", metric.operation, root_cause),
                     affected_components: vec![metric.backend.clone()],
                     recommended_actions: vec![
                         "Review recent configuration changes".to_string(),
@@ -1499,8 +1521,8 @@ impl PerformanceOperationsImpl {
             system_state: SystemState {
                 gpu_utilization: metric.compute_utilization_percent / 100.0,
                 memory_pressure: metric.memory_used_mb / 8192.0,
-                thermal_state: metric.thermal_state_celsius / 100.0,
-                power_consumption: metric.power_consumption_watts,
+                thermal_state: metric.thermal_state_celsius as f64 / 100.0,
+                power_consumption: metric.power_consumption_watts as f64,
                 active_operations: 1,
             },
             configuration: ConfigurationSnapshot {
@@ -1669,7 +1691,7 @@ impl ExtendedGpuConfig {
         monitor.stage_latencies
             .entry(stage_name.to_string())
             .or_insert_with(Vec::new)
-            .push(duration.as_secs_f64());
+            .push(duration);
 
         // Keep only recent measurements
         if let Some(latencies) = monitor.stage_latencies.get_mut(stage_name) {
@@ -1871,6 +1893,20 @@ impl ExtendedGpuConfig {
             success: true,
             error_message: None,
             retry_count: 0,
+            efficiency_score: 0.8, // Default efficiency
+            bottleneck_factor: "unknown".to_string(),
+            optimization_potential: 0.0,
+            z_score: 0.0,
+            percentile_rank: 0.0,
+            predicted_duration_ms: duration_ms,
+            prediction_accuracy: 1.0,
+            thermal_state_celsius: 25.0,
+            power_consumption_watts: 0.0,
+            system_load_percent: 0.0,
+            timestamp: std::time::Instant::now(),
+            trace_id: format!("{:x}", rand::random::<u64>()),
+            correlation_id: format!("{:x}", rand::random::<u64>()),
+            custom_metrics: std::collections::HashMap::new(),
         };
 
         // TODO: Elite Professor Level - performance metrics tracking temporarily disabled during Phase 0.1 modular breakout

@@ -1144,6 +1144,7 @@ impl OooExecutionQueue {
             reverse_dependencies: std::collections::HashMap::new(),
             next_work_id: 0,
             max_concurrent: 16,
+            stats: ExecutionStatistics::default(),
             scheduling_policy: SchedulingPolicy::Balanced,
             scheduling_context: SchedulingContext::default(),
             retry_queue: std::collections::VecDeque::new(),

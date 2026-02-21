@@ -550,8 +550,8 @@ impl HybridOperationMetrics {
 
     /// Record operation start
     pub fn record_start(&mut self) {
-        self.start_time = Instant::now();
-        self.timestamp = self.start_time;
+        self.start_time = std::time::SystemTime::now();
+        self.timestamp = std::time::Instant::now();
     }
 
     /// Record operation completion
@@ -1006,7 +1006,7 @@ impl ElitePerformanceMonitor {
     }
 
     /// Record operation performance
-    pub fn record_operation(&mut self, metrics: HybridOperationMetrics) -> Result<()> {
+    pub fn record_operation(&mut self, mut metrics: HybridOperationMetrics) -> Result<()> {
         // Update operation type classification
         metrics.operation_type = self.classify_operation_type(&metrics.operation);
 
@@ -1112,7 +1112,7 @@ impl ElitePerformanceMonitor {
             let entry = report.operation_breakdown.entry(metrics.operation_type.clone())
                 .or_insert(OperationSummary::default());
             entry.count += 1;
-            entry.total_duration += Duration::from_millis(metrics.duration_ms);
+            entry.total_duration += Duration::from_millis(metrics.duration_ms as u64);
             if metrics.success {
                 entry.success_count += 1;
             }
@@ -1243,6 +1243,7 @@ impl PipelinePerformanceSummary {
         // Generate optimization recommendations
         let recommended_optimizations = Self::generate_optimization_recommendations(&stage_summaries);
 
+        let stage_summaries_clone = stage_summaries.clone();
         PipelinePerformanceSummary {
             total_duration,
             total_operations,
@@ -1256,8 +1257,8 @@ impl PipelinePerformanceSummary {
             stage_variance_coefficient,
             bottleneck_contribution,
             parallelization_efficiency,
-            predicted_total_duration: Self::predict_total_duration(&stage_summaries),
-            optimization_potential: Self::calculate_optimization_potential(&stage_summaries),
+            predicted_total_duration: Self::predict_total_duration(&stage_summaries_clone),
+            optimization_potential: Self::calculate_optimization_potential(&stage_summaries_clone),
             recommended_optimizations,
             cluster_utilization: 0.0, // Would be populated from cluster monitoring
             memory_pressure: 0.0,
@@ -1652,7 +1653,7 @@ impl PipelinePerformanceSummary {
     /// Calculate confidence interval for duration prediction
     fn calculate_confidence_interval(durations: &[Duration]) -> (Duration, Duration) {
         if durations.len() < 2 {
-            let avg = Self::predict_stage_duration(durations);
+            let avg = predict_stage_duration(durations);
             return (avg, avg);
         }
 

@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::gpu::backends::hybrid_backend::HybridBackend;
+    use crate::gpu::backends::hybrid::HybridBackend;
     use crate::math::{bigint::BigInt256, secp::Secp256k1};
     use crate::types::Point;
     use tokio;
@@ -152,7 +152,7 @@ mod tests {
     #[cfg(feature = "rustacuda")]
     #[test]
     fn test_cuda_kangaroo_step() {
-        use crate::gpu::backends::hybrid_backend::HybridBackend;
+        use crate::gpu::backends::hybrid::HybridBackend;
         use crate::kangaroo::stepper::KangarooStepper;
         use crate::types::KangarooState;
 
@@ -341,7 +341,7 @@ mod tests {
         {
             match tokio::time::timeout(
                 std::time::Duration::from_secs(10),
-                crate::gpu::backends::hybrid_backend::HybridBackend::new()
+                crate::gpu::backends::hybrid::HybridBackend::new()
             ).await {
                 Ok(Ok(hybrid_backend)) => {
                 // FIXME: Test hooks not properly formed - step_kangaroo method doesn't exist on HybridBackend

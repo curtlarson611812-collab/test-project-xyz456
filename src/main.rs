@@ -49,7 +49,8 @@ fn auto_tune_kangaroos(config: &mut speedbitcrack::config::GpuConfig) {
     // First try metrics-based optimization
     if let Some(metrics) = speedbitcrack::utils::logging::load_comprehensive_nsight_metrics("ci_metrics.json") {
         log::info!("Applying Nsight metrics-based optimization...");
-        speedbitcrack::gpu::backends::hybrid_backend::HybridBackend::optimize_based_on_metrics(config, &metrics);
+        // TODO: Re-enable Nsight metrics optimization after Phase 0.2 modular integration
+        // speedbitcrack::gpu::backends::hybrid::HybridBackend::optimize_based_on_metrics(config, &metrics);
     }
 
     // Fallback to thermal-based tuning
