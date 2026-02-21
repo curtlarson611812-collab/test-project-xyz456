@@ -592,6 +592,7 @@ impl DpTable {
 
         cuckoo_size + entries_size + value_scores_size + clusters_size
     }
+}
 
 impl Drop for DpTable {
     fn drop(&mut self) {
