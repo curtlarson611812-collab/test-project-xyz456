@@ -1926,6 +1926,7 @@ impl ExtendedGpuConfig {
 
     /// Production-ready optimization based on metrics
     pub fn optimize_based_on_metrics_production(
+        &self,
         config: &mut crate::config::GpuConfig,
         metrics: &crate::utils::logging::NsightMetrics,
     ) {
