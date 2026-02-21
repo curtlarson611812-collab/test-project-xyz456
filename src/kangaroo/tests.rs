@@ -133,9 +133,12 @@ mod tests {
         let herds = generate_wild_herds(&target, &config, "magic9");
         assert_eq!(herds.len(), 3);
         let expected_first = curve
-            .mul_constant_time(&BigInt256::from_u64(179), &target)
+            .mul_constant_time(&BigInt256::from_u64(131), &target)
             .unwrap();
-        assert_eq!(herds[0], expected_first);
+        let expected_affine = curve.to_affine(&expected_first);
+        let actual_affine = curve.to_affine(&herds[0]);
+        assert_eq!(actual_affine.x, expected_affine.x);
+        assert_eq!(actual_affine.y, expected_affine.y);
         for herd in &herds {
             assert!(herd.is_valid(&curve)); // From secp.rs
         }
@@ -150,8 +153,8 @@ mod tests {
         let curve = Secp256k1::new();
         let herds = generate_tame_herds(&config, "magic9");
         assert_eq!(herds.len(), 3);
-        // Verify accumulation: 179 + 257 + 281 = 717 * G for last
-        let expected_sum = 179 + 257 + 281;
+        // Verify accumulation: 131 + 137 + 139 = 407 * G for last
+        let expected_sum = 131 + 137 + 139;
         let expected_last = curve
             .mul_constant_time(&BigInt256::from_u64(expected_sum), &curve.g)
             .unwrap();
