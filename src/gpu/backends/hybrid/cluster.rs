@@ -89,7 +89,7 @@ pub struct GpuTopology {
     /// NUMA domain groupings - devices sharing memory controllers
     numa_domains: Vec<Vec<usize>>,
     /// NVLink connectivity mask between device pairs
-    nvlink_mask: Vec<Vec<bool>>,
+    pub nvlink_mask: Vec<Vec<bool>>,
 }
 
 
@@ -157,8 +157,7 @@ pub struct PerformanceSnapshot {
     throughput: f64,
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BalancingStrategy {
     RoundRobin,
     LoadBalanced,
@@ -902,12 +901,12 @@ pub struct UtilizationStats {
                 },
             },
             load_balancer: super::load_balancer::AdaptiveLoadBalancer::new(),
-            cross_gpu_communication: Self::initialize_cross_gpu_communication(),
+            cross_gpu_communication: initialize_cross_gpu_communication(),
         }
     }
 
     /// Initialize cross-GPU communication
-    pub fn initialize_cross_gpu_communication() -> super::communication::CrossGpuCommunication {
+    fn initialize_cross_gpu_communication() -> super::communication::CrossGpuCommunication {
         super::communication::CrossGpuCommunication {
             shared_memory_regions: Vec::new(),
             peer_to_peer_enabled: true,

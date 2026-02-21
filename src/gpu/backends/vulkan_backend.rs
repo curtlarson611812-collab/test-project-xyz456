@@ -81,6 +81,7 @@ struct JumpTableEntry {
 
 /// Vulkan backend for bulk cryptographic operations
 #[cfg(feature = "wgpu")]
+#[derive(Debug)]
 pub struct WgpuBackend {
     #[allow(dead_code)]
     instance: wgpu::Instance,

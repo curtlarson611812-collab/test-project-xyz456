@@ -13,6 +13,7 @@
 
 use crate::gpu::backends::backend_trait::{GpuBackend, NearCollisionResult, RhoWalkResult};
 use crate::gpu::backends::cpu_backend::CpuBackend;
+use super::operations::HybridOperations;
 #[cfg(feature = "rustacuda")]
 use crate::gpu::backends::cuda_backend::CudaBackend;
 #[cfg(feature = "wgpu")]
@@ -1256,7 +1257,7 @@ impl HybridBackend {
         let traps = self.step_batch(positions, distances, types)?;
 
         log::debug!("Completed stepping batch, found {} collision traps", traps.len());
-        traps
+        Ok(traps)
     }
 
     /// Execute flow pipeline with optimal resource utilization

@@ -1,19 +1,5 @@
 # Rust Analyzer Configuration for SpeedBitCrackV3
-# Minimal valid configuration - all options verified against current rust-analyzer schema
-
-[check]
-# Enable warnings that are actually meaningful
-allTargets = false
-
-[completion]
-# Basic completion settings
-autoimport.enable = true
-postfix.enable = true
-
-[diagnostics]
-# Enable diagnostics but reduce noise
-enable = true
-styleLints.enable = false
+# Minimal working configuration - only well-supported options
 
 [imports]
 # Configure import handling
@@ -21,26 +7,11 @@ granularity.group = "crate"
 group.enable = true
 prefix = "crate"
 
-[inlayHints]
-# Essential inlay hints
-parameterHints.enable = true
-typeHints.enable = true
-chainingHints.enable = true
+[completion]
+# Completion settings
+autoimport.enable = true
 
-[lens]
-# Code lens for navigation
-enable = true
-implementations.enable = true
-run.enable = true
-
-[procMacro]
-# Enable proc macro expansion
+[diagnostics]
+# Diagnostic settings
 enable = true
 
-[semanticHighlighting]
-# Basic semantic highlighting
-strings.enable = true
-
-[signatureInfo]
-# Signature help
-detail = "full"
