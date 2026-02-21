@@ -761,7 +761,6 @@ struct TransferScheduler {
 }
 
 /// Handle for tracking active transfers
-#[derive(Debug)]
 struct TransferHandle {
     id: u64,
     start_time: Instant,
@@ -769,6 +768,17 @@ struct TransferHandle {
     // Note: progress_callback is not Debug due to closure
     #[allow(dead_code)]
     progress_callback: Option<Box<dyn Fn(f64) + Send + Sync>>,
+}
+
+impl std::fmt::Debug for TransferHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TransferHandle")
+            .field("id", &self.id)
+            .field("start_time", &self.start_time)
+            .field("estimated_completion", &self.estimated_completion)
+            .field("progress_callback", &"<closure>")
+            .finish()
+    }
 }
 
 /// Operation execution statistics
@@ -1228,8 +1238,8 @@ impl HybridOperations for HybridOperationsImpl {
         let mut results = Vec::new();
 
         for input in inputs {
-            let input_bigint = BigInt256::from(*input);
-            let modulus_bigint = BigInt256::from(*modulus);
+            let input_bigint = BigInt256::from_u32_array(*input);
+            let modulus_bigint = BigInt256::from_u32_array(*modulus);
 
             let inverse = crate::gpu::backends::cpu_backend::CpuBackend::mod_inverse(&input_bigint, &modulus_bigint);
             // Convert back to [u32; 8] format using the From implementation
@@ -1481,7 +1491,7 @@ impl HybridOperations for HybridOperationsImpl {
         config: &PipelineConfig,
     ) -> Result<Vec<T>>
     where
-        F: Fn() -> Result<T> + Send + Clone + 'static,
+        F: FnOnce() -> Result<T> + Send + Clone + 'static,
         T: Send + 'static,
     {
         // Execute pipelined operations with resource management
@@ -1959,11 +1969,11 @@ impl HybridOperationsImpl {
             // Execute stage operation based on its type
             match &stage.operation {
                 super::HybridOperation::BatchInverse(inputs, modulus) => {
-                    let result = self.batch_inverse(*inputs, *modulus)?;
+                    let result = self.batch_inverse(inputs, *modulus)?;
                     current_data = bincode::serialize(&result)?;
                 }
                 super::HybridOperation::BatchBarrettReduce(inputs, mu, modulus, use_montgomery) => {
-                    let result = self.batch_barrett_reduce(inputs.clone(), mu, modulus, use_montgomery)?;
+                    let result = self.batch_barrett_reduce(inputs.clone(), mu, modulus, *use_montgomery)?;
                     current_data = bincode::serialize(&result)?;
                 }
                 super::HybridOperation::BatchBigIntMul(a, b) => {
@@ -2068,8 +2078,8 @@ impl HybridOperationsImpl {
         let mut results = Vec::new();
 
         for input in inputs {
-            let input_bigint = BigInt256::from(*input);
-            let modulus_bigint = BigInt256::from(*modulus);
+            let input_bigint = BigInt256::from_u32_array(*input);
+            let modulus_bigint = BigInt256::from_u32_array(modulus);
 
             let inverse = crate::gpu::backends::cpu_backend::CpuBackend::mod_inverse(&input_bigint, &modulus_bigint);
             let arr: [u32; 8] = inverse.into();
@@ -2117,13 +2127,13 @@ impl HybridOperationsImpl {
     pub async fn check_and_resolve_collisions(
         &self,
         dp_table: &mut crate::dp::DpTable,
-        states: &[crate::types::RhoState],
+        states: &[crate::types::KangarooState],
     ) -> Option<BigInt256> {
         // Check for collisions in the DP table
         // This is a critical function for kangaroo algorithm success
         for state in states {
             let dp_entry = crate::types::DpEntry {
-                point: state.current.clone(),
+                point: state.position.clone(),
                 state: state.clone(),
                 x_hash: 0, // Will be computed by DP table
                 timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),

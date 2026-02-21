@@ -1228,7 +1228,6 @@ impl PipelinePerformanceSummary {
         //         max_stage_duration = stage_contribution;
         //         bottleneck_stage = Some(*stage_id);
         //     }
-        }
 
         // Calculate critical path
         let critical_path = Self::calculate_critical_path(&stage_summaries);

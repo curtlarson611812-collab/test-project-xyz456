@@ -547,7 +547,6 @@ impl HybridGpuManager {
                 ),
                 crate::gpu::backends::hybrid::WorkPriority::High,
                 vec![], // No dependencies
-                crate::gpu::backends::hybrid::BackendPreference::Auto,
             );
 
             // Execute the queue

@@ -1138,7 +1138,7 @@ impl HybridBackend {
     pub async fn check_and_resolve_collisions(
         &self,
         dp_table: &mut crate::dp::DpTable,
-        states: &[RhoState],
+        states: &[crate::types::KangarooState],
     ) -> Option<BigInt256> {
         // Input validation
         if states.is_empty() {

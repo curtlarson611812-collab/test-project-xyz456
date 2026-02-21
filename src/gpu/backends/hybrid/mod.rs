@@ -170,7 +170,7 @@ pub enum HybridOperation {
     /// Batch Barrett reduction with Montgomery multiplication
     /// Critical for elliptic curve point operations
     /// Input: (values, mu, modulus, is_montgomery) -> Output: reduced values
-    BatchBarrettReduce(Vec<[u32; 16]>, [u32; 9], [u32; 8], bool),
+    BatchBarrettReduce(Vec<[u32; 16]>, [u32; 16], [u32; 8], bool),
 
     /// Batch big integer multiplication
     /// Optimized for Jacobian coordinate transformations

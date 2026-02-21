@@ -91,7 +91,9 @@ impl FlowStage {
 
 impl Default for PipelinePerformanceMonitor {
     fn default() -> Self {
-        PipelinePerformanceMonitor
+        PipelinePerformanceMonitor {
+            stage_latencies: std::collections::HashMap::new(),
+        }
     }
 }
 

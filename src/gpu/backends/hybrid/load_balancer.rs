@@ -494,14 +494,14 @@ impl AdaptiveLoadBalancer {
                 let older_avg: f32 = history.iter().rev().skip(5).take(5).sum::<f32>() / 5.0;
 
                 if recent_avg > older_avg + 2.0 {
-                    0.8 // Penalize rising temperatures
+                    0.8_f64 // Penalize rising temperatures
                 } else if recent_avg < older_avg - 2.0 {
-                    1.1 // Bonus for cooling trend
+                    1.1_f64 // Bonus for cooling trend
                 } else {
-                    1.0 // Stable temperatures
+                    1.0_f64 // Stable temperatures
                 }
             } else {
-                1.0
+                1.0_f64
             }
         } else {
             1.0
@@ -547,7 +547,7 @@ impl AdaptiveLoadBalancer {
             let std_dev = variance.sqrt();
 
             // Lower variance = higher reliability
-            (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+            (1.0_f64 - (std_dev as f64 / 10.0_f64).min(0.5_f64)).max(0.5_f64)
         } else {
             1.0
         }
@@ -582,7 +582,7 @@ impl AdaptiveLoadBalancer {
             let std_dev = variance.sqrt();
 
             // Lower variance = higher stability
-            (1.0 - (std_dev / 15.0).min(0.8)).max(0.2)
+            (1.0_f64 - (std_dev as f64 / 15.0_f64).min(0.8_f64)).max(0.2_f64)
         } else {
             1.0 // Neutral if no history
         }
@@ -714,7 +714,7 @@ impl AdaptiveLoadBalancer {
             "batch_inverse" | "bsgs_solve" => {
                 // Prefer CUDA for complex math operations
                 self.device_weights.iter()
-                    .filter(|(id, _)| *id >= 8) // CUDA devices (8-15)
+                    .filter(|(id, _)| *id >= 8usize) // CUDA devices (8-15)
                     .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
                     .map(|(id, _)| *id)
                     .unwrap_or(8)

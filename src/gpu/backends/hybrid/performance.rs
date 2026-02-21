@@ -1027,8 +1027,8 @@ impl PerformanceOperationsImpl {
     }
 }
 
-// TODO: Elite Professor Level - PerformanceOperationsImpl temporarily disabled during Phase 0.1 modular breakout
-impl PerformanceOperations for PerformanceOperationsImpl {
+// TODO: Elite Professor Level - PerformanceOperations trait implementation temporarily disabled during Phase 0.1 modular breakout
+// impl PerformanceOperations for PerformanceOperationsImpl {
     fn clear_performance_metrics(&mut self) {
         self.performance_metrics.clear();
         self.performance_history.clear();
@@ -1255,8 +1255,8 @@ impl PerformanceOperations for PerformanceOperationsImpl {
         } else {
             0.5 // Default neutral efficiency
         }
-    }
-// }
+    // }
+}
 
 impl PerformancePredictor {
     fn new() -> Self {
