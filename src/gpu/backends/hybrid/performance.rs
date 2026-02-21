@@ -1908,19 +1908,19 @@ impl ExtendedGpuConfig {
     }
 
     /// Parse rule suggestion from string
-    pub fn parse_rule_suggestion<'a>(&self, suggestion: &'a str) -> Option<(&'a str, f64)> {
+    pub fn parse_rule_suggestion(&self, suggestion: &str) -> Option<(String, f64)> {
         // Parse rule suggestions from Nsight or other tools
         // Format: "rule_name:severity" or just "rule_name"
         if let Some(colon_pos) = suggestion.find(':') {
             let rule = &suggestion[..colon_pos];
             let severity_str = &suggestion[colon_pos + 1..];
             if let Ok(severity) = severity_str.parse::<f64>() {
-                Some((rule.trim(), severity))
+                Some((rule.trim().to_string(), severity))
             } else {
-                Some((rule.trim(), 0.5)) // Default severity
+                Some((rule.trim().to_string(), 0.5)) // Default severity
             }
         } else {
-            Some((suggestion.trim(), 0.5))
+            Some((suggestion.trim().to_string(), 0.5))
         }
     }
 
