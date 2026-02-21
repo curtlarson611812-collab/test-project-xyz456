@@ -17,6 +17,7 @@ use k256::elliptic_curve::sec1::ToEncodedPoint;
 use num_bigint::BigUint;
 
 /// CPU backend for parity testing only
+#[derive(Debug)]
 pub struct CpuBackend;
 
 impl CpuBackend {

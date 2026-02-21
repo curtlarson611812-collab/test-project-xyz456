@@ -38,7 +38,6 @@ use rustacuda::memory::DeviceSlice;
 /// - Real-time performance profiling and adaptation
 /// - Fault-tolerant execution with automatic failover
 /// - Memory topology optimization for NUMA systems
-#[derive(Debug)]
 pub struct HybridBackend {
     /// Vulkan backend for bulk parallel operations (optimal for kangaroo stepping)
     #[cfg(feature = "wgpu")]

@@ -902,6 +902,12 @@ impl HybridGpuManager {
             power_budget: 400.0,
             system_memory_pressure: 0.4,
             thermal_throttling_active: false,
+            predicted_thermal_state: 72.0,
+            current_power_consumption: 450.0,
+            memory_bandwidth_utilization: 0.7,
+            network_bandwidth_utilization: 0.0,
+            cpu_utilization: 0.3,
+            system_load_avg: 1.5,
         })
     }
 

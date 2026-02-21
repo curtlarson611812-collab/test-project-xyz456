@@ -1028,7 +1028,7 @@ impl PerformanceOperationsImpl {
 }
 
 // TODO: Elite Professor Level - PerformanceOperationsImpl temporarily disabled during Phase 0.1 modular breakout
-// impl PerformanceOperations for PerformanceOperationsImpl {
+impl PerformanceOperations for PerformanceOperationsImpl {
     fn clear_performance_metrics(&mut self) {
         self.performance_metrics.clear();
         self.performance_history.clear();

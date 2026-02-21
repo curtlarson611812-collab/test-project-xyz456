@@ -18,7 +18,6 @@ use tokio::task;
 
 /// Smart Distinguished Points table
 /// Cuckoo/Bloom + value-based + clustering — no simple hashmap for DP
-#[derive(Debug)]
 pub struct DpTable {
     // dp_bits: usize, // TODO: Use for DP bit calculations
     cuckoo_filter: CuckooFilter<DefaultHasher>,

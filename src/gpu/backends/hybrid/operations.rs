@@ -170,7 +170,6 @@ pub struct GpuBufferHandle {
 }
 
 /// Memory type classification
-#[derive(Debug, Clone, PartialEq)]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum MemoryType {
     Vulkan,
