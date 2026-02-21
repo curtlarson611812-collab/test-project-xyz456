@@ -1027,7 +1027,8 @@ impl PerformanceOperationsImpl {
     }
 }
 
-impl PerformanceOperations for PerformanceOperationsImpl {
+// TODO: Elite Professor Level - PerformanceOperationsImpl temporarily disabled during Phase 0.1 modular breakout
+// impl PerformanceOperations for PerformanceOperationsImpl {
     fn clear_performance_metrics(&mut self) {
         self.performance_metrics.clear();
         self.performance_history.clear();
@@ -1739,7 +1740,7 @@ impl ExtendedGpuConfig {
                 }
 
                 if suggestions.values().any(|s| s.contains("DRAM Bottleneck")) {
-                    config.gpu_frac = (config.gpu_frac * 3 / 4).max(0.3);
+                    config.gpu_frac = (config.gpu_frac * 3.0 / 4.0).max(0.3);
                     adjustments_made.push("Reduced GPU fraction for DRAM bottleneck");
                 }
 
@@ -1774,7 +1775,7 @@ impl ExtendedGpuConfig {
             }
             "dram_bandwidth" => {
                 if severity > 0.8 {
-                    config.gpu_frac = (config.gpu_frac * 3 / 4).max(0.3);
+                    config.gpu_frac = (config.gpu_frac * 3.0 / 4.0).max(0.3);
                 }
             }
             "occupancy" => {
@@ -1856,11 +1857,20 @@ impl ExtendedGpuConfig {
     pub fn record_performance_metrics(&mut self, operation: &str, backend: &str, duration_ms: u128) {
         let metrics = super::monitoring::HybridOperationMetrics {
             operation: operation.to_string(),
-            vulkan_time_ms: if backend == "vulkan" { duration_ms } else { 0 },
-            cuda_time_ms: if backend == "cuda" { duration_ms } else { 0 },
-            staging_time_ms: 0, // Not measured yet
-            total_time_ms: duration_ms,
-            backend_used: backend.to_string(),
+            operation_type: "unknown".to_string(), // TODO: determine operation type
+            backend: backend.to_string(),
+            device_id: 0, // TODO: get actual device ID
+            duration_ms: duration_ms,
+            queued_duration_ms: 0, // Not measured yet
+            start_time: std::time::SystemTime::now() - std::time::Duration::from_millis(duration_ms as u64),
+            end_time: std::time::SystemTime::now(),
+            data_size: 0, // TODO: measure data size
+            memory_used_mb: 0.0, // TODO: measure memory usage
+            compute_utilization_percent: 0.0, // TODO: measure compute utilization
+            memory_bandwidth_gbps: 0.0, // TODO: measure memory bandwidth
+            success: true,
+            error_message: None,
+            retry_count: 0,
         };
 
         // TODO: Elite Professor Level - performance metrics tracking temporarily disabled during Phase 0.1 modular breakout
@@ -1951,4 +1961,4 @@ impl ExtendedGpuConfig {
             log::info!("No optimizations applied - current configuration appears optimal");
         }
     }
-}
+// }

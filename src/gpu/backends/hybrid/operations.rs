@@ -171,6 +171,7 @@ pub struct GpuBufferHandle {
 
 /// Memory type classification
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum MemoryType {
     Vulkan,
     Cuda,
@@ -759,10 +760,13 @@ struct TransferScheduler {
 }
 
 /// Handle for tracking active transfers
+#[derive(Debug)]
 struct TransferHandle {
     id: u64,
     start_time: Instant,
     estimated_completion: Instant,
+    // Note: progress_callback is not Debug due to closure
+    #[allow(dead_code)]
     progress_callback: Option<Box<dyn Fn(f64) + Send + Sync>>,
 }
 
@@ -776,7 +780,7 @@ struct OperationStatistics {
     min_latency: Duration,
     max_latency: Duration,
     throughput_ops_per_sec: f64,
-    last_execution: Instant,
+    last_execution: Option<Instant>,
 }
 
 /// Transfer performance statistics
@@ -1932,7 +1936,7 @@ impl HybridOperationsImpl {
                     current_data = bincode::serialize(&result)?;
                 }
                 super::HybridOperation::BatchBarrettReduce(inputs, mu, modulus, use_montgomery) => {
-                    let result = self.batch_barrett_reduce(inputs.clone(), mu, modulus, *use_montgomery)?;
+                    let result = self.batch_barrett_reduce(inputs.clone(), mu, modulus, use_montgomery)?;
                     current_data = bincode::serialize(&result)?;
                 }
                 super::HybridOperation::BatchBigIntMul(a, b) => {

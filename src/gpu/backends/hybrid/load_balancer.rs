@@ -1058,7 +1058,7 @@ impl AdaptiveLoadBalancer {
     ) {
         let healthy_devices: Vec<usize> = self.device_weights.iter()
             .filter(|(id, _)| self.is_device_healthy(**id))
-            .map(|(id, _)| **id)
+            .map(|(id, _)| *id)
             .collect();
 
         if healthy_devices.is_empty() {
@@ -1101,7 +1101,7 @@ impl AdaptiveLoadBalancer {
                 let load_b = self.estimate_device_load(*b.0);
                 load_a.partial_cmp(&load_b).unwrap_or(std::cmp::Ordering::Equal)
             })
-            .map(|(id, _)| **id)
+            .map(|(id, _)| *id)
             .unwrap_or(0)
     }
 
@@ -1238,6 +1238,9 @@ impl AdaptiveLoadBalancer {
             HybridOperation::BsgsSolve(_, _, _) => "bsgs_solve".to_string(),
             HybridOperation::Inverse(_, _) => "inverse".to_string(),
             HybridOperation::SolveCollision(_, _, _, _, _, _) => "solve_collision".to_string(),
+            HybridOperation::BatchSolve(_, _) => "batch_solve".to_string(),
+            HybridOperation::BatchSolveCollision(_, _, _, _, _, _) => "batch_solve_collision".to_string(),
+            HybridOperation::BatchBsgsSolve(_, _, _, _) => "batch_bsgs_solve".to_string(),
             HybridOperation::Custom(_, _) => "custom".to_string(),
         }
     }
@@ -1321,7 +1324,7 @@ impl AdaptiveLoadBalancer {
             power_consumption: 250.0, // Default power
             current_load: load as f32,
             memory_used: 0,
-            memory_total: 0,
+            memory_total: (24 * 1024 * 1024 * 1024), // 24GB in bytes
         };
 
         self.update_weights(&[mock_device])

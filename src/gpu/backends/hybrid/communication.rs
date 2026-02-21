@@ -84,7 +84,7 @@ pub enum ChannelPriority {
 }
 
 /// Synchronization primitive for cross-GPU coordination
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SyncPrimitive {
     /// Unique identifier for this primitive
     pub id: String,

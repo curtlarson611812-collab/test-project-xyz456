@@ -66,6 +66,10 @@ pub struct GpuDevice {
     pub name: String,
     /// Available GPU memory in gigabytes
     pub memory_gb: f64,
+    /// Currently used memory in bytes
+    pub memory_used: u64,
+    /// Total memory in bytes
+    pub memory_total: u64,
     /// Number of compute units/SMs available
     pub compute_units: u32,
     /// Current utilization level (0.0 to 1.0)
@@ -290,6 +294,8 @@ impl GpuCluster {
             id: 0,
             name: "RTX 5090 Primary".to_string(),
             memory_gb: 32.0,
+            memory_used: 0,
+            memory_total: 32 * 1024 * 1024 * 1024, // 32GB in bytes
             compute_units: 170,
             current_load: 0.0,
             temperature: 45.0,
@@ -302,6 +308,8 @@ impl GpuCluster {
             id: 1,
             name: "RTX 5090 Secondary".to_string(),
             memory_gb: 32.0,
+            memory_used: 0,
+            memory_total: 32 * 1024 * 1024 * 1024, // 32GB in bytes
             compute_units: 170,
             current_load: 0.0,
             temperature: 40.0,
@@ -409,12 +417,17 @@ impl GpuCluster {
             return std::collections::HashMap::new();
         }
 
-        // Use the load balancer for intelligent distribution
-        self.load_balancer.distribute_workload(
-            total_kangaroos,
-            &self.devices,
-            "kangaroo_computation"
-        )
+        // Distribute kangaroos evenly across available devices
+        let device_count = self.devices.len();
+        let mut distribution = std::collections::HashMap::new();
+
+        for (i, device) in self.devices.iter().enumerate() {
+            let kangaroos_for_device = total_kangaroos / device_count +
+                if i < (total_kangaroos % device_count) { 1 } else { 0 };
+            distribution.insert(device.id, kangaroos_for_device);
+        }
+
+        distribution
     }
 
     /// Get optimal workgroup size for a specific device
@@ -852,6 +865,8 @@ pub struct UtilizationStats {
                 id: i,
                 name: format!("RTX 5090 #{}", i),
                 memory_gb: 32.0,    // RTX 5090 has 32GB GDDR7
+                memory_used: 0,
+                memory_total: 32 * 1024 * 1024 * 1024, // 32GB in bytes
                 compute_units: 170, // Approximate SM count
                 current_load: 0.0,
                 temperature: 40.0,
@@ -868,6 +883,8 @@ pub struct UtilizationStats {
                     id: i + 8, // Offset from Vulkan devices
                     name: format!("CUDA RTX 5090 #{}", i),
                     memory_gb: 32.0,
+                    memory_used: 0,
+                    memory_total: 32 * 1024 * 1024 * 1024, // 32GB in bytes
                     compute_units: 170,
                     current_load: 0.0,
                     temperature: 40.0,
