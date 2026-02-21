@@ -1,11 +1,11 @@
     Checking speedbitcrack v0.1.0 (/data/Projects/SpeedBitCrackV3)
 error: this file contains an unclosed delimiter
-    --> src/gpu/backends/hybrid/performance.rs:1964:2
+    --> src/gpu/backends/hybrid/performance.rs:1965:2
      |
 1031 | impl PerformanceOperations for PerformanceOperationsImpl {
      |                                                          - unclosed delimiter
 ...
-1964 | }
+1965 | }
      |  ^
 
 error: could not compile `speedbitcrack` (lib) due to 1 previous error
