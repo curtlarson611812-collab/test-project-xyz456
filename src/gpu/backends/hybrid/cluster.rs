@@ -785,6 +785,18 @@ impl GpuCluster {
 
         variance.sqrt() // Standard deviation
     }
+
+    /// Initialize cross-GPU communication
+    fn initialize_cross_gpu_communication() -> super::communication::CrossGpuCommunication {
+        super::communication::CrossGpuCommunication {
+            shared_memory_regions: Vec::new(),
+            peer_to_peer_enabled: true,
+            result_aggregation: super::cluster::ResultAggregator {
+                pending_results: std::collections::HashMap::new(),
+                aggregation_strategy: super::cluster::AggregationStrategy::FirstResult,
+            },
+        }
+    }
 }
 
 /// Cluster status summary
@@ -919,17 +931,5 @@ pub struct UtilizationStats {
             },
             load_balancer: super::load_balancer::AdaptiveLoadBalancer::new(),
             cross_gpu_communication: initialize_cross_gpu_communication(),
-        }
-    }
-
-    /// Initialize cross-GPU communication
-    fn initialize_cross_gpu_communication() -> super::communication::CrossGpuCommunication {
-        super::communication::CrossGpuCommunication {
-            shared_memory_regions: Vec::new(),
-            peer_to_peer_enabled: true,
-            result_aggregation: super::cluster::ResultAggregator {
-                pending_results: std::collections::HashMap::new(),
-                aggregation_strategy: super::cluster::AggregationStrategy::FirstResult,
-            },
         }
     }

@@ -37,6 +37,7 @@ pub struct FlowPipeline {
 pub struct FlowStage {
     pub id: usize,
     pub name: String,
+    pub operation: super::HybridOperation,
 }
 
 /// Minimal stub for ExecutionResult
@@ -79,10 +80,11 @@ impl FlowPipeline {
 }
 
 impl FlowStage {
-    pub fn new(id: usize, name: &str, _operation: HybridOperation) -> Self {
+    pub fn new(id: usize, name: &str, operation: HybridOperation) -> Self {
         FlowStage {
             id,
             name: name.to_string(),
+            operation,
         }
     }
 }

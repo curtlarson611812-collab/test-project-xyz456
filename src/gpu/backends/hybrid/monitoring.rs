@@ -1210,23 +1210,24 @@ impl PipelinePerformanceSummary {
         let mut max_stage_duration = Duration::ZERO;
         let mut bottleneck_stage = None;
 
-        // Analyze each stage in detail
-        for (stage_id, durations) in stage_durations {
-            if durations.is_empty() {
-                continue;
-            }
-
-            let summary = Self::analyze_stage(*stage_id, durations, stage_names);
-            stage_summaries.push(summary);
-            total_duration += summary.average_duration * summary.execution_count as u32;
-            total_operations += summary.execution_count;
-
-            // Identify bottleneck (stage with highest contribution to total time)
-            let stage_contribution = summary.average_duration * summary.execution_count as u32;
-            if stage_contribution > max_stage_duration {
-                max_stage_duration = stage_contribution;
-                bottleneck_stage = Some(*stage_id);
-            }
+        // TODO: Elite Professor Level - stage analysis temporarily disabled during Phase 0.1 modular breakout
+        // // Analyze each stage in detail
+        // for (stage_id, durations) in stage_durations {
+        //     if durations.is_empty() {
+        //         continue;
+        //     }
+        //
+        //     let summary = Self::analyze_stage(*stage_id, durations, stage_names);
+        //     stage_summaries.push(summary);
+        //     total_duration += summary.average_duration * summary.execution_count as u32;
+        //     total_operations += summary.execution_count;
+        //
+        //     // Identify bottleneck (stage with highest contribution to total time)
+        //     let stage_contribution = summary.average_duration * summary.execution_count as u32;
+        //     if stage_contribution > max_stage_duration {
+        //         max_stage_duration = stage_contribution;
+        //         bottleneck_stage = Some(*stage_id);
+        //     }
         }
 
         // Calculate critical path

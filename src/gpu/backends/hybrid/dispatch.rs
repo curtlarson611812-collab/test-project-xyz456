@@ -975,7 +975,7 @@ impl GpuBackend for HybridBackend {
 
             // Simple step - in real implementation would use proper jump table
             // This is a placeholder for parity testing
-            current_state.distance = current_state.distance.add(&BigInt256::from_u64(1));
+            current_state.distance = current_state.distance + BigInt256::from_u64(1);
         }
 
         Ok((positions, distances))

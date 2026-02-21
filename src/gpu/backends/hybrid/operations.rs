@@ -645,69 +645,71 @@ pub trait HybridOperations {
     //     })
     // }
 
-    /// Initialize multi-device coordination system
-    fn initialize_multi_device_coordination(&mut self) -> Result<()> {
-        log::info!("Initializing multi-device coordination for {} devices",
-                  self.device_capabilities.len());
+    // TODO: Elite Professor Level - initialize_multi_device_coordination temporarily disabled during Phase 0.1 modular breakout
+    // /// Initialize multi-device coordination system
+    // fn initialize_multi_device_coordination(&mut self) -> Result<()> {
+    //     log::info!("Initializing multi-device coordination for {} devices",
+    //               self.device_capabilities.len());
+    //
+    //     // Initialize peer-to-peer access between devices
+    //     // In a real implementation, this would set up CUDA/Vulkan interop
+    //
+    //     // Initialize transfer scheduler
+    //     // Already initialized in constructor
+    //
+    //     // Initialize performance monitoring across devices
+    //     // Already initialized in constructor
+    //
+    //     log::info!("Multi-device coordination initialized successfully");
+    //     Ok(())
+    // }
 
-        // Initialize peer-to-peer access between devices
-        // In a real implementation, this would set up CUDA/Vulkan interop
-
-        // Initialize transfer scheduler
-        // Already initialized in constructor
-
-        // Initialize performance monitoring across devices
-        // Already initialized in constructor
-
-        log::info!("Multi-device coordination initialized successfully");
-        Ok(())
-    }
-
-    /// Monitor and optimize device utilization
-    fn monitor_device_utilization(&self) -> Result<DeviceUtilizationReport> {
-        let mut devices = Vec::new();
-        let mut total_utilization = 0.0;
-        let mut bottleneck_device = None;
-        let mut max_utilization = 0.0;
-
-        for (device_id, capabilities) in &self.device_capabilities {
-            // In a real implementation, this would query actual device metrics
-            let utilization = DeviceUtilization {
-                device_id: *device_id,
-                compute_utilization: 0.7, // Example values
-                memory_utilization: 0.6,
-                interconnect_utilization: 0.5,
-                thermal_headroom: 0.8,
-                power_efficiency: 0.85,
-            };
-
-            total_utilization += utilization.compute_utilization;
-
-            if utilization.compute_utilization > max_utilization {
-                max_utilization = utilization.compute_utilization;
-                bottleneck_device = Some(*device_id);
-            }
-
-            devices.push(utilization);
-        }
-
-        let overall_utilization = total_utilization / devices.len() as f64;
-
-        let recommendations = if overall_utilization > 0.8 {
-            vec!["Consider workload redistribution".to_string()]
-        } else if let Some(bottleneck) = bottleneck_device {
-            vec![format!("Optimize device {} workload", bottleneck)]
-        } else {
-            vec!["System operating optimally".to_string()]
-        };
-
-        Ok(DeviceUtilizationReport {
-            devices,
-            overall_utilization,
-            bottleneck_device,
-            recommendations,
-        })
-    }
+    // TODO: Elite Professor Level - monitor_device_utilization temporarily disabled during Phase 0.1 modular breakout
+    // /// Monitor and optimize device utilization
+    // fn monitor_device_utilization(&self) -> Result<DeviceUtilizationReport> {
+    //     let mut devices = Vec::new();
+    //     let mut total_utilization = 0.0;
+    //     let mut bottleneck_device = None;
+    //     let mut max_utilization = 0.0;
+    //
+    //     for (device_id, capabilities) in &self.device_capabilities {
+    //         // In a real implementation, this would query actual device metrics
+    //         let utilization = DeviceUtilization {
+    //             device_id: *device_id,
+    //             compute_utilization: 0.7, // Example values
+    //             memory_utilization: 0.6,
+    //             interconnect_utilization: 0.5,
+    //             thermal_headroom: 0.8,
+    //             power_efficiency: 0.85,
+    //         };
+    //
+    //         total_utilization += utilization.compute_utilization;
+    //
+    //         if utilization.compute_utilization > max_utilization {
+    //             max_utilization = utilization.compute_utilization;
+    //             bottleneck_device = Some(*device_id);
+    //         }
+    //
+    //         devices.push(utilization);
+    //     }
+    //
+    //     let overall_utilization = total_utilization / devices.len() as f64;
+    //
+    //     let recommendations = if overall_utilization > 0.8 {
+    //         vec!["Consider workload redistribution".to_string()]
+    //     } else if let Some(bottleneck) = bottleneck_device {
+    //         vec![format!("Optimize device {} workload", bottleneck)]
+    //     } else {
+    //         vec!["System operating optimally".to_string()]
+    //     };
+    //
+    //     Ok(DeviceUtilizationReport {
+    //         devices,
+    //         overall_utilization,
+    //         bottleneck_device,
+    //         recommendations,
+    //     })
+    // }
 }
 
 /// Elite Hybrid Operations Implementation - Advanced GPU Computing Engine
@@ -1304,7 +1306,7 @@ impl HybridOperations for HybridOperationsImpl {
         // - Multiple collision solving strategies
         // - GPU acceleration for collision computation
 
-        let mut dp_table_clone = (*dp_table).clone();
+        let mut dp_table_clone = crate::dp::DpTable::new(20); // Create new table for collision checking
 
         // Check collisions for all states
         for tame_state in tame_states {

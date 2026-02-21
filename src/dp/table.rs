@@ -1245,3 +1245,4 @@ mod tests {
             "Should prune extremely dense cluster entirely"
         );
     }
+}

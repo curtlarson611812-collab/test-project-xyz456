@@ -1133,6 +1133,25 @@ pub struct OooExecutionQueue {
 
 // Note: Default implementation for OooExecutionQueue is in execution.rs
 
+impl OooExecutionQueue {
+    /// Create a new out-of-order execution queue
+    pub fn new() -> Self {
+        OooExecutionQueue {
+            work_queue: std::collections::VecDeque::new(),
+            active_work: std::collections::HashMap::new(),
+            completed_work: std::collections::HashMap::new(),
+            dependency_graph: std::collections::HashMap::new(),
+            reverse_dependencies: std::collections::HashMap::new(),
+            next_work_id: 0,
+            max_concurrent: 16,
+            scheduling_policy: SchedulingPolicy::Balanced,
+            scheduling_context: SchedulingContext::default(),
+            retry_queue: std::collections::VecDeque::new(),
+            suspended_work: std::collections::HashMap::new(),
+        }
+    }
+}
+
 impl WorkResult {
     /// Extract device ID from work result
     pub fn device_id(&self) -> usize {

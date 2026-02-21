@@ -1,0 +1,1420 @@
+    Checking speedbitcrack v0.1.0 (/data/Projects/SpeedBitCrackV3)
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1032:34
+     |
+1032 |     fn clear_performance_metrics(&mut self) {
+     |                                  ^^^^^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1039:24
+     |
+1039 |     fn get_raw_metrics(&self) -> &[HybridOperationMetrics] {
+     |                        ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1043:32
+     |
+1043 |     fn get_performance_summary(&self) -> HashMap<String, f64> {
+     |                                ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1099:9
+     |
+1099 |         &mut self,
+     |         ^^^^^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1159:27
+     |
+1159 |     fn apply_nsight_rules(&self, config: &mut GpuConfig) -> Result<Vec<NsightRuleResult>> {
+     |                           ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1196:33
+     |
+1196 |     fn analyze_ecdlp_divergence(&self, metrics: &HashMap<String, f64>) -> NsightRuleResult {
+     |                                 ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1214:34
+     |
+1214 |     fn optimize_based_on_metrics(&self, config: &mut GpuConfig, metrics: &logging::NsightMetrics) {
+     |                                  ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1235:24
+     |
+1235 |     fn tune_ml_predict(&self, config: &mut GpuConfig) {
+     |                        ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error: `self` parameter is only allowed in associated functions
+    --> src/gpu/backends/hybrid/performance.rs:1247:38
+     |
+1247 |     fn analyze_ecdlp_bias_efficiency(&self, config: &GpuConfig, metrics: &HashMap<String, f64>) -> ...
+     |                                      ^^^^^ not semantically valid as function parameter
+     |
+     = note: associated functions are those in `impl` or `trait` definitions
+
+error[E0423]: expected value, found struct `PipelinePerformanceMonitor`
+  --> src/gpu/backends/hybrid/execution.rs:92:9
+   |
+51 | / pub struct PipelinePerformanceMonitor {
+52 | |     pub stage_latencies: std::collections::HashMap<String, Vec<std::time::Duration>>,
+53 | | }
+   | |_- `PipelinePerformanceMonitor` defined here
+...
+92 |           PipelinePerformanceMonitor
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use struct literal syntax instead: `PipelinePerformanceMonitor { stage_latencies: val }`
+
+warning: unused import: `anyhow`
+  --> src/gpu/backends/hybrid/performance.rs:13:14
+   |
+13 | use anyhow::{anyhow, Result};
+   |              ^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> src/gpu/backends/hybrid/performance.rs:16:13
+   |
+16 | use serde::{Serialize, Deserialize};
+   |             ^^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused import: `tokio::sync::RwLock`
+  --> src/gpu/backends/hybrid/performance.rs:17:5
+   |
+17 | use tokio::sync::RwLock;
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::super::cpu_backend::CpuBackend`
+  --> src/gpu/backends/hybrid/cluster.rs:15:5
+   |
+15 | use super::super::cpu_backend::CpuBackend;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::super::vulkan_backend::WgpuBackend`
+  --> src/gpu/backends/hybrid/cluster.rs:19:5
+   |
+19 | use super::super::vulkan_backend::WgpuBackend;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Config` and `GpuConfig`
+  --> src/gpu/backends/hybrid/cluster.rs:21:21
+   |
+21 | use crate::config::{Config, GpuConfig};
+   |                     ^^^^^^  ^^^^^^^^^
+
+warning: unused import: `crate::kangaroo::collision::Trap`
+  --> src/gpu/backends/hybrid/cluster.rs:22:5
+   |
+22 | use crate::kangaroo::collision::Trap;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::math::bigint::BigInt256`
+  --> src/gpu/backends/hybrid/cluster.rs:23:5
+   |
+23 | use crate::math::bigint::BigInt256;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `DpEntry`, `KangarooState`, `Point`, and `RhoState`
+  --> src/gpu/backends/hybrid/cluster.rs:24:20
+   |
+24 | use crate::types::{DpEntry, KangarooState, Point, RhoState};
+   |                    ^^^^^^^  ^^^^^^^^^^^^^  ^^^^^  ^^^^^^^^
+
+warning: unused import: `crate::utils::logging`
+  --> src/gpu/backends/hybrid/cluster.rs:25:5
+   |
+25 | use crate::utils::logging;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `anyhow::anyhow`
+  --> src/gpu/backends/hybrid/cluster.rs:26:5
+   |
+26 | use anyhow::anyhow;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `crossbeam_deque::Worker`
+  --> src/gpu/backends/hybrid/cluster.rs:28:5
+   |
+28 | use crossbeam_deque::Worker;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `log::warn`
+  --> src/gpu/backends/hybrid/cluster.rs:29:5
+   |
+29 | use log::warn;
+   |     ^^^^^^^^^
+
+warning: unused import: `std::fs::read_to_string`
+  --> src/gpu/backends/hybrid/cluster.rs:33:5
+   |
+33 | use std::fs::read_to_string;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> src/gpu/backends/hybrid/cluster.rs:34:5
+   |
+34 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `tokio::sync::Notify`
+  --> src/gpu/backends/hybrid/cluster.rs:35:5
+   |
+35 | use tokio::sync::Notify;
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `GpuResult`
+  --> src/gpu/backends/hybrid/communication.rs:15:81
+   |
+15 | use super::cluster::{SharedMemoryRegion, ResultAggregator, AggregationStrategy, GpuResult};
+   |                                                                                 ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> src/gpu/backends/hybrid/communication.rs:19:5
+   |
+19 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `tokio::sync::Mutex`
+  --> src/gpu/backends/hybrid/communication.rs:20:5
+   |
+20 | use tokio::sync::Mutex;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::math::bigint::BigInt256`
+  --> src/gpu/backends/hybrid/dp_integration.rs:18:5
+   |
+18 | use crate::math::bigint::BigInt256;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `anyhow`
+  --> src/gpu/backends/hybrid/dp_integration.rs:19:14
+   |
+19 | use anyhow::{anyhow, Result};
+   |              ^^^^^^
+
+warning: unused import: `crate::gpu::HybridOperation`
+   --> src/gpu/backends/hybrid/monitoring.rs:155:5
+    |
+155 | use crate::gpu::HybridOperation;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Arc` and `Mutex`
+   --> src/gpu/backends/hybrid/monitoring.rs:158:17
+    |
+158 | use std::sync::{Arc, Mutex};
+    |                 ^^^  ^^^^^
+
+warning: unused import: `crate::gpu::backends::hybrid::HybridBackend`
+  --> src/kangaroo/manager.rs:11:5
+   |
+11 | use crate::gpu::backends::hybrid::HybridBackend;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0119]: conflicting implementations of trait `std::fmt::Debug` for type `operations::MemoryType`
+   --> src/gpu/backends/hybrid/operations.rs:174:10
+    |
+173 | #[derive(Debug, Clone, PartialEq)]
+    |          ----- first implementation here
+174 | #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+    |          ^^^^^ conflicting implementation for `operations::MemoryType`
+
+error[E0119]: conflicting implementations of trait `Clone` for type `operations::MemoryType`
+   --> src/gpu/backends/hybrid/operations.rs:174:17
+    |
+173 | #[derive(Debug, Clone, PartialEq)]
+    |                 ----- first implementation here
+174 | #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+    |                 ^^^^^ conflicting implementation for `operations::MemoryType`
+
+error[E0119]: conflicting implementations of trait `StructuralPartialEq` for type `operations::MemoryType`
+   --> src/gpu/backends/hybrid/operations.rs:174:30
+    |
+173 | #[derive(Debug, Clone, PartialEq)]
+    |                        --------- first implementation here
+174 | #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+    |                              ^^^^^^^^^ conflicting implementation for `operations::MemoryType`
+
+error[E0119]: conflicting implementations of trait `PartialEq` for type `operations::MemoryType`
+   --> src/gpu/backends/hybrid/operations.rs:174:30
+    |
+173 | #[derive(Debug, Clone, PartialEq)]
+    |                        --------- first implementation here
+174 | #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+    |                              ^^^^^^^^^ conflicting implementation for `operations::MemoryType`
+
+warning: variable does not need to be mutable
+    --> src/gpu/backends/hybrid/operations.rs:1646:21
+     |
+1646 |                 let mut positions: Vec<[[u32; 8]; 3]> = vulkan_herd.iter().map(|k| {
+     |                     ----^^^^^^^^^
+     |                     |
+     |                     help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> src/gpu/backends/hybrid/operations.rs:1670:21
+     |
+1670 |                 let mut distances: Vec<[u32; 8]> = vulkan_herd.iter().map(|k| {
+     |                     ----^^^^^^^^^
+     |                     |
+     |                     help: remove this `mut`
+
+error[E0609]: no field `operation` on type `&FlowStage`
+    --> src/gpu/backends/hybrid/operations.rs:1959:26
+     |
+1959 |             match &stage.operation {
+     |                          ^^^^^^^^^ unknown field
+     |
+     = note: available fields are: `id`, `name`
+
+error[E0614]: type `[u32; 8]` cannot be dereferenced
+    --> src/gpu/backends/hybrid/operations.rs:1961:62
+     |
+1961 |                     let result = self.batch_inverse(*inputs, *modulus)?;
+     |                                                              ^^^^^^^^ can't be dereferenced
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/operations.rs:1961:53
+     |
+1961 |                     let result = self.batch_inverse(*inputs, *modulus)?;
+     |                                       ------------- ^^^^^^^ expected `&Vec<[u32; 8]>`, found `[[u32; 8]]`
+     |                                       |
+     |                                       arguments to this method are incorrect
+     |
+     = note: expected reference `&Vec<[u32; 8]>`
+                    found slice `[[u32; 8]]`
+note: method defined here
+    --> src/gpu/backends/hybrid/operations.rs:2062:12
+     |
+2062 |     pub fn batch_inverse(&self, inputs: &Vec<[u32; 8]>, modulus: [u32; 8]) -> Result<Vec<Option<[u3...
+     |            ^^^^^^^^^^^^^        ----------------------
+
+error[E0308]: arguments to this method are incorrect
+    --> src/gpu/backends/hybrid/operations.rs:1965:39
+     |
+1965 | ...elf.batch_barrett_reduce(inputs.clone(), mu, modulus, use_montgomery)?;
+     |        ^^^^^^^^^^^^^^^^^^^^                 --  ------- expected `&[u32; 8]`, found `[u32; 8]`
+     |                                             |
+     |                                             expected `&[u32; 16]`, found `[u32; 9]`
+     |
+note: method defined here
+    --> src/gpu/backends/hybrid/operations.rs:2082:12
+     |
+2082 |     pub fn batch_barrett_reduce(
+     |            ^^^^^^^^^^^^^^^^^^^^
+...
+2085 |         mu: &[u32; 16],
+     |         --------------
+2086 |         modulus: &[u32; 8],
+     |         ------------------
+help: consider borrowing here
+     |
+1965 |                     let result = self.batch_barrett_reduce(inputs.clone(), mu, &modulus, use_montgomery)?;
+     |                                                                                +
+
+error[E0308]: arguments to this method are incorrect
+    --> src/gpu/backends/hybrid/operations.rs:1969:39
+     |
+1969 |                     let result = self.batch_bigint_mul(a, b)?;
+     |                                       ^^^^^^^^^^^^^^^^
+     |
+note: expected `&Vec<[u32; 8]>`, found `Vec<[u32; 8]>`
+    --> src/gpu/backends/hybrid/operations.rs:1969:56
+     |
+1969 |                     let result = self.batch_bigint_mul(a, b)?;
+     |                                                        ^
+     = note: expected reference `&Vec<_>`
+                   found struct `Vec<_>`
+note: expected `&Vec<[u32; 8]>`, found `Vec<[u32; 8]>`
+    --> src/gpu/backends/hybrid/operations.rs:1969:59
+     |
+1969 |                     let result = self.batch_bigint_mul(a, b)?;
+     |                                                           ^
+     = note: expected reference `&Vec<_>`
+                   found struct `Vec<_>`
+note: method defined here
+    --> src/gpu/backends/hybrid/operations.rs:2102:12
+     |
+2102 |     pub fn batch_bigint_mul(&self, a: &Vec<[u32; 8]>, b: &Vec<[u32; 8]>) -> Result<Vec<[u32; 16]>> {
+     |            ^^^^^^^^^^^^^^^^        -----------------  -----------------
+help: consider borrowing here
+     |
+1969 |                     let result = self.batch_bigint_mul(&a, b)?;
+     |                                                        +
+help: consider borrowing here
+     |
+1969 |                     let result = self.batch_bigint_mul(a, &b)?;
+     |                                                           +
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/operations.rs:2126:24
+     |
+2126 |                 state: state.clone(),
+     |                        ^^^^^^^^^^^^^ expected `KangarooState`, found `RhoState`
+
+error[E0061]: this method takes 4 arguments but 5 arguments were supplied
+    --> src/gpu/hybrid_manager.rs:543:48
+     |
+ 543 |             let _work_id = self.hybrid_backend.submit_ooo_work(
+     |                                                ^^^^^^^^^^^^^^^
+...
+ 550 |                 crate::gpu::backends::hybrid::BackendPreference::Auto,
+     |                 ----------------------------------------------------- unexpected argument #5 of type `BackendPreference`
+     |
+note: method defined here
+    --> src/gpu/backends/hybrid/dispatch.rs:1303:12
+     |
+1303 |     pub fn submit_ooo_work(&self, _queue: &mut crate::gpu::backends::hybrid::OooExecutionQueue, _op...
+     |            ^^^^^^^^^^^^^^^
+help: remove the extra argument
+     |
+ 549 -                 vec![], // No dependencies
+ 550 -                 crate::gpu::backends::hybrid::BackendPreference::Auto,
+ 549 +                 vec![],
+     |
+
+error[E0063]: missing fields `cpu_utilization`, `current_power_consumption`, `memory_bandwidth_utilization` and 3 other fields in initializer of `SchedulingContext`
+   --> src/gpu/hybrid_manager.rs:872:12
+    |
+872 |         Ok(crate::gpu::backends::hybrid::SchedulingContext {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `cpu_utilization`, `current_power_consumption`, `memory_bandwidth_utilization` and 3 other fields
+
+error[E0276]: impl has stricter requirements than trait
+    --> src/gpu/backends/hybrid/operations.rs:1483:12
+     |
+ 594 | /     fn execute_pipelined<F, T>(
+ 595 | |         &self,
+ 596 | |         stages: Vec<ExecutionStage<F, T>>,
+ 597 | |         config: &PipelineConfig,
+...    |
+ 600 | |         F: FnOnce() -> Result<T> + Send + Clone + 'static,
+ 601 | |         T: Send + 'static;
+     | |__________________________- definition of `execute_pipelined` from trait
+...
+1483 |           F: Fn() -> Result<T> + Send + Clone + 'static,
+     |              ^^^^^^^^^^^^^^^^^ impl has extra requirement `F: Fn()`
+
+error[E0277]: `CuckooFilter<DefaultHasher>` doesn't implement `std::fmt::Debug`
+  --> src/dp/table.rs:24:5
+   |
+21 | #[derive(Debug, Clone)]
+   |          ----- in this derive macro expansion
+...
+24 |     cuckoo_filter: CuckooFilter<DefaultHasher>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::fmt::Debug` is not implemented for `CuckooFilter<DefaultHasher>`
+
+error[E0277]: the trait bound `CuckooFilter<DefaultHasher>: Clone` is not satisfied
+  --> src/dp/table.rs:24:5
+   |
+21 | #[derive(Debug, Clone)]
+   |                 ----- in this derive macro expansion
+...
+24 |     cuckoo_filter: CuckooFilter<DefaultHasher>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `CuckooFilter<DefaultHasher>`
+
+error[E0277]: `cpu_backend::CpuBackend` doesn't implement `std::fmt::Debug`
+  --> src/gpu/backends/hybrid/dispatch.rs:50:5
+   |
+41 | #[derive(Debug)]
+   |          ----- in this derive macro expansion
+...
+50 |     cpu: CpuBackend,
+   |     ^^^^^^^^^^^^^^^ the trait `std::fmt::Debug` is not implemented for `cpu_backend::CpuBackend`
+   |
+   = note: add `#[derive(Debug)]` to `cpu_backend::CpuBackend` or manually `impl std::fmt::Debug for cpu_backend::CpuBackend`
+help: consider annotating `cpu_backend::CpuBackend` with `#[derive(Debug)]`
+  --> src/gpu/backends/cpu_backend.rs:20:1
+   |
+20 + #[derive(Debug)]
+21 | pub struct CpuBackend;
+   |
+
+error[E0609]: no field `device_capabilities` on type `&mut Self`
+   --> src/gpu/backends/hybrid/operations.rs:651:24
+    |
+460 | pub trait HybridOperations {
+    | -------------------------- type parameter 'Self' declared here
+...
+651 |                   self.device_capabilities.len());
+    |                        ^^^^^^^^^^^^^^^^^^^ unknown field
+
+error[E0609]: no field `device_capabilities` on type `&Self`
+   --> src/gpu/backends/hybrid/operations.rs:673:48
+    |
+460 | pub trait HybridOperations {
+    | -------------------------- type parameter 'Self' declared here
+...
+673 |         for (device_id, capabilities) in &self.device_capabilities {
+    |                                                ^^^^^^^^^^^^^^^^^^^ unknown field
+
+error[E0277]: `(dyn Fn(f64) + Send + Sync + 'static)` doesn't implement `std::fmt::Debug`
+   --> src/gpu/backends/hybrid/operations.rs:770:5
+    |
+763 | #[derive(Debug)]
+    |          ----- in this derive macro expansion
+...
+770 |     progress_callback: Option<Box<dyn Fn(f64) + Send + Sync>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::fmt::Debug` is not implemented for `(dyn Fn(f64) + Send + Sync + 'static)`
+
+error[E0614]: type `[u32; 8]` cannot be dereferenced
+    --> src/gpu/backends/hybrid/operations.rs:2071:50
+     |
+2071 |             let modulus_bigint = BigInt256::from(*modulus);
+     |                                                  ^^^^^^^^ can't be dereferenced
+
+error[E0689]: can't call method `min` on ambiguous numeric type `{float}`
+   --> src/gpu/backends/hybrid/load_balancer.rs:510:38
+    |
+510 |         (base_factor * trend_factor).min(1.5_f64).max(0.1_f64)
+    |                                      ^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/load_balancer.rs:550:31
+    |
+550 |             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+    |                               ^^^^^^^^ expected `f32`, found `f64`
+
+error[E0277]: cannot divide `f32` by `f64`
+   --> src/gpu/backends/hybrid/load_balancer.rs:550:29
+    |
+550 |             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+    |                             ^ no implementation for `f32 / f64`
+    |
+    = help: the trait `Div<f64>` is not implemented for `f32`
+    = help: the following other types implement trait `Div<Rhs>`:
+              `&f32` implements `Div<&num_complex::Complex<f32>>`
+              `&f32` implements `Div<f32>`
+              `&f32` implements `Div<num_complex::Complex<f32>>`
+              `&f32` implements `Div`
+              `f32` implements `Div<&f32>`
+              `f32` implements `Div<&ndarray::ArrayBase<S, D>>`
+              `f32` implements `Div<&num_complex::Complex<f32>>`
+              `f32` implements `Div<ndarray::ArrayBase<S, D>>`
+            and 5 others
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/load_balancer.rs:550:45
+    |
+550 |             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+    |                                         --- ^^^^^^^ expected `f32`, found `f64`
+    |                                         |
+    |                                         arguments to this method are incorrect
+    |
+note: method defined here
+   --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/f32.rs:946:18
+    |
+946 |     pub const fn min(self, other: f32) -> f32 {
+    |                  ^^^
+help: change the type of the numeric literal from `f64` to `f32`
+    |
+550 -             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+550 +             (1.0 - (std_dev / 10.0_f64).min(0.5_f32)).max(0.5_f64)
+    |
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/load_balancer.rs:550:59
+    |
+550 |             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+    |                                                       --- ^^^^^^^ expected `f32`, found `f64`
+    |                                                       |
+    |                                                       arguments to this method are incorrect
+    |
+note: method defined here
+   --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/f32.rs:920:18
+    |
+920 |     pub const fn max(self, other: f32) -> f32 {
+    |                  ^^^
+help: change the type of the numeric literal from `f64` to `f32`
+    |
+550 -             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+550 +             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f32)
+    |
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/load_balancer.rs:550:13
+    |
+533 |     fn calculate_reliability_factor(&self, device_id: usize) -> f64 {
+    |                                                                 --- expected `f64` because of return type
+...
+550 |             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64)
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `f64`, found `f32`
+    |
+help: you can convert an `f32` to an `f64`
+    |
+550 |             (1.0 - (std_dev / 10.0_f64).min(0.5_f64)).max(0.5_f64).into()
+    |                                                                   +++++++
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/load_balancer.rs:585:13
+    |
+569 |     fn calculate_thermal_stability(&self, device_id: usize) -> f64 {
+    |                                                                --- expected `f64` because of return type
+...
+585 |             (1.0 - (std_dev / 15.0).min(0.8)).max(0.2)
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `f64`, found `f32`
+    |
+help: you can convert an `f32` to an `f64`
+    |
+585 |             (1.0 - (std_dev / 15.0).min(0.8)).max(0.2).into()
+    |                                                       +++++++
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/load_balancer.rs:717:46
+    |
+717 |                     .filter(|(id, _)| *id >= 8) // CUDA devices (8-15)
+    |                                              ^ expected `&usize`, found integer
+    |
+help: consider dereferencing the borrow
+    |
+717 |                     .filter(|(id, _)| **id >= 8) // CUDA devices (8-15)
+    |                                       +
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/load_balancer.rs:725:45
+    |
+725 |                     .filter(|(id, _)| *id < 8) // Vulkan devices (0-7)
+    |                                             ^ expected `&usize`, found integer
+    |
+help: consider dereferencing the borrow
+    |
+725 |                     .filter(|(id, _)| **id < 8) // Vulkan devices (0-7)
+    |                                       +
+
+error[E0277]: can't compare `{integer}` with `&usize`
+   --> src/gpu/backends/hybrid/load_balancer.rs:974:53
+    |
+974 |             .filter(|(id, _)| device_range.contains(id))
+    |                                            -------- ^^ the trait `PartialOrd<&usize>` is not implemented for `{integer}`
+    |                                            |
+    |                                            required by a bound introduced by this call
+    |
+    = note: the trait bound `{integer}: PartialOrd<&usize>` is not satisfied
+note: required by a bound in `std::ops::Range::<Idx>::contains`
+   --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/range.rs:125:14
+    |
+123 |     pub const fn contains<U>(&self, item: &U) -> bool
+    |                  -------- required by a bound in this associated function
+124 |     where
+125 |         Idx: [const] PartialOrd<U>,
+    |              ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Range::<Idx>::contains`
+help: consider borrowing here
+    |
+974 |             .filter(|(id, _)| device_range.contains(&id))
+    |                                                     +
+
+error[E0277]: can't compare `&usize` with `{integer}`
+    --> src/gpu/backends/hybrid/load_balancer.rs:974:53
+     |
+ 974 |             .filter(|(id, _)| device_range.contains(id))
+     |                                            -------- ^^ no implementation for `&usize < {integer}` and `&usize > {integer}`
+     |                                            |
+     |                                            required by a bound introduced by this call
+     |
+help: the trait `PartialOrd<{integer}>` is not implemented for `&_`
+      but trait `PartialOrd<usize>` is implemented for `_`
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2047:5
+     |
+2047 |     ord_impl! { char usize u8 u16 u32 u64 u128 isize i8 i16 i32 i64 i128 }
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = help: for that trait implementation, expected `usize`, found `&usize`
+note: required by a bound in `std::ops::Range::<Idx>::contains`
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/range.rs:126:21
+     |
+ 123 |     pub const fn contains<U>(&self, item: &U) -> bool
+     |                  -------- required by a bound in this associated function
+...
+ 126 |         U: ?Sized + [const] PartialOrd<Idx>,
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Range::<Idx>::contains`
+     = note: this error originates in the macro `ord_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/load_balancer.rs:1149:30
+     |
+1149 |                 headroom.max(0.1_f64).min(1.0_f64) // Clamp to reasonable range
+     |                          --- ^^^^^^^ expected `f32`, found `f64`
+     |                          |
+     |                          arguments to this method are incorrect
+     |
+note: method defined here
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/f32.rs:920:18
+     |
+ 920 |     pub const fn max(self, other: f32) -> f32 {
+     |                  ^^^
+help: change the type of the numeric literal from `f64` to `f32`
+     |
+1149 -                 headroom.max(0.1_f64).min(1.0_f64) // Clamp to reasonable range
+1149 +                 headroom.max(0.1_f32).min(1.0_f64) // Clamp to reasonable range
+     |
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/load_balancer.rs:1149:43
+     |
+1149 |                 headroom.max(0.1_f64).min(1.0_f64) // Clamp to reasonable range
+     |                                       --- ^^^^^^^ expected `f32`, found `f64`
+     |                                       |
+     |                                       arguments to this method are incorrect
+     |
+note: method defined here
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/f32.rs:946:18
+     |
+ 946 |     pub const fn min(self, other: f32) -> f32 {
+     |                  ^^^
+help: change the type of the numeric literal from `f64` to `f32`
+     |
+1149 -                 headroom.max(0.1_f64).min(1.0_f64) // Clamp to reasonable range
+1149 +                 headroom.max(0.1_f64).min(1.0_f32) // Clamp to reasonable range
+     |
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/load_balancer.rs:1149:17
+     |
+1143 |     fn calculate_thermal_headroom(&self, device_id: usize) -> f64 {
+     |                                                               --- expected `f64` because of return type
+...
+1149 |                 headroom.max(0.1_f64).min(1.0_f64) // Clamp to reasonable range
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `f64`, found `f32`
+     |
+help: you can convert an `f32` to an `f64`
+     |
+1149 |                 headroom.max(0.1_f64).min(1.0_f64).into() // Clamp to reasonable range
+     |                                                   +++++++
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/load_balancer.rs:1313:36
+     |
+1313 |         self.distribute_operations(&operations)
+     |              --------------------- ^^^^^^^^^^^ expected `Vec<HybridOperation>`, found `&Vec<HybridOperation>`
+     |              |
+     |              arguments to this method are incorrect
+     |
+     = note: expected struct `Vec<_>`
+             found reference `&Vec<_>`
+note: method defined here
+    --> src/gpu/backends/hybrid/load_balancer.rs:592:12
+     |
+ 592 |     pub fn distribute_operations(
+     |            ^^^^^^^^^^^^^^^^^^^^^
+ 593 |         &mut self,
+ 594 |         operations: Vec<HybridOperation>,
+     |         --------------------------------
+help: consider removing the borrow
+     |
+1313 -         self.distribute_operations(&operations)
+1313 +         self.distribute_operations(operations)
+     |
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/load_balancer.rs:1325:27
+     |
+1325 |             current_load: load as f32,
+     |                           ^^^^^^^^^^^ expected `f64`, found `f32`
+
+error[E0063]: missing fields `compute_units`, `memory_gb` and `name` in initializer of `GpuDevice`
+    --> src/gpu/backends/hybrid/load_balancer.rs:1320:27
+     |
+1320 |         let mock_device = GpuDevice {
+     |                           ^^^^^^^^^ missing `compute_units`, `memory_gb` and `name`
+
+error[E0277]: `(dyn FeatureExtractor + 'static)` doesn't implement `std::fmt::Debug`
+    --> src/gpu/backends/hybrid/performance.rs:746:5
+     |
+ 742 | #[derive(Debug)]
+     |          ----- in this derive macro expansion
+...
+ 746 |     feature_extractors: Vec<Box<dyn FeatureExtractor>>,
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::fmt::Debug` is not implemented for `(dyn FeatureExtractor + 'static)`
+     |
+help: the following other types implement trait `std::fmt::Debug`
+    --> /home/curtlarson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-0.20.1/src/lib.rs:5534:5
+     |
+5534 |     impl fmt::Debug for dyn AnyWasmNotSendSync {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `dyn wgpu::send_sync::AnyWasmNotSendSync`
+     |
+    ::: /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/any.rs:149:1
+     |
+ 149 | impl fmt::Debug for dyn Any {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ `dyn std::any::Any`
+...
+ 159 | impl fmt::Debug for dyn Any + Send {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `dyn std::any::Any + Send`
+...
+ 166 | impl fmt::Debug for dyn Any + Send + Sync {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `dyn std::any::Any + Send + Sync`
+
+error[E0277]: `MonitorHandle` doesn't implement `std::fmt::Debug`
+    --> src/gpu/backends/hybrid/performance.rs:752:5
+     |
+ 750 | #[derive(Debug)]
+     |          ----- in this derive macro expansion
+ 751 | struct RealTimeMonitor {
+ 752 |     active_monitors: HashMap<String, MonitorHandle>,
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+     |
+help: the trait `std::fmt::Debug` is not implemented for `MonitorHandle`
+    --> src/gpu/backends/hybrid/performance.rs:836:1
+     |
+ 836 | struct MonitorHandle {
+     | ^^^^^^^^^^^^^^^^^^^^
+     = note: add `#[derive(Debug)]` to `MonitorHandle` or manually `impl std::fmt::Debug for MonitorHandle`
+help: the trait `std::fmt::Debug` is implemented for `HashMap<K, V, S>`
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/collections/hash/map.rs:1344:1
+     |
+1344 | / impl<K, V, S> Debug for HashMap<K, V, S>
+1345 | | where
+1346 | |     K: Debug,
+1347 | |     V: Debug,
+     | |_____________^
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/performance.rs:1113:25
+     |
+1113 |             start_time: Instant::now() - Duration::from_millis(duration_ms as u64),
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `SystemTime`, found `Instant`
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/performance.rs:1114:23
+     |
+1114 |             end_time: Instant::now(),
+     |                       ^^^^^^^^^^^^^^ expected `SystemTime`, found `Instant`
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/performance.rs:1502:32
+     |
+1502 |                 thermal_state: metric.thermal_state_celsius / 100.0,
+     |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `f64`, found `f32`
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/performance.rs:1503:36
+     |
+1503 |                 power_consumption: metric.power_consumption_watts,
+     |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `f64`, found `f32`
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/performance.rs:1672:19
+     |
+1672 |             .push(duration.as_secs_f64());
+     |              ---- ^^^^^^^^^^^^^^^^^^^^^^ expected `Duration`, found `f64`
+     |              |
+     |              arguments to this method are incorrect
+     |
+note: method defined here
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:2525:12
+     |
+2525 |     pub fn push(&mut self, value: T) {
+     |            ^^^^
+help: try removing the method call
+     |
+1672 -             .push(duration.as_secs_f64());
+1672 +             .push(duration);
+     |
+
+error[E0063]: missing fields `bottleneck_factor`, `correlation_id`, `custom_metrics` and 11 other fields in initializer of `HybridOperationMetrics`
+    --> src/gpu/backends/hybrid/performance.rs:1858:23
+     |
+1858 |         let metrics = super::monitoring::HybridOperationMetrics {
+     |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `bottleneck_factor`, `correlation_id`, `custom_metrics` and 11 other fields
+
+error[E0599]: no function or associated item named `initialize_cross_gpu_communication` found for struct `GpuCluster` in the current scope
+   --> src/gpu/backends/hybrid/cluster.rs:270:45
+    |
+ 42 | pub struct GpuCluster {
+    | --------------------- function or associated item `initialize_cross_gpu_communication` not found for this struct
+...
+270 |         let cross_gpu_communication = Self::initialize_cross_gpu_communication();
+    |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function or associated item not found in `GpuCluster`
+    |
+note: if you're trying to build a new `GpuCluster`, consider using `GpuCluster::new` which returns `std::result::Result<GpuCluster, anyhow::Error>`
+   --> src/gpu/backends/hybrid/cluster.rs:249:5
+    |
+249 |     pub fn new() -> Result<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/cluster.rs:388:34
+    |
+388 |             performance_history: Vec::new(),
+    |                                  ^^^^^^^^^^ expected `VecDeque<PerformanceSnapshot>`, found `Vec<_>`
+    |
+    = note: expected struct `VecDeque<cluster::PerformanceSnapshot>`
+               found struct `Vec<_>`
+help: call `Into::into` on this expression to convert `Vec<_>` into `VecDeque<cluster::PerformanceSnapshot>`
+    |
+388 |             performance_history: Vec::new().into(),
+    |                                            +++++++
+
+error: cannot construct `AdaptiveLoadBalancer` with struct literal syntax due to private fields
+   --> src/gpu/backends/hybrid/cluster.rs:385:9
+    |
+385 |         AdaptiveLoadBalancer {
+    |         ^^^^^^^^^^^^^^^^^^^^
+386 |             device_weights,
+    |             -------------- private field
+387 |             workload_patterns: Vec::new(),
+    |             ----------------------------- private field
+388 |             performance_history: Vec::new(),
+    |             ------------------------------- private field
+389 |             balancing_strategy: BalancingStrategy::Adaptive,
+    |             ----------------------------------------------- private field
+    |
+    = note: ...and other private fields that were not provided
+help: you might have meant to use an associated function to build this type
+    |
+385 -         AdaptiveLoadBalancer {
+386 -             device_weights,
+387 -             workload_patterns: Vec::new(),
+388 -             performance_history: Vec::new(),
+389 -             balancing_strategy: BalancingStrategy::Adaptive,
+390 -         }
+385 +         AdaptiveLoadBalancer::new()
+    |
+385 -         AdaptiveLoadBalancer {
+386 -             device_weights,
+387 -             workload_patterns: Vec::new(),
+388 -             performance_history: Vec::new(),
+389 -             balancing_strategy: BalancingStrategy::Adaptive,
+390 -         }
+385 +         AdaptiveLoadBalancer::new_minimal()
+    |
+help: consider using the `Default` trait
+    |
+385 -         AdaptiveLoadBalancer {
+385 +         <AdaptiveLoadBalancer as std::default::Default>::default()
+    |
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/cluster.rs:921:38
+    |
+921 |             cross_gpu_communication: initialize_cross_gpu_communication(),
+    |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `cluster::CrossGpuCommunication`, found `communication::CrossGpuCommunication`
+    |
+    = note: `communication::CrossGpuCommunication` and `cluster::CrossGpuCommunication` have similar names, but are actually distinct types
+note: `communication::CrossGpuCommunication` is defined in module `crate::gpu::backends::hybrid::communication` of the current crate
+   --> src/gpu/backends/hybrid/communication.rs:28:1
+    |
+ 28 | pub struct CrossGpuCommunication {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: `cluster::CrossGpuCommunication` is defined in module `crate::gpu::backends::hybrid::cluster` of the current crate
+   --> src/gpu/backends/hybrid/cluster.rs:103:1
+    |
+103 | pub struct CrossGpuCommunication {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: cannot construct `communication::CrossGpuCommunication` with struct literal syntax due to private fields
+   --> src/gpu/backends/hybrid/cluster.rs:927:9
+    |
+927 |           super::communication::CrossGpuCommunication {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+928 |               shared_memory_regions: Vec::new(),
+    |               --------------------------------- private field
+929 |               peer_to_peer_enabled: true,
+    |               -------------------------- private field
+930 | /             result_aggregation: super::cluster::ResultAggregator {
+931 | |                 pending_results: std::collections::HashMap::new(),
+932 | |                 aggregation_strategy: super::cluster::AggregationStrategy::FirstResult,
+933 | |             },
+    | |_____________- private field
+    |
+    = note: ...and other private fields `bandwidth_matrix`, `active_channels` and `sync_primitives` that were not provided
+help: you might have meant to use the `new` associated function
+    |
+927 -         super::communication::CrossGpuCommunication {
+928 -             shared_memory_regions: Vec::new(),
+929 -             peer_to_peer_enabled: true,
+930 -             result_aggregation: super::cluster::ResultAggregator {
+931 -                 pending_results: std::collections::HashMap::new(),
+932 -                 aggregation_strategy: super::cluster::AggregationStrategy::FirstResult,
+933 -             },
+934 -         }
+927 +         super::communication::CrossGpuCommunication::new(_)
+    |
+help: consider using the `Default` trait
+    |
+927 -         super::communication::CrossGpuCommunication {
+927 +         <super::communication::CrossGpuCommunication as std::default::Default>::default()
+    |
+
+error[E0609]: no field `collision_efficiency` on type `DpPerformanceStats`
+   --> src/gpu/backends/hybrid/dp_integration.rs:327:45
+    |
+327 |         let low_collision_rate = self.stats.collision_efficiency < 0.001; // <0.1% collision rate
+    |                                             ^^^^^^^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `total_checks`, `dp_found`, `collisions_found`, `avg_hash_time_ns`, `memory_usage`
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/monitoring.rs:553:27
+    |
+553 |         self.start_time = Instant::now();
+    |         ---------------   ^^^^^^^^^^^^^^ expected `SystemTime`, found `Instant`
+    |         |
+    |         expected due to the type of this binding
+
+error[E0308]: mismatched types
+   --> src/gpu/backends/hybrid/monitoring.rs:554:26
+    |
+554 |         self.timestamp = self.start_time;
+    |         --------------   ^^^^^^^^^^^^^^^ expected `Instant`, found `SystemTime`
+    |         |
+    |         expected due to the type of this binding
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/hybrid/monitoring.rs:1115:59
+     |
+1115 |             entry.total_duration += Duration::from_millis(metrics.duration_ms);
+     |                                     --------------------- ^^^^^^^^^^^^^^^^^^^ expected `u64`, found `u128`
+     |                                     |
+     |                                     arguments to this function are incorrect
+     |
+note: associated function defined here
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/time.rs:244:18
+     |
+ 244 |     pub const fn from_millis(millis: u64) -> Duration {
+     |                  ^^^^^^^^^^^
+help: you can convert a `u128` to a `u64` and panic if the converted value doesn't fit
+     |
+1115 |             entry.total_duration += Duration::from_millis(metrics.duration_ms.try_into().unwrap());
+     |                                                                              ++++++++++++++++++++
+
+error[E0599]: no function or associated item named `analyze_stage` found for struct `PipelinePerformanceSummary` in the current scope
+    --> src/gpu/backends/hybrid/monitoring.rs:1219:33
+     |
+ 708 | pub struct PipelinePerformanceSummary {
+     | ------------------------------------- function or associated item `analyze_stage` not found for this struct
+...
+1219 |             let summary = Self::analyze_stage(*stage_id, durations, stage_names);
+     |                                 ^^^^^^^^^^^^^ function or associated item not found in `PipelinePerformanceSummary`
+     |
+note: if you're trying to build a new `PipelinePerformanceSummary`, consider using `PipelinePerformanceSummary::from_stage_timings` which returns `PipelinePerformanceSummary`
+    --> src/gpu/backends/hybrid/monitoring.rs:1203:5
+     |
+1203 | /     pub fn from_stage_timings(
+1204 | |         stage_durations: &HashMap<usize, Vec<Duration>>,
+1205 | |         stage_names: &HashMap<usize, String>,
+1206 | |     ) -> Self {
+     | |_____________^
+
+error[E0433]: failed to resolve: `Self` is only available in impls, traits, and type definitions
+    --> src/gpu/backends/hybrid/monitoring.rs:1655:23
+     |
+1655 |             let avg = Self::predict_stage_duration(durations);
+     |                       ^^^^ `Self` is only available in impls, traits, and type definitions
+
+error[E0063]: missing field `stats` in initializer of `OooExecutionQueue`
+    --> src/gpu/backends/hybrid/mod.rs:1139:9
+     |
+1139 |         OooExecutionQueue {
+     |         ^^^^^^^^^^^^^^^^^ missing `stats`
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/vulkan_backend.rs:928:51
+     |
+ 928 |             let moduli_data: Vec<[u32; 8]> = vec![modulus; x.len()];
+     |                                              -----^^^^^^^----------
+     |                                              |    |
+     |                                              |    expected `[u32; 8]`, found `&[u32; 8]`
+     |                                              arguments to this function are incorrect
+     |
+help: the return type of this call is `&[u32; 8]` due to the type of the argument passed
+    --> src/gpu/backends/vulkan_backend.rs:928:46
+     |
+ 928 |             let moduli_data: Vec<[u32; 8]> = vec![modulus; x.len()];
+     |                                              ^^^^^-------^^^^^^^^^^
+     |                                                   |
+     |                                                   this argument influences the return type of `from_elem`
+note: function defined here
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:3509:8
+     |
+3509 | pub fn from_elem<T: Clone>(elem: T, n: usize) -> Vec<T> {
+     |        ^^^^^^^^^
+     = note: this error originates in the macro `vec` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider dereferencing the borrow
+     |
+ 928 |             let moduli_data: Vec<[u32; 8]> = vec![*modulus; x.len()];
+     |                                                   +
+
+error[E0308]: mismatched types
+    --> src/gpu/backends/vulkan_backend.rs:1114:60
+     |
+1114 |             let modulus_bigint = BigInt256::from_u32_limbs(modulus);
+     |                                  ------------------------- ^^^^^^^ expected `[u32; 8]`, found `&[u32; 8]`
+     |                                  |
+     |                                  arguments to this function are incorrect
+     |
+note: associated function defined here
+    --> src/math/bigint.rs:912:12
+     |
+ 912 |     pub fn from_u32_limbs(limbs: [u32; 8]) -> Self {
+     |            ^^^^^^^^^^^^^^ ---------------
+help: consider dereferencing the borrow
+     |
+1114 |             let modulus_bigint = BigInt256::from_u32_limbs(*modulus);
+     |                                                            +
+
+warning: unused import: `super::super::backend_trait::GpuBackend`
+  --> src/gpu/backends/hybrid/cluster.rs:14:5
+   |
+14 | use super::super::backend_trait::GpuBackend;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::gpu::backends::backend_trait::GpuBackend`
+  --> src/gpu/backends/hybrid/buffers.rs:14:5
+   |
+14 | use crate::gpu::backends::backend_trait::GpuBackend;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `collision_pairs`
+   --> src/gpu/backends/hybrid/dispatch.rs:627:9
+    |
+627 |         collision_pairs: Vec<(usize, usize)>,
+    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_collision_pairs`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kangaroo_states`
+   --> src/gpu/backends/hybrid/dispatch.rs:628:9
+    |
+628 |         kangaroo_states: &Vec<[[u32; 8]; 4]>,
+    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kangaroo_states`
+
+warning: unused variable: `tame_params`
+   --> src/gpu/backends/hybrid/dispatch.rs:629:9
+    |
+629 |         tame_params: &[u32; 8],
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tame_params`
+
+warning: unused variable: `wild_params`
+   --> src/gpu/backends/hybrid/dispatch.rs:630:9
+    |
+630 |         wild_params: &[u32; 8],
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wild_params`
+
+warning: unused variable: `max_walk_steps`
+   --> src/gpu/backends/hybrid/dispatch.rs:631:9
+    |
+631 |         max_walk_steps: u32,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_max_walk_steps`
+
+warning: unused variable: `m_bsgs`
+   --> src/gpu/backends/hybrid/dispatch.rs:632:9
+    |
+632 |         m_bsgs: u32,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_m_bsgs`
+
+warning: unused variable: `config`
+   --> src/gpu/backends/hybrid/dispatch.rs:633:9
+    |
+633 |         config: &crate::config::Config,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `types`
+    --> src/gpu/backends/hybrid/operations.rs:1681:21
+     |
+1681 | ...   let types: Vec<u32> = vulkan_herd.iter().map(|k| if k.is_tame { 0 } else { 1 }).collect();
+     |           ^^^^^ help: if this is intentional, prefix it with an underscore: `_types`
+
+warning: unused variable: `config`
+    --> src/gpu/backends/hybrid/operations.rs:1630:9
+     |
+1630 |         config: &crate::config::Config,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `cuda_count`
+    --> src/gpu/backends/hybrid/operations.rs:1636:13
+     |
+1636 |         let cuda_count = herd.len() - vulkan_count;
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cuda_count`
+
+warning: unused variable: `cuda_herd`
+    --> src/gpu/backends/hybrid/operations.rs:1639:27
+     |
+1639 |         let (vulkan_herd, cuda_herd) = herd.split_at_mut(vulkan_count);
+     |                           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cuda_herd`
+
+warning: unused variable: `data`
+    --> src/gpu/backends/hybrid/dispatch.rs:1183:55
+     |
+1183 |     pub fn unified_transfer(&self, buffer_name: &str, data: &[u8], offset: usize) -> Result<()> {
+     |                                                       ^^^^ help: if this is intentional, prefix it with an underscore: `_data`
+
+warning: unused variable: `offset`
+    --> src/gpu/backends/hybrid/dispatch.rs:1183:68
+     |
+1183 |     pub fn unified_transfer(&self, buffer_name: &str, data: &[u8], offset: usize) -> Result<()> {
+     |                                                                    ^^^^^^ help: if this is intentional, prefix it with an underscore: `_offset`
+
+warning: unused variable: `pipeline`
+    --> src/gpu/backends/hybrid/dispatch.rs:1266:9
+     |
+1266 |         pipeline: &mut crate::gpu::backends::hybrid::execution::FlowPipeline,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pipeline`
+
+warning: unused variable: `cpu_backend`
+    --> src/gpu/backends/hybrid/operations.rs:1226:13
+     |
+1226 |         let cpu_backend = crate::gpu::backends::cpu_backend::CpuBackend::new()?;
+     |             ^^^^^^^^^^^
+     |
+help: you might have meant to pattern match on the similarly named struct `CpuBackend`
+     |
+1226 -         let cpu_backend = crate::gpu::backends::cpu_backend::CpuBackend::new()?;
+1226 +         let gpu::backends::cpu_backend::CpuBackend = crate::gpu::backends::cpu_backend::CpuBackend::new()?;
+     |
+help: if this is intentional, prefix it with an underscore
+     |
+1226 |         let _cpu_backend = crate::gpu::backends::cpu_backend::CpuBackend::new()?;
+     |             +
+
+warning: unused variable: `p2`
+    --> src/gpu/backends/hybrid/operations.rs:1862:9
+     |
+1862 |         p2: &[[u32; 8]; 3],
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_p2`
+
+warning: unused variable: `jump_table`
+    --> src/gpu/backends/hybrid/operations.rs:1281:9
+     |
+1281 |         jump_table: &[[u32; 8]],
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_jump_table`
+
+warning: unused variable: `bias_table`
+    --> src/gpu/backends/hybrid/operations.rs:1282:9
+     |
+1282 |         bias_table: &[f64],
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bias_table`
+
+warning: unused variable: `target_distribution`
+    --> src/gpu/backends/hybrid/operations.rs:1379:9
+     |
+1379 |         target_distribution: &[f64],
+     |         ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_target_distribution`
+
+warning: unused variable: `collision`
+    --> src/gpu/backends/hybrid/operations.rs:1892:31
+     |
+1892 |     fn solve_collision(&self, collision: &crate::types::Collision) -> Result<Option<BigInt256>> {
+     |                               ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_collision`
+
+warning: unused variable: `config`
+    --> src/gpu/backends/hybrid/operations.rs:1988:9
+     |
+1988 |         config: &crate::config::GpuConfig,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `pipeline`
+    --> src/gpu/backends/hybrid/operations.rs:2048:44
+     |
+2048 | ...(&self, pipeline: &super::execution::FlowPipeline) -> super::monitoring::PipelinePerformanceSumm...
+     |            ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pipeline`
+
+warning: unused variable: `target_performance`
+    --> src/gpu/backends/hybrid/operations.rs:2056:49
+     |
+2056 |     pub fn scale_kangaroos(&self, count: usize, target_performance: f64) -> usize {
+     |                                                 ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_target_performance`
+
+warning: unused variable: `mu`
+    --> src/gpu/backends/hybrid/operations.rs:2085:9
+     |
+2085 |         mu: &[u32; 16],
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_mu`
+
+warning: unused variable: `modulus`
+    --> src/gpu/backends/hybrid/operations.rs:2086:9
+     |
+2086 |         modulus: &[u32; 8],
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modulus`
+
+warning: unused variable: `use_montgomery`
+    --> src/gpu/backends/hybrid/operations.rs:2087:9
+     |
+2087 |         use_montgomery: bool,
+     |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_use_montgomery`
+
+warning: unused variable: `b`
+    --> src/gpu/backends/hybrid/operations.rs:2102:55
+     |
+2102 |     pub fn batch_bigint_mul(&self, a: &Vec<[u32; 8]>, b: &Vec<[u32; 8]>) -> Result<Vec<[u32; 16]>> {
+     |                                                       ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `power_history`
+   --> src/gpu/backends/hybrid/load_balancer.rs:515:13
+    |
+515 |         let power_history = self.power_history.get(&device_id);
+    |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_power_history`
+
+warning: unused variable: `op_type`
+    --> src/gpu/backends/hybrid/load_balancer.rs:1263:14
+     |
+1263 |         for (op_type, model) in self.performance_predictor.iter_mut() {
+     |              ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_op_type`
+
+error[E0382]: borrow of moved value: `common_operations`
+    --> src/gpu/backends/hybrid/performance.rs:1006:81
+     |
+ 996 | ... let common_operations = vec![
+     |         ----------------- move occurs because `common_operations` has type `Vec<&str>`, which does not implement the `Copy` trait
+...
+1001 | ... for operation in common_operations {
+     |                      ----------------- `common_operations` moved due to this implicit call to `.into_iter()`
+...
+1006 | ... log::info!("🧠 Initialized ML prediction models for {} operation types", common_operations.len());
+     |                                                                              ^^^^^^^^^^^^^^^^^ value borrowed here after move
+     |
+note: `std::iter::IntoIterator::into_iter` takes ownership of the receiver `self`, which moves `common_operations`
+    --> /home/curtlarson/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/collect.rs:310:18
+     |
+ 310 |     fn into_iter(self) -> Self::IntoIter;
+     |                  ^^^^
+help: consider iterating over a slice of the `Vec<&str>`'s content to avoid moving into the `for` loop
+     |
+1001 |         for operation in &common_operations {
+     |                          +
+
+warning: unused variable: `jumps`
+    --> src/gpu/backends/hybrid/performance.rs:1616:13
+     |
+1616 |         let jumps = vec![crate::math::bigint::BigInt256::one(); 256];
+     |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_jumps`
+
+warning: unused variable: `test_batch_size`
+    --> src/gpu/backends/hybrid/performance.rs:1831:13
+     |
+1831 |         let test_batch_size = 1024;
+     |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_test_batch_size`
+
+warning: unused variable: `test_batch_size`
+    --> src/gpu/backends/hybrid/performance.rs:1845:13
+     |
+1845 |         let test_batch_size = 1024;
+     |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_test_batch_size`
+
+error: lifetime may not live long enough
+    --> src/gpu/backends/hybrid/performance.rs:1923:13
+     |
+1911 |     pub fn parse_rule_suggestion(&self, suggestion: &str) -> Option<(&str, f64)> {
+     |                                  -                  - let's call the lifetime of this reference `'1`
+     |                                  |
+     |                                  let's call the lifetime of this reference `'2`
+...
+1923 |             Some((suggestion.trim(), 0.5))
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method was supposed to return data with lifetime `'2` but it is returning data with lifetime `'1`
+     |
+help: consider introducing a named lifetime parameter and update trait if needed
+     |
+1911 |     pub fn parse_rule_suggestion<'a>(&self, suggestion: &'a str) -> Option<(&'a str, f64)> {
+     |                                 ++++                     ++                  ++
+
+warning: unused variable: `model`
+    --> src/gpu/backends/hybrid/power.rs:1407:21
+     |
+1407 |         if let Some(model) = &self.power_optimization_model {
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_model`
+
+warning: unused variable: `alert`
+    --> src/gpu/backends/hybrid/power.rs:1419:17
+     |
+1419 |             let alert = PowerAlert {
+     |                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_alert`
+
+warning: unused variable: `alert`
+    --> src/gpu/backends/hybrid/power.rs:1437:21
+     |
+1437 |                 let alert = PowerAlert {
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_alert`
+
+warning: unused variable: `duration`
+    --> src/gpu/backends/hybrid/power.rs:1589:78
+     |
+1589 | ...: &str, duration: Duration, power_samples: &[f64]) -> WorkloadPowerProfile {
+     |            ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_duration`
+
+warning: unused variable: `time_period`
+    --> src/gpu/backends/hybrid/power.rs:1640:47
+     |
+1640 |     pub fn get_carbon_footprint_report(&self, time_period: Duration) -> CarbonFootprint {
+     |                                               ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_time_period`
+
+warning: value assigned to `locality_score` is never read
+   --> src/gpu/backends/hybrid/topology.rs:946:38
+    |
+946 |             let mut locality_score = 0.0;
+    |                                      ^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `locality_opt`
+   --> src/gpu/backends/hybrid/topology.rs:997:21
+    |
+997 |         if let Some(locality_opt) = &self.locality_optimizer {
+    |                     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_locality_opt`
+
+warning: variable does not need to be mutable
+   --> src/gpu/backends/hybrid/cluster.rs:330:13
+    |
+330 |         let mut nvlink_mask = vec![vec![false; device_count]; device_count];
+    |             ----^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/gpu/backends/hybrid/buffers.rs:220:13
+    |
+220 |         let mut buffer = UnifiedGpuBuffer::with_label(size, label);
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/gpu/backends/hybrid/buffers.rs:280:13
+    |
+280 |         let mut buffer = Self::create_unified_buffer(size, label)?;
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+error[E0594]: cannot assign to `metrics.operation_type`, as `metrics` is not declared as mutable
+    --> src/gpu/backends/hybrid/monitoring.rs:1011:9
+     |
+1011 |         metrics.operation_type = self.classify_operation_type(&metrics.operation);
+     |         ^^^^^^^^^^^^^^^^^^^^^^ cannot assign
+     |
+help: consider changing this to be mutable
+     |
+1009 |     pub fn record_operation(&mut self, mut metrics: HybridOperationMetrics) -> Result<()> {
+     |                                        +++
+
+error[E0596]: cannot borrow `metrics` as mutable, as it is not declared as mutable
+    --> src/gpu/backends/hybrid/monitoring.rs:1014:44
+     |
+1014 |         self.calculate_statistical_metrics(&mut metrics);
+     |                                            ^^^^^^^^^^^^ cannot borrow as mutable
+     |
+help: consider changing this to be mutable
+     |
+1009 |     pub fn record_operation(&mut self, mut metrics: HybridOperationMetrics) -> Result<()> {
+     |                                        +++
+
+Some errors have detailed explanations: E0061, E0063, E0119, E0276, E0277, E0308, E0382, E0423, E0433...
+For more information about an error, try `rustc --explain E0061`.
+warning: `speedbitcrack` (lib) generated 70 warnings
+error: could not compile `speedbitcrack` (lib) due to 73 previous errors; 70 warnings emitted
