@@ -582,6 +582,16 @@ impl DpTable {
         hashes.iter().filter(|&&hash| self.remove_dp(hash)).count()
     }
 
+    /// Estimate current memory usage of DP table
+    pub fn estimated_memory_usage(&self) -> usize {
+        // Estimate memory usage: cuckoo filter + hashmaps + entries
+        let cuckoo_size = std::mem::size_of::<CuckooFilter<DefaultHasher>>();
+        let entries_size = self.entries.len() * std::mem::size_of::<(u64, DpEntry)>();
+        let value_scores_size = self.value_scores.len() * std::mem::size_of::<(u64, f64)>();
+        let clusters_size = self.clusters.values().map(|v| v.len() * std::mem::size_of::<u64>()).sum::<usize>();
+
+        cuckoo_size + entries_size + value_scores_size + clusters_size
+    }
 
 impl Drop for DpTable {
     fn drop(&mut self) {
@@ -1233,15 +1243,4 @@ mod tests {
             clusters_to_prune.contains(&dense_cluster_id),
             "Should prune extremely dense cluster entirely"
         );
-    }
-
-    /// Estimate current memory usage of DP table
-    pub fn estimated_memory_usage(&self) -> usize {
-        // Estimate memory usage: cuckoo filter + hashmaps + entries
-        let cuckoo_size = std::mem::size_of::<CuckooFilter<DefaultHasher>>();
-        let entries_size = self.entries.len() * std::mem::size_of::<(u64, DpEntry)>();
-        let value_scores_size = self.value_scores.len() * std::mem::size_of::<(u64, f64)>();
-        let clusters_size = self.clusters.values().map(|v| v.len() * std::mem::size_of::<u64>()).sum::<usize>();
-
-        cuckoo_size + entries_size + value_scores_size + clusters_size
     }
